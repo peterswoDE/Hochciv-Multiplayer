@@ -6,6 +6,8 @@ const MP = {
     joinCode: null,
     password: null,
     lastTurn: null,
+    players: [],
+    gameConfig: {},
     serverUrl: 'http://localhost:3000',
 
     connect: function () {
@@ -14,19 +16,38 @@ const MP = {
             this.socket = io(this.serverUrl);
             this.socket.on('connect', resolve);
 
-            this.socket.on('player:joined', data => toast(`${data.name} ist beigetreten.`));
-            this.socket.on('player:left', data => toast(`${data.name} hat das Spiel verlassen.`));
+            this.socket.on('player:joined', data => {
+                MP.players = data.players;
+                toast(`${data.name} ist beigetreten.`);
+                if (MP.renderLobby) MP.renderLobby();
+            });
+            this.socket.on('player:left', data => {
+                MP.players = data.players;
+                toast(`${data.name} hat das Spiel verlassen.`);
+                if (MP.renderLobby) MP.renderLobby();
+            });
+            this.socket.on('session:kicked', () => {
+                MP.active = false;
+                toast('Du wurdest vom Host gekickt.');
+                setTimeout(() => location.reload(), 2000);
+            });
+            this.socket.on('lobby:config:update', (newConfig) => {
+                MP.gameConfig = newConfig;
+                if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
+            });
 
             this.socket.on('game:start', data => {
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
+                MP.syncTurnBlocker();
                 closeModal();
                 startGameScreen();
             });
 
             this.socket.on('state:update', data => {
                 S = data.state;
+                MP.syncTurnBlocker();
                 // If it's a new turn for us, trigger UI events
                 if (S.cur === MP.playerIndex && MP.lastTurn !== S.cur && !S.over) {
                     MP.lastTurn = S.cur;
@@ -45,6 +66,14 @@ const MP = {
                 gameOver();
             });
         });
+    },
+
+    syncTurnBlocker: function () {
+        if (S && S.cur !== MP.playerIndex && !S.over) {
+            document.body.classList.add('mp-waiting');
+        } else {
+            document.body.classList.remove('mp-waiting');
+        }
     },
 
     showLobby: function () {
@@ -72,21 +101,74 @@ const MP = {
           <label class="row"><span>Zivilisation</span>
             <select id="mp-hciv">${CIVS.map(c => `<option value="${c.k}">${c.n}</option>`).join('')}</select>
           </label>
-          <p class="sub">Spieleinstellungen (Karte, Ereignisse, etc.) werden aus dem lokalen Setup-Menü übernommen.</p>
+          <p class="sub">Nach dem Hosten kannst du die Kartengröße und weitere Einstellungen in der Lobby festlegen.</p>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
         `;
             } else if (mode === 'waiting') {
+                const isHost = this.playerIndex === 0;
+                let trs = this.players.map(p => `
+                    <tr>
+                        <td><b>${p.name}</b> ${p.index === 0 ? '(Host)' : ''}</td>
+                        <td>${p.civ}</td>
+                        <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
+                        <td style="text-align:right">${isHost && p.index !== 0 ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
+                    </tr>
+                `).join('');
+
                 h = `
-          <h3>Lobby</h3>
-          <p class="sub">Code: <b>${this.joinCode}</b> · Passwort: <b>${this.password}</b></p>
-          <p class="sub">Warte auf weitere Spieler...</p>
-          ${this.playerIndex === 0 ? '<button class="btn wide primary" onclick="MP.startGame()">Spiel starten</button>' : ''}
+          <h3>Lobby <span class="sub" style="float:right">Code: <b>${this.joinCode}</b> · Passwort: <b>${this.password}</b></span></h3>
+          <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
+            <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>Spieler</th><th>Ziv</th><th>Status</th><th></th></tr>
+            ${trs}
+          </table>
+
+          <h4>Spieleinstellungen</h4>
+          <div style="background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.7}">
+              <label class="row"><span>Karte</span>
+                <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
+                  <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>Originalkarte (12 × 18)</option>
+                  <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>Große Karte (15 × 24)</option>
+                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>Zufall</option>
+                </select>
+              </label>
+              <label class="row"><span>Mit Ereignissen</span>
+                <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
+              </label>
+              <label class="row"><span>Mit Weltwundern</span>
+                <input type="checkbox" id="mp-set-wonders" onchange="MP.updateLobbyConfig()" ${this.gameConfig.wonders ? 'checked' : ''}>
+              </label>
+              <label class="row"><span>Schwierigkeit (Bots)</span>
+                <select id="mp-set-diff" onchange="MP.updateLobbyConfig()">
+                  ${DIFFICULTIES.map(d => `<option value="${d.k}" ${this.gameConfig.difficulty === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
+                </select>
+              </label>
+          </div>
+
+          ${isHost ? '<button class="btn wide primary" onclick="MP.startGame()">Spiel starten</button>' : ''}
         `;
             }
             modal('Multiplayer', h);
         };
         this.setMode = (m) => { mode = m; render(); };
+        this.renderLobby = render; // Export render method to dynamically update when lobby state changes
         render();
+    },
+
+    updateLobbyConfig: function () {
+        if (this.playerIndex !== 0) return;
+        const newConfig = {
+            mapKey: $('mp-set-map').value,
+            events: $('mp-set-events').checked,
+            wonders: $('mp-set-wonders').checked,
+            difficulty: $('mp-set-diff').value,
+        };
+        this.socket.emit('lobby:config', newConfig);
+    },
+
+    kickPlayer: function (playerIndex) {
+        if (confirm('Diesen Spieler unwiderruflich kicken?')) {
+            this.socket.emit('session:kick', { playerIndex });
+        }
     },
 
     join: async function () {
@@ -123,6 +205,8 @@ const MP = {
                 if (ack.status === 'playing') toast('Das Spiel hat bereits begonnen, warte auf Zustand...');
                 else {
                     this.active = true;
+                    this.players = ack.players;
+                    this.gameConfig = ack.gameConfig || {};
                     this.setMode('waiting');
                 }
             });
@@ -160,6 +244,7 @@ const MP = {
             this.joinCode = data.joinCode;
             this.password = data.password;
             this.playerIndex = 0; // Host is always 0
+            this.gameConfig = config;
 
             await this.connect();
 
@@ -170,6 +255,8 @@ const MP = {
             }, (ack) => {
                 if (ack.error) return toast(ack.error);
                 this.active = true;
+                this.players = ack.players;
+                this.gameConfig = ack.gameConfig || config;
                 this.setMode('waiting');
             });
         } catch (e) {
@@ -194,6 +281,26 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.onclick = () => MP.showLobby();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
     }
+
+    // Inject Turn Blocker CSS rules
+    const style = document.createElement('style');
+    style.textContent = `
+        .mp-waiting .actionbar { pointer-events: none !important; opacity: 0.5 !important; filter: grayscale(100%); }
+        .mp-waiting #sheet { pointer-events: none !important; }
+        .mp-waiting .sheet-close { opacity: 0 !important; }
+        .mp-waiting-toast {
+            display: none; position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+            background: #904030; color: white; padding: 6px 14px; border-radius: 4px; z-index: 1000; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .mp-waiting .mp-waiting-toast { display: block; }
+    `;
+    document.head.appendChild(style);
+
+    // Inject Turn Blocker active toast
+    const waitToast = document.createElement('div');
+    waitToast.className = 'mp-waiting-toast';
+    waitToast.textContent = 'Warte auf deinen Zug...';
+    document.body.appendChild(waitToast);
 });
 
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────

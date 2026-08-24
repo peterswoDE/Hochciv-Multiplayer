@@ -130,6 +130,25 @@ function cleanup() {
 const _cleanupTimer = setInterval(cleanup, config.CLEANUP_INTERVAL_MS);
 _cleanupTimer.unref();   // don't prevent Node from exiting
 
+function kickPlayer(sessionId, playerIndex) {
+    const session = sessions.get(sessionId);
+    if (!session || session.status !== 'lobby' || playerIndex === 0) return false;
+
+    session.players.splice(playerIndex, 1);
+    // Reindex remaining players
+    for (let i = 0; i < session.players.length; i++) {
+        session.players[i].index = i;
+    }
+    return true;
+}
+
+function updateConfig(sessionId, newConfig) {
+    const session = sessions.get(sessionId);
+    if (!session || session.status !== 'lobby') return false;
+    session.gameConfig = { ...session.gameConfig, ...newConfig };
+    return session.gameConfig;
+}
+
 module.exports = {
     createSession,
     joinSession,
@@ -137,4 +156,6 @@ module.exports = {
     getSessionByCode,
     removeSession,
     cleanup,
+    kickPlayer,
+    updateConfig,
 };

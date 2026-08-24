@@ -32,7 +32,7 @@ module.exports = function registerHandlers(io) {
             // Join a Socket.IO room for this session
             socket.join(sessionId);
 
-            ack?.({ ok: true, status: s.status, players: publicPlayers(s) });
+            ack?.({ ok: true, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
@@ -41,6 +41,49 @@ module.exports = function registerHandlers(io) {
                 civ: s.players[playerIndex].civ,
                 players: publicPlayers(s),
             });
+        });
+
+        // ── Kick Player (Host only) ──────────────────────────────────────────
+        socket.on('session:kick', (data, ack) => {
+            if (!session) return ack?.({ error: 'Nicht verbunden.' });
+            if (playerIndex !== session.hostIndex) return ack?.({ error: 'Nur der Host kann kicken.' });
+
+            const targetIndex = data.playerIndex;
+            const kickedPlayer = session.players[targetIndex];
+
+            if (sessions.kickPlayer(sessionId, targetIndex)) {
+                // If the kicked player is currently connected, disconnect them
+                if (kickedPlayer && kickedPlayer.socketId) {
+                    const targetSocket = io.sockets.sockets.get(kickedPlayer.socketId);
+                    if (targetSocket) {
+                        targetSocket.emit('session:kicked');
+                        targetSocket.leave(sessionId);
+                    }
+                }
+
+                ack?.({ ok: true });
+                io.to(sessionId).emit('player:left', {
+                    playerIndex: targetIndex,
+                    name: kickedPlayer ? kickedPlayer.name : 'Spieler',
+                    players: publicPlayers(session),
+                });
+            } else {
+                ack?.({ error: 'Konnte Spieler nicht kicken.' });
+            }
+        });
+
+        // ── Update Lobby Config (Host only) ──────────────────────────────────
+        socket.on('lobby:config', (newConfig, ack) => {
+            if (!session) return ack?.({ error: 'Nicht verbunden.' });
+            if (playerIndex !== session.hostIndex) return ack?.({ error: 'Nur der Host kann Einstellungen ändern.' });
+
+            const updated = sessions.updateConfig(sessionId, newConfig);
+            if (updated) {
+                ack?.({ ok: true });
+                io.to(sessionId).emit('lobby:config:update', updated);
+            } else {
+                ack?.({ error: 'Konnte Einstellungen nicht aktualisieren.' });
+            }
         });
 
         // ── Start the game (host only) ───────────────────────────────────────
