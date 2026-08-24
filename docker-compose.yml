@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  hochciv:
+    build: .
+    container_name: hochciv-multiplayer
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      # Original repository URL
+      - CORE_REPO_URL=https://github.com/peter-schomburg/Hochciv.git
+      # Branch to pull (defaults to main)
+      - CORE_REPO_BRANCH=main
+      # Update interval in seconds (default 3600 = 1 hour)
+      - UPDATE_INTERVAL_SEC=3600
+    volumes:
+      # Optional: Maps public dir to a named volume to persist the initial clone
+      - hochciv_frontend:/app/public
+
+volumes:
+  hochciv_frontend:
