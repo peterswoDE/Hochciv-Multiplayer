@@ -12,7 +12,7 @@ services:
       # The base URL clients use to connect to this server (leave empty for same-host)
       - EXTERNAL_URL=
       # Original repository URL
-      - CORE_REPO_URL=https://github.com/peter-schomburg/Hochciv.git
+      - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       # Branch to pull (defaults to main)
       - CORE_REPO_BRANCH=main
       # Update interval in seconds (default 3600 = 1 hour)

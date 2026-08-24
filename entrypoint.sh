@@ -2,9 +2,15 @@
 set -e
 
 # Configuration
-REPO_URL=${CORE_REPO_URL:-"https://github.com/peter-schomburg/Hochciv.git"}
-BRANCH=${CORE_REPO_BRANCH:-"main"}
-INTERVAL=${UPDATE_INTERVAL_SEC:-3600}
+# Strip possible \r (CRLF) endings if docker-compose.yml was edited on Windows
+RAW_REPO=${CORE_REPO_URL:-"https://github.com/timooom-hash/Hochciv.git"}
+REPO_URL=$(echo "$RAW_REPO" | tr -d '\r' | xargs)
+
+RAW_BRANCH=${CORE_REPO_BRANCH:-"main"}
+BRANCH=$(echo "$RAW_BRANCH" | tr -d '\r' | xargs)
+
+RAW_INTERVAL=${UPDATE_INTERVAL_SEC:-3600}
+INTERVAL=$(echo "$RAW_INTERVAL" | tr -d '\r' | xargs)
 
 echo "======================================"
 echo "Starting Hochciv Multiplayer Server"
