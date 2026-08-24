@@ -2,6 +2,7 @@ const MP = {
     active: false,
     socket: null,
     sessionId: null,
+    lobbyIndex: null,
     playerIndex: null,
     joinCode: null,
     password: null,
@@ -105,7 +106,7 @@ const MP = {
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
         `;
             } else if (mode === 'waiting') {
-                const isHost = this.playerIndex === 0;
+                const isHost = this.lobbyIndex === 0;
                 let trs = this.players.map(p => `
                     <tr>
                         <td><b>${p.name}</b> ${p.index === 0 ? '(Host)' : ''}</td>
@@ -155,7 +156,7 @@ const MP = {
     },
 
     updateLobbyConfig: function () {
-        if (this.playerIndex !== 0) return;
+        if (this.lobbyIndex !== 0) return;
         const newConfig = {
             mapKey: $('mp-set-map').value,
             events: $('mp-set-events').checked,
@@ -190,7 +191,7 @@ const MP = {
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
 
             this.sessionId = data.sessionId;
-            this.playerIndex = data.playerIndex;
+            this.lobbyIndex = data.playerIndex;
             this.joinCode = joinCode;
             this.password = password;
 
@@ -198,7 +199,7 @@ const MP = {
 
             this.socket.emit('session:connect', {
                 sessionId: this.sessionId,
-                playerIndex: this.playerIndex,
+                playerIndex: this.lobbyIndex,
                 password: this.password
             }, (ack) => {
                 if (ack.error) return toast(ack.error);
@@ -243,14 +244,14 @@ const MP = {
             this.sessionId = data.sessionId;
             this.joinCode = data.joinCode;
             this.password = data.password;
-            this.playerIndex = 0; // Host is always 0
+            this.lobbyIndex = 0; // Host is always 0
             this.gameConfig = config;
 
             await this.connect();
 
             this.socket.emit('session:connect', {
                 sessionId: this.sessionId,
-                playerIndex: this.playerIndex,
+                playerIndex: this.lobbyIndex,
                 password: this.password
             }, (ack) => {
                 if (ack.error) return toast(ack.error);

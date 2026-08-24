@@ -107,11 +107,13 @@ module.exports = function registerHandlers(io) {
             ack?.({ ok: true });
 
             // Send initial state to each player
-            for (const p of session.players) {
-                if (p.socketId) {
-                    io.to(p.socketId).emit('game:start', {
-                        state: engine.stateForPlayer(session.state, p.index),
-                        yourIndex: p.index,
+            for (const lobbyPlayer of session.players) {
+                if (lobbyPlayer.socketId) {
+                    // engine.js sorts players by civ in newGame(), so we must find their updated index in the state!
+                    const sortedStateIndex = session.state.players.findIndex(p => p.civ === lobbyPlayer.civ);
+                    io.to(lobbyPlayer.socketId).emit('game:start', {
+                        state: engine.stateForPlayer(session.state, sortedStateIndex),
+                        yourIndex: sortedStateIndex,
                     });
                 }
             }
@@ -128,7 +130,13 @@ module.exports = function registerHandlers(io) {
             const { type, params } = data || {};
             if (!type) return ack?.({ error: 'Aktionstyp fehlt.' });
 
-            const err = engine.applyAction(session.state, playerIndex, type, params || {});
+            // playerIndex is the Lobby join index! Map it to the sorted state index.
+            const lobbyCiv = session.players[playerIndex].civ;
+            const stateIndex = session.state.players.findIndex(p => p.civ === lobbyCiv);
+
+            if (stateIndex === -1) return ack?.({ error: 'Spieler nicht in der Partie.' });
+
+            const err = engine.applyAction(session.state, stateIndex, type, params || {});
             if (err) return ack?.({ error: err });
 
             ack?.({ ok: true });
@@ -172,8 +180,9 @@ function publicPlayers(session) {
 function broadcastState(io, session) {
     for (const p of session.players) {
         if (p.socketId) {
+            const stateIndex = session.state.players.findIndex(sp => sp.civ === p.civ);
             io.to(p.socketId).emit('state:update', {
-                state: engine.stateForPlayer(session.state, p.index),
+                state: engine.stateForPlayer(session.state, stateIndex),
                 currentPlayer: session.state.cur,
                 round: session.state.round,
             });
