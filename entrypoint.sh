@@ -25,9 +25,17 @@ update_frontend() {
     git pull origin "$BRANCH"
   fi
 
-  echo "Applying multiplayer-ui.patch..."
-  # Patch file comes from the multiplayer server directory (/app outside public)
-  git apply ../multiplayer-ui.patch
+  echo "Injecting multiplayer scripts..."
+  # Clean previous copies if restarting
+  cp ../mp.js js/mp.js
+  
+  # Inject the script tags right before </body>, only if they don't already exist
+  if ! grep -q 'js/mp.js' index.html; then
+    sed -i -e '/<\/body>/i \
+<script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>\
+<script src="js/mp.js"></script>\
+' index.html
+  fi
 
   if [ -n "$EXTERNAL_URL" ]; then
     echo "Configuring external URL to: $EXTERNAL_URL"
