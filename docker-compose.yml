@@ -17,9 +17,3 @@ services:
       - CORE_REPO_BRANCH=main
       # Update interval in seconds (default 3600 = 1 hour)
       - UPDATE_INTERVAL_SEC=3600
-    volumes:
-      # Optional: Maps public dir to a named volume to persist the initial clone
-      - hochciv_frontend:/app/public
-
-volumes:
-  hochciv_frontend:
