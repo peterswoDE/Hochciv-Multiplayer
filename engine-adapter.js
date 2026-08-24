@@ -12,7 +12,10 @@ const vm = require('vm');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
-const ENGINE_DIR = path.resolve(__dirname, '..', 'Hochciv', 'js');
+let ENGINE_DIR = path.resolve(__dirname, 'public', 'js');
+if (!require('fs').existsSync(ENGINE_DIR)) {
+    ENGINE_DIR = path.resolve(__dirname, '..', 'Hochciv', 'js');
+}
 
 const FILES = ['data.js', 'hex.js', 'engine.js', 'expansion.js', 'bots.js'];
 
