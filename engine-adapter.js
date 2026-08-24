@@ -70,17 +70,18 @@ function createGame(session) {
     }
 
     // Determine map
+    // Determine map
     let map;
     if (cfg.duel && players.length === 2) {
         map = E.duelMap(players[0].civ, players[1].civ, cfg.seed);
     } else if (cfg.mapKey === 'gross') {
-        map = JSON.parse(JSON.stringify(E.MAP_GROSS));
+        map = JSON.parse(JSON.stringify(vm.runInContext('MAP_GROSS', sandbox)));
     } else if (cfg.mapKey === 'random') {
         map = E.randomMap(cfg.seed);
     } else if (cfg.customMap) {
         map = JSON.parse(JSON.stringify(cfg.customMap));
     } else {
-        map = JSON.parse(JSON.stringify(E.MAP_ORIGINAL));
+        map = JSON.parse(JSON.stringify(vm.runInContext('DEFAULT_MAP', sandbox)));
     }
 
     const gameCfg = {
