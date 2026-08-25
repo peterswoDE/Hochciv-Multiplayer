@@ -9,19 +9,23 @@ This is the authoritative backend multiplayer server for **Hochciv**, built usin
 * **Dynamic Frontend Pulling:** The server's Docker container automatically fetches the latest frontend game client from the core Hochciv repository on startup, injecting the multiplayer networking bindings (`mp.js`) directly into the HTML to ensure players are always playing on the latest version.
 * **Smart Reconnection Flow:** Handles accidental disconnections, tab sleeping, or hard page refreshes by automatically identifying and dropping players back into their active game states.
 
-## 🚀 Deployment (Docker)
+## 🚀 Deployment (Production)
 
-The fastest and most robust way to run the multiplayer server is via Docker Compose.
+The production setup relies on pre-built images generated automatically via GitHub Actions, mapped securely to external networking (like Nginx Proxy Manager).
 
-1. Clone this repository.
-2. Ensure you have Docker and Docker Compose installed.
-3. Start the container in detached mode:
+1. Ensure you have Docker and Docker Compose installed on your host.
+2. In order for the container to start, you must create its required external networks first:
+   ```bash
+   docker network create nginx
+   docker network create hoochciv-mp_default
+   ```
+3. Inside the folder containing your `docker-compose.yml`, start the container in detached mode. This directly pulls the latest built image `peterswode/hochciv-multiplayer:latest`:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-The server will be available at `http://localhost:3000`. 
+The server will be reachable within the `nginx` internal network at port `3000`.
 
 ### Configuration (Environment Variables)
 
