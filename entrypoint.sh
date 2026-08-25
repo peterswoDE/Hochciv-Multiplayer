@@ -43,14 +43,8 @@ update_frontend() {
 ' index.html
   fi
 
-  if [ -n "$EXTERNAL_URL" ]; then
-    CLEAN_URL=$(echo "$EXTERNAL_URL" | sed 's:/*$::')
-    echo "Configuring external URL to: $CLEAN_URL"
-    sed -i "s|serverUrl: 'http://localhost:3000'|serverUrl: '$CLEAN_URL'|g" js/mp.js
-  else
-    echo "Configuring external URL to relative (same-host)"
-    sed -i "s|serverUrl: 'http://localhost:3000'|serverUrl: ''|g" js/mp.js
-  fi
+  echo "Configuring frontend to use relative URLs (same-host)"
+  sed -i "s|serverUrl: 'http://localhost:3000'|serverUrl: ''|g" js/mp.js
 
   cd ..
   echo "[Completed] Frontend integration ready."
