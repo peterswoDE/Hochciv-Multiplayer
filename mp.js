@@ -371,8 +371,7 @@ window.addEventListener('DOMContentLoaded', () => {
         wrap.innerHTML = `
           <span class="res" style="cursor:text; user-select:text; padding: 4px 10px;" title="Lobby Zugangsdaten">
             <i style="font-style:normal; margin-right:4px;">🌐</i> 
-            <b id="mp-cred-box" style="font-family:monospace; font-size:14px; user-select:all;"></b>
-            <u>Lobby</u>
+            <b id="mp-cred-box" style="font-family:monospace; font-size:14px;"></b>
           </span>
         `;
         headerHud.insertBefore(wrap, document.querySelector('.hud-res'));
