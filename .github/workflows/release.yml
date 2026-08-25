@@ -62,9 +62,9 @@ jobs:
           push: true
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:latest
-            ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:latest
+            ghcr.io/peterswode/hochciv-multiplayer:latest
             ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ env.IMG_TAG }}
-            ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:${{ env.IMG_TAG }}
+            ghcr.io/peterswode/hochciv-multiplayer:${{ env.IMG_TAG }}
 
       # Create GitHub Release (Only on main branch pushes)
       - name: Create a GitHub release
@@ -77,6 +77,6 @@ jobs:
             Automated release for version ${{ steps.tag_version.outputs.new_tag }}.
             Docker Images:
             - Docker Hub: ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ steps.tag_version.outputs.new_tag }}
-            - GHCR: ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:${{ steps.tag_version.outputs.new_tag }}
+            - GHCR: ghcr.io/peterswode/hochciv-multiplayer:${{ steps.tag_version.outputs.new_tag }}
             
             ${{ steps.tag_version.outputs.changelog }}
