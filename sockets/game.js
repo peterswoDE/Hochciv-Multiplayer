@@ -41,6 +41,15 @@ module.exports = function registerHandlers(io) {
                 civ: s.players[playerIndex].civ,
                 players: publicPlayers(s),
             });
+
+            // If game is already playing, send current state to the reconnecting player right away
+            if (s.status === 'playing' && s.state) {
+                const sortedStateIndex = s.state.players.findIndex(p => p.civ === s.players[playerIndex].civ);
+                socket.emit('game:start', {
+                    state: engine.stateForPlayer(s.state, sortedStateIndex),
+                    yourIndex: sortedStateIndex,
+                });
+            }
         });
 
         // ── Kick Player (Host only) ──────────────────────────────────────────
@@ -86,6 +95,20 @@ module.exports = function registerHandlers(io) {
             }
         });
 
+        // ── Update Player Config (Lobby) ─────────────────────────────────────
+        socket.on('lobby:player:update', (updates, ack) => {
+            if (!session) return ack?.({ error: 'Nicht verbunden.' });
+            if (session.status !== 'lobby') return ack?.({ error: 'Spiel läuft bereits.' });
+
+            const updated = sessions.updatePlayer(sessionId, playerIndex, updates);
+            if (updated) {
+                ack?.({ ok: true });
+                io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+            } else {
+                ack?.({ error: 'Konnte Einstellungen nicht aktualisieren.' });
+            }
+        });
+
         // ── Start the game (host only) ───────────────────────────────────────
         socket.on('game:start', (_data, ack) => {
             if (!session) return ack?.({ error: 'Nicht verbunden.' });
@@ -95,6 +118,13 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Spiel läuft bereits.' });
             if (session.players.filter(p => p.kind === 'human').length < 1)
                 return ack?.({ error: 'Mindestens ein Spieler nötig.' });
+
+            // Check for duplicate civilizations
+            const usedCivs = new Set();
+            for (const p of session.players) {
+                if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt!` });
+                usedCivs.add(p.civ);
+            }
 
             try {
                 session.state = engine.createGame(session);
@@ -173,6 +203,7 @@ function publicPlayers(session) {
         index: p.index,
         name: p.name,
         civ: p.civ,
+        ability: p.ability,
         connected: p.connected,
     }));
 }

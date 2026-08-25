@@ -51,7 +51,7 @@ function createSession(gameConfig, hostInfo) {
             {
                 index: 0,
                 name: hostInfo.name || 'Host',
-                civ: hostInfo.civ,
+                civ: hostInfo.civ || 'griechenland',
                 ability: hostInfo.ability || 'basis',
                 kind: 'human',
                 connected: false,
@@ -78,18 +78,28 @@ function joinSession(joinCode, password, playerInfo) {
     if (!sessionId) return 'Ungültiger Beitrittscode.';
     const session = sessions.get(sessionId);
     if (!session) return 'Sitzung nicht gefunden.';
+    // Check if player is reconnecting
+    const existingPlayer = session.players.find(p => p.name === playerInfo.name);
+    if (existingPlayer) {
+        // It's a reconnection
+        return { sessionId, playerIndex: existingPlayer.index };
+    }
+
     if (session.status !== 'lobby') return 'Spiel hat bereits begonnen.';
-    if (session.password !== password) return 'Falsches Passwort.';
     if (session.players.length >= config.MAX_PLAYERS) return 'Sitzung ist voll.';
-    // Prevent duplicate civ
-    if (session.players.some(p => p.civ === playerInfo.civ))
-        return `${playerInfo.civ} ist schon vergeben.`;
 
     const playerIndex = session.players.length;
+    let fallbackName = playerInfo.name || `Spieler ${playerIndex + 1}`;
+
+    // Safety check for duplicate names upon initial join to prevent reconnect mixing
+    if (session.players.some(p => p.name === fallbackName)) {
+        fallbackName = fallbackName + " (2)";
+    }
+
     session.players.push({
         index: playerIndex,
-        name: playerInfo.name || `Spieler ${playerIndex + 1}`,
-        civ: playerInfo.civ,
+        name: fallbackName,
+        civ: playerInfo.civ || 'griechenland',
         ability: playerInfo.ability || 'basis',
         kind: 'human',
         connected: false,
@@ -149,6 +159,27 @@ function updateConfig(sessionId, newConfig) {
     return session.gameConfig;
 }
 
+function updatePlayer(sessionId, playerIndex, updates) {
+    const session = sessions.get(sessionId);
+    if (!session || session.status !== 'lobby') return false;
+    const player = session.players[playerIndex];
+    if (!player) return false;
+
+    let civChanged = false;
+    if (updates.civ && player.civ !== updates.civ) {
+        player.civ = updates.civ;
+        civChanged = true;
+    }
+
+    // If the civ changed, forcefully reset the ability to 'basis' since the old ability key is invalid for the new civ.
+    if (civChanged) {
+        player.ability = 'basis';
+    } else if (updates.ability) {
+        player.ability = updates.ability;
+    }
+    return true;
+}
+
 module.exports = {
     createSession,
     joinSession,
@@ -158,4 +189,5 @@ module.exports = {
     cleanup,
     kickPlayer,
     updateConfig,
+    updatePlayer,
 };

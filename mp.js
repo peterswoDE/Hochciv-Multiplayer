@@ -15,7 +15,18 @@ const MP = {
         if (this.socket) return Promise.resolve();
         return new Promise((resolve) => {
             this.socket = io(this.serverUrl);
-            this.socket.on('connect', resolve);
+
+            this.socket.on('connect', () => {
+                // Auto re-authenticate if we disconnect and reconnect mid-session
+                if (MP.active && MP.sessionId) {
+                    MP.socket.emit('session:connect', {
+                        sessionId: MP.sessionId,
+                        playerIndex: MP.lobbyIndex,
+                        password: MP.password
+                    });
+                }
+                resolve();
+            });
 
             this.socket.on('player:joined', data => {
                 MP.players = data.players;
@@ -25,6 +36,10 @@ const MP = {
             this.socket.on('player:left', data => {
                 MP.players = data.players;
                 toast(`${data.name} hat das Spiel verlassen.`);
+                if (MP.renderLobby) MP.renderLobby();
+            });
+            this.socket.on('lobby:player:updated', players => {
+                MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
             });
             this.socket.on('session:kicked', () => {
@@ -91,30 +106,34 @@ const MP = {
           <label class="row"><span>Beitrittscode</span><input type="text" id="mp-c" style="width:100px;text-transform:uppercase"></label>
           <label class="row"><span>Passwort</span><input type="number" id="mp-p" style="width:100px"></label>
           <label class="row"><span>Dein Name</span><input type="text" id="mp-n" value="Spieler"></label>
-          <label class="row"><span>Zivilisation</span>
-            <select id="mp-civ">${CIVS.map(c => `<option value="${c.k}">${c.n}</option>`).join('')}</select>
-          </label>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">Beitreten</button>
         `;
             } else if (mode === 'host') {
                 h = `
           <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="Host"></label>
-          <label class="row"><span>Zivilisation</span>
-            <select id="mp-hciv">${CIVS.map(c => `<option value="${c.k}">${c.n}</option>`).join('')}</select>
-          </label>
-          <p class="sub">Nach dem Hosten kannst du die Kartengröße und weitere Einstellungen in der Lobby festlegen.</p>
+          <p class="sub">Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.</p>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
         `;
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === 0;
-                let trs = this.players.map(p => `
+                let trs = this.players.map(p => {
+                    const isMe = p.index === this.lobbyIndex;
+                    const civOpts = CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
+                    const abOpts = civDef ? civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('') : '';
+
+                    return `
                     <tr>
                         <td><b>${p.name}</b> ${p.index === 0 ? '(Host)' : ''}</td>
-                        <td>${p.civ}</td>
+                        <td style="padding: 4px;">
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'}>${civOpts}</select>
+                            <br/>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px;font-size: 13px;">${abOpts}</select>
+                        </td>
                         <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
-                        <td style="text-align:right">${isHost && p.index !== 0 ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
+                        <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
                     </tr>
-                `).join('');
+                `}).join('');
 
                 h = `
           <h3>Lobby <span class="sub" style="float:right">Code: <b>${this.joinCode}</b> · Passwort: <b>${this.password}</b></span></h3>
@@ -166,6 +185,17 @@ const MP = {
         this.socket.emit('lobby:config', newConfig);
     },
 
+    updateLobbyPlayer: function () {
+        if (this.lobbyIndex == null) return;
+        const civSelect = $(`mp-p-civ-${this.lobbyIndex}`);
+        const abSelect = $(`mp-p-ab-${this.lobbyIndex}`);
+        if (!civSelect || !abSelect) return;
+        this.socket.emit('lobby:player:update', {
+            civ: civSelect.value,
+            ability: abSelect.value
+        });
+    },
+
     kickPlayer: function (playerIndex) {
         if (confirm('Diesen Spieler unwiderruflich kicken?')) {
             this.socket.emit('session:kick', { playerIndex });
@@ -176,7 +206,6 @@ const MP = {
         const joinCode = $('mp-c').value.trim();
         const password = $('mp-p').value.trim();
         const name = $('mp-n').value.trim();
-        const civ = $('mp-civ').value;
 
         if (!joinCode || !password) return toast('Bitte Code und Passwort eingeben.');
 
@@ -185,7 +214,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name, civ } })
+                body: JSON.stringify({ joinCode, password, player: { name } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
@@ -203,11 +232,15 @@ const MP = {
                 password: this.password
             }, (ack) => {
                 if (ack.error) return toast(ack.error);
-                if (ack.status === 'playing') toast('Das Spiel hat bereits begonnen, warte auf Zustand...');
+
+                this.active = true;
+                this.players = ack.players;
+                this.gameConfig = ack.gameConfig || {};
+
+                if (ack.status === 'playing') {
+                    toast('Spiel läuft, lade Zustand...');
+                }
                 else {
-                    this.active = true;
-                    this.players = ack.players;
-                    this.gameConfig = ack.gameConfig || {};
                     this.setMode('waiting');
                 }
             });
@@ -218,7 +251,6 @@ const MP = {
 
     host: async function () {
         const name = $('mp-hn').value.trim();
-        const civ = $('mp-hciv').value;
 
         // Create local config from settings
         const config = {
@@ -236,7 +268,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config, host: { name, civ } })
+                body: JSON.stringify({ config, host: { name } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Hosten.');
