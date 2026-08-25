@@ -25,9 +25,16 @@ module.exports = function registerHandlers(io) {
             playerIndex = data.playerIndex;
             session = s;
 
+            const oldHostOffline = !s.players[s.hostIndex].connected;
+
             // Mark connected
             s.players[playerIndex].connected = true;
             s.players[playerIndex].socketId = socket.id;
+
+            // Reclaim host if the lobby was abandoned
+            if (oldHostOffline && s.hostIndex !== playerIndex) {
+                s.hostIndex = playerIndex;
+            }
 
             // Join a Socket.IO room for this session
             socket.join(sessionId);

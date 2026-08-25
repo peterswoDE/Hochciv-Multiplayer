@@ -60,6 +60,7 @@ const MP = {
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
                 MP.syncTurnBlocker();
+                MP.renderLobby = null; // Prevent Lobby from opening mid-game on reconnects
                 closeModal();
                 startGameScreen();
             });
