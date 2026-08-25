@@ -4,9 +4,6 @@ services:
   hochciv:
     image: peterswode/hochciv-multiplayer:latest
     container_name: hochciv-multiplayer
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
     restart: unless-stopped
     environment:
       - PORT=3000
