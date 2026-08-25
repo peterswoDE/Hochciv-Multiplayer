@@ -40,7 +40,7 @@ jobs:
           push: true
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:latest
-            ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:latest
+            ghcr.io/peterswode/hochciv-multiplayer:latest
             ${{ github.ref_type == 'tag' && format('{0}/hochciv-multiplayer:{1}', vars.DOCKERHUB_USERNAME, github.ref_name) || '' }}
             ${{ github.ref_type == 'tag' && format('ghcr.io/{0}/hochciv-multiplayer:{1}', github.repository_owner, github.ref_name) || '' }}
 
