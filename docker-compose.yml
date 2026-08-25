@@ -14,11 +14,14 @@ services:
       # Update interval in seconds (default 3600 = 1 hour)
       - UPDATE_INTERVAL_SEC=3600
     networks:
-      default:
+      hoochciv-mp_default:
         priority: 1000
       nginx:
         priority: 100
 
 networks:
   nginx:
+    external: true
+
+  hoochciv-mp_default:
     external: true
