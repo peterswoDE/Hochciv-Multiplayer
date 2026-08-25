@@ -7,6 +7,7 @@ const MP = {
     joinCode: null,
     password: null,
     lastTurn: null,
+    hostIndex: 0,
     players: [],
     gameConfig: {},
     serverUrl: 'http://localhost:3000',
@@ -30,11 +31,13 @@ const MP = {
 
             this.socket.on('player:joined', data => {
                 MP.players = data.players;
+                if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
                 toast(`${data.name} ist beigetreten.`);
                 if (MP.renderLobby) MP.renderLobby();
             });
             this.socket.on('player:left', data => {
                 MP.players = data.players;
+                if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
                 toast(`${data.name} hat das Spiel verlassen.`);
                 if (MP.renderLobby) MP.renderLobby();
             });
@@ -102,29 +105,32 @@ const MP = {
           <button class="btn wide" onclick="MP.setMode('join')">Einem Spiel beitreten</button>
         `;
             } else if (mode === 'join') {
+                const savedName = localStorage.getItem('mp-name') || 'Spieler';
                 h = `
           <label class="row"><span>Beitrittscode</span><input type="text" id="mp-c" style="width:100px;text-transform:uppercase"></label>
           <label class="row"><span>Passwort</span><input type="number" id="mp-p" style="width:100px"></label>
-          <label class="row"><span>Dein Name</span><input type="text" id="mp-n" value="Spieler"></label>
+          <label class="row"><span>Dein Name</span><input type="text" id="mp-n" value="${savedName}"></label>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">Beitreten</button>
         `;
             } else if (mode === 'host') {
+                const savedName = localStorage.getItem('mp-name') || 'Host';
                 h = `
-          <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="Host"></label>
+          <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="${savedName}"></label>
           <p class="sub">Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.</p>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
         `;
             } else if (mode === 'waiting') {
-                const isHost = this.lobbyIndex === 0;
+                const isHost = this.lobbyIndex === this.hostIndex;
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
+                    const isPlayerHost = p.index === this.hostIndex;
                     const civOpts = CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
                     const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
                     const abOpts = civDef ? civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('') : '';
 
                     return `
                     <tr>
-                        <td><b>${p.name}</b> ${p.index === 0 ? '(Host)' : ''}</td>
+                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''}</td>
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'}>${civOpts}</select>
                             <br/>
@@ -182,7 +188,7 @@ const MP = {
     },
 
     updateLobbyConfig: function () {
-        if (this.lobbyIndex !== 0) return;
+        if (this.lobbyIndex !== this.hostIndex) return;
         const evModeEl = $('mp-set-evmode');
         const newConfig = {
             mapKey: $('mp-set-map').value,
@@ -215,6 +221,7 @@ const MP = {
         const joinCode = $('mp-c').value.trim();
         const password = $('mp-p').value.trim();
         const name = $('mp-n').value.trim();
+        localStorage.setItem('mp-name', name);
 
         if (!joinCode || !password) return toast('Bitte Code und Passwort eingeben.');
 
@@ -245,6 +252,7 @@ const MP = {
                 this.active = true;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || {};
+                this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
                 if (ack.status === 'playing') {
                     toast('Spiel läuft, lade Zustand...');
@@ -260,6 +268,7 @@ const MP = {
 
     host: async function () {
         const name = $('mp-hn').value.trim();
+        localStorage.setItem('mp-name', name);
 
         // Create local config with valid defaults (since Singleplayer UI is bypassed)
         const config = {
@@ -299,6 +308,7 @@ const MP = {
                 this.active = true;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || config;
+                this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
                 this.setMode('waiting');
             });
         } catch (e) {

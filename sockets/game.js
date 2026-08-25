@@ -32,7 +32,7 @@ module.exports = function registerHandlers(io) {
             // Join a Socket.IO room for this session
             socket.join(sessionId);
 
-            ack?.({ ok: true, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig });
+            ack?.({ ok: true, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
@@ -40,6 +40,7 @@ module.exports = function registerHandlers(io) {
                 name: s.players[playerIndex].name,
                 civ: s.players[playerIndex].civ,
                 players: publicPlayers(s),
+                newHostIndex: s.hostIndex
             });
 
             // If game is already playing, send current state to the reconnecting player right away
@@ -186,10 +187,19 @@ module.exports = function registerHandlers(io) {
             if (session && session.players[playerIndex]) {
                 session.players[playerIndex].connected = false;
                 session.players[playerIndex].socketId = null;
+
+                if (session.hostIndex === playerIndex) {
+                    const nextHost = session.players.find(p => p.connected && p.index !== playerIndex);
+                    if (nextHost) {
+                        session.hostIndex = nextHost.index;
+                    }
+                }
+
                 io.to(sessionId).emit('player:left', {
                     playerIndex,
                     name: session.players[playerIndex].name,
                     players: publicPlayers(session),
+                    newHostIndex: session.hostIndex
                 });
             }
         });

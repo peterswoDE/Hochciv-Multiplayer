@@ -78,6 +78,8 @@ function joinSession(joinCode, password, playerInfo) {
     if (!sessionId) return 'Ungültiger Beitrittscode.';
     const session = sessions.get(sessionId);
     if (!session) return 'Sitzung nicht gefunden.';
+    if (session.password !== password) return 'Falsches Passwort.';
+
     // Check if player is reconnecting
     const existingPlayer = session.players.find(p => p.name === playerInfo.name);
     if (existingPlayer) {
@@ -85,7 +87,7 @@ function joinSession(joinCode, password, playerInfo) {
         return { sessionId, playerIndex: existingPlayer.index };
     }
 
-    if (session.status !== 'lobby') return 'Spiel hat bereits begonnen.';
+    if (session.status !== 'lobby') return 'Spiel hat bereits begonnen. Wenn du dich wiederverbinden willst, musst du deinen exakten, ursprünglichen Spielernamen verwenden.';
     if (session.players.length >= config.MAX_PLAYERS) return 'Sitzung ist voll.';
 
     const playerIndex = session.players.length;
