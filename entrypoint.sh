@@ -20,15 +20,15 @@ echo "======================================"
 update_frontend() {
   if [ ! -d "public/.git" ]; then
     echo "[Init] Cloning original Hochciv repository ($BRANCH)..."
-    git clone -b "$BRANCH" "$REPO_URL" public || echo "WARNING: Clone failed! Relying on pre-baked frontend."
-    cd public || { echo "ERROR: Could not enter public directory!"; exit 1; }
+    git clone -b "$BRANCH" "$REPO_URL" public
+    cd public
   else
     echo "[Update] Pulling latest changes from Hochciv repository..."
     cd public
     # Clean previous patches to avoid conflicts before pulling
-    git reset --hard HEAD || true
-    git clean -fd || true
-    git pull origin "$BRANCH" || echo "WARNING: Pull failed! Using local cache."
+    git reset --hard HEAD
+    git clean -fd
+    git pull origin "$BRANCH"
   fi
 
   echo "Injecting multiplayer scripts..."
@@ -59,9 +59,9 @@ update_frontend
     sleep "$INTERVAL"
     echo "[Auto-Updater] Checking for updates on original repository..."
     cd public
-    git fetch origin "$BRANCH" || echo "WARNING: Auto-update fetch failed."
-    LOCAL=$(git rev-parse HEAD 2>/dev/null || echo "LOCAL")
-    REMOTE=$(git rev-parse origin/"$BRANCH" 2>/dev/null || echo "REMOTE")
+    git fetch origin "$BRANCH"
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/"$BRANCH")
     if [ "$LOCAL" != "$REMOTE" ]; then
       echo "[Auto-Updater] New updates found ($LOCAL -> $REMOTE). Updating..."
       cd ..
