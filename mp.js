@@ -133,9 +133,9 @@ const MP = {
                     <tr>
                         <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''}</td>
                         <td style="padding: 4px;">
-                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'}>${civOpts}</select>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
-                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px;font-size: 13px;">${abOpts}</select>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                         </td>
                         <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
@@ -150,7 +150,7 @@ const MP = {
           </table>
 
           <h4>Spieleinstellungen</h4>
-          <div style="background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.7}">
+          <div style="background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
               <label class="row"><span>Karte</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
                   <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>Originalkarte (12 × 18)</option>
