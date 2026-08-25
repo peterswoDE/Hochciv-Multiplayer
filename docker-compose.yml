@@ -9,8 +9,6 @@ services:
     restart: unless-stopped
     environment:
       - PORT=3000
-      # The base URL clients use to connect to this server (leave empty for same-host)
-      - EXTERNAL_URL=
       # Original repository URL
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       # Branch to pull (defaults to main)
