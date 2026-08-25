@@ -5,6 +5,9 @@ services:
     image: peterswode/hochciv-multiplayer:latest
     container_name: hochciv-multiplayer
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       - PORT=3000
       # Original repository URL
@@ -13,15 +16,19 @@ services:
       - CORE_REPO_BRANCH=main
       # Update interval in seconds (default 3600 = 1 hour)
       - UPDATE_INTERVAL_SEC=3600
+    volumes:
+      - ./mp.js:/app/mp.js
+      - ./server.js:/app/server.js
+      - ./sessions.js:/app/sessions.js
+      - ./sockets:/app/sockets
     networks:
-      hoochciv-mp_default:
-        priority: 1000
-      nginx:
-        priority: 100
+      - default
+      - nginx
 
 networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
   nginx:
-    external: true
-
-  hoochciv-mp_default:
     external: true

@@ -154,6 +154,13 @@ const MP = {
               <label class="row"><span>Mit Ereignissen</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
+              ${this.gameConfig.events ? `
+              <label class="row"><span>Ereignisstärke</span>
+                <select id="mp-set-evmode" onchange="MP.updateLobbyConfig()">
+                  <option value="hard" ${this.gameConfig.eventMode === 'hard' ? 'selected' : ''}>Hart (jede Runde)</option>
+                  <option value="easy" ${this.gameConfig.eventMode === 'easy' ? 'selected' : ''}>Leicht (selten)</option>
+                </select>
+              </label>` : ''}
               <label class="row"><span>Mit Weltwundern</span>
                 <input type="checkbox" id="mp-set-wonders" onchange="MP.updateLobbyConfig()" ${this.gameConfig.wonders ? 'checked' : ''}>
               </label>
@@ -176,9 +183,11 @@ const MP = {
 
     updateLobbyConfig: function () {
         if (this.lobbyIndex !== 0) return;
+        const evModeEl = $('mp-set-evmode');
         const newConfig = {
             mapKey: $('mp-set-map').value,
             events: $('mp-set-events').checked,
+            eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
             difficulty: $('mp-set-diff').value,
         };
@@ -252,15 +261,15 @@ const MP = {
     host: async function () {
         const name = $('mp-hn').value.trim();
 
-        // Create local config from settings
+        // Create local config with valid defaults (since Singleplayer UI is bypassed)
         const config = {
             seed: Math.floor(Math.random() * 2 ** 31) | 0,
-            duel: false, // Could read from setupMode
-            events: $('setup-events') ? $('setup-events').checked : false,
-            eventMode: $('setup-evmode') ? $('setup-evmode').value : 'hard',
-            wonders: $('setup-wonders') ? $('setup-wonders').checked : false,
-            difficulty: $('setup-diff') ? $('setup-diff').value : 'prinz',
-            mapKey: $('setup-map') && $('setup-map').value === 'zufall' ? 'random' : '0'
+            duel: false, // Could read from setupMode if needed
+            events: false,
+            eventMode: 'hard',
+            wonders: false,
+            difficulty: 'prinz',
+            mapKey: '0'
         };
 
         try {
