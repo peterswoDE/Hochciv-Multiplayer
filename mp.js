@@ -255,6 +255,9 @@ const MP = {
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
+                const credBox = $('mp-cred-box');
+                if (credBox) credBox.textContent = `Lobby: ${this.joinCode}  PW: ${this.password}`;
+
                 if (ack.status === 'playing') {
                     toast('Spiel läuft, lade Zustand...');
                 }
@@ -310,6 +313,10 @@ const MP = {
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || config;
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
+
+                const credBox = $('mp-cred-box');
+                if (credBox) credBox.textContent = `Lobby: ${this.joinCode}  PW: ${this.password}`;
+
                 this.setMode('waiting');
             });
         } catch (e) {
@@ -354,6 +361,15 @@ window.addEventListener('DOMContentLoaded', () => {
     waitToast.className = 'mp-waiting-toast';
     waitToast.textContent = 'Warte auf deinen Zug...';
     document.body.appendChild(waitToast);
+
+    // Inject Credentials Box into Game Screen HUD
+    const screenGame = $('screen-game');
+    if (screenGame && !$('mp-cred-box')) {
+        const credBox = document.createElement('div');
+        credBox.id = 'mp-cred-box';
+        credBox.style.cssText = 'position:absolute; top:4px; right:10px; font-size:11px; font-family:monospace; color:rgba(255,255,255,0.8); background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:4px; z-index:50; user-select:all;';
+        screenGame.appendChild(credBox);
+    }
 });
 
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────
