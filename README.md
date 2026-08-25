@@ -1,1 +1,56 @@
-Multiplayer Server Version of https://github.com/timooom-hash/Hochciv.git
+# Hochciv Multiplayer Server
+
+This is the authoritative backend multiplayer server for **Hochciv**, built using Node.js, Express, and Socket.IO. It manages session lobbies, synchronizes game states in real-time across connected clients, and dynamically serves the game frontend.
+
+## 🌟 Key Features
+
+* **Real-Time Synchronization:** Uses Socket.IO for effortless, immediate propagation of game inputs, turns, and state changes.
+* **Lobby Management:** Full lobby system allowing players to join via simple 4-letter passcodes. The host can configure game rules (Difficulty, Map Size, Events, Wonders) directly in the lobby.
+* **Dynamic Frontend Pulling:** The server's Docker container automatically fetches the latest frontend game client from the core Hochciv repository on startup, injecting the multiplayer networking bindings (`mp.js`) directly into the HTML to ensure players are always playing on the latest version.
+* **Smart Reconnection Flow:** Handles accidental disconnections, tab sleeping, or hard page refreshes by automatically identifying and dropping players back into their active game states.
+
+## 🚀 Deployment (Docker)
+
+The fastest and most robust way to run the multiplayer server is via Docker Compose.
+
+1. Clone this repository.
+2. Ensure you have Docker and Docker Compose installed.
+3. Start the container in detached mode:
+
+```bash
+docker compose up -d --build
+```
+
+The server will be available at `http://localhost:3000`. 
+
+### Configuration (Environment Variables)
+
+In the `docker-compose.yml`, you can customize the following variables:
+- `PORT` (default: `3000`): The port the Node.js server listens on.
+- `MAX_PLAYERS` (default: `4`): Maximum number of players allowed in a single lobby.
+- `CORE_REPO_URL`: The Git URL from which it clones the original frontend Hochciv repository.
+- `CORE_REPO_BRANCH`: The branch to clone for the frontend (e.g. `main`).
+- `UPDATE_INTERVAL_SEC`: How often (in seconds) the container queries the frontend repo for updates.
+
+## 🛠️ Local Development
+
+If you wish to run the server locally without Docker for development and debugging:
+
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Run the development server:
+   ```bash
+   npm start
+   ```
+
+*(Note: Running outside Docker means you might need to manually set up the `public/` directory containing the frontend, as `entrypoint.sh` normally handles cloning this automatically.)*
+
+## 📁 Architecture Overview
+* `server.js`: The main Express server entry point.
+* `sockets/game.js`: The Socket.IO event router mapping client inputs to engine functions.
+* `sessions.js`: In-memory session and lobby manager mapping connection IDs to game environments.
+* `engine-adapter.js`: The bridge linking the stateless frontend game logic (`engine.js`) to the backend server.
+* `mp.js`: The frontend-injected multiplayer module enabling the custom UI and socket bindings.
