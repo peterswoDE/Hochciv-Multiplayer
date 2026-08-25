@@ -9,12 +9,34 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        id: tag_version
+        if: github.ref == 'refs/heads/main'
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+
+      - name: Determine Docker Tag
+        id: vars
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "IMG_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            echo "IMG_TAG=${{ steps.tag_version.outputs.new_tag }}" >> $GITHUB_ENV
+          else
+            echo "IMG_TAG=dev-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          fi
 
       # Login Docker Hub
       - name: Log in to Docker Hub
@@ -31,7 +53,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      # Build & Push (only amd64)
+      # Build & Push
       - name: Build & Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -40,23 +62,21 @@ jobs:
           push: true
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:latest
-            ghcr.io/peterswode/hochciv-multiplayer:latest
-            ${{ github.ref_type == 'tag' && format('{0}/hochciv-multiplayer:{1}', vars.DOCKERHUB_USERNAME, github.ref_name) || '' }}
-            ${{ github.ref_type == 'tag' && format('ghcr.io/{0}/hochciv-multiplayer:{1}', github.repository_owner, github.ref_name) || '' }}
+            ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:latest
+            ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ env.IMG_TAG }}
+            ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:${{ env.IMG_TAG }}
 
-  release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      # Create GitHub Release (Only on main branch pushes)
+      - name: Create a GitHub release
+        if: github.ref == 'refs/heads/main'
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
           body: |
-            Automated release for version ${{ github.ref_name }}.
+            Automated release for version ${{ steps.tag_version.outputs.new_tag }}.
             Docker Images:
-            - Docker Hub: ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ github.ref_name }}
-            - GHCR: ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:${{ github.ref_name }}
+            - Docker Hub: ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ steps.tag_version.outputs.new_tag }}
+            - GHCR: ghcr.io/${{ github.repository_owner }}/hochciv-multiplayer:${{ steps.tag_version.outputs.new_tag }}
+            
+            ${{ steps.tag_version.outputs.changelog }}
