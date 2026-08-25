@@ -256,7 +256,7 @@ const MP = {
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
                 const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Lobby: ${this.joinCode}  PW: ${this.password}`;
+                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
 
                 if (ack.status === 'playing') {
                     toast('Spiel läuft, lade Zustand...');
@@ -315,7 +315,7 @@ const MP = {
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
                 const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Lobby: ${this.joinCode}  PW: ${this.password}`;
+                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
 
                 this.setMode('waiting');
             });
@@ -362,13 +362,20 @@ window.addEventListener('DOMContentLoaded', () => {
     waitToast.textContent = 'Warte auf deinen Zug...';
     document.body.appendChild(waitToast);
 
-    // Inject Credentials Box into Game Screen HUD
-    const screenGame = $('screen-game');
-    if (screenGame && !$('mp-cred-box')) {
-        const credBox = document.createElement('div');
-        credBox.id = 'mp-cred-box';
-        credBox.style.cssText = 'position:absolute; top:4px; right:10px; font-size:11px; font-family:monospace; color:rgba(255,255,255,0.8); background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:4px; z-index:50; user-select:all;';
-        screenGame.appendChild(credBox);
+    // Inject Credentials Box into Game Screen HUD Bar
+    const headerHud = document.querySelector('.hud');
+    if (headerHud && !$('mp-cred-wrapper')) {
+        const wrap = document.createElement('div');
+        wrap.id = 'mp-cred-wrapper';
+        wrap.style.cssText = 'flex-grow: 1; display: flex; justify-content: center; align-items: center;';
+        wrap.innerHTML = `
+          <span class="res" style="cursor:text; user-select:text; padding: 4px 10px;" title="Lobby Zugangsdaten">
+            <i style="font-style:normal; margin-right:4px;">🌐</i> 
+            <b id="mp-cred-box" style="font-family:monospace; font-size:14px; user-select:all;"></b>
+            <u>Lobby</u>
+          </span>
+        `;
+        headerHud.insertBefore(wrap, document.querySelector('.hud-res'));
     }
 });
 
