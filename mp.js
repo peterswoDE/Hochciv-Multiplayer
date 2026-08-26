@@ -109,7 +109,7 @@ const MP = {
             this.socket.on('session:kicked', (data) => {
                 MP.active = false;
                 toast(data && data.reason ? data.reason : 'Du wurdest vom Host gekickt.');
-                setTimeout(() => location.reload(), 2000);
+                MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
             });
             this.socket.on('lobby:config:update', (newConfig) => {
                 MP.gameConfig = newConfig;
@@ -223,7 +223,7 @@ const MP = {
                 };
 
                 fetchList();
-                this._publicListTimer = setInterval(fetchList, 3000);
+                this._publicListTimer = setInterval(fetchList, 5000);
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 let trs = this.players.map(p => {
