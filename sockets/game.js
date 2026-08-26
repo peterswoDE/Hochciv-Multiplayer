@@ -203,20 +203,21 @@ module.exports = function registerHandlers(io) {
                 const pName = session.players[playerIndex].name;
 
                 if (session.status === 'lobby') {
-                    sessions.kickPlayer(sessionId, playerIndex, true);
-
-                    if (session.players.length === 0) {
+                    if (isHost) {
                         sessions.removeSession(sessionId);
+                        io.to(sessionId).emit('session:kicked', { reason: 'Der Host hat die Lobby geschlossen.' });
                     } else {
-                        if (isHost) {
-                            session.hostIndex = 0; // After kick reindex, 0 is the new Host
+                        sessions.kickPlayer(sessionId, playerIndex, true);
+                        if (session.players.length === 0) {
+                            sessions.removeSession(sessionId);
+                        } else {
+                            io.to(sessionId).emit('player:left', {
+                                playerIndex,
+                                name: pName,
+                                players: publicPlayers(session),
+                                newHostIndex: session.hostIndex
+                            });
                         }
-                        io.to(sessionId).emit('player:left', {
-                            playerIndex,
-                            name: pName,
-                            players: publicPlayers(session),
-                            newHostIndex: session.hostIndex
-                        });
                     }
                 } else {
                     session.players[playerIndex].connected = false;

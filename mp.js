@@ -106,9 +106,9 @@ const MP = {
                 MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
             });
-            this.socket.on('session:kicked', () => {
+            this.socket.on('session:kicked', (data) => {
                 MP.active = false;
-                toast('Du wurdest vom Host gekickt.');
+                toast(data && data.reason ? data.reason : 'Du wurdest vom Host gekickt.');
                 setTimeout(() => location.reload(), 2000);
             });
             this.socket.on('lobby:config:update', (newConfig) => {
@@ -163,6 +163,7 @@ const MP = {
     showLobby: function () {
         let mode = 'menu';
         const render = () => {
+            if (this._publicListTimer) clearInterval(this._publicListTimer);
             let h = '';
             if (mode === 'menu') {
                 h = `
@@ -194,30 +195,35 @@ const MP = {
           <div id="mp-pl-container">Lade...</div>
           <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">Zurück</button>
         `;
-                // Fetch lobbies
-                fetch(`${this.serverUrl}/api/public-sessions`)
-                    .then(r => r.json())
-                    .then(list => {
-                        const c = $('mp-pl-container');
-                        if (!c) return;
-                        if (list.length === 0) {
-                            c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
-                            return;
-                        }
-                        c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
-                            list.map(l => `
-                            <tr style="border-bottom:1px solid #ccc;">
-                                <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
-                                <td style="padding: 8px 4px; text-align:right;">
-                                    <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
-                                </td>
-                            </tr>
-                        `).join('') + '</table>';
-                    })
-                    .catch(() => {
-                        const c = $('mp-pl-container');
-                        if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
-                    });
+
+                const fetchList = () => {
+                    fetch(`${this.serverUrl}/api/public-sessions`)
+                        .then(r => r.json())
+                        .then(list => {
+                            const c = $('mp-pl-container');
+                            if (!c) return;
+                            if (list.length === 0) {
+                                c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
+                                return;
+                            }
+                            c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
+                                list.map(l => `
+                                <tr style="border-bottom:1px solid #ccc;">
+                                    <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
+                                    <td style="padding: 8px 4px; text-align:right;">
+                                        <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
+                                    </td>
+                                </tr>
+                            `).join('') + '</table>';
+                        })
+                        .catch(() => {
+                            const c = $('mp-pl-container');
+                            if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
+                        });
+                };
+
+                fetchList();
+                this._publicListTimer = setInterval(fetchList, 3000);
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 let trs = this.players.map(p => {
