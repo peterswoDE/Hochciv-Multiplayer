@@ -24,8 +24,10 @@ services:
       - ./sessions.js:/app/sessions.js
       - ./sockets:/app/sockets
     networks:
-      - default
-      - nginx
+      default:
+        priority: 1000
+      nginx:
+        priority: 100
 
 networks:
   default:
