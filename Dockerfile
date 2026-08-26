@@ -1,7 +1,7 @@
 FROM node:20-slim
 
-# Install git, bash, curl, tar, and ca-certificates for resilient downloading
-RUN apt-get update && apt-get install -y git bash curl tar ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install git, bash, curl, tar, ca-certificates, and ping utility
+RUN apt-get update && apt-get install -y git bash curl tar ca-certificates iputils-ping && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -16,6 +16,76 @@ echo "======================================"
 echo "Starting Hochciv Multiplayer Server"
 echo "======================================"
 
+# Network diagnostic helpers
+resolve_host() {
+  local target="$1"
+  command -v getent >/dev/null 2>&1 && getent ahosts "$target" >/dev/null 2>&1 && return 0
+  command -v nslookup >/dev/null 2>&1 && nslookup "$target" >/dev/null 2>&1 && return 0
+  command -v host >/dev/null 2>&1 && host "$target" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+ping_host() {
+  local target="$1"
+  command -v ping >/dev/null 2>&1 || return 2
+  ping -c 1 -W 2 "$target" >/dev/null 2>&1 && return 0
+  ping -n 1 -w 2000 "$target" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+probe_https() {
+  local target="$1"
+  curl -fsSI --connect-timeout 4 --max-time 8 "https://$target" >/dev/null 2>&1 && return 0
+  curl -k -fsSI --connect-timeout 4 --max-time 8 "https://$target" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+# Test and log internet connectivity (Ping, DNS, HTTPS)
+test_internet_connection() {
+  echo "--- Network Connectivity Test ---"
+  local domain
+  domain=$(echo "$REPO_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:.*$||')
+  [ -z "$domain" ] && domain="github.com"
+
+  # 1. ICMP Ping Test to public IP
+  printf "[Ping] Testing ICMP ping to 1.1.1.1... "
+  if ping_host 1.1.1.1; then
+    echo "SUCCESS (1.1.1.1 reachable)"
+  elif ping_host 8.8.8.8; then
+    echo "SUCCESS (8.8.8.8 reachable)"
+  else
+    echo "FAILED (ICMP blocked or no route)"
+  fi
+
+  # 2. DNS Resolution Test
+  printf "[DNS] Resolving %s... " "$domain"
+  if resolve_host "$domain"; then
+    echo "SUCCESS"
+  else
+    echo "FAILED"
+  fi
+
+  # 3. Target Host Ping
+  printf "[Ping] Testing ping to %s... " "$domain"
+  if ping_host "$domain"; then
+    echo "SUCCESS"
+  else
+    echo "FAILED / BLOCKED"
+  fi
+
+  # 4. HTTPS Handshake Probe
+  printf "[HTTPS] Probing https://%s... " "$domain"
+  if probe_https "$domain"; then
+    echo "SUCCESS (Internet connection confirmed)"
+  else
+    echo "FAILED / TIMEOUT"
+  fi
+  echo "---------------------------------"
+}
+
+# Run connectivity test on container start
+test_internet_connection
+
 # Ensure DNS resolution works inside container
 ensure_dns() {
   local domain
@@ -23,7 +93,7 @@ ensure_dns() {
   [ -z "$domain" ] && domain="github.com"
 
   # Quick check if domain resolves
-  if getent ahosts "$domain" >/dev/null 2>&1 || ping -c 1 -W 2 "$domain" >/dev/null 2>&1; then
+  if resolve_host "$domain" || ping_host "$domain"; then
     return 0
   fi
 
