@@ -113,10 +113,13 @@ const MP = {
             this.socket.on('state:update', data => {
                 S = data.state;
                 MP.syncTurnBlocker();
+                MP.updateHudDelayed();
+                MP.updatePersistentLog();
                 // If it's a new turn for us, trigger UI events
                 if (S.cur === MP.playerIndex && MP.lastTurn !== S.cur && !S.over) {
                     MP.lastTurn = S.cur;
                     humanTurnStart();
+                    MP.animDeinZug();
                 } else {
                     MP.lastTurn = S.cur;
                     redraw();
@@ -490,8 +493,26 @@ window.addEventListener('DOMContentLoaded', () => {
             background: #904030; color: white; padding: 6px 14px; border-radius: 4px; z-index: 1000; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .mp-waiting .mp-waiting-toast { display: block; }
+        @keyframes mpAnimPop {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+        #mp-persistent-log {
+            position: fixed; right: 10px; bottom: 80px; width: 320px; max-height: 50vh;
+            overflow-y: auto; background: rgba(255,255,240,0.95); pointer-events: auto;
+            border: 2px solid #a89f91; padding: 10px; border-radius: 6px; z-index: 50;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333;
+        }
+        #mp-persistent-log .logline { margin-bottom: 4px; }
+        #mp-persistent-log .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
     `;
     document.head.appendChild(style);
+
+    const pLog = document.createElement('div');
+    pLog.id = 'mp-persistent-log';
+    document.body.appendChild(pLog);
 
     // Inject Turn Blocker active toast
     const waitToast = document.createElement('div');
