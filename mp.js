@@ -12,6 +12,51 @@ const MP = {
     gameConfig: {},
     serverUrl: "",
 
+    getClientId: function () {
+        let id = sessionStorage.getItem('mp-clientId');
+        if (!id) {
+            id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9);
+            sessionStorage.setItem('mp-clientId', id);
+        }
+        return id;
+    },
+
+    animDeinZug: function () {
+        if (!this.active) return;
+        const d = document.createElement('div');
+        d.textContent = 'DU BIST AM ZUG!';
+        d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:8vmin;color:white;font-weight:bold;text-shadow:0 0 20px #000, 0 0 10px #702010;z-index:9999;animation: mpAnimPop 2s forwards;pointer-events:none;text-align:center;line-height:1.2;';
+        document.body.appendChild(d);
+        setTimeout(() => d.remove(), 2100);
+    },
+
+    updateHudDelayed: function () {
+        if (!this.active) return;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const hn = document.getElementById('hud-name');
+                if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
+                    const curCiv = S.players[S.cur].civ;
+                    const p = MP.players.find(x => x.civ === curCiv);
+                    if (p && hn.textContent.indexOf(p.name) === -1) {
+                        hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+                    }
+                }
+            });
+        });
+    },
+
+    updatePersistentLog: function () {
+        if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
+        const pl = document.getElementById('mp-persistent-log');
+        if (pl && typeof logHtml === 'function') {
+            const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
+            pl.style.display = 'block';
+            pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
+            if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
+        }
+    },
+
     connect: function () {
         if (this.socket) return Promise.resolve();
         return new Promise((resolve) => {
