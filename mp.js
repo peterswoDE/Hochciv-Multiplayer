@@ -300,7 +300,8 @@ const MP = {
                 }
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
@@ -352,7 +353,8 @@ const MP = {
                 }
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
@@ -409,7 +411,8 @@ const MP = {
                 this.setMode('waiting');
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
