@@ -199,22 +199,43 @@ module.exports = function registerHandlers(io) {
         // ── Disconnect ───────────────────────────────────────────────────────
         socket.on('disconnect', () => {
             if (session && session.players[playerIndex]) {
-                session.players[playerIndex].connected = false;
-                session.players[playerIndex].socketId = null;
+                const isHost = session.hostIndex === playerIndex;
+                const pName = session.players[playerIndex].name;
 
-                if (session.hostIndex === playerIndex) {
-                    const nextHost = session.players.find(p => p.connected && p.index !== playerIndex);
-                    if (nextHost) {
-                        session.hostIndex = nextHost.index;
+                if (session.status === 'lobby') {
+                    sessions.kickPlayer(sessionId, playerIndex, true);
+
+                    if (session.players.length === 0) {
+                        sessions.removeSession(sessionId);
+                    } else {
+                        if (isHost) {
+                            session.hostIndex = 0; // After kick reindex, 0 is the new Host
+                        }
+                        io.to(sessionId).emit('player:left', {
+                            playerIndex,
+                            name: pName,
+                            players: publicPlayers(session),
+                            newHostIndex: session.hostIndex
+                        });
                     }
-                }
+                } else {
+                    session.players[playerIndex].connected = false;
+                    session.players[playerIndex].socketId = null;
 
-                io.to(sessionId).emit('player:left', {
-                    playerIndex,
-                    name: session.players[playerIndex].name,
-                    players: publicPlayers(session),
-                    newHostIndex: session.hostIndex
-                });
+                    if (isHost) {
+                        const nextHost = session.players.find(p => p.connected && p.index !== playerIndex);
+                        if (nextHost) {
+                            session.hostIndex = nextHost.index;
+                        }
+                    }
+
+                    io.to(sessionId).emit('player:left', {
+                        playerIndex,
+                        name: pName,
+                        players: publicPlayers(session),
+                        newHostIndex: session.hostIndex
+                    });
+                }
             }
         });
     });

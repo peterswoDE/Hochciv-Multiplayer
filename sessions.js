@@ -54,6 +54,7 @@ function createSession(gameConfig, hostInfo) {
             {
                 index: 0,
                 name: hostInfo.name || 'Host',
+                clientId: hostInfo.clientId,
                 civ: hostInfo.civ || 'griechenland',
                 ability: hostInfo.ability || 'basis',
                 kind: 'human',
@@ -84,7 +85,7 @@ function joinSession(joinCode, password, playerInfo) {
     if (session.password !== password) return 'Falsches Passwort.';
 
     // Check if player is reconnecting
-    const existingPlayer = session.players.find(p => p.name === playerInfo.name);
+    const existingPlayer = session.players.find(p => p.clientId === playerInfo.clientId);
     if (existingPlayer) {
         // It's a reconnection
         return { sessionId, playerIndex: existingPlayer.index };
@@ -104,6 +105,7 @@ function joinSession(joinCode, password, playerInfo) {
     session.players.push({
         index: playerIndex,
         name: fallbackName,
+        clientId: playerInfo.clientId,
         civ: playerInfo.civ || 'griechenland',
         ability: playerInfo.ability || 'basis',
         kind: 'human',
@@ -169,9 +171,10 @@ function cleanup() {
 const _cleanupTimer = setInterval(cleanup, config.CLEANUP_INTERVAL_MS);
 _cleanupTimer.unref();   // don't prevent Node from exiting
 
-function kickPlayer(sessionId, playerIndex) {
+function kickPlayer(sessionId, playerIndex, force = false) {
     const session = sessions.get(sessionId);
-    if (!session || session.status !== 'lobby' || playerIndex === 0) return false;
+    if (!session || session.status !== 'lobby') return false;
+    if (playerIndex === 0 && !force) return false;
 
     session.players.splice(playerIndex, 1);
     // Reindex remaining players

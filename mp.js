@@ -265,7 +265,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name } })
+                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
@@ -317,7 +317,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name } })
+                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
