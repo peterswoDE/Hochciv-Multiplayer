@@ -25,6 +25,11 @@ router.post('/sessions/join', (req, res) => {
     res.json(result);
 });
 
+// ── GET /api/public-sessions — list all public sessions ─────────────────────
+router.get('/public-sessions', (req, res) => {
+    res.json(sessions.getPublicSessions());
+});
+
 // ── GET /api/sessions/:id — session info ────────────────────────────────────
 router.get('/sessions/:id', (req, res) => {
     const session = sessions.getSession(req.params.id);

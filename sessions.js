@@ -44,8 +44,11 @@ function createSession(gameConfig, hostInfo) {
         joinCode,
         password,                     // 6-digit numeric, shared out-of-band
         gameConfig,                   // raw setup data from host
+        isPublic: gameConfig.isPublic === true,
         status: 'lobby',              // lobby → playing → finished
         createdAt: Date.now(),
+        lastActivity: Date.now(),
+        emptySince: null,
         hostIndex: 0,
         players: [
             {
@@ -132,7 +135,31 @@ function removeSession(sessionId) {
 function cleanup() {
     const now = Date.now();
     for (const [id, s] of sessions) {
+        let shouldTerminate = false;
+
+        // 1. Session absolute timeout
         if (now - s.createdAt > config.SESSION_TIMEOUT_MS) {
+            shouldTerminate = true;
+        }
+
+        // 2. Empty room termination
+        const hasConnectedPlayers = s.players.some(p => p.connected);
+        if (!hasConnectedPlayers) {
+            if (!s.emptySince) {
+                s.emptySince = now;
+            } else if (now - s.emptySince > 10 * 1000) { // 10 seconds empty grace period
+                shouldTerminate = true;
+            }
+        } else {
+            s.emptySince = null;
+        }
+
+        // 3. Inactivity termination (10 mins)
+        if (s.lastActivity && now - s.lastActivity > 10 * 60 * 1000) {
+            shouldTerminate = true;
+        }
+
+        if (shouldTerminate) {
             removeSession(id);
         }
     }
@@ -182,6 +209,32 @@ function updatePlayer(sessionId, playerIndex, updates) {
     return true;
 }
 
+function getPublicSessions() {
+    const list = [];
+    for (const [id, s] of sessions) {
+        if (s.status === 'lobby' && s.isPublic) {
+            list.push({
+                id: s.id,
+                joinCode: s.joinCode,
+                password: s.password,
+                hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
+                playersCount: s.players.length,
+                maxPlayers: config.MAX_PLAYERS,
+                mapKey: s.gameConfig.mapKey || '0',
+            });
+        }
+    }
+    return list;
+}
+
+function recordActivity(sessionId) {
+    const s = sessions.get(sessionId);
+    if (s) {
+        s.lastActivity = Date.now();
+        s.emptySince = null;
+    }
+}
+
 module.exports = {
     createSession,
     joinSession,
@@ -192,4 +245,6 @@ module.exports = {
     kickPlayer,
     updateConfig,
     updatePlayer,
+    getPublicSessions,
+    recordActivity,
 };

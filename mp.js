@@ -10,7 +10,7 @@ const MP = {
     hostIndex: 0,
     players: [],
     gameConfig: {},
-    serverUrl: 'http://localhost:3000',
+    serverUrl: "",
 
     connect: function () {
         if (this.socket) return Promise.resolve();
@@ -103,7 +103,8 @@ const MP = {
             if (mode === 'menu') {
                 h = `
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">Neues Spiel hosten (Server)</button>
-          <button class="btn wide" onclick="MP.setMode('join')">Einem Spiel beitreten</button>
+          <button class="btn wide" onclick="MP.setMode('public-list')">Öffentliche Lobbys suchen</button>
+          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">Privatem Spiel beitreten</button>
         `;
             } else if (mode === 'join') {
                 const savedName = localStorage.getItem('mp-name') || 'Spieler';
@@ -117,9 +118,42 @@ const MP = {
                 const savedName = localStorage.getItem('mp-name') || 'Host';
                 h = `
           <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="${savedName}"></label>
+          <label class="row" style="margin-top:10px"><span>Öffentlich</span><input type="checkbox" id="mp-is-public" checked></label>
           <p class="sub">Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.</p>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
         `;
+            } else if (mode === 'public-list') {
+                const savedName = localStorage.getItem('mp-name') || 'Spieler';
+                h = `
+          <label class="row" style="margin-bottom:15px"><span>Dein Name</span><input type="text" id="mp-pln" value="${savedName}"></label>
+          <h3 style="margin-bottom:10px">Öffentliche Lobbys</h3>
+          <div id="mp-pl-container">Lade...</div>
+          <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">Zurück</button>
+        `;
+                // Fetch lobbies
+                fetch(`${this.serverUrl}/api/public-sessions`)
+                    .then(r => r.json())
+                    .then(list => {
+                        const c = $('mp-pl-container');
+                        if (!c) return;
+                        if (list.length === 0) {
+                            c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
+                            return;
+                        }
+                        c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
+                            list.map(l => `
+                            <tr style="border-bottom:1px solid #ccc;">
+                                <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
+                                <td style="padding: 8px 4px; text-align:right;">
+                                    <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
+                                </td>
+                            </tr>
+                        `).join('') + '</table>';
+                    })
+                    .catch(() => {
+                        const c = $('mp-pl-container');
+                        if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
+                    });
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 let trs = this.players.map(p => {
@@ -270,13 +304,68 @@ const MP = {
         }
     },
 
+    joinPublic: async function (joinCode, password) {
+        const nameInput = $('mp-pln');
+        if (!nameInput) return;
+        const name = nameInput.value.trim();
+        if (!name) return toast('Bitte Namen eingeben.');
+
+        localStorage.setItem('mp-name', name);
+
+        try {
+            toast('Verbinde...');
+            const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ joinCode, password, player: { name } })
+            });
+            const data = await res.json();
+            if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
+
+            this.sessionId = data.sessionId;
+            this.lobbyIndex = data.playerIndex;
+            this.joinCode = joinCode;
+            this.password = password;
+
+            await this.connect();
+
+            this.socket.emit('session:connect', {
+                sessionId: this.sessionId,
+                playerIndex: this.lobbyIndex,
+                password: this.password
+            }, (ack) => {
+                if (ack.error) return toast(ack.error);
+
+                this.active = true;
+                this.players = ack.players;
+                this.gameConfig = ack.gameConfig || {};
+                this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
+
+                const credBox = $('mp-cred-box');
+                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+
+                if (ack.status === 'playing') {
+                    toast('Spiel läuft, lade Zustand...');
+                }
+                else {
+                    this.setMode('waiting');
+                }
+            });
+        } catch (e) {
+            toast('Server nicht erreichbar.');
+        }
+    },
+
     host: async function () {
         const name = $('mp-hn').value.trim();
+        const isPublicCheckbox = $('mp-is-public');
+        const isPublic = isPublicCheckbox ? isPublicCheckbox.checked : false;
         localStorage.setItem('mp-name', name);
 
         // Create local config with valid defaults (since Singleplayer UI is bypassed)
         const config = {
             seed: Math.floor(Math.random() * 2 ** 31) | 0,
+            isPublic: isPublic,
             duel: false, // Could read from setupMode if needed
             events: false,
             eventMode: 'hard',
