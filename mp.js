@@ -516,7 +516,7 @@ window.addEventListener('DOMContentLoaded', () => {
             100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
         }
         #mp-persistent-log {
-            position: fixed; right: 10px; bottom: 80px; width: 320px; max-height: 50vh;
+            position: fixed; right: 10px; top: 60px; width: 320px; max-height: 50vh;
             overflow-y: auto; background: rgba(255,255,240,0.95); pointer-events: auto;
             border: 2px solid #a89f91; padding: 10px; border-radius: 6px; z-index: 50;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333;
