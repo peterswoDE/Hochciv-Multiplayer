@@ -16,44 +16,137 @@ echo "======================================"
 echo "Starting Hochciv Multiplayer Server"
 echo "======================================"
 
-# Internal function to clone or update
-update_frontend() {
-  if [ ! -d "public/.git" ]; then
-    echo "[Init] Cloning original Hochciv repository ($BRANCH)..."
-    if ! run_cmd_with_retries "git clone -b \"$BRANCH\" \"$REPO_URL\" public"; then
-      echo "[Error] Initial git clone failed after retries."
-      return 1
+# Ensure DNS resolution works inside container
+ensure_dns() {
+  local domain
+  domain=$(echo "$REPO_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:.*$||')
+  [ -z "$domain" ] && domain="github.com"
+
+  # Quick check if domain resolves
+  if getent ahosts "$domain" >/dev/null 2>&1 || ping -c 1 -W 2 "$domain" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[DNS] Warning: Could not resolve '$domain'. Attempting automatic DNS recovery..."
+
+  # 1. Try adding Docker default and standard DNS servers to /etc/resolv.conf if writable
+  if [ -w /etc/resolv.conf ]; then
+    local default_gw
+    default_gw=$(ip route show default 2>/dev/null | awk '{print $3}' | head -n1)
+    for ns in "127.0.0.11" "$default_gw" "1.1.1.1" "8.8.8.8" "9.9.9.9"; do
+      if [ -n "$ns" ] && ! grep -q "$ns" /etc/resolv.conf 2>/dev/null; then
+        echo "nameserver $ns" >> /etc/resolv.conf 2>/dev/null || true
+      fi
+    done
+  fi
+
+  if getent ahosts "$domain" >/dev/null 2>&1; then
+    echo "[DNS] Successfully restored DNS resolution for '$domain'."
+    return 0
+  fi
+
+  # 2. If standard DNS is blocked (e.g. UDP port 53 filtered), add static IP fallback for GitHub
+  if [[ "$domain" == *"github.com"* ]] && [ -w /etc/hosts ]; then
+    echo "[DNS] Standard DNS unreachable. Adding static GitHub fallback IPs to /etc/hosts..."
+    grep -q "github.com" /etc/hosts 2>/dev/null || echo "140.82.121.3 github.com" >> /etc/hosts 2>/dev/null || true
+    grep -q "codeload.github.com" /etc/hosts 2>/dev/null || echo "140.82.121.10 codeload.github.com" >> /etc/hosts 2>/dev/null || true
+    grep -q "api.github.com" /etc/hosts 2>/dev/null || echo "140.82.121.6 api.github.com" >> /etc/hosts 2>/dev/null || true
+  fi
+
+  return 0
+}
+
+# Multi-tier frontend download: Git Clone -> HTTP Archive Tarball -> Pre-bundled Fallback
+download_frontend() {
+  rm -rf public_tmp
+
+  # Strategy 1: Git shallow clone
+  echo "[Download] Attempting git shallow clone from $REPO_URL ($BRANCH)..."
+  if git clone --depth 1 -b "$BRANCH" "$REPO_URL" public_tmp 2>/dev/null; then
+    if [ -f "public_tmp/index.html" ]; then
+      rm -rf public
+      mv public_tmp public
+      echo "[Download] Git clone succeeded."
+      return 0
     fi
-    cd public
-  else
-    echo "[Update] Pulling latest changes from Hochciv repository..."
-    cd public
-    # Clean previous patches to avoid conflicts before pulling
-    git reset --hard HEAD
-    git clean -fd
-    if ! run_cmd_with_retries "git pull origin \"$BRANCH\""; then
-      echo "[Error] git pull failed after retries."
-      return 1
+  fi
+  rm -rf public_tmp
+
+  # Strategy 2: Direct HTTP archive tarball download
+  local gh_path
+  gh_path=$(echo "$REPO_URL" | sed -E 's/.*github\.com[\/:]([^\/]+)\/([^\/\.]+)(\.git)?/\1\/\2/')
+  if [ -n "$gh_path" ] && [ "$gh_path" != "$REPO_URL" ]; then
+    echo "[Download] Git clone failed; attempting HTTP tarball download for $gh_path ($BRANCH)..."
+    local tar_url1="https://codeload.github.com/${gh_path}/tar.gz/refs/heads/${BRANCH}"
+    local tar_url2="https://github.com/${gh_path}/archive/refs/heads/${BRANCH}.tar.gz"
+
+    mkdir -p public_tmp
+    if (curl -fsSL --connect-timeout 10 --max-time 60 "$tar_url1" 2>/dev/null || \
+        curl -fsSL --connect-timeout 10 --max-time 60 "$tar_url2" 2>/dev/null) | tar -xz --strip-components=1 -C public_tmp 2>/dev/null; then
+      if [ -f "public_tmp/index.html" ]; then
+        rm -rf public
+        mv public_tmp public
+        echo "[Download] HTTP archive download succeeded."
+        return 0
+      fi
     fi
+    rm -rf public_tmp
+  fi
+
+  # Strategy 3: Restore from pre-bundled image backup
+  if [ -d "/app/public_bundled" ] && [ -f "/app/public_bundled/index.html" ]; then
+    echo "[Download] Network downloads failed; restoring pre-bundled frontend from image..."
+    rm -rf public
+    mkdir -p public
+    cp -r /app/public_bundled/* public/
+    return 0
+  fi
+
+  # Strategy 4: Keep existing public if valid
+  if [ -f "public/index.html" ]; then
+    echo "[Download] Using existing frontend files in public/."
+    return 0
+  fi
+
+  return 1
+}
+
+# Inject multiplayer scripts and configuration into the frontend
+patch_frontend() {
+  if [ ! -f "public/index.html" ]; then
+    return 1
   fi
 
   echo "Injecting multiplayer scripts..."
-  # Clean previous copies if restarting
-  cp ../mp.js js/mp.js
-  
-  # Inject the script tags right before </body>, only if they don't already exist
-  if ! grep -q 'js/mp.js' index.html; then
-    sed -i -e '/<\/body>/i \
-<script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>\
-<script src="js/mp.js"></script>\
-' index.html
+  mkdir -p public/js
+
+  if [ -f "mp.js" ]; then
+    cp mp.js public/js/mp.js
+  elif [ -f "../mp.js" ]; then
+    cp ../mp.js public/js/mp.js
   fi
 
-  echo "Configuring frontend to use relative URLs (same-host)"
-  sed -i "s|serverUrl: 'http://localhost:3000'|serverUrl: ''|g" js/mp.js
+  node -e '
+  const fs = require("fs");
+  const htmlPath = "public/index.html";
+  if (fs.existsSync(htmlPath)) {
+    let html = fs.readFileSync(htmlPath, "utf8");
+    if (!html.includes("js/mp.js")) {
+      const snippet = "<script src=\"https://cdn.socket.io/4.8.0/socket.io.min.js\"></script>\n<script src=\"js/mp.js\"></script>\n";
+      html = html.replace("</body>", snippet + "</body>");
+      fs.writeFileSync(htmlPath, html, "utf8");
+    }
+  }
+  const jsPath = "public/js/mp.js";
+  if (fs.existsSync(jsPath)) {
+    let js = fs.readFileSync(jsPath, "utf8");
+    js = js.replace(/serverUrl:\s*["\x27]http:\/\/localhost:3000["\x27]/g, "serverUrl: \"\"");
+    fs.writeFileSync(jsPath, js, "utf8");
+  }
+  '
 
-  cd ..
   echo "[Completed] Frontend integration ready."
+  return 0
 }
 
 # Helper: run a shell command with retries and exponential backoff
@@ -64,8 +157,9 @@ run_cmd_with_retries() {
   local delay=2
 
   while [ $attempt -lt $max_retries ]; do
-    # shellcheck disable=SC2091
-    eval "$cmd" && return 0
+    if eval "$cmd"; then
+      return 0
+    fi
     attempt=$((attempt + 1))
     echo "[Retry] Command failed (attempt $attempt/$max_retries). Retrying in $delay seconds..."
     sleep $delay
@@ -75,21 +169,47 @@ run_cmd_with_retries() {
   return 1
 }
 
-# 1. Do initial clone/patch before starting the server (don't exit the script on failure)
+# Internal function to clone or update
+update_frontend() {
+  ensure_dns
+
+  if [ -d "public/.git" ]; then
+    echo "[Update] Pulling latest changes from Hochciv repository..."
+    cd public
+    git reset --hard HEAD >/dev/null 2>&1 || true
+    git clean -fd >/dev/null 2>&1 || true
+    if ! run_cmd_with_retries "git pull origin \"$BRANCH\""; then
+      echo "[Warning] git pull failed; using cached frontend version."
+    fi
+    cd ..
+  else
+    echo "[Init] Fetching Hochciv frontend ($BRANCH)..."
+    if ! run_cmd_with_retries "download_frontend"; then
+      echo "[Error] All download methods and fallbacks failed."
+      return 1
+    fi
+  fi
+
+  patch_frontend
+  return 0
+}
+
+# 1. Initial frontend setup before starting server
 if ! update_frontend; then
-  echo "[Warning] Initial clone/update failed; continuing. Auto-updater will retry periodically."
+  echo "[Warning] Initial frontend fetch failed; continuing. Auto-updater will retry periodically."
 fi
 
-# 2. Start the background auto-updater process
+# 2. Background auto-updater
 (
   while true; do
     sleep "$INTERVAL"
     echo "[Auto-Updater] Checking for updates on original repository..."
+    ensure_dns
     if [ -d "public/.git" ]; then
       cd public
-      if run_cmd_with_retries "git fetch origin \"$BRANCH\""; then
-        LOCAL=$(git rev-parse HEAD || echo "")
-        REMOTE=$(git rev-parse origin/"$BRANCH" || echo "")
+      if git fetch origin "$BRANCH" >/dev/null 2>&1; then
+        LOCAL=$(git rev-parse HEAD 2>/dev/null || echo "")
+        REMOTE=$(git rev-parse origin/"$BRANCH" 2>/dev/null || echo "")
         if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
           echo "[Auto-Updater] New updates found ($LOCAL -> $REMOTE). Updating..."
           cd ..
@@ -107,11 +227,15 @@ fi
         cd ..
       fi
     else
-      echo "[Auto-Updater] public/.git missing; attempting initial clone..."
-      if update_frontend; then
-        echo "[Auto-Updater] Initial clone applied successfully."
+      echo "[Auto-Updater] public/.git missing; checking if frontend download is needed..."
+      if [ ! -f "public/index.html" ]; then
+        if update_frontend; then
+          echo "[Auto-Updater] Frontend downloaded successfully."
+        else
+          echo "[Auto-Updater] Download failed; will retry later."
+        fi
       else
-        echo "[Auto-Updater] Initial clone failed; will retry later."
+        echo "[Auto-Updater] Frontend already available."
       fi
     fi
   done

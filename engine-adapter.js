@@ -12,11 +12,6 @@ const vm = require('vm');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
-let ENGINE_DIR = path.resolve(__dirname, 'public', 'js');
-if (!require('fs').existsSync(ENGINE_DIR)) {
-    ENGINE_DIR = path.resolve(__dirname, '..', 'Hochciv', 'js');
-}
-
 const FILES = ['data.js', 'hex.js', 'engine.js', 'expansion.js', 'bots.js'];
 
 // The sandbox shares a single global object so every file can see the
@@ -29,10 +24,48 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 
-for (const file of FILES) {
-    const code = fs.readFileSync(path.join(ENGINE_DIR, file), 'utf8');
-    vm.runInContext(code, sandbox, { filename: file });
+let isLoaded = false;
+
+function resolveEngineDir() {
+    let dir = path.resolve(__dirname, 'public', 'js');
+    if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'engine.js'))) {
+        return dir;
+    }
+    dir = path.resolve(__dirname, 'public_bundled', 'js');
+    if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'engine.js'))) {
+        return dir;
+    }
+    dir = path.resolve(__dirname, '..', 'Hochciv', 'js');
+    if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'engine.js'))) {
+        return dir;
+    }
+    return null;
 }
+
+function ensureEngineLoaded() {
+    if (isLoaded) return true;
+    const dir = resolveEngineDir();
+    if (!dir) {
+        return false;
+    }
+    try {
+        for (const file of FILES) {
+            const filePath = path.join(dir, file);
+            if (!fs.existsSync(filePath)) return false;
+            const code = fs.readFileSync(filePath, 'utf8');
+            vm.runInContext(code, sandbox, { filename: file });
+        }
+        isLoaded = true;
+        console.log(`[Engine Adapter] Loaded Hochciv game engine from ${dir}`);
+        return true;
+    } catch (err) {
+        console.error(`[Engine Adapter] Error loading game engine from ${dir}:`, err);
+        return false;
+    }
+}
+
+// Attempt initial load
+ensureEngineLoaded();
 
 // ── Expose engine functions ──────────────────────────────────────────────────
 
@@ -44,6 +77,9 @@ const E = sandbox;   // shorthand
  * @returns {object} The game state S
  */
 function createGame(session) {
+    if (!ensureEngineLoaded()) {
+        throw new Error('Game Engine ist noch nicht bereit (Frontend-Dateien fehlen). Bitte kurz warten.');
+    }
     const cfg = session.gameConfig || {};
 
     // Build the players array from session.players (lobby order)
@@ -109,6 +145,7 @@ function createGame(session) {
  * @returns {string|null}  error message or null on success
  */
 function applyAction(state, pi, action, params) {
+    if (!ensureEngineLoaded()) return 'Game Engine ist noch nicht bereit (Frontend-Dateien fehlen).';
     // Only the current player may act
     if (state.cur !== pi) return 'Du bist nicht am Zug.';
     if (state.over) return 'Das Spiel ist vorbei.';

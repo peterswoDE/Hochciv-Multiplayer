@@ -36,9 +36,14 @@ In the `docker-compose.yml`, you can customize the following variables:
 - `CORE_REPO_BRANCH`: The branch to clone for the frontend (e.g. `main`).
 - `UPDATE_INTERVAL_SEC`: How often (in seconds) the container queries the frontend repo for updates.
 
-Notes on resilience:
-- The `entrypoint.sh` script now retries network/git operations with exponential backoff when cloning or pulling. If the initial clone fails (for example due to DNS/network issues), the container will continue starting and the background auto-updater will keep retrying periodically according to `UPDATE_INTERVAL_SEC`.
-- To override retry behavior, set `CORE_REPO_URL` to a reachable mirror or pre-populate the `public/` directory before starting the container.
+Notes on resilience & offline operation:
+- **Build-Time Bundling**: Pre-built Docker images ship with the core Hochciv frontend already bundled and patched, allowing the server to start up immediately without requiring internet access at startup.
+- **Multi-Tier Download Engine**: If downloading or updating at runtime, `entrypoint.sh` automatically tries:
+  1. *Git Shallow Clone* (`--depth 1` for fast, lightweight transfer).
+  2. *Direct HTTP Tarball Extraction* (`curl` + `tar` from GitHub archives if Git fails).
+  3. *Pre-bundled Image Fallback* (restoring local bundled files if network is down).
+- **DNS Auto-Recovery**: If container DNS resolution fails (e.g. `Could not resolve host: github.com` due to restricted corporate/firewall networks), `entrypoint.sh` attempts automatic DNS resolver fixes and known static IP fallbacks.
+- **Host DNS Inheritance**: In `docker-compose.yml`, hardcoded DNS overrides have been removed so Docker containers properly inherit working DNS from the host network.
 
 ## 🛠️ Local Development
 

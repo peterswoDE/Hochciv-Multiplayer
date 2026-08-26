@@ -5,9 +5,11 @@ services:
     image: peterswode/hochciv-multiplayer:latest
     container_name: hochciv-multiplayer
     restart: unless-stopped
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
+    # By default, Docker inherits DNS from the host system.
+    # If your specific deployment requires custom DNS servers, uncomment below:
+    # dns:
+    #   - 8.8.8.8
+    #   - 1.1.1.1
     environment:
       - PORT=3000
       # Original repository URL
