@@ -379,7 +379,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config, host: { name } })
+                body: JSON.stringify({ config, host: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Hosten.');
