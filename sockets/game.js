@@ -25,6 +25,8 @@ module.exports = function registerHandlers(io) {
             playerIndex = data.playerIndex;
             session = s;
 
+            sessions.recordActivity(sessionId);
+
             const oldHostOffline = !s.players[s.hostIndex].connected;
 
             // Mark connected
@@ -64,6 +66,7 @@ module.exports = function registerHandlers(io) {
         socket.on('session:kick', (data, ack) => {
             if (!session) return ack?.({ error: 'Nicht verbunden.' });
             if (playerIndex !== session.hostIndex) return ack?.({ error: 'Nur der Host kann kicken.' });
+            sessions.recordActivity(sessionId);
 
             const targetIndex = data.playerIndex;
             const kickedPlayer = session.players[targetIndex];
@@ -93,6 +96,7 @@ module.exports = function registerHandlers(io) {
         socket.on('lobby:config', (newConfig, ack) => {
             if (!session) return ack?.({ error: 'Nicht verbunden.' });
             if (playerIndex !== session.hostIndex) return ack?.({ error: 'Nur der Host kann Einstellungen ändern.' });
+            sessions.recordActivity(sessionId);
 
             const updated = sessions.updateConfig(sessionId, newConfig);
             if (updated) {
@@ -107,6 +111,7 @@ module.exports = function registerHandlers(io) {
         socket.on('lobby:player:update', (updates, ack) => {
             if (!session) return ack?.({ error: 'Nicht verbunden.' });
             if (session.status !== 'lobby') return ack?.({ error: 'Spiel läuft bereits.' });
+            sessions.recordActivity(sessionId);
 
             const updated = sessions.updatePlayer(sessionId, playerIndex, updates);
             if (updated) {
@@ -126,6 +131,7 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Spiel läuft bereits.' });
             if (session.players.filter(p => p.kind === 'human').length < 1)
                 return ack?.({ error: 'Mindestens ein Spieler nötig.' });
+            sessions.recordActivity(sessionId);
 
             // Check for duplicate civilizations
             const usedCivs = new Set();
@@ -164,6 +170,7 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Spiel läuft nicht.' });
             if (!session.state)
                 return ack?.({ error: 'Kein Spielstand.' });
+            sessions.recordActivity(sessionId);
 
             const { type, params } = data || {};
             if (!type) return ack?.({ error: 'Aktionstyp fehlt.' });

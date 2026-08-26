@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  hochciv-local:
+    build: .
+    container_name: hochciv-multiplayer-local
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
+      - CORE_REPO_BRANCH=main
+      - UPDATE_INTERVAL_SEC=3600
+    volumes:
+      - ./mp.js:/app/mp.js
+      - ./mp.js:/app/public/js/mp.js
+      - ./server.js:/app/server.js
+      - ./sessions.js:/app/sessions.js
+      - ./sockets:/app/sockets
+      - ./routes:/app/routes
