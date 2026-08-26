@@ -20,7 +20,10 @@ echo "======================================"
 update_frontend() {
   if [ ! -d "public/.git" ]; then
     echo "[Init] Cloning original Hochciv repository ($BRANCH)..."
-    git clone -b "$BRANCH" "$REPO_URL" public
+    if ! run_cmd_with_retries "git clone -b \"$BRANCH\" \"$REPO_URL\" public"; then
+      echo "[Error] Initial git clone failed after retries."
+      return 1
+    fi
     cd public
   else
     echo "[Update] Pulling latest changes from Hochciv repository..."
@@ -28,7 +31,10 @@ update_frontend() {
     # Clean previous patches to avoid conflicts before pulling
     git reset --hard HEAD
     git clean -fd
-    git pull origin "$BRANCH"
+    if ! run_cmd_with_retries "git pull origin \"$BRANCH\""; then
+      echo "[Error] git pull failed after retries."
+      return 1
+    fi
   fi
 
   echo "Injecting multiplayer scripts..."
@@ -50,26 +56,63 @@ update_frontend() {
   echo "[Completed] Frontend integration ready."
 }
 
-# 1. Do initial clone/patch before starting the server
-update_frontend
+# Helper: run a shell command with retries and exponential backoff
+run_cmd_with_retries() {
+  local cmd="$1"
+  local max_retries=5
+  local attempt=0
+  local delay=2
+
+  while [ $attempt -lt $max_retries ]; do
+    # shellcheck disable=SC2091
+    eval "$cmd" && return 0
+    attempt=$((attempt + 1))
+    echo "[Retry] Command failed (attempt $attempt/$max_retries). Retrying in $delay seconds..."
+    sleep $delay
+    delay=$((delay * 2))
+  done
+
+  return 1
+}
+
+# 1. Do initial clone/patch before starting the server (don't exit the script on failure)
+if ! update_frontend; then
+  echo "[Warning] Initial clone/update failed; continuing. Auto-updater will retry periodically."
+fi
 
 # 2. Start the background auto-updater process
 (
   while true; do
     sleep "$INTERVAL"
     echo "[Auto-Updater] Checking for updates on original repository..."
-    cd public
-    git fetch origin "$BRANCH"
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/"$BRANCH")
-    if [ "$LOCAL" != "$REMOTE" ]; then
-      echo "[Auto-Updater] New updates found ($LOCAL -> $REMOTE). Updating..."
-      cd ..
-      update_frontend
-      echo "[Auto-Updater] Update applied successfully."
+    if [ -d "public/.git" ]; then
+      cd public
+      if run_cmd_with_retries "git fetch origin \"$BRANCH\""; then
+        LOCAL=$(git rev-parse HEAD || echo "")
+        REMOTE=$(git rev-parse origin/"$BRANCH" || echo "")
+        if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
+          echo "[Auto-Updater] New updates found ($LOCAL -> $REMOTE). Updating..."
+          cd ..
+          if update_frontend; then
+            echo "[Auto-Updater] Update applied successfully."
+          else
+            echo "[Auto-Updater] update_frontend failed; will retry later."
+          fi
+        else
+          echo "[Auto-Updater] Already up to date."
+          cd ..
+        fi
+      else
+        echo "[Auto-Updater] git fetch failed; will retry later."
+        cd ..
+      fi
     else
-      echo "[Auto-Updater] Already up to date."
-      cd ..
+      echo "[Auto-Updater] public/.git missing; attempting initial clone..."
+      if update_frontend; then
+        echo "[Auto-Updater] Initial clone applied successfully."
+      else
+        echo "[Auto-Updater] Initial clone failed; will retry later."
+      fi
     fi
   done
 ) &
