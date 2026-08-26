@@ -12,6 +12,67 @@ const MP = {
     gameConfig: {},
     serverUrl: "",
 
+    getClientId: function () {
+        let id = sessionStorage.getItem('mp-clientId');
+        if (!id) {
+            id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9);
+            sessionStorage.setItem('mp-clientId', id);
+        }
+        return id;
+    },
+
+    animDeinZug: function () {
+        if (!this.active || document.getElementById('mp-turn-popup')) return;
+        const d = document.createElement('div');
+        d.id = 'mp-turn-popup';
+        d.textContent = 'DU BIST AM ZUG!';
+        d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:8vmin;color:white;font-weight:bold;text-shadow:0 0 20px #000, 0 0 10px #702010;z-index:9999;animation: mpAnimPop 2s forwards;pointer-events:none;text-align:center;line-height:1.2;';
+        document.body.appendChild(d);
+        setTimeout(() => d.remove(), 2100);
+    },
+
+    updateHudDelayed: function () {
+        if (!this.active) return;
+
+        if (!this._hudObserver) {
+            this._hudObserver = new MutationObserver(() => {
+                const hn = document.getElementById('hud-name');
+                if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
+                    const curCiv = S.players[S.cur].civ;
+                    const p = MP.players.find(x => x.civ === curCiv);
+                    if (p && !hn.innerHTML.includes('opacity:0.75')) {
+                        hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+                    }
+                }
+            });
+            const target = document.getElementById('hud-name');
+            if (target) {
+                this._hudObserver.observe(target, { childList: true, characterData: true, subtree: true });
+            }
+        }
+
+        // Trigger initial hit
+        const hn = document.getElementById('hud-name');
+        if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
+            const curCiv = S.players[S.cur].civ;
+            const p = MP.players.find(x => x.civ === curCiv);
+            if (p && !hn.innerHTML.includes('opacity:0.75')) {
+                hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+            }
+        }
+    },
+
+    updatePersistentLog: function () {
+        if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
+        const pl = document.getElementById('mp-persistent-log');
+        if (pl && typeof logHtml === 'function') {
+            const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
+            pl.style.display = 'block';
+            pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
+            if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
+        }
+    },
+
     connect: function () {
         if (this.socket) return Promise.resolve();
         return new Promise((resolve) => {
@@ -68,10 +129,13 @@ const MP = {
             this.socket.on('state:update', data => {
                 S = data.state;
                 MP.syncTurnBlocker();
+                MP.updateHudDelayed();
+                MP.updatePersistentLog();
                 // If it's a new turn for us, trigger UI events
                 if (S.cur === MP.playerIndex && MP.lastTurn !== S.cur && !S.over) {
                     MP.lastTurn = S.cur;
                     humanTurnStart();
+                    MP.animDeinZug();
                 } else {
                     MP.lastTurn = S.cur;
                     redraw();
@@ -265,7 +329,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name } })
+                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
@@ -300,7 +364,8 @@ const MP = {
                 }
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
@@ -317,7 +382,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name } })
+                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
@@ -352,7 +417,8 @@ const MP = {
                 }
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
@@ -379,7 +445,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config, host: { name } })
+                body: JSON.stringify({ config, host: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Hosten.');
@@ -409,7 +475,8 @@ const MP = {
                 this.setMode('waiting');
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
@@ -442,8 +509,26 @@ window.addEventListener('DOMContentLoaded', () => {
             background: #904030; color: white; padding: 6px 14px; border-radius: 4px; z-index: 1000; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .mp-waiting .mp-waiting-toast { display: block; }
+        @keyframes mpAnimPop {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+        #mp-persistent-log {
+            position: fixed; right: 10px; top: 60px; width: 320px; max-height: 50vh;
+            overflow-y: auto; background: rgba(255,255,240,0.95); pointer-events: auto;
+            border: 2px solid #a89f91; padding: 10px; border-radius: 6px; z-index: 50;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333;
+        }
+        #mp-persistent-log .logline { margin-bottom: 4px; }
+        #mp-persistent-log .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
     `;
     document.head.appendChild(style);
+
+    const pLog = document.createElement('div');
+    pLog.id = 'mp-persistent-log';
+    document.body.appendChild(pLog);
 
     // Inject Turn Blocker active toast
     const waitToast = document.createElement('div');

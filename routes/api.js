@@ -5,8 +5,8 @@ const sessions = require('../sessions');
 // ── POST /api/sessions — create a new session ───────────────────────────────
 router.post('/sessions', (req, res) => {
     const { config, host } = req.body || {};
-    if (!host || !host.name) {
-        return res.status(400).json({ error: 'host.name ist erforderlich.' });
+    if (!host || !host.name || !host.clientId) {
+        return res.status(400).json({ error: 'host.name und host.clientId sind erforderlich.' });
     }
     const result = sessions.createSession(config || {}, host);
     res.status(201).json(result);
@@ -15,8 +15,8 @@ router.post('/sessions', (req, res) => {
 // ── POST /api/sessions/join — join with code + password ─────────────────────
 router.post('/sessions/join', (req, res) => {
     const { joinCode, password, player } = req.body || {};
-    if (!joinCode || !password || !player || !player.name) {
-        return res.status(400).json({ error: 'joinCode, password und player.name sind erforderlich.' });
+    if (!joinCode || !password || !player || !player.name || !player.clientId) {
+        return res.status(400).json({ error: 'joinCode, password, player.name und player.clientId sind erforderlich.' });
     }
     const result = sessions.joinSession(joinCode, password, player);
     if (typeof result === 'string') {
