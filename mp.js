@@ -22,8 +22,9 @@ const MP = {
     },
 
     animDeinZug: function () {
-        if (!this.active) return;
+        if (!this.active || document.getElementById('mp-turn-popup')) return;
         const d = document.createElement('div');
+        d.id = 'mp-turn-popup';
         d.textContent = 'DU BIST AM ZUG!';
         d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:8vmin;color:white;font-weight:bold;text-shadow:0 0 20px #000, 0 0 10px #702010;z-index:9999;animation: mpAnimPop 2s forwards;pointer-events:none;text-align:center;line-height:1.2;';
         document.body.appendChild(d);
@@ -32,18 +33,33 @@ const MP = {
 
     updateHudDelayed: function () {
         if (!this.active) return;
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+
+        if (!this._hudObserver) {
+            this._hudObserver = new MutationObserver(() => {
                 const hn = document.getElementById('hud-name');
                 if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
                     const curCiv = S.players[S.cur].civ;
                     const p = MP.players.find(x => x.civ === curCiv);
-                    if (p && hn.textContent.indexOf(p.name) === -1) {
+                    if (p && !hn.innerHTML.includes('opacity:0.75')) {
                         hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
                     }
                 }
             });
-        });
+            const target = document.getElementById('hud-name');
+            if (target) {
+                this._hudObserver.observe(target, { childList: true, characterData: true, subtree: true });
+            }
+        }
+
+        // Trigger initial hit
+        const hn = document.getElementById('hud-name');
+        if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
+            const curCiv = S.players[S.cur].civ;
+            const p = MP.players.find(x => x.civ === curCiv);
+            if (p && !hn.innerHTML.includes('opacity:0.75')) {
+                hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+            }
+        }
     },
 
     updatePersistentLog: function () {
