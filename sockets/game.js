@@ -133,11 +133,14 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Mindestens ein Spieler nötig.' });
             sessions.recordActivity(sessionId);
 
-            // Check for duplicate civilizations
-            const usedCivs = new Set();
-            for (const p of session.players) {
-                if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt!` });
-                usedCivs.add(p.civ);
+            // Check for duplicate civilizations (only if not on a random map)
+            if (session.gameConfig.mapKey !== 'random') {
+                const usedCivs = new Set();
+                for (const p of session.players) {
+                    if (p.civ === 'random') return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
+                    if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Dies ist nur auf der Zufallskarte erlaubt.` });
+                    usedCivs.add(p.civ);
+                }
             }
 
             try {
