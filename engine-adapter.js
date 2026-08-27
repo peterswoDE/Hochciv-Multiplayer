@@ -21,7 +21,11 @@ const sandbox = {
     String, Infinity, parseInt, parseFloat, isNaN, isFinite,
     Error, TypeError, RangeError, RegExp, Date, Symbol,
     setTimeout, clearTimeout, setInterval, clearInterval,
-    T: function (str) { return str; }
+    T: function (str, ...args) {
+        let out = str;
+        args.forEach(a => { if (out && out.replace) out = out.replace('%s', a); });
+        return out;
+    }
 };
 vm.createContext(sandbox);
 
@@ -153,86 +157,91 @@ function applyAction(state, pi, action, params) {
     // Bots are not controllable
     if (state.players[pi].kind === 'bot') return 'Bot-Spieler werden automatisch gesteuert.';
 
-    switch (action) {
-        // ── Research ──────────────────────────────────────────────
-        case 'research':
-            return E.doResearch(state, pi, params.tech);
+    try {
+        switch (action) {
+            // ── Research ──────────────────────────────────────────────
+            case 'research':
+                return E.doResearch(state, pi, params.tech);
 
-        case 'freeTech':
-            return E.useFreeTech(state, pi, params.tech);
+            case 'freeTech':
+                return E.useFreeTech(state, pi, params.tech);
 
-        case 'backPick':
-            return E.useBackPick(state, pi, params.tech);
+            case 'backPick':
+                return E.useBackPick(state, pi, params.tech);
 
-        case 'copyTech':
-            return E.copyTech(state, pi, params.tech, params.mode);
+            case 'copyTech':
+                return E.copyTech(state, pi, params.tech, params.mode);
 
-        // ── Cities ────────────────────────────────────────────────
-        case 'foundCity':
-            return E.foundCity(state, pi, params.r, params.c);
+            // ── Cities ────────────────────────────────────────────────
+            case 'foundCity':
+                return E.foundCity(state, pi, params.r, params.c);
 
-        case 'growCity': {
-            const city = state.cities.find(c => c.id === params.cityId);
-            if (!city) return 'Stadt nicht gefunden.';
-            return E.growCity(state, pi, city, params.mode);
+            case 'growCity': {
+                const city = state.cities.find(c => c.id === params.cityId);
+                if (!city) return 'Stadt nicht gefunden.';
+                return E.growCity(state, pi, city, params.mode);
+            }
+
+            case 'sacrifice': {
+                const city = state.cities.find(c => c.id === params.cityId);
+                if (!city) return 'Stadt nicht gefunden.';
+                return E.sacrifice(state, pi, city);
+            }
+
+            // ── Armies ────────────────────────────────────────────────
+            case 'buildArmy': {
+                const city = state.cities.find(c => c.id === params.cityId);
+                if (!city) return 'Stadt nicht gefunden.';
+                return E.buildArmy(state, pi, city);
+            }
+
+            case 'moveArmy': {
+                const army = state.armies.find(a => a.id === params.armyId);
+                if (!army) return 'Armee nicht gefunden.';
+                if (army.owner !== pi) return 'Nicht deine Armee.';
+                return E.moveArmy(state, army, params.r, params.c);
+            }
+
+            // ── Economy ───────────────────────────────────────────────
+            case 'buyPower':
+                return E.buyPower(state, pi, params.n || 1);
+
+            case 'buildRoad':
+                return E.buildRoad(state, pi, params.r, params.c, params.target);
+
+            case 'buyTile':
+                return E.buyTile(state, pi, params.r, params.c);
+
+            case 'coverPop':
+                return E.coverPop(state, pi, params.kind, params.amount);
+
+            case 'uncoverPop':
+                return E.uncoverPop(state, pi, params.kind, params.amount);
+
+            // ── Wonders ───────────────────────────────────────────────
+            case 'buildWonder': {
+                const city = state.cities.find(c => c.id === params.cityId);
+                if (!city) return 'Stadt nicht gefunden.';
+                return E.buildWonder(state, pi, city, params.wonder);
+            }
+
+            // ── Combat ────────────────────────────────────────────────
+            case 'nuke':
+                return E.nuke(state, pi, params.r, params.c);
+
+            // ── Turn ──────────────────────────────────────────────────
+            case 'endTurn':
+                E.endTurn(state);
+                // Auto-play bot turns
+                runBots(state);
+                return null;
+
+            default:
+                return `Unbekannte Aktion: ${action}`;
         }
-
-        case 'sacrifice': {
-            const city = state.cities.find(c => c.id === params.cityId);
-            if (!city) return 'Stadt nicht gefunden.';
-            return E.sacrifice(state, pi, city);
-        }
-
-        // ── Armies ────────────────────────────────────────────────
-        case 'buildArmy': {
-            const city = state.cities.find(c => c.id === params.cityId);
-            if (!city) return 'Stadt nicht gefunden.';
-            return E.buildArmy(state, pi, city);
-        }
-
-        case 'moveArmy': {
-            const army = state.armies.find(a => a.id === params.armyId);
-            if (!army) return 'Armee nicht gefunden.';
-            if (army.owner !== pi) return 'Nicht deine Armee.';
-            return E.moveArmy(state, army, params.r, params.c);
-        }
-
-        // ── Economy ───────────────────────────────────────────────
-        case 'buyPower':
-            return E.buyPower(state, pi, params.n || 1);
-
-        case 'buildRoad':
-            return E.buildRoad(state, pi, params.r, params.c, params.target);
-
-        case 'buyTile':
-            return E.buyTile(state, pi, params.r, params.c);
-
-        case 'coverPop':
-            return E.coverPop(state, pi, params.kind, params.amount);
-
-        case 'uncoverPop':
-            return E.uncoverPop(state, pi, params.kind, params.amount);
-
-        // ── Wonders ───────────────────────────────────────────────
-        case 'buildWonder': {
-            const city = state.cities.find(c => c.id === params.cityId);
-            if (!city) return 'Stadt nicht gefunden.';
-            return E.buildWonder(state, pi, city, params.wonder);
-        }
-
-        // ── Combat ────────────────────────────────────────────────
-        case 'nuke':
-            return E.nuke(state, pi, params.r, params.c);
-
-        // ── Turn ──────────────────────────────────────────────────
-        case 'endTurn':
-            E.endTurn(state);
-            // Auto-play bot turns
-            runBots(state);
-            return null;
-
-        default:
-            return `Unbekannte Aktion: ${action}`;
+    } catch (err) {
+        console.error(`[Engine] Ausnahme bei Aktion '${action}' von PI ${pi}:`, err);
+        return 'Server-Fehler bei der Ausführung.';
     }
 }
 

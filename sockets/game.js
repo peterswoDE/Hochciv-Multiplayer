@@ -145,6 +145,18 @@ module.exports = function registerHandlers(io) {
                 }
             }
 
+            // Fill empty lobby slots with bots up to exactly 4 players
+            while (session.players.length < 4) {
+                session.players.push({
+                    index: session.players.length,
+                    kind: 'bot',
+                    name: `Bot ${session.players.length}`,
+                    civ: 'random',
+                    ability: 'random',
+                    connected: false
+                });
+            }
+
             // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
             const engineApi = engine.getEngine();
             const CIVS = engineApi.CIVS || [];
@@ -248,24 +260,21 @@ module.exports = function registerHandlers(io) {
             if (!session.state)
                 return ack?.({ error: 'Spielstatus fehlt.' });
 
-            if (session.state.cur !== playerIndex)
+            const lobbyPlayer = session.players[playerIndex];
+            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+
+            if (session.state.cur !== finalIndex)
                 return ack?.({ error: 'Du bist nicht am Zug.' });
 
-            const err = engine.applyAction(session.state, playerIndex, data.type, data.params);
+            const err = engine.applyAction(session.state, finalIndex, data.type, data.params);
             if (err) return ack?.({ error: err });
 
             ack?.({ ok: true });
 
-            // Re-sync all connected clients
-            for (const lobbyPlayer of session.players) {
-                if (lobbyPlayer.socketId) {
-                    const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
-                    const finalIndex = session.state.players.findIndex(p => p.name === expectedName);
-                    io.to(lobbyPlayer.socketId).emit('state:update', {
-                        state: engine.stateForPlayer(session.state, finalIndex)
-                    });
-                }
-            }
+            // Re-sync all connected clients immediately after a valid action
+            broadcastState(io, session);
 
             // Check for game over
             if (session.state.over) {
@@ -358,6 +367,20 @@ module.exports = function registerHandlers(io) {
             }
         });
     });
+    // Start the global 15-second synchronization loop
+    if (!io.__syncInterval) {
+        io.__syncInterval = setInterval(() => {
+            for (const session of sessions.getAllSessions().values()) {
+                if (session.status === 'playing' && session.state) {
+                    try {
+                        broadcastState(io, session);
+                    } catch (err) {
+                        console.error(`[Sync] Error syncing session ${session.id}:`, err);
+                    }
+                }
+            }
+        }, 15000);
+    }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -373,11 +396,14 @@ function publicPlayers(session) {
 }
 
 function broadcastState(io, session) {
-    for (const p of session.players) {
-        if (p.socketId) {
-            const stateIndex = session.state.players.findIndex(sp => sp.civ === p.civ);
-            io.to(p.socketId).emit('state:update', {
-                state: engine.stateForPlayer(session.state, stateIndex),
+    for (const lobbyPlayer of session.players) {
+        if (lobbyPlayer.socketId) {
+            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+
+            io.to(lobbyPlayer.socketId).emit('state:update', {
+                state: engine.stateForPlayer(session.state, finalIndex),
                 currentPlayer: session.state.cur,
                 round: session.state.round,
             });

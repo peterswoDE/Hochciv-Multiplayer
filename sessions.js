@@ -250,4 +250,5 @@ module.exports = {
     updatePlayer,
     getPublicSessions,
     recordActivity,
+    getAllSessions: () => sessions,
 };
