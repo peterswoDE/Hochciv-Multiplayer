@@ -205,7 +205,7 @@ function updatePlayer(sessionId, playerIndex, updates) {
 
     // If the civ changed, forcefully reset the ability to 'basis' since the old ability key is invalid for the new civ.
     if (civChanged) {
-        player.ability = 'basis';
+        player.ability = player.civ === 'random' ? 'random' : 'basis';
     } else if (updates.ability) {
         player.ability = updates.ability;
     }
@@ -250,4 +250,5 @@ module.exports = {
     updatePlayer,
     getPublicSessions,
     recordActivity,
+    getAllSessions: () => sessions,
 };

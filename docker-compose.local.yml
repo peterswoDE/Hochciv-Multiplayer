@@ -18,3 +18,4 @@ services:
       - ./sessions.js:/app/sessions.js
       - ./sockets:/app/sockets
       - ./routes:/app/routes
+      - ./engine-adapter.js:/app/engine-adapter.js

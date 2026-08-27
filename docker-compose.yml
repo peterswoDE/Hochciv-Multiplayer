@@ -23,6 +23,7 @@ services:
       - ./server.js:/app/server.js
       - ./sessions.js:/app/sessions.js
       - ./sockets:/app/sockets
+      - ./engine-adapter.js:/app/engine-adapter.js
     networks:
       nginx:
 

@@ -106,25 +106,69 @@ const MP = {
                 MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
             });
-            this.socket.on('session:kicked', () => {
+            this.socket.on('session:kicked', (data) => {
                 MP.active = false;
-                toast('Du wurdest vom Host gekickt.');
-                setTimeout(() => location.reload(), 2000);
+                toast(data && data.reason ? data.reason : 'Du wurdest vom Host gekickt.');
+                MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
             });
             this.socket.on('lobby:config:update', (newConfig) => {
                 MP.gameConfig = newConfig;
                 if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
             });
 
+            this.socket.on('placement:start', data => {
+                MP.renderLobby = null; closeModal();
+
+                // Clever trick: Tell the native random map generator that EVERY other player across the network is a Bot!
+                // This tricks the native UI to instantly autocomplete them and ONLY present the single local player queue 
+                // for placement! This enables seamless simultaneous decentralized drafting!
+                data.cfg.players = MP.players.map(p => {
+                    return p.index === MP.lobbyIndex ? p : { ...p, kind: 'bot' };
+                });
+
+                window.placeReveal = function () {
+                    // Suppress revealing the map locally since we must wait for server resolution!
+                    document.body.classList.add('mp-waiting');
+                    if (MP.placementFinished) window.toast("Warten auf andere Spieler...");
+                }
+
+                const origPlaceSeat = window.placeSeat;
+                window.placeSeat = function (plan, seat, o, cell) {
+                    if (seat.idx === MP.lobbyIndex) {
+                        MP.placementFinished = true;
+                        MP.socket.emit('placement:action', { o, cell }, res => {
+                            if (res && res.error) window.toast(res.error);
+                        });
+                        document.body.classList.add('mp-waiting');
+                        window.toast('Warten auf andere Spieler...');
+                    }
+                    return origPlaceSeat(plan, seat, o, cell);
+                };
+
+                const origRandom = Math.random;
+                // Force seed predictability
+                Math.random = () => (data.seed / (Math.pow(2, 31)));
+                try {
+                    window.startPlacement(data.cfg);
+                } finally {
+                    Math.random = origRandom;
+                }
+            });
+
             this.socket.on('game:start', data => {
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
+
+                window.placeState = null;
+                document.body.classList.remove('mp-waiting');
+
                 MP.syncTurnBlocker();
                 MP.renderLobby = null; // Prevent Lobby from opening mid-game on reconnects
                 closeModal();
                 startGameScreen();
             });
+
 
             this.socket.on('state:update', data => {
                 S = data.state;
@@ -160,9 +204,12 @@ const MP = {
         }
     },
 
+
+
     showLobby: function () {
         let mode = 'menu';
         const render = () => {
+            if (this._publicListTimer) clearInterval(this._publicListTimer);
             let h = '';
             if (mode === 'menu') {
                 h = `
@@ -194,38 +241,48 @@ const MP = {
           <div id="mp-pl-container">Lade...</div>
           <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">Zurück</button>
         `;
-                // Fetch lobbies
-                fetch(`${this.serverUrl}/api/public-sessions`)
-                    .then(r => r.json())
-                    .then(list => {
-                        const c = $('mp-pl-container');
-                        if (!c) return;
-                        if (list.length === 0) {
-                            c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
-                            return;
-                        }
-                        c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
-                            list.map(l => `
-                            <tr style="border-bottom:1px solid #ccc;">
-                                <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
-                                <td style="padding: 8px 4px; text-align:right;">
-                                    <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
-                                </td>
-                            </tr>
-                        `).join('') + '</table>';
-                    })
-                    .catch(() => {
-                        const c = $('mp-pl-container');
-                        if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
-                    });
+
+                const fetchList = () => {
+                    fetch(`${this.serverUrl}/api/public-sessions`)
+                        .then(r => r.json())
+                        .then(list => {
+                            const c = $('mp-pl-container');
+                            if (!c) return;
+                            if (list.length === 0) {
+                                c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
+                                return;
+                            }
+                            c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
+                                list.map(l => `
+                                <tr style="border-bottom:1px solid #ccc;">
+                                    <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
+                                    <td style="padding: 8px 4px; text-align:right;">
+                                        <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
+                                    </td>
+                                </tr>
+                            `).join('') + '</table>';
+                        })
+                        .catch(() => {
+                            const c = $('mp-pl-container');
+                            if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
+                        });
+                };
+
+                fetchList();
+                this._publicListTimer = setInterval(fetchList, 5000);
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
-                    const civOpts = CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civOpts = '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>Zufall</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
                     const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
-                    const abOpts = civDef ? civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('') : '';
+                    let abOpts = '';
+                    if (p.civ === 'random') {
+                        abOpts = '<option value="random" selected>Zufall</option>';
+                    } else if (civDef) {
+                        abOpts = '<option value="random" ' + (p.ability === 'random' ? 'selected' : '') + '>Zufall</option>' + civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('');
+                    }
 
                     return `
                     <tr>

@@ -133,14 +133,105 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Mindestens ein Spieler nötig.' });
             sessions.recordActivity(sessionId);
 
-            // Check for duplicate civilizations
-            const usedCivs = new Set();
-            for (const p of session.players) {
-                if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt!` });
-                usedCivs.add(p.civ);
+            const isPlaettchen = session.gameConfig.mapKey === 'plaettchen' || session.gameConfig.mapKey === 'random';
+
+            // Check for duplicate civilizations (only if not on a random map)
+            if (!isPlaettchen) {
+                const usedCivs = new Set();
+                for (const p of session.players) {
+                    if (p.civ === 'random' || p.civ === 'zufall') return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
+                    if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Dies ist nur auf der Zufallskarte erlaubt.` });
+                    usedCivs.add(p.civ);
+                }
             }
 
+            // Fill empty lobby slots with bots up to exactly 4 players
+            while (session.players.length < 4) {
+                session.players.push({
+                    index: session.players.length,
+                    kind: 'bot',
+                    name: `Bot ${session.players.length}`,
+                    civ: 'random',
+                    ability: 'random',
+                    connected: false
+                });
+            }
+
+            // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
+            const engineApi = engine.getEngine();
+            const CIVS = engineApi.CIVS || [];
+            const allCivs = CIVS.map(c => c.k);
+            const pick = list => list[Math.floor(Math.random() * list.length)];
+            session.players.forEach((p, i) => {
+                if (p.civ !== 'random' && p.civ !== 'zufall') return;
+                const pool = allCivs.filter(k => isPlaettchen || !session.players.some((q, j) => j !== i && q.civ === k));
+                p.civ = pick(pool.length ? pool : allCivs);
+            });
+            session.players.forEach(p => {
+                if (p.ability !== 'random' && p.ability !== 'zufall') return;
+                const civDef = CIVS.find(c => c.k === p.civ) || { abilities: [{ k: 'basis' }] };
+                p.ability = pick(civDef.abilities).k;
+            });
+
+            const zaehler = {};
+            session.players.forEach(p => { zaehler[p.civ] = (zaehler[p.civ] || 0) + 1; });
+            const belegt = new Set();
+            session.players.forEach(p => { if (!belegt.has(p.civ)) { belegt.add(p.civ); p.colorOf = p.civ; } });
+            session.players.forEach(p => {
+                if (p.colorOf) return;
+                const frei = CIVS.map(c => c.k).find(k => !belegt.has(k)) || p.civ;
+                belegt.add(frei); p.colorOf = frei;
+            });
+            const lauf = {};
+            session.players.forEach(p => {
+                const civ = CIVS.find(c => c.k === p.civ);
+                p.color = p.colorOf === p.civ ? null : (CIVS.find(c => c.k === p.colorOf) || {}).color;
+                delete p.colorOf;
+                if (zaehler[p.civ] > 1 && civ) {
+                    const k = lauf[p.civ] = (lauf[p.civ] || 0) + 1;
+                    const ROMAN = ['I', 'II', 'III', 'IV'];
+                    p.mappedName = `${civ.n} ${ROMAN[k - 1] || k}`;
+                }
+            });
+
+            // Update clients immediately with finalized synced randomly rolled names & abilities
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+
             try {
+                if (isPlaettchen) {
+                    const seed = session.gameConfig.seed || Math.floor(Math.random() * 2 ** 31);
+                    const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
+                    if (!plan) return ack?.({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
+
+                    const rnd = engineApi.mapRng(seed + 12345);
+                    const humanSeats = [];
+                    plan.seats.forEach(seat => {
+                        const spl = session.players[seat.idx];
+                        if (spl && spl.kind === 'bot') {
+                            engineApi.botPlaceSeat(plan, seat, rnd);
+                        } else {
+                            humanSeats.push(seat);
+                        }
+                    });
+
+                    session.status = 'placement';
+                    session.placementState = {
+                        plan, seed, rnd,
+                        humanSeats,
+                        placedCount: 0
+                    };
+
+                    ack?.({ ok: true });
+                    io.to(sessionId).emit('placement:start', {
+                        cfg: session.gameConfig,
+                        seed,
+                        queue: humanSeats,
+                        at: 0,
+                        plan
+                    });
+                    return;
+                }
+
                 session.state = engine.createGame(session);
                 session.status = 'playing';
             } catch (err) {
@@ -150,10 +241,8 @@ module.exports = function registerHandlers(io) {
 
             ack?.({ ok: true });
 
-            // Send initial state to each player
             for (const lobbyPlayer of session.players) {
                 if (lobbyPlayer.socketId) {
-                    // engine.js sorts players by civ in newGame(), so we must find their updated index in the state!
                     const sortedStateIndex = session.state.players.findIndex(p => p.civ === lobbyPlayer.civ);
                     io.to(lobbyPlayer.socketId).emit('game:start', {
                         state: engine.stateForPlayer(session.state, sortedStateIndex),
@@ -169,30 +258,68 @@ module.exports = function registerHandlers(io) {
             if (session.status !== 'playing')
                 return ack?.({ error: 'Spiel läuft nicht.' });
             if (!session.state)
-                return ack?.({ error: 'Kein Spielstand.' });
-            sessions.recordActivity(sessionId);
+                return ack?.({ error: 'Spielstatus fehlt.' });
 
-            const { type, params } = data || {};
-            if (!type) return ack?.({ error: 'Aktionstyp fehlt.' });
+            const lobbyPlayer = session.players[playerIndex];
+            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
 
-            // playerIndex is the Lobby join index! Map it to the sorted state index.
-            const lobbyCiv = session.players[playerIndex].civ;
-            const stateIndex = session.state.players.findIndex(p => p.civ === lobbyCiv);
+            if (session.state.cur !== finalIndex)
+                return ack?.({ error: 'Du bist nicht am Zug.' });
 
-            if (stateIndex === -1) return ack?.({ error: 'Spieler nicht in der Partie.' });
-
-            const err = engine.applyAction(session.state, stateIndex, type, params || {});
+            const err = engine.applyAction(session.state, finalIndex, data.type, data.params);
             if (err) return ack?.({ error: err });
 
             ack?.({ ok: true });
 
-            // Broadcast updated state to all players
+            // Re-sync all connected clients immediately after a valid action
             broadcastState(io, session);
 
             // Check for game over
             if (session.state.over) {
                 session.status = 'finished';
                 io.to(sessionId).emit('game:over', session.state.over);
+            }
+        });
+
+        // ── Placement actions (for simultaneous plaettchen map) ─────────────────────
+        socket.on('placement:action', (data, ack) => {
+            if (!session || session.status !== 'placement') return ack?.({ error: 'Falscher Status' });
+
+            const st = session.placementState;
+            const seat = st.humanSeats.find(s => s.idx === playerIndex);
+
+            if (!seat) return ack?.({ error: 'Kein Startplatz für dich reserviert.' });
+            if (seat.cell != null) return ack?.({ error: 'Du hast dein Startplättchen bereits platziert.' });
+
+            const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
+            if (err) return ack?.({ error: err });
+
+            st.placedCount++;
+            ack?.({ ok: true });
+
+            if (st.placedCount >= st.humanSeats.length) {
+                // All players have placed! Generate map!
+                session.gameConfig.map = engine.getEngine().tileMap(st.plan);
+                try {
+                    session.state = engine.createGame(session);
+                    session.status = 'playing';
+
+                    for (const lobbyPlayer of session.players) {
+                        if (lobbyPlayer.socketId) {
+                            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+                            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+                            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+                            io.to(lobbyPlayer.socketId).emit('game:start', {
+                                state: engine.stateForPlayer(session.state, finalIndex),
+                                yourIndex: finalIndex,
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error starting game after placement', e);
+                }
             }
         });
 
@@ -203,20 +330,21 @@ module.exports = function registerHandlers(io) {
                 const pName = session.players[playerIndex].name;
 
                 if (session.status === 'lobby') {
-                    sessions.kickPlayer(sessionId, playerIndex, true);
-
-                    if (session.players.length === 0) {
+                    if (isHost) {
                         sessions.removeSession(sessionId);
+                        io.to(sessionId).emit('session:kicked', { reason: 'Der Host hat die Lobby geschlossen.' });
                     } else {
-                        if (isHost) {
-                            session.hostIndex = 0; // After kick reindex, 0 is the new Host
+                        sessions.kickPlayer(sessionId, playerIndex, true);
+                        if (session.players.length === 0) {
+                            sessions.removeSession(sessionId);
+                        } else {
+                            io.to(sessionId).emit('player:left', {
+                                playerIndex,
+                                name: pName,
+                                players: publicPlayers(session),
+                                newHostIndex: session.hostIndex
+                            });
                         }
-                        io.to(sessionId).emit('player:left', {
-                            playerIndex,
-                            name: pName,
-                            players: publicPlayers(session),
-                            newHostIndex: session.hostIndex
-                        });
                     }
                 } else {
                     session.players[playerIndex].connected = false;
@@ -239,6 +367,20 @@ module.exports = function registerHandlers(io) {
             }
         });
     });
+    // Start the global 15-second synchronization loop
+    if (!io.__syncInterval) {
+        io.__syncInterval = setInterval(() => {
+            for (const session of sessions.getAllSessions().values()) {
+                if (session.status === 'playing' && session.state) {
+                    try {
+                        broadcastState(io, session);
+                    } catch (err) {
+                        console.error(`[Sync] Error syncing session ${session.id}:`, err);
+                    }
+                }
+            }
+        }, 15000);
+    }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -254,11 +396,14 @@ function publicPlayers(session) {
 }
 
 function broadcastState(io, session) {
-    for (const p of session.players) {
-        if (p.socketId) {
-            const stateIndex = session.state.players.findIndex(sp => sp.civ === p.civ);
-            io.to(p.socketId).emit('state:update', {
-                state: engine.stateForPlayer(session.state, stateIndex),
+    for (const lobbyPlayer of session.players) {
+        if (lobbyPlayer.socketId) {
+            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+
+            io.to(lobbyPlayer.socketId).emit('state:update', {
+                state: engine.stateForPlayer(session.state, finalIndex),
                 currentPlayer: session.state.cur,
                 round: session.state.round,
             });
