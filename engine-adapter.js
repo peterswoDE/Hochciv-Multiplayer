@@ -12,7 +12,7 @@ const vm = require('vm');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
-const FILES = ['data.js', 'hex.js', 'engine.js', 'expansion.js', 'bots.js'];
+const FILES = ['data.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js'];
 
 // The sandbox shares a single global object so every file can see the
 // constants and functions defined by the previous one – just like a browser.
@@ -260,4 +260,4 @@ function stateForPlayer(state, _pi) {
     return JSON.parse(JSON.stringify(state));
 }
 
-module.exports = { createGame, applyAction, stateForPlayer };
+module.exports = { createGame, applyAction, stateForPlayer, getEngine: () => E };

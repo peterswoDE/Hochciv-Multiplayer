@@ -133,17 +133,95 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Mindestens ein Spieler nötig.' });
             sessions.recordActivity(sessionId);
 
+            const isPlaettchen = session.gameConfig.mapKey === 'plaettchen' || session.gameConfig.mapKey === 'random';
+
             // Check for duplicate civilizations (only if not on a random map)
-            if (session.gameConfig.mapKey !== 'random') {
+            if (!isPlaettchen) {
                 const usedCivs = new Set();
                 for (const p of session.players) {
-                    if (p.civ === 'random') return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
+                    if (p.civ === 'random' || p.civ === 'zufall') return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
                     if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Dies ist nur auf der Zufallskarte erlaubt.` });
                     usedCivs.add(p.civ);
                 }
             }
 
+            // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
+            const engineApi = engine.getEngine();
+            const CIVS = engineApi.CIVS || [];
+            const allCivs = CIVS.map(c => c.k);
+            const pick = list => list[Math.floor(Math.random() * list.length)];
+            session.players.forEach((p, i) => {
+                if (p.civ !== 'random' && p.civ !== 'zufall') return;
+                const pool = allCivs.filter(k => isPlaettchen || !session.players.some((q, j) => j !== i && q.civ === k));
+                p.civ = pick(pool.length ? pool : allCivs);
+            });
+            session.players.forEach(p => {
+                if (p.ability !== 'random' && p.ability !== 'zufall') return;
+                const civDef = CIVS.find(c => c.k === p.civ) || { abilities: [{ k: 'basis' }] };
+                p.ability = pick(civDef.abilities).k;
+            });
+
+            const zaehler = {};
+            session.players.forEach(p => { zaehler[p.civ] = (zaehler[p.civ] || 0) + 1; });
+            const belegt = new Set();
+            session.players.forEach(p => { if (!belegt.has(p.civ)) { belegt.add(p.civ); p.colorOf = p.civ; } });
+            session.players.forEach(p => {
+                if (p.colorOf) return;
+                const frei = CIVS.map(c => c.k).find(k => !belegt.has(k)) || p.civ;
+                belegt.add(frei); p.colorOf = frei;
+            });
+            const lauf = {};
+            session.players.forEach(p => {
+                const civ = CIVS.find(c => c.k === p.civ);
+                p.color = p.colorOf === p.civ ? null : (CIVS.find(c => c.k === p.colorOf) || {}).color;
+                delete p.colorOf;
+                if (zaehler[p.civ] > 1 && civ) {
+                    const k = lauf[p.civ] = (lauf[p.civ] || 0) + 1;
+                    const ROMAN = ['I', 'II', 'III', 'IV'];
+                    p.mappedName = `${civ.n} ${ROMAN[k - 1] || k}`;
+                }
+            });
+
+            // Update clients immediately with finalized synced randomly rolled names & abilities
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+
             try {
+                if (isPlaettchen) {
+                    const seed = session.gameConfig.seed || Math.floor(Math.random() * 2 ** 31);
+                    const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
+                    if (!plan) return ack?.({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
+
+                    const rnd = engineApi.mapRng(seed + 12345);
+                    const humanQueue = [];
+                    plan.seats.forEach(seat => {
+                        const spl = session.players[seat.idx];
+                        if (spl && spl.kind === 'bot') {
+                            engineApi.botPlaceSeat(plan, seat, rnd);
+                        } else {
+                            humanQueue.push(seat);
+                        }
+                    });
+
+                    // Bypass placement if there's no humans to place or it's resolved? 
+                    // Let's enter the placement phase state correctly.
+                    session.status = 'placement';
+                    session.placementState = {
+                        plan, seed, rnd,
+                        queue: humanQueue,
+                        at: 0
+                    };
+
+                    ack?.({ ok: true });
+                    io.to(sessionId).emit('placement:start', {
+                        cfg: session.gameConfig,
+                        seed,
+                        queue: humanQueue,
+                        at: 0,
+                        plan
+                    });
+                    return;
+                }
+
                 session.state = engine.createGame(session);
                 session.status = 'playing';
             } catch (err) {
@@ -153,10 +231,8 @@ module.exports = function registerHandlers(io) {
 
             ack?.({ ok: true });
 
-            // Send initial state to each player
             for (const lobbyPlayer of session.players) {
                 if (lobbyPlayer.socketId) {
-                    // engine.js sorts players by civ in newGame(), so we must find their updated index in the state!
                     const sortedStateIndex = session.state.players.findIndex(p => p.civ === lobbyPlayer.civ);
                     io.to(lobbyPlayer.socketId).emit('game:start', {
                         state: engine.stateForPlayer(session.state, sortedStateIndex),
@@ -241,6 +317,45 @@ module.exports = function registerHandlers(io) {
                     });
                 }
             }
+        });
+
+        // ── Placement actions (for plaettchen map) ──────────────────────────────────
+        socket.on('placement:action', (data, ack) => {
+            if (!session || session.status !== 'placement') return ack?.({ error: 'Falscher Status' });
+            const st = session.placementState;
+            const seat = st.queue[st.at];
+            if (!seat) return ack?.({ error: 'Kein Spieler in der Warteschlange' });
+
+            if (seat.idx !== playerIndex) return ack?.({ error: 'Du bist nicht am Zug.' });
+
+            const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
+            if (err) return ack?.({ error: err });
+
+            st.at++;
+
+            io.to(sessionId).emit('placement:update', { seatIdx: seat.idx, o: data.o, cell: data.cell, at: st.at });
+
+            if (st.at >= st.queue.length) {
+                // Placement done, start real game
+                session.gameConfig.map = engine.getEngine().tileMap(st.plan);
+                try {
+                    session.state = engine.createGame(session);
+                    session.status = 'playing';
+
+                    for (const lobbyPlayer of session.players) {
+                        if (lobbyPlayer.socketId) {
+                            const sortedStateIndex = session.state.players.findIndex(p => p.civ === lobbyPlayer.civ);
+                            io.to(lobbyPlayer.socketId).emit('game:start', {
+                                state: engine.stateForPlayer(session.state, sortedStateIndex),
+                                yourIndex: sortedStateIndex,
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error starting game after placement', e);
+                }
+            }
+            ack?.({ ok: true });
         });
     });
 };

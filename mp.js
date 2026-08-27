@@ -116,15 +116,55 @@ const MP = {
                 if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
             });
 
+            this.socket.on('placement:start', data => {
+                MP.renderLobby = null;
+                closeModal();
+
+                // Reconstruct local placeState matching `data.plan` initialized by server.
+                data.cfg.players = MP.players; // UI needs the rich player array.
+                window.placeState = {
+                    cfg: data.cfg,
+                    plan: data.plan,
+                    rnd: null,
+                    queue: data.queue,
+                    at: data.at,
+                    o: 0, cell: null, done: false
+                };
+
+                MP.patchPlacementUI();
+                show('screen-place');
+                placeStep();
+            });
+
+            this.socket.on('placement:update', data => {
+                if (window.placeState && !window.placeState.done) {
+                    const st = window.placeState;
+                    const seat = st.queue[st.at];
+                    if (seat) {
+                        try {
+                            placeSeat(st.plan, seat, data.o, data.cell);
+                        } catch (e) { }
+                    }
+                    st.at = data.at;
+                    placeStep();
+                }
+            });
+
             this.socket.on('game:start', data => {
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
+
+                // Clean up placement UI blocking if coming from placement
+                window.placeState = null;
+                document.body.classList.remove('mp-waiting');
+
                 MP.syncTurnBlocker();
                 MP.renderLobby = null; // Prevent Lobby from opening mid-game on reconnects
                 closeModal();
                 startGameScreen();
             });
+
 
             this.socket.on('state:update', data => {
                 S = data.state;
@@ -158,6 +198,66 @@ const MP = {
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    patchPlacementUI: function () {
+        if (this._placementPatched) return;
+        this._placementPatched = true;
+
+        // Suppress Hotseat modal and track Turns natively
+        const origPlaceStep = window.placeStep;
+        window.placeStep = function () {
+            const st = window.placeState;
+            // Native UI finishes when everything is placed, this triggers placeReveal!
+            if (!st || st.at >= st.queue.length) {
+                document.body.classList.remove('mp-waiting');
+                return origPlaceStep();
+            }
+
+            st.o = 0; st.cell = null;
+            window.drawPlace();
+
+            const seat = window.placeSeatNow();
+            if (seat && seat.idx === MP.playerIndex) {
+                // Active player's turn to place
+                const modal = document.getElementById('modal');
+                if (modal) window.closeModal();
+                document.body.classList.remove('mp-waiting');
+                window.toast('Du bist am Zug, dein Plättchen zu legen!');
+            } else if (seat) {
+                // Someone else's turn
+                const modal = document.getElementById('modal');
+                if (modal) window.closeModal();
+                document.body.classList.add('mp-waiting');
+                const civ = window.seatCiv(seat);
+                window.toast(`Warte auf ${civ.n}...`);
+            }
+        };
+
+        // Redirect Placement Actions to Multiplayer Socket
+        const origPlaceConfirm = window.placeConfirm;
+        window.placeConfirm = function () {
+            const st = window.placeState;
+            // If already completed (st.done is true), prevent single-player local map creation. Wait for game:start!
+            if (!st || st.done) {
+                window.toast('Sychronisiere Spielstart...');
+                return;
+            }
+
+            const seat = window.placeSeatNow();
+            if (!seat) return;
+            if (seat.idx !== MP.playerIndex) return window.toast('Du bist nicht am Zug!');
+            if (st.cell == null) return window.toast('Erst die Hauptstadt setzen.');
+
+            // Basic validity check natively to avoid round trips for obvious mistakes
+            const opts = window.placeOptions(st.plan, seat, st.o);
+            if (!opts[st.cell]) return window.toast('Nur auf Land – und nicht zu nah an einem fremden Plättchen.');
+
+            // Emit async to server. DO NOT artificially advance st.at until packet returns to keep determinism.
+            MP.socket.emit('placement:action', { o: st.o, cell: st.cell }, res => {
+                if (res && res.error) window.toast(res.error);
+            });
+        };
     },
 
     showLobby: function () {
