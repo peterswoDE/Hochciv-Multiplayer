@@ -192,30 +192,28 @@ module.exports = function registerHandlers(io) {
                     if (!plan) return ack?.({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
 
                     const rnd = engineApi.mapRng(seed + 12345);
-                    const humanQueue = [];
+                    const humanSeats = [];
                     plan.seats.forEach(seat => {
                         const spl = session.players[seat.idx];
                         if (spl && spl.kind === 'bot') {
                             engineApi.botPlaceSeat(plan, seat, rnd);
                         } else {
-                            humanQueue.push(seat);
+                            humanSeats.push(seat);
                         }
                     });
 
-                    // Bypass placement if there's no humans to place or it's resolved? 
-                    // Let's enter the placement phase state correctly.
                     session.status = 'placement';
                     session.placementState = {
                         plan, seed, rnd,
-                        queue: humanQueue,
-                        at: 0
+                        humanSeats,
+                        placedCount: 0
                     };
 
                     ack?.({ ok: true });
                     io.to(sessionId).emit('placement:start', {
                         cfg: session.gameConfig,
                         seed,
-                        queue: humanQueue,
+                        queue: humanSeats,
                         at: 0,
                         plan
                     });
@@ -248,30 +246,71 @@ module.exports = function registerHandlers(io) {
             if (session.status !== 'playing')
                 return ack?.({ error: 'Spiel läuft nicht.' });
             if (!session.state)
-                return ack?.({ error: 'Kein Spielstand.' });
-            sessions.recordActivity(sessionId);
+                return ack?.({ error: 'Spielstatus fehlt.' });
 
-            const { type, params } = data || {};
-            if (!type) return ack?.({ error: 'Aktionstyp fehlt.' });
+            if (session.state.cur !== playerIndex)
+                return ack?.({ error: 'Du bist nicht am Zug.' });
 
-            // playerIndex is the Lobby join index! Map it to the sorted state index.
-            const lobbyCiv = session.players[playerIndex].civ;
-            const stateIndex = session.state.players.findIndex(p => p.civ === lobbyCiv);
-
-            if (stateIndex === -1) return ack?.({ error: 'Spieler nicht in der Partie.' });
-
-            const err = engine.applyAction(session.state, stateIndex, type, params || {});
+            const err = engine.applyAction(session.state, playerIndex, data.type, data.params);
             if (err) return ack?.({ error: err });
 
             ack?.({ ok: true });
 
-            // Broadcast updated state to all players
-            broadcastState(io, session);
+            // Re-sync all connected clients
+            for (const lobbyPlayer of session.players) {
+                if (lobbyPlayer.socketId) {
+                    const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+                    const finalIndex = session.state.players.findIndex(p => p.name === expectedName);
+                    io.to(lobbyPlayer.socketId).emit('state:update', {
+                        state: engine.stateForPlayer(session.state, finalIndex)
+                    });
+                }
+            }
 
             // Check for game over
             if (session.state.over) {
                 session.status = 'finished';
                 io.to(sessionId).emit('game:over', session.state.over);
+            }
+        });
+
+        // ── Placement actions (for simultaneous plaettchen map) ─────────────────────
+        socket.on('placement:action', (data, ack) => {
+            if (!session || session.status !== 'placement') return ack?.({ error: 'Falscher Status' });
+
+            const st = session.placementState;
+            const seat = st.humanSeats.find(s => s.idx === playerIndex);
+
+            if (!seat) return ack?.({ error: 'Kein Startplatz für dich reserviert.' });
+            if (seat.cell != null) return ack?.({ error: 'Du hast dein Startplättchen bereits platziert.' });
+
+            const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
+            if (err) return ack?.({ error: err });
+
+            st.placedCount++;
+            ack?.({ ok: true });
+
+            if (st.placedCount >= st.humanSeats.length) {
+                // All players have placed! Generate map!
+                session.gameConfig.map = engine.getEngine().tileMap(st.plan);
+                try {
+                    session.state = engine.createGame(session);
+                    session.status = 'playing';
+
+                    for (const lobbyPlayer of session.players) {
+                        if (lobbyPlayer.socketId) {
+                            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
+                            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+                            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+                            io.to(lobbyPlayer.socketId).emit('game:start', {
+                                state: engine.stateForPlayer(session.state, finalIndex),
+                                yourIndex: finalIndex,
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error starting game after placement', e);
+                }
             }
         });
 
@@ -317,45 +356,6 @@ module.exports = function registerHandlers(io) {
                     });
                 }
             }
-        });
-
-        // ── Placement actions (for plaettchen map) ──────────────────────────────────
-        socket.on('placement:action', (data, ack) => {
-            if (!session || session.status !== 'placement') return ack?.({ error: 'Falscher Status' });
-            const st = session.placementState;
-            const seat = st.queue[st.at];
-            if (!seat) return ack?.({ error: 'Kein Spieler in der Warteschlange' });
-
-            if (seat.idx !== playerIndex) return ack?.({ error: 'Du bist nicht am Zug.' });
-
-            const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
-            if (err) return ack?.({ error: err });
-
-            st.at++;
-
-            io.to(sessionId).emit('placement:update', { seatIdx: seat.idx, o: data.o, cell: data.cell, at: st.at });
-
-            if (st.at >= st.queue.length) {
-                // Placement done, start real game
-                session.gameConfig.map = engine.getEngine().tileMap(st.plan);
-                try {
-                    session.state = engine.createGame(session);
-                    session.status = 'playing';
-
-                    for (const lobbyPlayer of session.players) {
-                        if (lobbyPlayer.socketId) {
-                            const sortedStateIndex = session.state.players.findIndex(p => p.civ === lobbyPlayer.civ);
-                            io.to(lobbyPlayer.socketId).emit('game:start', {
-                                state: engine.stateForPlayer(session.state, sortedStateIndex),
-                                yourIndex: sortedStateIndex,
-                            });
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error starting game after placement', e);
-                }
-            }
-            ack?.({ ok: true });
         });
     });
 };
