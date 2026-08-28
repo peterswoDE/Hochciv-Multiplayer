@@ -26,11 +26,8 @@ services:
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
       - UPDATE_INTERVAL_SEC=3600
-      - SMTP_HOST=
-      - SMTP_PORT=
-      - SMTP_USER=
-      - SMTP_PASS=
-      - SMTP_FROM=
+    env_file:
+      - secrets.env
     volumes:
       - ./mp.js:/app/mp.js
       - ./mp.js:/app/public/js/mp.js
