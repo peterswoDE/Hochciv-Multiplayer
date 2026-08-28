@@ -1,13 +1,28 @@
 version: '3.8'
 
 services:
+  hochciv-db:
+    image: postgres:15-alpine
+    container_name: hochciv-db
+    environment:
+      POSTGRES_USER: hochciv
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: hochciv
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
   hochciv-local:
     build: .
     container_name: hochciv-multiplayer-local
+    depends_on:
+      - hochciv-db
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
+      - DATABASE_URL=postgres://hochciv:password123@hochciv-db:5432/hochciv
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
       - UPDATE_INTERVAL_SEC=3600
@@ -18,4 +33,9 @@ services:
       - ./sessions.js:/app/sessions.js
       - ./sockets:/app/sockets
       - ./routes:/app/routes
+      - ./models:/app/models
+      - ./utils:/app/utils
       - ./engine-adapter.js:/app/engine-adapter.js
+
+volumes:
+  pgdata:

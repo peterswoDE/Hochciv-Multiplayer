@@ -1,6 +1,7 @@
 const sessions = require('../sessions');
 const engine = require('../engine-adapter');
-
+const { User, Game } = require('../models');
+const { calculateMMR } = require('../utils/mmr');
 /**
  * Register Socket.IO event handlers on the given server instance.
  * @param {import('socket.io').Server} io
@@ -32,6 +33,11 @@ module.exports = function registerHandlers(io) {
             // Mark connected
             s.players[playerIndex].connected = true;
             s.players[playerIndex].socketId = socket.id;
+            if (socket.request.user) {
+                s.players[playerIndex].dbUserId = socket.request.user.id;
+                s.players[playerIndex].dbUsername = socket.request.user.username;
+                s.players[playerIndex].mmr = socket.request.user.mmr;
+            }
 
             // Reclaim host if the lobby was abandoned
             if (oldHostOffline && s.hostIndex !== playerIndex) {
@@ -280,6 +286,11 @@ module.exports = function registerHandlers(io) {
             if (session.state.over) {
                 session.status = 'finished';
                 io.to(sessionId).emit('game:over', session.state.over);
+
+                // If the game was flagged as ranked, compile the MMR data
+                if (session.gameConfig && session.gameConfig.ranked) {
+                    processGameOverMmr(session, io, sessionId);
+                }
             }
         });
 
@@ -392,6 +403,7 @@ function publicPlayers(session) {
         civ: p.civ,
         ability: p.ability,
         connected: p.connected,
+        mmr: p.mmr || 1000
     }));
 }
 
@@ -408,5 +420,80 @@ function broadcastState(io, session) {
                 round: session.state.round,
             });
         }
+    }
+}
+
+/**
+ * Handle game over stats processing, database persistence, and Rating scaling.
+ */
+async function processGameOverMmr(session, io, sessionId) {
+    try {
+        if (!engine.getEngine().victoryScore) return console.error('victoryScore function not exposed from engine');
+
+        // Compile participant data
+        const playersData = [];
+        for (let i = 0; i < session.players.length; i++) {
+            const lp = session.players[i];
+            const sp = session.state.players[i];
+
+            let points = 0;
+            try {
+                points = engine.getEngine().victoryScore(session.state, i);
+            } catch (e) {
+                console.error('Error fetching score for player', i, e);
+            }
+
+            playersData.push({
+                dbUserId: lp.dbUserId,
+                dbUsername: lp.dbUsername,
+                name: lp.name,
+                civ: lp.civ,
+                ability: lp.ability,
+                isBot: lp.kind === 'bot',
+                points: points
+            });
+        }
+
+        // Fetch current MMR for all human users from DB
+        for (let p of playersData) {
+            if (p.dbUserId) {
+                const u = await User.findByPk(p.dbUserId);
+                p.mmr = u ? u.mmr : 1000;
+            } else {
+                p.mmr = 1000; // Fill bot MMR or missing user as baseline
+            }
+        }
+
+        // Execute Custom ELO/MMR Engine
+        const mmrResults = calculateMMR(playersData);
+
+        // Map results back for DB persistence
+        for (let res of mmrResults) {
+            const p = playersData.find(x => x.dbUserId === res.dbUserId && x.dbUserId != null);
+            if (p) {
+                p.mmrShift = res.mmrChange;
+                p.oldMmr = res.oldMmr;
+                p.newMmr = res.newMmr;
+
+                // Persist new MMR to DB
+                await User.update({
+                    mmr: res.newMmr,
+                    gamesPlayed: sequelize.literal('"gamesPlayed" + 1')
+                }, { where: { id: p.dbUserId } });
+            }
+        }
+
+        // Log the Historic Match Record
+        await Game.create({
+            version: engine.getEngine().APP_VERSION || 'Unknown',
+            durationRounds: session.state.round,
+            winnerUsername: session.state.over && session.state.over.id ? playersData.find(p => p.civ === session.state.over.id)?.dbUsername : null,
+            participants: playersData
+        });
+
+        console.log(`[MMR] Successfully processed ranked game ${sessionId}. Ratings updated.`);
+
+    } catch (err) {
+        console.error('[MMR] Failed to process game over logic:', err);
     }
 }

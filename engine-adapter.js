@@ -65,6 +65,8 @@ function ensureEngineLoaded() {
         // Expose CIVS and other consts directly into sandbox if needed
         try {
             sandbox.CIVS = vm.runInContext('CIVS', sandbox);
+            sandbox.APP_VERSION = vm.runInContext('typeof APP_VERSION !== "undefined" ? APP_VERSION : "Unknown"', sandbox);
+            sandbox.victoryScore = vm.runInContext('typeof victoryScore === "function" ? victoryScore : null', sandbox);
         } catch (e) { }
 
         console.log(`[Engine Adapter] Loaded Hochciv game engine from ${dir}`);

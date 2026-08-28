@@ -11,6 +11,20 @@ const MP = {
     players: [],
     gameConfig: {},
     serverUrl: "",
+    user: null,
+
+    fetchUser: async function () {
+        try {
+            const res = await fetch(`${this.serverUrl}/api/auth/me`);
+            if (res.ok) {
+                this.user = await res.json();
+            } else {
+                this.user = null;
+            }
+        } catch (e) {
+            this.user = null;
+        }
+    },
 
     getClientId: function () {
         let id = sessionStorage.getItem('mp-clientId');
@@ -59,6 +73,9 @@ const MP = {
                     displayName += ' <span style="opacity:0.75;font-weight:normal;">(· Bot)</span>';
                 } else if (p && p.name) {
                     displayName += ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+                    if (p.mmr) {
+                        displayName += ` <span style="opacity:0.6;font-size:11px;background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px;margin-left:4px">[${p.mmr} MMR]</span>`;
+                    }
                 }
 
                 const finalHtml = displayName + abBadge;
@@ -228,16 +245,48 @@ const MP = {
 
 
 
-    showLobby: function () {
+    showLobby: async function () {
+        await this.fetchUser();
         let mode = 'menu';
         const render = () => {
             if (this._publicListTimer) clearInterval(this._publicListTimer);
             let h = '';
+
+            const authBar = this.user
+                ? `<div style="background:#222; padding:8px; border-radius:4px; margin-bottom:15px; text-align:center;">
+                     Eingeloggt als <b>${this.user.username}</b> 
+                     (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) <span style="margin: 0 4px; color:#666">|</span> <a href="#" style="color:#aaa" onclick="MP.logout(); return false;">Logout</a>
+                   </div>`
+                : `<div style="background:#222; padding:8px; border-radius:4px; margin-bottom:15px; text-align:center;">
+                     Als Gast (Ranked gesperrt) <span style="margin: 0 4px; color:#666">|</span> 
+                     <a href="#" style="color:#2b85e4" onclick="MP.setMode('login'); return false;">Anmelden</a> oder <a href="#" style="color:#2b85e4" onclick="MP.setMode('register'); return false;">Registrieren</a>
+                   </div>`;
+
             if (mode === 'menu') {
                 h = `
+          ${authBar}
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">Neues Spiel hosten (Server)</button>
           <button class="btn wide" onclick="MP.setMode('public-list')">Öffentliche Lobbys suchen</button>
           <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">Privatem Spiel beitreten</button>
+        `;
+            } else if (mode === 'login') {
+                h = `
+          <h3 style="margin-bottom:15px; text-align:center;">Anmelden</h3>
+          <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+          <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+          <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none; color:red"></div>
+          <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('login')">Einloggen</button>
+          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('menu')">Abbrechen</button>
+        `;
+            } else if (mode === 'register') {
+                h = `
+          <h3 style="margin-bottom:15px; text-align:center;">Konto erstellen</h3>
+          <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+          <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+          <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+          <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none; color:red"></div>
+          <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('register')">Registrieren</button>
+          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('menu')">Abbrechen</button>
         `;
             } else if (mode === 'join') {
                 const savedName = localStorage.getItem('mp-name') || 'Spieler';
@@ -308,7 +357,7 @@ const MP = {
 
                     return `
                     <tr>
-                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''}</td>
+                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${p.mmr} MMR]</span>` : ''}</td>
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
@@ -353,6 +402,10 @@ const MP = {
                   ${DIFFICULTIES.map(d => `<option value="${d.k}" ${this.gameConfig.difficulty === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
                 </select>
               </label>
+              <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
+                <span><b>🔥 Gewertetes Spiel</b> <br><small style="font-size:10px;color:#777">(min 2 H-Spieler, Bots auf schwer)</small></span>
+                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
+              </label>
           </div>
 
           ${isHost ? '<button class="btn wide primary" onclick="MP.startGame()">Spiel starten</button>' : ''}
@@ -368,14 +421,62 @@ const MP = {
     updateLobbyConfig: function () {
         if (this.lobbyIndex !== this.hostIndex) return;
         const evModeEl = $('mp-set-evmode');
+        // Force the hardest difficulty if Ranked is checked
+        let diff = $('mp-set-diff').value;
+        const isRanked = $('mp-set-ranked') && $('mp-set-ranked').checked;
+        if (isRanked) {
+            diff = DIFFICULTIES[DIFFICULTIES.length - 1].k;
+            // Temporarily force UI visual to match
+            if ($('mp-set-diff')) $('mp-set-diff').value = diff;
+        }
+
         const newConfig = {
             mapKey: $('mp-set-map').value,
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
-            difficulty: $('mp-set-diff').value,
+            difficulty: diff,
+            ranked: isRanked
         };
         this.socket.emit('lobby:config', newConfig);
+    },
+
+    auth: async function (type) {
+        const username = $('mp-auth-usn').value.trim();
+        const password = $('mp-auth-pw').value.trim();
+        const errEl = $('mp-auth-err');
+
+        const payload = { username, password };
+        if (type === 'register') {
+            payload.email = $('mp-auth-em').value.trim();
+        }
+
+        try {
+            const res = await fetch(`${this.serverUrl}/api/auth/${type}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                errEl.innerText = data.error || 'Fehler beim Authentifizieren';
+                errEl.style.display = 'block';
+                return;
+            }
+            this.user = data;
+            this.setMode('menu');
+        } catch (e) {
+            errEl.innerText = 'Netzwerkfehler';
+            errEl.style.display = 'block';
+        }
+    },
+
+    logout: async function () {
+        try {
+            await fetch(`${this.serverUrl}/api/auth/logout`, { method: 'POST' });
+            this.user = null;
+            this.setMode('menu');
+        } catch (e) { }
     },
 
     updateLobbyPlayer: function () {

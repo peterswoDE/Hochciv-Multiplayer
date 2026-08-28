@@ -59,4 +59,21 @@ router.delete('/sessions/:id', (req, res) => {
     res.json({ ok: true });
 });
 
+// ── GET /api/leaderboard — global ranking ──────────────────────────────────
+const { User } = require('../models');
+
+router.get('/leaderboard', async (req, res) => {
+    try {
+        const users = await User.findAll({
+            attributes: ['id', 'username', 'mmr', 'gamesPlayed'],
+            order: [['mmr', 'DESC']],
+            limit: 100
+        });
+        res.json(users);
+    } catch (err) {
+        console.error('Leaderboard error', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 module.exports = router;
