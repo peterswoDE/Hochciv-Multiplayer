@@ -34,16 +34,32 @@ const MP = {
     updateHudDelayed: function () {
         if (!this.active) return;
 
+        const updateHudName = (hn) => {
+            if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
+                const curCiv = S.players[S.cur].civ;
+                const p = MP.players.find(x => x.civ === curCiv);
+                if (p && !hn.innerHTML.includes('opacity:0.75')) {
+                    const civDef = typeof CIV_BY_KEY !== 'undefined' ? CIV_BY_KEY[curCiv] : null;
+                    let abName = p.ability || 'basis';
+                    let abDesc = '';
+                    if (civDef && civDef.abilities) {
+                        const abDef = civDef.abilities.find(a => a.k === abName);
+                        if (abDef) {
+                            abName = abDef.n;
+                            abDesc = abDef.e;
+                        }
+                    }
+                    const abBadge = ` <span title="${abDesc.replace(/"/g, '&quot;')}" style="cursor:help; background:rgba(0,0,0,0.1); border:1px solid rgba(0,0,0,0.2); border-radius:4px; padding:1px 6px; font-size:11px; margin-left:6px; display:inline-block; vertical-align:middle; line-height:1.2">${abName}</span>`;
+
+                    hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>${abBadge}`;
+                }
+            }
+        };
+
         if (!this._hudObserver) {
             this._hudObserver = new MutationObserver(() => {
                 const hn = document.getElementById('hud-name');
-                if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
-                    const curCiv = S.players[S.cur].civ;
-                    const p = MP.players.find(x => x.civ === curCiv);
-                    if (p && !hn.innerHTML.includes('opacity:0.75')) {
-                        hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
-                    }
-                }
+                updateHudName(hn);
             });
             const target = document.getElementById('hud-name');
             if (target) {
@@ -53,13 +69,7 @@ const MP = {
 
         // Trigger initial hit
         const hn = document.getElementById('hud-name');
-        if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
-            const curCiv = S.players[S.cur].civ;
-            const p = MP.players.find(x => x.civ === curCiv);
-            if (p && !hn.innerHTML.includes('opacity:0.75')) {
-                hn.innerHTML = hn.innerHTML + ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
-            }
-        }
+        updateHudName(hn);
     },
 
     updatePersistentLog: function () {
