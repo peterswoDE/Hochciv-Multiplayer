@@ -66,7 +66,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Initialize ORM
-sequelize.sync().then(() => {
+sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
     sequelize.query(`
         CREATE TABLE IF NOT EXISTS "session" (
