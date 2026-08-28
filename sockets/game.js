@@ -160,12 +160,12 @@ module.exports = function registerHandlers(io) {
             // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
             const engineApi = engine.getEngine();
             const CIVS = engineApi.CIVS || [];
-            const allCivs = CIVS.map(c => c.k);
+            const allCivs = CIVS.map(c => c.k).filter(k => k !== 'random' && k !== 'zufall');
             const pick = list => list[Math.floor(Math.random() * list.length)];
             session.players.forEach((p, i) => {
                 if (p.civ !== 'random' && p.civ !== 'zufall') return;
                 const pool = allCivs.filter(k => isPlaettchen || !session.players.some((q, j) => j !== i && q.civ === k));
-                p.civ = pick(pool.length ? pool : allCivs);
+                p.civ = pick(pool.length > 0 ? pool : allCivs);
             });
             session.players.forEach(p => {
                 if (p.ability !== 'random' && p.ability !== 'zufall') return;
