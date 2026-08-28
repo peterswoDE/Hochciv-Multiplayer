@@ -125,6 +125,7 @@ router.post('/reset-password/confirm', async (req, res) => {
 
         user.password_hash = await bcrypt.hash(newPassword, 10);
         user.resetCode = null;
+        user.isActive = true; // Automatically mark account as active since they proved ownership of the email
         await user.save();
         return res.json({ ok: true });
     } catch (err) {
