@@ -3,6 +3,12 @@ const router = express.Router();
 const passport = require('passport');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
+const { sendMail } = require('../utils/mailer');
+const { Op } = require('sequelize');
+
+function generateCode() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 // Register endpoint
 router.post('/register', async (req, res) => {
@@ -11,26 +17,120 @@ router.post('/register', async (req, res) => {
         if (!username || !email || !password) {
             return res.status(400).json({ error: 'Username, Email and Password are required.' });
         }
-        const existingUser = await User.findOne({ where: { username } });
+        const existingUser = await User.findOne({
+            where: { [Op.or]: [{ username }, { email }] }
+        });
         if (existingUser) {
-            return res.status(400).json({ error: 'Username already exists.' });
+            return res.status(400).json({ error: 'Username or Email already exists.' });
         }
         const password_hash = await bcrypt.hash(password, 10);
-        const user = await User.create({ username, email, password_hash });
+        const activationCode = generateCode();
 
-        req.login(user, (err) => {
-            if (err) return res.status(500).json({ error: 'Login failed post-registration' });
-            return res.json({ id: user.id, username: user.username, email: user.email, mmr: user.mmr, gamesPlayed: user.gamesPlayed });
+        const user = await User.create({
+            username,
+            email,
+            password_hash,
+            isActive: false,
+            activationCode
         });
+
+        const text = `Dein Hochciv Aktivierungscode lautet: ${activationCode}`;
+        await sendMail(email, 'Hochciv Account aktivieren', text, text);
+
+        return res.json({ ok: true, message: 'Activation code sent' });
     } catch (err) {
         console.error('Register error', err);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
+// Activate endpoint
+router.post('/activate', async (req, res) => {
+    try {
+        const { username, code } = req.body;
+        if (!username || !code) return res.status(400).json({ error: 'Missing code' });
+
+        const user = await User.findOne({ where: { username } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        if (user.isActive) return res.status(400).json({ error: 'Already activated' });
+
+        if (user.activationCode !== code) {
+            return res.status(400).json({ error: 'Invalid activation code' });
+        }
+
+        user.isActive = true;
+        user.activationCode = null;
+        await user.save();
+
+        req.login(user, (err) => {
+            if (err) return res.status(500).json({ error: 'Login failed' });
+            return res.json({ id: user.id, username: user.username, email: user.email, mmr: user.mmr, gamesPlayed: user.gamesPlayed });
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 // Login endpoint
-router.post('/login', passport.authenticate('local'), (req, res) => {
-    res.json({ id: req.user.id, username: req.user.username, email: req.user.email, mmr: req.user.mmr, gamesPlayed: req.user.gamesPlayed });
+router.post('/login', (req, res, next) => {
+    passport.authenticate('local', (err, user, info) => {
+        if (err) return res.status(500).json({ error: 'Internal Server Error' });
+        if (!user) return res.status(401).json({ error: 'Falscher Benutzername oder Passwort' });
+        if (!user.isActive) return res.status(403).json({ error: 'Konto noch nicht aktiviert' });
+
+        req.login(user, (err) => {
+            if (err) return res.status(500).json({ error: 'Login failed' });
+            return res.json({ id: req.user.id, username: req.user.username, email: req.user.email, mmr: req.user.mmr, gamesPlayed: req.user.gamesPlayed });
+        });
+    })(req, res, next);
+});
+
+// Password reset request
+router.post('/reset-password/request', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'E-Mail ist erforderlich.' });
+
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            // Return success even if not found to prevent email scanning
+            return res.json({ ok: true });
+        }
+
+        const resetCode = generateCode();
+        user.resetCode = resetCode;
+        await user.save();
+
+        const text = `Dein Code zum Zurücksetzen deines Hochciv Passworts lautet: ${resetCode}`;
+        await sendMail(email, 'Hochciv Passwort zurücksetzen', text, text);
+
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Reset request error', err);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Password reset confirm
+router.post('/reset-password/confirm', async (req, res) => {
+    try {
+        const { email, code, newPassword } = req.body;
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ error: 'E-Mail, Code und neues Passwort werden benötigt.' });
+        }
+        const user = await User.findOne({ where: { email, resetCode: code } });
+        if (!user) {
+            return res.status(400).json({ error: 'Ungültiger Code oder E-Mail.' });
+        }
+
+        user.password_hash = await bcrypt.hash(newPassword, 10);
+        user.resetCode = null;
+        await user.save();
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Reset confirm error', err);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 // Get current user (session check)

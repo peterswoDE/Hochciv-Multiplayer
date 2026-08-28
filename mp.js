@@ -15,7 +15,7 @@ const MP = {
 
     fetchUser: async function () {
         try {
-            const res = await fetch(`${this.serverUrl}/api/auth/me`);
+            const res = await fetch(`${this.serverUrl}/api/auth/me`, { cache: 'no-cache' });
             if (res.ok) {
                 this.user = await res.json();
             } else {
@@ -245,6 +245,88 @@ const MP = {
 
 
 
+    renderMainMenuAuth: async function () {
+        await this.fetchUser();
+        const authContainer = $('mp-main-auth-container');
+        if (!authContainer) return;
+
+        if (this.user) {
+            authContainer.innerHTML = `
+                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
+                    Eingeloggt als <b>${this.user.username}</b> 
+                    (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) 
+                    <span style="opacity:0.5; margin:0 6px;">|</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.logout(); return false;">Logout</a>
+                </div>
+            `;
+        } else {
+            authContainer.innerHTML = `
+                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
+                    Gast <span style="opacity:0.7">(Ranked gesperrt)</span> 
+                    <span style="opacity:0.5; margin:0 6px;">|</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.showAuthDialog('login'); return false;">Anmelden</a> 
+                    <span style="opacity:0.5; margin:0 6px;">oder</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.showAuthDialog('register'); return false;">Registrieren</a>
+                </div>
+            `;
+        }
+
+        if (this.renderLobby) this.renderLobby();
+    },
+
+    showAuthDialog: function (mode, context = {}) {
+        let h = '';
+        if (mode === 'login') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Anmelden</h3>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+              <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('login')">Einloggen</button>
+              <div style="text-align:center; margin-top:10px;"><a href="#" style="color:#666; font-size:12px; text-decoration:underline;" onclick="MP.showAuthDialog('reset-request'); return false;">Passwort vergessen?</a></div>
+            `;
+        } else if (mode === 'register') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Konto erstellen</h3>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+              <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('register')">Registrieren</button>
+            `;
+        } else if (mode === 'activate') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Konto aktivieren</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Wir haben dir einen 6-stelligen Code per E-Mail geschickt.</p>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px" value="${context.username || ''}" readonly></label>
+              <label class="row"><span>6-stelliger Code</span><input type="text" id="mp-auth-code" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('activate')">Aktivieren & Einloggen</button>
+            `;
+        } else if (mode === 'reset-request') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Passwort zurücksetzen</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Bitte gib deine registrierte E-Mail-Adresse ein.</p>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('reset-request')">Code senden</button>
+              <button class="btn wide ghost" style="margin-top:10px" onclick="MP.showAuthDialog('login')">Zurück</button>
+            `;
+        } else if (mode === 'reset-confirm') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Passwort neu setzen</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Gib den Code aus deiner E-Mail und ein neues Passwort ein.</p>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px" value="${context.email || ''}" readonly></label>
+              <label class="row"><span>6-stelliger Code</span><input type="text" id="mp-auth-code" style="width:120px"></label>
+              <label class="row"><span>Neues Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('reset-confirm')">Passwort ändern</button>
+              <button class="btn wide ghost" style="margin-top:10px" onclick="MP.showAuthDialog('login')">Abbrechen</button>
+            `;
+        }
+        modal('Account', h);
+    },
+
     showLobby: async function () {
         await this.fetchUser();
         let mode = 'menu';
@@ -252,41 +334,11 @@ const MP = {
             if (this._publicListTimer) clearInterval(this._publicListTimer);
             let h = '';
 
-            const authBar = this.user
-                ? `<div style="background:#222; padding:8px; border-radius:4px; margin-bottom:15px; text-align:center;">
-                     Eingeloggt als <b>${this.user.username}</b> 
-                     (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) <span style="margin: 0 4px; color:#666">|</span> <a href="#" style="color:#aaa" onclick="MP.logout(); return false;">Logout</a>
-                   </div>`
-                : `<div style="background:#222; padding:8px; border-radius:4px; margin-bottom:15px; text-align:center;">
-                     Als Gast (Ranked gesperrt) <span style="margin: 0 4px; color:#666">|</span> 
-                     <a href="#" style="color:#2b85e4" onclick="MP.setMode('login'); return false;">Anmelden</a> oder <a href="#" style="color:#2b85e4" onclick="MP.setMode('register'); return false;">Registrieren</a>
-                   </div>`;
-
             if (mode === 'menu') {
                 h = `
-          ${authBar}
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">Neues Spiel hosten (Server)</button>
           <button class="btn wide" onclick="MP.setMode('public-list')">Öffentliche Lobbys suchen</button>
           <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">Privatem Spiel beitreten</button>
-        `;
-            } else if (mode === 'login') {
-                h = `
-          <h3 style="margin-bottom:15px; text-align:center;">Anmelden</h3>
-          <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
-          <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
-          <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none; color:red"></div>
-          <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('login')">Einloggen</button>
-          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('menu')">Abbrechen</button>
-        `;
-            } else if (mode === 'register') {
-                h = `
-          <h3 style="margin-bottom:15px; text-align:center;">Konto erstellen</h3>
-          <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
-          <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
-          <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
-          <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none; color:red"></div>
-          <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('register')">Registrieren</button>
-          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('menu')">Abbrechen</button>
         `;
             } else if (mode === 'join') {
                 const savedName = localStorage.getItem('mp-name') || 'Spieler';
@@ -442,29 +494,60 @@ const MP = {
     },
 
     auth: async function (type) {
-        const username = $('mp-auth-usn').value.trim();
-        const password = $('mp-auth-pw').value.trim();
-        const errEl = $('mp-auth-err');
+        const payload = {};
+        if ($('mp-auth-usn')) payload.username = $('mp-auth-usn').value.trim();
+        if ($('mp-auth-pw')) payload.password = $('mp-auth-pw').value.trim();
+        if ($('mp-auth-em')) payload.email = $('mp-auth-em').value.trim();
+        if ($('mp-auth-code')) payload.code = $('mp-auth-code').value.trim();
 
-        const payload = { username, password };
-        if (type === 'register') {
-            payload.email = $('mp-auth-em').value.trim();
+        if (type === 'reset-confirm') {
+            payload.newPassword = payload.password;
         }
 
+        const errEl = $('mp-auth-err');
+
         try {
-            const res = await fetch(`${this.serverUrl}/api/auth/${type}`, {
+            let apiPath = type;
+            if (type === 'reset-request') apiPath = 'reset-password/request';
+            if (type === 'reset-confirm') apiPath = 'reset-password/confirm';
+
+            errEl.innerText = 'Laden...';
+            errEl.style.display = 'block';
+
+            const res = await fetch(`${this.serverUrl}/api/auth/${apiPath}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
+
             if (!res.ok) {
-                errEl.innerText = data.error || 'Fehler beim Authentifizieren';
+                errEl.innerText = data.error || 'Fehler beim Abrufen';
                 errEl.style.display = 'block';
                 return;
             }
+
+            // Flow Transitions
+            if (type === 'register') {
+                this.showAuthDialog('activate', { username: payload.username });
+                return;
+            }
+            if (type === 'reset-request') {
+                this.showAuthDialog('reset-confirm', { email: payload.email });
+                return;
+            }
+            if (type === 'reset-confirm') {
+                this.showAuthDialog('login');
+                toast('Dein Passwort wurde erfolgreich aktualisiert.');
+                return;
+            }
+
+            // Login / Activate
             this.user = data;
-            this.setMode('menu');
+
+            // Close the auth modal
+            closeModal();
+            this.renderMainMenuAuth();
         } catch (e) {
             errEl.innerText = 'Netzwerkfehler';
             errEl.style.display = 'block';
@@ -667,15 +750,28 @@ const MP = {
     }
 };
 
-// ── Inject Multiplayer Button ────────────────────────────────────────────────
+// ── Inject Multiplayer Button and Auth Bar ─────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
     const mNew = $('m-new');
     if (mNew) {
+        // Multiplaxer Button
         const btn = document.createElement('button');
         btn.className = 'btn primary';
         btn.textContent = 'Multiplayer';
         btn.onclick = () => MP.showLobby();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
+
+        // Auth Container for Main Menu
+        const authDiv = document.createElement('div');
+        authDiv.id = 'mp-main-auth-container';
+        // Insert right above the action boxes
+        const menuActions = document.querySelector('.menu-actions');
+        if (menuActions && menuActions.parentNode) {
+            menuActions.parentNode.insertBefore(authDiv, menuActions);
+        }
+
+        // Render it
+        MP.renderMainMenuAuth();
     }
 
     // Inject Turn Blocker CSS rules

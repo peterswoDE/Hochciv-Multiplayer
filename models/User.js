@@ -30,6 +30,19 @@ module.exports = (sequelize) => {
             type: DataTypes.INTEGER,
             defaultValue: 0,
             allowNull: false,
+        },
+        isActive: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+        },
+        activationCode: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        resetCode: {
+            type: DataTypes.STRING,
+            allowNull: true,
         }
     }, {
         tableName: 'users',
