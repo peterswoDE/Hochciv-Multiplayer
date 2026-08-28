@@ -558,7 +558,7 @@ const MP = {
         try {
             await fetch(`${this.serverUrl}/api/auth/logout`, { method: 'POST' });
             this.user = null;
-            this.setMode('menu');
+            this.renderMainMenuAuth();
         } catch (e) { }
     },
 
