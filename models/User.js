@@ -40,8 +40,16 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
         },
+        activationCodeExpiresAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
         resetCode: {
             type: DataTypes.STRING,
+            allowNull: true,
+        },
+        resetCodeExpiresAt: {
+            type: DataTypes.DATE,
             allowNull: true,
         }
     }, {

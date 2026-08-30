@@ -30,6 +30,21 @@ const sandbox = {
 vm.createContext(sandbox);
 
 let isLoaded = false;
+let lastMtime = 0;
+
+function checkUpdateTrigger() {
+    try {
+        const triggerPath = path.resolve(__dirname, '.update_trigger');
+        if (fs.existsSync(triggerPath)) {
+            const stat = fs.statSync(triggerPath);
+            if (stat.mtimeMs > lastMtime) {
+                lastMtime = stat.mtimeMs;
+                console.log('[Engine Adapter] .update_trigger modified, forcing engine reload.');
+                isLoaded = false;
+            }
+        }
+    } catch (err) {}
+}
 
 function resolveEngineDir() {
     let dir = path.resolve(__dirname, 'public', 'js');
@@ -48,6 +63,7 @@ function resolveEngineDir() {
 }
 
 function ensureEngineLoaded() {
+    checkUpdateTrigger();
     if (isLoaded) return true;
     const dir = resolveEngineDir();
     if (!dir) {
@@ -155,9 +171,10 @@ function createGame(session) {
  * @param {number} pi      – player index claiming to act
  * @param {string} action  – action type key
  * @param {object} params  – action-specific parameters
+ * @param {function} onStateChanged - callback for async state changes
  * @returns {string|null}  error message or null on success
  */
-function applyAction(state, pi, action, params) {
+function applyAction(state, pi, action, params, onStateChanged) {
     if (!ensureEngineLoaded()) return 'Game Engine ist noch nicht bereit (Frontend-Dateien fehlen).';
     // Only the current player may act
     if (state.cur !== pi) return 'Du bist nicht am Zug.';
@@ -241,7 +258,7 @@ function applyAction(state, pi, action, params) {
             case 'endTurn':
                 E.endTurn(state);
                 // Auto-play bot turns
-                runBots(state);
+                runBots(state, onStateChanged);
                 return null;
 
             default:
@@ -254,17 +271,26 @@ function applyAction(state, pi, action, params) {
 }
 
 /**
- * After a human ends their turn, auto-play all consecutive bot turns.
+ * After a human ends their turn, auto-play all consecutive bot turns asynchronously.
  */
-function runBots(state) {
-    // We need the bots module too
+function runBots(state, onStateChanged) {
     if (!E.botTurn) return;
-    let guard = 0;
-    while (!state.over && state.players[state.cur].kind === 'bot' && guard < 50) {
-        E.botTurn(state, state.cur);
-        E.endTurn(state);
-        guard++;
-    }
+    const processBots = async () => {
+        let guard = 0;
+        while (!state.over && state.players[state.cur].kind === 'bot' && guard < 50) {
+            await new Promise(resolve => setImmediate(resolve));
+            if (state.over || state.players[state.cur].kind !== 'bot') break;
+            
+            E.botTurn(state, state.cur);
+            E.endTurn(state);
+            guard++;
+            
+            if (onStateChanged) {
+                onStateChanged(state);
+            }
+        }
+    };
+    processBots().catch(err => console.error('[Engine Adapter] Bot run error:', err));
 }
 
 /**

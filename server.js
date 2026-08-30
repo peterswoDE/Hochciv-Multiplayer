@@ -47,17 +47,32 @@ passport.deserializeUser(async (id, done) => {
 const app = express();
 
 const dbUrl = process.env.DATABASE_URL || 'postgres://hochciv:password123@hochciv-db:5432/hochciv';
+const sessionSecret = process.env.SESSION_SECRET || 'hochciv_super_secret';
+
+if (process.env.NODE_ENV === 'production' && (!process.env.DATABASE_URL || !process.env.SESSION_SECRET)) {
+    throw new Error('CRITICAL: DATABASE_URL and SESSION_SECRET environment variables are required in production mode!');
+}
+
 const pgPool = new pg.Pool({ connectionString: dbUrl });
 
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
 app.use(express.json());
 
+// Enable trust proxy for Nginx reverse proxy so HTTPS session secure cookies work
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 const sessionMiddleware = session({
     store: new pgSession({ pool: pgPool, tableName: 'session' }),
-    secret: process.env.SESSION_SECRET || 'hochciv_super_secret',
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 days
+    cookie: {
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    }
 });
 
 app.use(sessionMiddleware);
@@ -72,13 +87,13 @@ sequelize.sync({ alter: true }).then(() => {
         CREATE TABLE IF NOT EXISTS "session" (
           "sid" varchar NOT NULL COLLATE "default",
           "sess" json NOT NULL,
-          "expire" timestamp(6) NOT NULL
+          "expire" timestamp(6) NOT NULL,
+          CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
         )
         WITH (OIDS=FALSE);
     `).then(() => {
-        sequelize.query(`ALTER TABLE "session" ADD CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE;`).catch(() => { });
         sequelize.query(`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");`).catch(() => { });
-    });
+    }).catch(e => console.error('[DB] Session table init error', e));
 });
 
 // Health check

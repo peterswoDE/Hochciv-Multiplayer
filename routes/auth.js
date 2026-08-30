@@ -10,8 +10,19 @@ function generateCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+const rateLimitLib = require('express-rate-limit');
+
+// Use express-rate-limit for robust IP limiting against brute-force attacks
+const rateLimit = rateLimitLib({
+    windowMs: 60 * 1000, // 1 minute
+    max: 15,
+    message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 // Register endpoint
-router.post('/register', async (req, res) => {
+router.post('/register', rateLimit, async (req, res) => {
     try {
         const { username, email, password } = req.body;
         if (!username || !email || !password) {
@@ -31,7 +42,8 @@ router.post('/register', async (req, res) => {
             email,
             password_hash,
             isActive: false,
-            activationCode
+            activationCode,
+            activationCodeExpiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
         });
 
         const text = `Dein Hochciv Aktivierungscode lautet: ${activationCode}`;
@@ -45,7 +57,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Activate endpoint
-router.post('/activate', async (req, res) => {
+router.post('/activate', rateLimit, async (req, res) => {
     try {
         const { username, code } = req.body;
         if (!username || !code) return res.status(400).json({ error: 'Missing code' });
@@ -56,6 +68,10 @@ router.post('/activate', async (req, res) => {
 
         if (user.activationCode !== code) {
             return res.status(400).json({ error: 'Invalid activation code' });
+        }
+
+        if (user.activationCodeExpiresAt && user.activationCodeExpiresAt < new Date()) {
+            return res.status(400).json({ error: 'Activation code expired. Please register again or request a new code.' });
         }
 
         user.isActive = true;
@@ -72,7 +88,7 @@ router.post('/activate', async (req, res) => {
 });
 
 // Login endpoint
-router.post('/login', (req, res, next) => {
+router.post('/login', rateLimit, (req, res, next) => {
     passport.authenticate('local', (err, user, info) => {
         if (err) return res.status(500).json({ error: 'Internal Server Error' });
         if (!user) return res.status(401).json({ error: 'Falscher Benutzername oder Passwort' });
@@ -86,7 +102,7 @@ router.post('/login', (req, res, next) => {
 });
 
 // Password reset request
-router.post('/reset-password/request', async (req, res) => {
+router.post('/reset-password/request', rateLimit, async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) return res.status(400).json({ error: 'E-Mail ist erforderlich.' });
@@ -99,6 +115,7 @@ router.post('/reset-password/request', async (req, res) => {
 
         const resetCode = generateCode();
         user.resetCode = resetCode;
+        user.resetCodeExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
         await user.save();
 
         const text = `Dein Code zum Zurücksetzen deines Hochciv Passworts lautet: ${resetCode}`;
@@ -112,7 +129,7 @@ router.post('/reset-password/request', async (req, res) => {
 });
 
 // Password reset confirm
-router.post('/reset-password/confirm', async (req, res) => {
+router.post('/reset-password/confirm', rateLimit, async (req, res) => {
     try {
         const { email, code, newPassword } = req.body;
         if (!email || !code || !newPassword) {
@@ -121,6 +138,10 @@ router.post('/reset-password/confirm', async (req, res) => {
         const user = await User.findOne({ where: { email, resetCode: code } });
         if (!user) {
             return res.status(400).json({ error: 'Ungültiger Code oder E-Mail.' });
+        }
+
+        if (user.resetCodeExpiresAt && user.resetCodeExpiresAt < new Date()) {
+            return res.status(400).json({ error: 'Reset code expired. Please request a new one.' });
         }
 
         user.password_hash = await bcrypt.hash(newPassword, 10);

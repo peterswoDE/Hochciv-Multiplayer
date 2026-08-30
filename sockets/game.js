@@ -381,10 +381,13 @@ module.exports = function registerHandlers(io) {
     // Start the global 15-second synchronization loop
     if (!io.__syncInterval) {
         io.__syncInterval = setInterval(() => {
+            const now = Date.now();
             for (const session of sessions.getAllSessions().values()) {
                 if (session.status === 'playing' && session.state) {
                     try {
-                        broadcastState(io, session);
+                        if (now - session.lastActivity < 30000) {
+                            broadcastState(io, session);
+                        }
                     } catch (err) {
                         console.error(`[Sync] Error syncing session ${session.id}:`, err);
                     }
@@ -408,19 +411,18 @@ function publicPlayers(session) {
 }
 
 function broadcastState(io, session) {
-    for (const lobbyPlayer of session.players) {
-        if (lobbyPlayer.socketId) {
-            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
-            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
-            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+    if (!session || !session.state) return;
 
-            io.to(lobbyPlayer.socketId).emit('state:update', {
-                state: engine.stateForPlayer(session.state, finalIndex),
-                currentPlayer: session.state.cur,
-                round: session.state.round,
-            });
-        }
-    }
+    // Instead of deep cloning per-player in a loop, clone the state exactly once.
+    // The engine's stateForPlayer currently treats the state as fully visible for all players.
+    const sharedState = engine.stateForPlayer(session.state, 0);
+
+    // Broadcast universally to everyone in the room. This avoids individual serialization per socket.
+    io.to(session.id).emit('state:update', {
+        state: sharedState,
+        currentPlayer: session.state.cur,
+        round: session.state.round,
+    });
 }
 
 /**
