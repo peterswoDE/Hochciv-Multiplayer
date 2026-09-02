@@ -44,13 +44,17 @@ function createSession(gameConfig, hostInfo) {
         joinCode,
         password,                     // 6-digit numeric, shared out-of-band
         gameConfig,                   // raw setup data from host
+        isPublic: gameConfig.isPublic === true,
         status: 'lobby',              // lobby → playing → finished
         createdAt: Date.now(),
+        lastActivity: Date.now(),
+        emptySince: null,
         hostIndex: 0,
         players: [
             {
                 index: 0,
                 name: hostInfo.name || 'Host',
+                clientId: hostInfo.clientId,
                 civ: hostInfo.civ || 'griechenland',
                 ability: hostInfo.ability || 'basis',
                 kind: 'human',
@@ -81,7 +85,7 @@ function joinSession(joinCode, password, playerInfo) {
     if (session.password !== password) return 'Falsches Passwort.';
 
     // Check if player is reconnecting
-    const existingPlayer = session.players.find(p => p.name === playerInfo.name);
+    const existingPlayer = session.players.find(p => p.clientId === playerInfo.clientId);
     if (existingPlayer) {
         // It's a reconnection
         return { sessionId, playerIndex: existingPlayer.index };
@@ -101,6 +105,7 @@ function joinSession(joinCode, password, playerInfo) {
     session.players.push({
         index: playerIndex,
         name: fallbackName,
+        clientId: playerInfo.clientId,
         civ: playerInfo.civ || 'griechenland',
         ability: playerInfo.ability || 'basis',
         kind: 'human',
@@ -132,7 +137,29 @@ function removeSession(sessionId) {
 function cleanup() {
     const now = Date.now();
     for (const [id, s] of sessions) {
-        if (now - s.createdAt > config.SESSION_TIMEOUT_MS) {
+        let shouldTerminate = false;
+
+        // 1. Session absolute timeout (REMOVED)
+        // Rely purely on inactivity or empty room timeout.
+
+        // 2. Empty room termination
+        const hasConnectedPlayers = s.players.some(p => p.connected);
+        if (!hasConnectedPlayers) {
+            if (!s.emptySince) {
+                s.emptySince = now;
+            } else if (now - s.emptySince > 10 * 1000) { // 10 seconds empty grace period
+                shouldTerminate = true;
+            }
+        } else {
+            s.emptySince = null;
+        }
+
+        // 3. Inactivity termination (10 mins)
+        if (s.lastActivity && now - s.lastActivity > 10 * 60 * 1000) {
+            shouldTerminate = true;
+        }
+
+        if (shouldTerminate) {
             removeSession(id);
         }
     }
@@ -142,9 +169,10 @@ function cleanup() {
 const _cleanupTimer = setInterval(cleanup, config.CLEANUP_INTERVAL_MS);
 _cleanupTimer.unref();   // don't prevent Node from exiting
 
-function kickPlayer(sessionId, playerIndex) {
+function kickPlayer(sessionId, playerIndex, force = false) {
     const session = sessions.get(sessionId);
-    if (!session || session.status !== 'lobby' || playerIndex === 0) return false;
+    if (!session || session.status !== 'lobby') return false;
+    if (playerIndex === 0 && !force) return false;
 
     session.players.splice(playerIndex, 1);
     // Reindex remaining players
@@ -175,11 +203,37 @@ function updatePlayer(sessionId, playerIndex, updates) {
 
     // If the civ changed, forcefully reset the ability to 'basis' since the old ability key is invalid for the new civ.
     if (civChanged) {
-        player.ability = 'basis';
+        player.ability = player.civ === 'random' ? 'random' : 'basis';
     } else if (updates.ability) {
         player.ability = updates.ability;
     }
     return true;
+}
+
+function getPublicSessions() {
+    const list = [];
+    for (const [id, s] of sessions) {
+        if (s.status === 'lobby' && s.isPublic) {
+            list.push({
+                id: s.id,
+                joinCode: s.joinCode,
+                password: s.password,
+                hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
+                playersCount: s.players.length,
+                maxPlayers: config.MAX_PLAYERS,
+                mapKey: s.gameConfig.mapKey || '0',
+            });
+        }
+    }
+    return list;
+}
+
+function recordActivity(sessionId) {
+    const s = sessions.get(sessionId);
+    if (s) {
+        s.lastActivity = Date.now();
+        s.emptySince = null;
+    }
 }
 
 module.exports = {
@@ -192,4 +246,7 @@ module.exports = {
     kickPlayer,
     updateConfig,
     updatePlayer,
+    getPublicSessions,
+    recordActivity,
+    getAllSessions: () => sessions,
 };

@@ -31,6 +31,9 @@ RUN mkdir -p public && \
       cp -r public/* /app/public_bundled/; \
     fi
 
+RUN chown -R node:node /app
+
+USER node
 EXPOSE 3000
 
 ENTRYPOINT ["/app/entrypoint.sh"]

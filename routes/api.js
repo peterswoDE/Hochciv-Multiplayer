@@ -5,8 +5,8 @@ const sessions = require('../sessions');
 // ── POST /api/sessions — create a new session ───────────────────────────────
 router.post('/sessions', (req, res) => {
     const { config, host } = req.body || {};
-    if (!host || !host.name) {
-        return res.status(400).json({ error: 'host.name ist erforderlich.' });
+    if (!host || !host.name || !host.clientId) {
+        return res.status(400).json({ error: 'host.name und host.clientId sind erforderlich.' });
     }
     const result = sessions.createSession(config || {}, host);
     res.status(201).json(result);
@@ -15,14 +15,19 @@ router.post('/sessions', (req, res) => {
 // ── POST /api/sessions/join — join with code + password ─────────────────────
 router.post('/sessions/join', (req, res) => {
     const { joinCode, password, player } = req.body || {};
-    if (!joinCode || !password || !player || !player.name) {
-        return res.status(400).json({ error: 'joinCode, password und player.name sind erforderlich.' });
+    if (!joinCode || !password || !player || !player.name || !player.clientId) {
+        return res.status(400).json({ error: 'joinCode, password, player.name und player.clientId sind erforderlich.' });
     }
     const result = sessions.joinSession(joinCode, password, player);
     if (typeof result === 'string') {
         return res.status(400).json({ error: result });
     }
     res.json(result);
+});
+
+// ── GET /api/public-sessions — list all public sessions ─────────────────────
+router.get('/public-sessions', (req, res) => {
+    res.json(sessions.getPublicSessions());
 });
 
 // ── GET /api/sessions/:id — session info ────────────────────────────────────
@@ -52,6 +57,23 @@ router.delete('/sessions/:id', (req, res) => {
     if (!session) return res.status(404).json({ error: 'Sitzung nicht gefunden.' });
     sessions.removeSession(req.params.id);
     res.json({ ok: true });
+});
+
+// ── GET /api/leaderboard — global ranking ──────────────────────────────────
+const { User } = require('../models');
+
+router.get('/leaderboard', async (req, res) => {
+    try {
+        const users = await User.findAll({
+            attributes: ['id', 'username', 'mmr', 'gamesPlayed'],
+            order: [['mmr', 'DESC']],
+            limit: 100
+        });
+        res.json(users);
+    } catch (err) {
+        console.error('Leaderboard error', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 module.exports = router;

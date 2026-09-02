@@ -10,7 +10,107 @@ const MP = {
     hostIndex: 0,
     players: [],
     gameConfig: {},
-    serverUrl: 'http://localhost:3000',
+    serverUrl: "",
+    user: null,
+
+    fetchUser: async function () {
+        try {
+            const res = await fetch(`${this.serverUrl}/api/auth/me`, { cache: 'no-cache' });
+            if (res.ok) {
+                this.user = await res.json();
+            } else {
+                this.user = null;
+            }
+        } catch (e) {
+            this.user = null;
+        }
+    },
+
+    getClientId: function () {
+        let id = sessionStorage.getItem('mp-clientId');
+        if (!id) {
+            id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9);
+            sessionStorage.setItem('mp-clientId', id);
+        }
+        return id;
+    },
+
+    animDeinZug: function () {
+        if (!this.active || document.getElementById('mp-turn-popup')) return;
+        const d = document.createElement('div');
+        d.id = 'mp-turn-popup';
+        d.textContent = 'DU BIST AM ZUG!';
+        d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:8vmin;color:white;font-weight:bold;text-shadow:0 0 20px #000, 0 0 10px #702010;z-index:9999;animation: mpAnimPop 2s forwards;pointer-events:none;text-align:center;line-height:1.2;';
+        document.body.appendChild(d);
+        setTimeout(() => d.remove(), 2100);
+    },
+
+    updateHudDelayed: function () {
+        if (!this.active) return;
+
+        const updateHudName = (hn) => {
+            if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
+                const curCiv = S.players[S.cur].civ;
+                const sPlayer = S.players[S.cur];
+                const p = MP.players.find(x => x.civ === curCiv);
+
+                const civDef = typeof CIV_BY_KEY !== 'undefined' ? CIV_BY_KEY[curCiv] : null;
+                const nationName = civDef ? civDef.n : curCiv;
+
+                let abName = sPlayer.ability || 'basis';
+                let abDesc = '';
+                if (civDef && civDef.abilities) {
+                    const abDef = civDef.abilities.find(a => a.k === abName);
+                    if (abDef) {
+                        abName = abDef.n;
+                        abDesc = abDef.e;
+                    }
+                }
+                const abBadge = ` <span title="${abDesc.replace(/"/g, '&quot;')}" style="cursor:help; background:rgba(0,0,0,0.1); border:1px solid rgba(0,0,0,0.2); border-radius:4px; padding:1px 6px; font-size:11px; margin-left:6px; display:inline-block; vertical-align:middle; line-height:1.2">${abName}</span>`;
+
+                let displayName = nationName;
+                if (sPlayer.kind === 'bot') {
+                    displayName += ' <span style="opacity:0.75;font-weight:normal;">(· Bot)</span>';
+                } else if (p && p.name) {
+                    displayName += ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+                    if (p.mmr) {
+                        displayName += ` <span style="opacity:0.6;font-size:11px;background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px;margin-left:4px">[${p.mmr} MMR]</span>`;
+                    }
+                }
+
+                const finalHtml = displayName + abBadge;
+                if (hn.innerHTML !== finalHtml) {
+                    hn.innerHTML = finalHtml;
+                }
+            }
+        };
+
+        if (!this._hudObserver) {
+            this._hudObserver = new MutationObserver(() => {
+                const hn = document.getElementById('hud-name');
+                if (hn) updateHudName(hn);
+            });
+            const target = document.getElementById('hud-name');
+            if (target) {
+                this._hudObserver.observe(target, { childList: true, characterData: true, subtree: true });
+            }
+        }
+
+        // Trigger initial hit
+        const hn = document.getElementById('hud-name');
+        if (hn) updateHudName(hn);
+    },
+
+    updatePersistentLog: function () {
+        if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
+        const pl = document.getElementById('mp-persistent-log');
+        if (pl && typeof logHtml === 'function') {
+            const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
+            pl.style.display = 'block';
+            pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
+            if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
+        }
+    },
 
     connect: function () {
         if (this.socket) return Promise.resolve();
@@ -45,33 +145,80 @@ const MP = {
                 MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
             });
-            this.socket.on('session:kicked', () => {
+            this.socket.on('session:kicked', (data) => {
                 MP.active = false;
-                toast('Du wurdest vom Host gekickt.');
-                setTimeout(() => location.reload(), 2000);
+                toast(data && data.reason ? data.reason : 'Du wurdest vom Host gekickt.');
+                MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
             });
             this.socket.on('lobby:config:update', (newConfig) => {
                 MP.gameConfig = newConfig;
                 if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
             });
 
+            this.socket.on('placement:start', data => {
+                MP.renderLobby = null; closeModal();
+
+                // Clever trick: Tell the native random map generator that EVERY other player across the network is a Bot!
+                // This tricks the native UI to instantly autocomplete them and ONLY present the single local player queue 
+                // for placement! This enables seamless simultaneous decentralized drafting!
+                data.cfg.players = MP.players.map(p => {
+                    return p.index === MP.lobbyIndex ? p : { ...p, kind: 'bot' };
+                });
+
+                window.placeReveal = function () {
+                    // Suppress revealing the map locally since we must wait for server resolution!
+                    document.body.classList.add('mp-waiting');
+                    if (MP.placementFinished) window.toast("Warten auf andere Spieler...");
+                }
+
+                const origPlaceSeat = window.placeSeat;
+                window.placeSeat = function (plan, seat, o, cell) {
+                    if (seat.idx === MP.lobbyIndex) {
+                        MP.placementFinished = true;
+                        MP.socket.emit('placement:action', { o, cell }, res => {
+                            if (res && res.error) window.toast(res.error);
+                        });
+                        document.body.classList.add('mp-waiting');
+                        window.toast('Warten auf andere Spieler...');
+                    }
+                    return origPlaceSeat(plan, seat, o, cell);
+                };
+
+                const origRandom = Math.random;
+                // Force seed predictability
+                Math.random = () => (data.seed / (Math.pow(2, 31)));
+                try {
+                    window.startPlacement(data.cfg);
+                } finally {
+                    Math.random = origRandom;
+                }
+            });
+
             this.socket.on('game:start', data => {
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
+
+                window.placeState = null;
+                document.body.classList.remove('mp-waiting');
+
                 MP.syncTurnBlocker();
                 MP.renderLobby = null; // Prevent Lobby from opening mid-game on reconnects
                 closeModal();
                 startGameScreen();
             });
 
+
             this.socket.on('state:update', data => {
                 S = data.state;
                 MP.syncTurnBlocker();
+                MP.updateHudDelayed();
+                MP.updatePersistentLog();
                 // If it's a new turn for us, trigger UI events
                 if (S.cur === MP.playerIndex && MP.lastTurn !== S.cur && !S.over) {
                     MP.lastTurn = S.cur;
                     humanTurnStart();
+                    MP.animDeinZug();
                 } else {
                     MP.lastTurn = S.cur;
                     redraw();
@@ -96,14 +243,102 @@ const MP = {
         }
     },
 
-    showLobby: function () {
+
+
+    renderMainMenuAuth: async function () {
+        await this.fetchUser();
+        const authContainer = $('mp-main-auth-container');
+        if (!authContainer) return;
+
+        if (this.user) {
+            authContainer.innerHTML = `
+                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
+                    Eingeloggt als <b>${this.user.username}</b> 
+                    (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) 
+                    <span style="opacity:0.5; margin:0 6px;">|</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.logout(); return false;">Logout</a>
+                </div>
+            `;
+        } else {
+            authContainer.innerHTML = `
+                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
+                    Gast <span style="opacity:0.7">(Ranked gesperrt)</span> 
+                    <span style="opacity:0.5; margin:0 6px;">|</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.showAuthDialog('login'); return false;">Anmelden</a> 
+                    <span style="opacity:0.5; margin:0 6px;">oder</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.showAuthDialog('register'); return false;">Registrieren</a>
+                </div>
+            `;
+        }
+
+        if (this.renderLobby) this.renderLobby();
+    },
+
+    showAuthDialog: function (mode, context = {}) {
+        let h = '';
+        if (mode === 'login') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Anmelden</h3>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+              <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('login')">Einloggen</button>
+              <div style="text-align:center; margin-top:10px;"><a href="#" style="color:#666; font-size:12px; text-decoration:underline;" onclick="MP.showAuthDialog('reset-request'); return false;">Passwort vergessen?</a></div>
+            `;
+        } else if (mode === 'register') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Konto erstellen</h3>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+              <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('register')">Registrieren</button>
+            `;
+        } else if (mode === 'activate') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Konto aktivieren</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Wir haben dir einen 6-stelligen Code per E-Mail geschickt.</p>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px" value="${context.username || ''}" readonly></label>
+              <label class="row"><span>6-stelliger Code</span><input type="text" id="mp-auth-code" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('activate')">Aktivieren & Einloggen</button>
+            `;
+        } else if (mode === 'reset-request') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Passwort zurücksetzen</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Bitte gib deine registrierte E-Mail-Adresse ein.</p>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('reset-request')">Code senden</button>
+              <button class="btn wide ghost" style="margin-top:10px" onclick="MP.showAuthDialog('login')">Zurück</button>
+            `;
+        } else if (mode === 'reset-confirm') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Passwort neu setzen</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Gib den Code aus deiner E-Mail und ein neues Passwort ein.</p>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px" value="${context.email || ''}" readonly></label>
+              <label class="row"><span>6-stelliger Code</span><input type="text" id="mp-auth-code" style="width:120px"></label>
+              <label class="row"><span>Neues Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('reset-confirm')">Passwort ändern</button>
+              <button class="btn wide ghost" style="margin-top:10px" onclick="MP.showAuthDialog('login')">Abbrechen</button>
+            `;
+        }
+        modal('Account', h);
+    },
+
+    showLobby: async function () {
+        await this.fetchUser();
         let mode = 'menu';
         const render = () => {
+            if (this._publicListTimer) clearInterval(this._publicListTimer);
             let h = '';
+
             if (mode === 'menu') {
                 h = `
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">Neues Spiel hosten (Server)</button>
-          <button class="btn wide" onclick="MP.setMode('join')">Einem Spiel beitreten</button>
+          <button class="btn wide" onclick="MP.setMode('public-list')">Öffentliche Lobbys suchen</button>
+          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">Privatem Spiel beitreten</button>
         `;
             } else if (mode === 'join') {
                 const savedName = localStorage.getItem('mp-name') || 'Spieler';
@@ -117,21 +352,64 @@ const MP = {
                 const savedName = localStorage.getItem('mp-name') || 'Host';
                 h = `
           <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="${savedName}"></label>
+          <label class="row" style="margin-top:10px"><span>Öffentlich</span><input type="checkbox" id="mp-is-public" checked></label>
           <p class="sub">Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.</p>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
         `;
+            } else if (mode === 'public-list') {
+                const savedName = localStorage.getItem('mp-name') || 'Spieler';
+                h = `
+          <label class="row" style="margin-bottom:15px"><span>Dein Name</span><input type="text" id="mp-pln" value="${savedName}"></label>
+          <h3 style="margin-bottom:10px">Öffentliche Lobbys</h3>
+          <div id="mp-pl-container">Lade...</div>
+          <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">Zurück</button>
+        `;
+
+                const fetchList = () => {
+                    fetch(`${this.serverUrl}/api/public-sessions`)
+                        .then(r => r.json())
+                        .then(list => {
+                            const c = $('mp-pl-container');
+                            if (!c) return;
+                            if (list.length === 0) {
+                                c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
+                                return;
+                            }
+                            c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
+                                list.map(l => `
+                                <tr style="border-bottom:1px solid #ccc;">
+                                    <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
+                                    <td style="padding: 8px 4px; text-align:right;">
+                                        <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
+                                    </td>
+                                </tr>
+                            `).join('') + '</table>';
+                        })
+                        .catch(() => {
+                            const c = $('mp-pl-container');
+                            if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
+                        });
+                };
+
+                fetchList();
+                this._publicListTimer = setInterval(fetchList, 5000);
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
-                    const civOpts = CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civOpts = '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>Zufall</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
                     const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
-                    const abOpts = civDef ? civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('') : '';
+                    let abOpts = '';
+                    if (p.civ === 'random') {
+                        abOpts = '<option value="random" selected>Zufall</option>';
+                    } else if (civDef) {
+                        abOpts = '<option value="random" ' + (p.ability === 'random' ? 'selected' : '') + '>Zufall</option>' + civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('');
+                    }
 
                     return `
                     <tr>
-                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''}</td>
+                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${p.mmr} MMR]</span>` : ''}</td>
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
@@ -176,6 +454,10 @@ const MP = {
                   ${DIFFICULTIES.map(d => `<option value="${d.k}" ${this.gameConfig.difficulty === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
                 </select>
               </label>
+              <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
+                <span><b>🔥 Gewertetes Spiel</b> <br><small style="font-size:10px;color:#777">(min 2 H-Spieler, Bots auf schwer)</small></span>
+                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
+              </label>
           </div>
 
           ${isHost ? '<button class="btn wide primary" onclick="MP.startGame()">Spiel starten</button>' : ''}
@@ -191,14 +473,93 @@ const MP = {
     updateLobbyConfig: function () {
         if (this.lobbyIndex !== this.hostIndex) return;
         const evModeEl = $('mp-set-evmode');
+        // Force the hardest difficulty if Ranked is checked
+        let diff = $('mp-set-diff').value;
+        const isRanked = $('mp-set-ranked') && $('mp-set-ranked').checked;
+        if (isRanked) {
+            diff = DIFFICULTIES[DIFFICULTIES.length - 1].k;
+            // Temporarily force UI visual to match
+            if ($('mp-set-diff')) $('mp-set-diff').value = diff;
+        }
+
         const newConfig = {
             mapKey: $('mp-set-map').value,
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
-            difficulty: $('mp-set-diff').value,
+            difficulty: diff,
+            ranked: isRanked
         };
         this.socket.emit('lobby:config', newConfig);
+    },
+
+    auth: async function (type) {
+        const payload = {};
+        if ($('mp-auth-usn')) payload.username = $('mp-auth-usn').value.trim();
+        if ($('mp-auth-pw')) payload.password = $('mp-auth-pw').value.trim();
+        if ($('mp-auth-em')) payload.email = $('mp-auth-em').value.trim();
+        if ($('mp-auth-code')) payload.code = $('mp-auth-code').value.trim();
+
+        if (type === 'reset-confirm') {
+            payload.newPassword = payload.password;
+        }
+
+        const errEl = $('mp-auth-err');
+
+        try {
+            let apiPath = type;
+            if (type === 'reset-request') apiPath = 'reset-password/request';
+            if (type === 'reset-confirm') apiPath = 'reset-password/confirm';
+
+            errEl.innerText = 'Laden...';
+            errEl.style.display = 'block';
+
+            const res = await fetch(`${this.serverUrl}/api/auth/${apiPath}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                errEl.innerText = data.error || 'Fehler beim Abrufen';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            // Flow Transitions
+            if (type === 'register') {
+                this.showAuthDialog('activate', { username: payload.username });
+                return;
+            }
+            if (type === 'reset-request') {
+                this.showAuthDialog('reset-confirm', { email: payload.email });
+                return;
+            }
+            if (type === 'reset-confirm') {
+                this.showAuthDialog('login');
+                toast('Dein Passwort wurde erfolgreich aktualisiert.');
+                return;
+            }
+
+            // Login / Activate
+            this.user = data;
+
+            // Close the auth modal
+            closeModal();
+            this.renderMainMenuAuth();
+        } catch (e) {
+            errEl.innerText = 'Netzwerkfehler';
+            errEl.style.display = 'block';
+        }
+    },
+
+    logout: async function () {
+        try {
+            await fetch(`${this.serverUrl}/api/auth/logout`, { method: 'POST' });
+            this.user = null;
+            this.renderMainMenuAuth();
+        } catch (e) { }
     },
 
     updateLobbyPlayer: function () {
@@ -231,7 +592,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name } })
+                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
@@ -266,17 +627,74 @@ const MP = {
                 }
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
+        }
+    },
+
+    joinPublic: async function (joinCode, password) {
+        const nameInput = $('mp-pln');
+        if (!nameInput) return;
+        const name = nameInput.value.trim();
+        if (!name) return toast('Bitte Namen eingeben.');
+
+        localStorage.setItem('mp-name', name);
+
+        try {
+            toast('Verbinde...');
+            const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
+            });
+            const data = await res.json();
+            if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
+
+            this.sessionId = data.sessionId;
+            this.lobbyIndex = data.playerIndex;
+            this.joinCode = joinCode;
+            this.password = password;
+
+            await this.connect();
+
+            this.socket.emit('session:connect', {
+                sessionId: this.sessionId,
+                playerIndex: this.lobbyIndex,
+                password: this.password
+            }, (ack) => {
+                if (ack.error) return toast(ack.error);
+
+                this.active = true;
+                this.players = ack.players;
+                this.gameConfig = ack.gameConfig || {};
+                this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
+
+                const credBox = $('mp-cred-box');
+                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+
+                if (ack.status === 'playing') {
+                    toast('Spiel läuft, lade Zustand...');
+                }
+                else {
+                    this.setMode('waiting');
+                }
+            });
+        } catch (e) {
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
     host: async function () {
         const name = $('mp-hn').value.trim();
+        const isPublicCheckbox = $('mp-is-public');
+        const isPublic = isPublicCheckbox ? isPublicCheckbox.checked : false;
         localStorage.setItem('mp-name', name);
 
         // Create local config with valid defaults (since Singleplayer UI is bypassed)
         const config = {
             seed: Math.floor(Math.random() * 2 ** 31) | 0,
+            isPublic: isPublic,
             duel: false, // Could read from setupMode if needed
             events: false,
             eventMode: 'hard',
@@ -290,7 +708,7 @@ const MP = {
             const res = await fetch(`${this.serverUrl}/api/sessions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config, host: { name } })
+                body: JSON.stringify({ config, host: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error || 'Fehler beim Hosten.');
@@ -320,7 +738,8 @@ const MP = {
                 this.setMode('waiting');
             });
         } catch (e) {
-            toast('Server nicht erreichbar.');
+            console.error(e);
+            toast('Server nicht erreichbar: ' + e.message);
         }
     },
 
@@ -331,15 +750,28 @@ const MP = {
     }
 };
 
-// ── Inject Multiplayer Button ────────────────────────────────────────────────
+// ── Inject Multiplayer Button and Auth Bar ─────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
     const mNew = $('m-new');
     if (mNew) {
+        // Multiplaxer Button
         const btn = document.createElement('button');
         btn.className = 'btn primary';
         btn.textContent = 'Multiplayer';
         btn.onclick = () => MP.showLobby();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
+
+        // Auth Container for Main Menu
+        const authDiv = document.createElement('div');
+        authDiv.id = 'mp-main-auth-container';
+        // Insert right above the action boxes
+        const menuActions = document.querySelector('.menu-actions');
+        if (menuActions && menuActions.parentNode) {
+            menuActions.parentNode.insertBefore(authDiv, menuActions);
+        }
+
+        // Render it
+        MP.renderMainMenuAuth();
     }
 
     // Inject Turn Blocker CSS rules
@@ -353,8 +785,26 @@ window.addEventListener('DOMContentLoaded', () => {
             background: #904030; color: white; padding: 6px 14px; border-radius: 4px; z-index: 1000; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .mp-waiting .mp-waiting-toast { display: block; }
+        @keyframes mpAnimPop {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+        #mp-persistent-log {
+            position: fixed; right: 10px; top: 60px; width: 320px; max-height: 50vh;
+            overflow-y: auto; background: rgba(255,255,240,0.95); pointer-events: auto;
+            border: 2px solid #a89f91; padding: 10px; border-radius: 6px; z-index: 50;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333;
+        }
+        #mp-persistent-log .logline { margin-bottom: 4px; }
+        #mp-persistent-log .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
     `;
     document.head.appendChild(style);
+
+    const pLog = document.createElement('div');
+    pLog.id = 'mp-persistent-log';
+    document.body.appendChild(pLog);
 
     // Inject Turn Blocker active toast
     const waitToast = document.createElement('div');

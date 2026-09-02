@@ -1,5 +1,11 @@
 node_modules/
 public/
+.vscode/
 npm-debug.log
 .env
 .DS_Store
+.vscode/
+*.log
+*.txt
+instructions.md
+secrets.env

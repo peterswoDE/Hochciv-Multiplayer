@@ -23,16 +23,11 @@ services:
       - ./server.js:/app/server.js
       - ./sessions.js:/app/sessions.js
       - ./sockets:/app/sockets
+      - ./engine-adapter.js:/app/engine-adapter.js
     networks:
-      default:
-        priority: 1000
       nginx:
-        priority: 100
 
 networks:
-  default:
-    driver: bridge
-    driver_opts:
-      com.docker.network.driver.mtu: 1400
+
   nginx:
     external: true

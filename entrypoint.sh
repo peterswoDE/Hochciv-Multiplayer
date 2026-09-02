@@ -305,6 +305,7 @@ fi
           cd ..
           if update_frontend; then
             echo "[Auto-Updater] Update applied successfully."
+            touch .update_trigger
           else
             echo "[Auto-Updater] update_frontend failed; will retry later."
           fi
@@ -321,6 +322,7 @@ fi
       if [ ! -f "public/index.html" ]; then
         if update_frontend; then
           echo "[Auto-Updater] Frontend downloaded successfully."
+          touch .update_trigger
         else
           echo "[Auto-Updater] Download failed; will retry later."
         fi
