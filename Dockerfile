@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy dependency files first
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm config set strict-ssl false && npm install --omit=dev
 
 # Copy application files
 COPY . .
