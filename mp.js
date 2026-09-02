@@ -103,10 +103,11 @@ const MP = {
 
     updatePersistentLog: function () {
         if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
-        const pl = document.getElementById('mp-persistent-log');
-        if (pl && typeof logHtml === 'function') {
+        const plc = document.getElementById('mp-persistent-log-container');
+        const pl = document.getElementById('mp-persistent-log-content');
+        if (pl && plc && typeof logHtml === 'function') {
             const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
-            pl.style.display = 'block';
+            plc.style.display = 'block';
             pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
             if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
         }
@@ -791,20 +792,45 @@ window.addEventListener('DOMContentLoaded', () => {
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
         }
-        #mp-persistent-log {
-            position: fixed; right: 10px; top: 60px; width: 320px; max-height: 50vh;
-            overflow-y: auto; background: rgba(255,255,240,0.95); pointer-events: auto;
-            border: 2px solid #a89f91; padding: 10px; border-radius: 6px; z-index: 50;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333;
+        #mp-persistent-log-container {
+            position: fixed; right: 10px; top: 60px; width: 320px;
+            background: rgba(255,255,240,0.95); pointer-events: auto;
+            border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
         }
-        #mp-persistent-log .logline { margin-bottom: 4px; }
-        #mp-persistent-log .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
+        #mp-persistent-log-header {
+            background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
+        }
+        #mp-persistent-log-content {
+            max-height: 40vh; overflow-y: auto; padding: 10px; display: block;
+        }
+        #mp-persistent-log-content .logline { margin-bottom: 4px; }
+        #mp-persistent-log-content .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
     `;
     document.head.appendChild(style);
 
     const pLog = document.createElement('div');
-    pLog.id = 'mp-persistent-log';
+    pLog.id = 'mp-persistent-log-container';
+    pLog.innerHTML = `
+        <div id="mp-persistent-log-header">
+            <span>Spiel-Log</span>
+            <span id="mp-log-toggle-icon">▼</span>
+        </div>
+        <div id="mp-persistent-log-content"></div>
+    `;
     document.body.appendChild(pLog);
+
+    document.getElementById('mp-persistent-log-header').addEventListener('click', () => {
+        const content = document.getElementById('mp-persistent-log-content');
+        const icon = document.getElementById('mp-log-toggle-icon');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.innerText = '▼';
+        } else {
+            content.style.display = 'none';
+            icon.innerText = '▲';
+        }
+    });
 
     // Inject Turn Blocker active toast
     const waitToast = document.createElement('div');

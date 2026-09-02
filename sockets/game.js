@@ -274,7 +274,13 @@ module.exports = function registerHandlers(io) {
             if (session.state.cur !== finalIndex)
                 return ack?.({ error: 'Du bist nicht am Zug.' });
 
-            const err = engine.applyAction(session.state, finalIndex, data.type, data.params);
+            const err = engine.applyAction(session.state, finalIndex, data.type, data.params, () => {
+                broadcastState(io, session);
+                if (session.state.over) {
+                    session.status = 'finished';
+                    io.to(sessionId).emit('game:over', session.state.over);
+                }
+            });
             if (err) return ack?.({ error: err });
 
             ack?.({ ok: true });
