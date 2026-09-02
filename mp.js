@@ -382,6 +382,7 @@ window.addEventListener('DOMContentLoaded', () => {
 const ACTIONS = {
     doResearch: (state, pi, tech) => ({ type: 'research', params: { tech } }),
     useFreeTech: (state, pi, tech) => ({ type: 'freeTech', params: { tech } }),
+    useFreePick: (state, pi, tech) => ({ type: 'freePick', params: { tech } }),
     useBackPick: (state, pi, tech) => ({ type: 'backPick', params: { tech } }),
     copyTech: (state, pi, tech, mode) => ({ type: 'copyTech', params: { tech, mode } }),
     foundCity: (state, pi, r, c) => ({ type: 'foundCity', params: { r, c } }),

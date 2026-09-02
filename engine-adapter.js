@@ -12,7 +12,7 @@ const vm = require('vm');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
-const FILES = ['data.js', 'hex.js', 'engine.js', 'expansion.js', 'bots.js'];
+const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js'];
 
 // The sandbox shares a single global object so every file can see the
 // constants and functions defined by the previous one – just like a browser.
@@ -159,6 +159,9 @@ function applyAction(state, pi, action, params) {
 
         case 'freeTech':
             return E.useFreeTech(state, pi, params.tech);
+
+        case 'freePick':
+            return E.useFreePick(state, pi, params.tech);
 
         case 'backPick':
             return E.useBackPick(state, pi, params.tech);
