@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  hochciv-local:
+    build: .
+    container_name: hochciv-multiplayer-local
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    volumes:
+      - ./mp.js:/app/mp.js
+      - ./server.js:/app/server.js
+      - ./engine-adapter.js:/app/engine-adapter.js
+      - ./sessions.js:/app/sessions.js
+      - ./sockets:/app/sockets
