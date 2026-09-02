@@ -27,6 +27,7 @@ services:
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
       - UPDATE_INTERVAL_SEC=3600
+      - GIT_SSL_NO_VERIFY=1
     env_file:
       - secrets.env
     volumes:
