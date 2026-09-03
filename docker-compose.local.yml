@@ -4,6 +4,7 @@ services:
   hochciv-db:
     image: postgres:15-alpine
     container_name: hochciv-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: hochciv
       POSTGRES_PASSWORD: password123
