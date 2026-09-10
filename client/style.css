@@ -1,12 +1,22 @@
 :root {
-    --primary: #4f46e5;
-    --primary-hover: #4338ca;
-    --bg-dark: #111827;
-    --bg-card: #1f2937;
-    --text-main: #f9fafb;
-    --text-muted: #9ca3af;
-    --border: #374151;
-    --error: #ef4444;
+    --parchment: #e8dfc7;
+    --paper: #fcfbfa;
+    --paper-2: #f4ede1;
+    --ink: #3c3014;
+    --ink-soft: #7a6e52;
+    --rule: #d5cbb3;
+    --red: #a43e2b;
+    --red-hover: #8f3322;
+    --shadow: 0 6px 24px rgba(60,48,20,0.16);
+
+    --primary: var(--red);
+    --primary-hover: var(--red-hover);
+    --bg-dark: var(--parchment);
+    --bg-card: var(--paper);
+    --text-main: var(--ink);
+    --text-muted: var(--ink-soft);
+    --border: var(--rule);
+    --error: var(--red);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -37,17 +47,26 @@ body {
 }
 
 .portal-header h1 {
-    font-size: 3rem;
-    font-weight: 800;
-    margin-bottom: 0.5rem;
-    background: linear-gradient(to right, #60a5fa, #c084fc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-size: clamp(38px, 9vw, 64px);
+    font-family: Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 18px;
+    color: var(--text-main);
+}
+.portal-header h1::after {
+    content: "";
+    display: block;
+    width: 64px;
+    height: 3px;
+    background: var(--red);
+    margin: 18px auto 0;
 }
 
 .portal-header p {
     color: var(--text-muted);
-    font-size: 1.1rem;
+    font-size: 15px;
 }
 
 .view-section {
@@ -63,11 +82,11 @@ body {
 }
 
 /* Cards */
-.auth-card, .dashboard-card {
+.auth-card, .dashboard-card, .landing-card {
     background: var(--bg-card);
-    border-radius: 1rem;
-    padding: 2rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: var(--shadow);
     border: 1px solid var(--border);
     max-width: 450px;
     margin: 0 auto;
@@ -90,7 +109,7 @@ body {
     color: var(--text-muted);
     padding: 0.75rem;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 15px;
     font-weight: 600;
     border-bottom: 2px solid transparent;
     transition: all 0.2s;
@@ -104,23 +123,24 @@ body {
 /* Forms */
 .auth-form { display: none; }
 .auth-form.active { display: block; }
-.form-desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; text-align: center; }
+.form-desc { color: var(--text-muted); font-size: 13px; margin-bottom: 1rem; text-align: center; }
 
 .form-group { margin-bottom: 1rem; }
 .form-group label {
     display: block;
     margin-bottom: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 13px;
     color: var(--text-muted);
+    font-weight: 500;
 }
 .form-group input {
     width: 100%;
-    padding: 0.75rem;
-    background: #374151;
+    padding: 10px;
+    background: var(--paper-2);
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    color: white;
-    font-size: 1rem;
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 15px;
 }
 .form-group input:focus {
     outline: none;
@@ -130,17 +150,17 @@ body {
     display: flex;
     justify-content: flex-end;
     margin-bottom: 1rem;
-    font-size: 0.875rem;
+    font-size: 13px;
 }
 .form-options a {
-    color: #60a5fa;
-    text-decoration: none;
+    color: var(--text-muted);
+    text-decoration: underline;
 }
-.form-options a:hover { text-decoration: underline; }
+.form-options a:hover { color: var(--text-main); }
 
 .error-msg {
     color: var(--error);
-    font-size: 0.875rem;
+    font-size: 13px;
     margin-bottom: 1rem;
     display: none;
 }
@@ -151,29 +171,38 @@ body {
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 0.75rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
+    padding: 13px 16px;
+    border-radius: 10px;
+    font-weight: 500;
     cursor: pointer;
-    border: none;
-    transition: background 0.2s;
+    border: 1px solid var(--border);
+    background: var(--paper);
+    color: var(--text-main);
+    transition: transform 0.08s;
     text-decoration: none;
-    font-size: 1rem;
+    font-size: 15px;
+    box-shadow: 0 2px 5px rgba(60,48,20,0.08);
+}
+.btn:active {
+    transform: translateY(1px);
 }
 .btn-primary {
     background: var(--primary);
-    color: white;
+    border-color: var(--primary);
+    color: #fdf7e8;
 }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-ghost {
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-main);
     border: 1px solid var(--border);
+    box-shadow: none;
 }
-.btn-ghost:hover { background: var(--border); color: white; }
+.btn-ghost:hover { background: var(--paper-2); }
 .btn-huge {
-    padding: 1rem;
-    font-size: 1.25rem;
+    padding: 16px;
+    font-size: 18px;
+    margin-bottom: 10px;
 }
 
 /* Divider */
@@ -183,7 +212,7 @@ body {
     text-align: center;
     margin: 1.5rem 0;
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: 13px;
 }
 .divider::before, .divider::after {
     content: '';
@@ -199,8 +228,8 @@ body {
 }
 .btn-oauth {
     flex: 1;
-    background: #374151;
-    color: white;
+    background: var(--paper-2);
+    color: var(--text-main);
     gap: 0.5rem;
 }
 .btn-oauth:disabled {
@@ -215,32 +244,33 @@ body {
     align-items: center;
     margin-bottom: 2rem;
 }
-.dashboard-header h2 { font-size: 1.5rem; }
-.dashboard-header .btn { width: auto; padding: 0.5rem 1rem; }
+.dashboard-header h2 { font-size: 19px; font-family: Georgia, serif; }
+.dashboard-header .btn { width: auto; padding: 6px 12px; }
 
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    gap: 10px;
     margin-bottom: 2rem;
 }
 .stat-box {
-    background: #374151;
+    background: var(--paper-2);
     padding: 1.5rem;
-    border-radius: 0.5rem;
+    border-radius: 10px;
     text-align: center;
+    border: 1px solid var(--border);
 }
 .stat-label {
     display: block;
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: 13px;
     margin-bottom: 0.5rem;
 }
 .stat-value {
     display: block;
     font-size: 2rem;
     font-weight: bold;
-    color: white;
+    font-family: monospace;
 }
 
 /* Loader */
@@ -260,6 +290,6 @@ body {
 .portal-footer {
     text-align: center;
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: 12px;
     padding: 2rem 0;
 }

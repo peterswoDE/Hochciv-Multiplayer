@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Views
     const viewLoading = document.getElementById('view-loading');
+    const viewLanding = document.getElementById('view-landing');
     const viewAuth = document.getElementById('view-auth');
     const viewDashboard = document.getElementById('view-dashboard');
 
@@ -24,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- View Management ---
     function showView(view) {
         viewLoading.classList.remove('active');
+        if (viewLanding) viewLanding.classList.remove('active');
         viewAuth.classList.remove('active');
         viewDashboard.classList.remove('active');
         view.classList.add('active');
@@ -41,6 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => switchAuthTab(btn.dataset.target));
     });
+
+    // Landing Buttons
+    if (document.getElementById('btn-guest')) {
+        document.getElementById('btn-guest').addEventListener('click', () => {
+            sessionStorage.setItem('hochciv_guest', 'true');
+            window.location.href = '/game';
+        });
+    }
+    if (document.getElementById('btn-show-login')) {
+        document.getElementById('btn-show-login').addEventListener('click', () => {
+            showView(viewAuth);
+        });
+    }
 
     // --- API Interactions ---
     async function fetchMe() {
@@ -60,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error fetching profile:', e);
         }
-        showView(viewAuth);
+        showView(viewLanding);
     }
 
     function showError(elementId, msg) {
@@ -90,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             
             if (res.ok && !data.error) {
+                sessionStorage.removeItem('hochciv_guest');
                 await fetchMe();
             } else {
                 showError('login-error', data.error || 'Login fehlgeschlagen.');
@@ -142,6 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             
             if (res.ok && !data.error) {
+                sessionStorage.removeItem('hochciv_guest');
                 await fetchMe();
             } else {
                 showError('act-error', data.error || 'Aktivierung fehlgeschlagen.');
@@ -155,7 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await fetch('/api/auth/logout', { method: 'POST' });
             currentUser = null;
-            showView(viewAuth);
+            sessionStorage.removeItem('hochciv_guest');
+            showView(viewLanding);
             switchAuthTab('form-login');
         } catch (e) {
             console.error(e);
