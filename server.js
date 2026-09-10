@@ -108,7 +108,22 @@ app.use('/api', apiRoutes);
   const path = require('path');
   
   // 1. Serve custom portal first (shadows public/index.html)
-  app.use(express.static(path.join(__dirname, 'client')));
+  
+app.get('/sw.js', (req, res) => {
+    res.type('application/javascript');
+    res.send(`
+        self.addEventListener('install', e => { self.skipWaiting(); });
+        self.addEventListener('activate', e => {
+            e.waitUntil(self.registration.unregister().then(() => self.clients.claim()));
+        });
+        self.addEventListener('fetch', e => {
+            e.respondWith(fetch(e.request));
+        });
+    `);
+});
+
+app.use(express.static(path.join(__dirname, 'client')));
+
   
   // 2. Explicitly serve the game at /game
   app.get('/game', (req, res) => {

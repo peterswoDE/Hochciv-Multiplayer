@@ -279,6 +279,173 @@ const MP = {
         if (this.renderLobby) this.renderLobby();
     },
 
+    showLobby: async function () {
+        await this.fetchUser();
+        let mode = 'menu';
+        const render = () => {
+            if (this._publicListTimer) clearInterval(this._publicListTimer);
+            let h = '';
+
+            if (mode === 'menu') {
+                h = `
+          <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">Neues Spiel hosten (Server)</button>
+          <button class="btn wide" onclick="MP.setMode('public-list')">Öffentliche Lobbys suchen</button>
+          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">Privatem Spiel beitreten</button>
+        `;
+            } else if (mode === 'join') {
+                const savedName = localStorage.getItem('mp-name') || 'Spieler';
+                h = `
+          <label class="row"><span>Beitrittscode</span><input type="text" id="mp-c" style="width:100px;text-transform:uppercase"></label>
+          <label class="row"><span>Passwort</span><input type="number" id="mp-p" style="width:100px"></label>
+          <label class="row"><span>Dein Name</span><input type="text" id="mp-n" value="${savedName}"></label>
+          <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">Beitreten</button>
+        `;
+            } else if (mode === 'host') {
+                const savedName = localStorage.getItem('mp-name') || 'Host';
+                h = `
+          <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="${savedName}"></label>
+          <label class="row" style="margin-top:10px"><span>Öffentlich</span><input type="checkbox" id="mp-is-public" checked></label>
+          <p class="sub">Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.</p>
+          <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
+        `;
+            } else if (mode === 'public-list') {
+                const savedName = localStorage.getItem('mp-name') || 'Spieler';
+                h = `
+          <label class="row" style="margin-bottom:15px"><span>Dein Name</span><input type="text" id="mp-pln" value="${savedName}"></label>
+          <h3 style="margin-bottom:10px">Öffentliche Lobbys</h3>
+          <div id="mp-pl-container">Lade...</div>
+          <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">Zurück</button>
+        `;
+
+                const fetchList = () => {
+                    fetch(`${this.serverUrl}/api/public-sessions`)
+                        .then(r => r.json())
+                        .then(list => {
+                            const c = $('mp-pl-container');
+                            if (!c) return;
+                            if (list.length === 0) {
+                                c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
+                                return;
+                            }
+                            c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
+                                list.map(l => `
+                                <tr style="border-bottom:1px solid #ccc;">
+                                    <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
+                                    <td style="padding: 8px 4px; text-align:right;">
+                                        <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
+                                    </td>
+                                </tr>
+                            `).join('') + '</table>';
+                        })
+                        .catch(() => {
+                            const c = $('mp-pl-container');
+                            if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
+                        });
+                };
+
+                fetchList();
+                this._publicListTimer = setInterval(fetchList, 5000);
+            } else if (mode === 'waiting') {
+                const isHost = this.lobbyIndex === this.hostIndex;
+                let trs = this.players.map(p => {
+                    const isMe = p.index === this.lobbyIndex;
+                    const isPlayerHost = p.index === this.hostIndex;
+                    const civOpts = '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>Zufall</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
+                    let abOpts = '';
+                    if (p.civ === 'random') {
+                        abOpts = '<option value="random" selected>Zufall</option>';
+                    } else if (civDef) {
+                        abOpts = '<option value="random" ' + (p.ability === 'random' ? 'selected' : '') + '>Zufall</option>' + civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('');
+                    }
+
+                    return `
+                    <tr>
+                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${p.mmr} MMR]</span>` : ''}</td>
+                        <td style="padding: 4px;">
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
+                            <br/>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
+                        </td>
+                        <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
+                        <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
+                    </tr>
+                `}).join('');
+
+                h = `
+          <h3>Lobby <span class="sub" style="float:right">Code: <b>${this.joinCode}</b> · Passwort: <b>${this.password}</b></span></h3>
+          <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
+            <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>Spieler</th><th>Ziv</th><th>Status</th><th></th></tr>
+            ${trs}
+          </table>
+
+          <h4>Spieleinstellungen</h4>
+          <div style="background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
+              <label class="row"><span>Karte</span>
+                <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
+                  <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>Originalkarte (12 × 18)</option>
+                  <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>Große Karte (15 × 24)</option>
+                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>Zufall</option>
+                </select>
+              </label>
+              <label class="row"><span>Mit Ereignissen</span>
+                <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
+              </label>
+              ${this.gameConfig.events ? `
+              <label class="row"><span>Ereignisstärke</span>
+                <select id="mp-set-evmode" onchange="MP.updateLobbyConfig()">
+                  <option value="hard" ${this.gameConfig.eventMode === 'hard' ? 'selected' : ''}>Hart (jede Runde)</option>
+                  <option value="easy" ${this.gameConfig.eventMode === 'easy' ? 'selected' : ''}>Leicht (selten)</option>
+                </select>
+              </label>` : ''}
+              <label class="row"><span>Mit Weltwundern</span>
+                <input type="checkbox" id="mp-set-wonders" onchange="MP.updateLobbyConfig()" ${this.gameConfig.wonders ? 'checked' : ''}>
+              </label>
+              <label class="row"><span>Schwierigkeit (Bots)</span>
+                <select id="mp-set-diff" onchange="MP.updateLobbyConfig()">
+                  ${DIFFICULTIES.map(d => `<option value="${d.k}" ${this.gameConfig.difficulty === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
+                </select>
+              </label>
+              <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
+                <span><b>🔥 Gewertetes Spiel</b> <br><small style="font-size:10px;color:#777">(min 2 H-Spieler, Bots auf schwer)</small></span>
+                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
+              </label>
+          </div>
+
+          ${isHost ? '<button class="btn wide primary" onclick="MP.startGame()">Spiel starten</button>' : ''}
+        `;
+            }
+            modal('Multiplayer', h);
+        };
+        this.setMode = (m) => { mode = m; render(); };
+        this.renderLobby = render; // Export render method to dynamically update when lobby state changes
+        render();
+    },
+
+    updateLobbyConfig: function () {
+        if (this.lobbyIndex !== this.hostIndex) return;
+        const evModeEl = $('mp-set-evmode');
+        // Force the hardest difficulty if Ranked is checked
+        let diff = $('mp-set-diff').value;
+        const isRanked = $('mp-set-ranked') && $('mp-set-ranked').checked;
+        if (isRanked) {
+            diff = DIFFICULTIES[DIFFICULTIES.length - 1].k;
+            // Temporarily force UI visual to match
+            if ($('mp-set-diff')) $('mp-set-diff').value = diff;
+        }
+
+        const newConfig = {
+            mapKey: $('mp-set-map').value,
+            events: $('mp-set-events').checked,
+            eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
+            wonders: $('mp-set-wonders').checked,
+            difficulty: diff,
+            ranked: isRanked
+        };
+        this.socket.emit('lobby:config', newConfig);
+    },
+
+
 updateLobbyPlayer: function () {
         if (this.lobbyIndex == null) return;
         const civSelect = $(`mp-p-civ-${this.lobbyIndex}`);
