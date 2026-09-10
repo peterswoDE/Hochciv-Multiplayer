@@ -103,7 +103,9 @@
             <div class="nav-tabs">
                 <button class="nav-tab active" data-target="tab-profile">Profil</button>
                 <button class="nav-tab" data-target="tab-history">Spielhistorie</button>
-                <button class="nav-tab" id="tab-btn-admin" data-target="tab-admin" style="display:none;">Admin-Panel</button>
+                <button class="nav-tab admin-tab" data-target="tab-admin-dashboard" style="display:none; color: var(--red);">Server-Status</button>
+                <button class="nav-tab admin-tab" data-target="tab-admin-lobbies" style="display:none; color: var(--red);">Lobbys</button>
+                <button class="nav-tab admin-tab" data-target="tab-admin-users" style="display:none; color: var(--red);">User</button>
             </div>
 
             <!-- Profile Tab -->
@@ -170,8 +172,9 @@
             </div>
 
             <!-- Admin Panel Tab -->
-            <div id="tab-admin" class="tab-content">
-                <h2 style="font-family: Georgia, serif; color: var(--red);">Server Administration</h2>
+            <!-- Admin Dashboard Tab -->
+            <div id="tab-admin-dashboard" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">Server-Status</h2>
                 
                 <div class="metrics-grid">
                     <div class="metric-card">
@@ -199,8 +202,11 @@
                         Registrierung erlauben
                     </label>
                 </div>
+            </div>
 
-                <h3>Lobby Management</h3>
+            <!-- Admin Lobbies Tab -->
+            <div id="tab-admin-lobbies" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">Lobby Management</h2>
                 <table id="table-admin-lobbies" style="margin-bottom: 40px;">
                     <thead>
                         <tr>
@@ -212,8 +218,11 @@
                     </thead>
                     <tbody></tbody>
                 </table>
+            </div>
 
-                <h3>User Management</h3>
+            <!-- Admin Users Tab -->
+            <div id="tab-admin-users" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">User Management</h2>
                 <table id="table-admin-users">
                     <thead>
                         <tr>

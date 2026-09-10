@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Admin mode
         if (data.role === 'admin') {
-            document.getElementById('tab-btn-admin').style.display = 'block';
+            document.querySelectorAll('.admin-tab').forEach(el => el.style.display = 'block');
             loadAdminData();
             setInterval(loadAdminData, 10000); // refresh every 10s
         }
