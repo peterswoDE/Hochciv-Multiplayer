@@ -293,10 +293,9 @@ module.exports = function registerHandlers(io) {
                 session.status = 'finished';
                 io.to(sessionId).emit('game:over', session.state.over);
 
-                // If the game was flagged as ranked, compile the MMR data
-                if (session.gameConfig && session.gameConfig.ranked) {
-                    processGameOverMmr(session, io, sessionId);
-                }
+                // Always record history, calculate MMR only if ranked
+                const isRanked = session.gameConfig && session.gameConfig.ranked === true;
+                processGameOverMmr(session, io, sessionId, isRanked);
             }
         });
 
@@ -434,7 +433,7 @@ function broadcastState(io, session) {
 /**
  * Handle game over stats processing, database persistence, and Rating scaling.
  */
-async function processGameOverMmr(session, io, sessionId) {
+async function processGameOverMmr(session, io, sessionId, isRanked = false) {
     try {
         if (!engine.getEngine().victoryScore) return console.error('victoryScore function not exposed from engine');
 
@@ -472,22 +471,33 @@ async function processGameOverMmr(session, io, sessionId) {
             }
         }
 
-        // Execute Custom ELO/MMR Engine
-        const mmrResults = calculateMMR(playersData);
+        if (isRanked) {
+            // Execute Custom ELO/MMR Engine
+            const mmrResults = calculateMMR(playersData);
 
-        // Map results back for DB persistence
-        for (let res of mmrResults) {
-            const p = playersData.find(x => x.dbUserId === res.dbUserId && x.dbUserId != null);
-            if (p) {
-                p.mmrShift = res.mmrChange;
-                p.oldMmr = res.oldMmr;
-                p.newMmr = res.newMmr;
+            // Map results back for DB persistence
+            for (let res of mmrResults) {
+                const p = playersData.find(x => x.dbUserId === res.dbUserId && x.dbUserId != null);
+                if (p) {
+                    p.mmrShift = res.mmrChange;
+                    p.oldMmr = res.oldMmr;
+                    p.newMmr = res.newMmr;
 
-                // Persist new MMR to DB
-                await User.update({
-                    mmr: res.newMmr,
-                    gamesPlayed: sequelize.literal('"gamesPlayed" + 1')
-                }, { where: { id: p.dbUserId } });
+                    // Persist new MMR to DB
+                    await User.update({
+                        mmr: res.newMmr,
+                        gamesPlayed: sequelize.literal('"gamesPlayed" + 1')
+                    }, { where: { id: p.dbUserId } });
+                }
+            }
+        } else {
+            // Unranked games just increment gamesPlayed
+            for (let p of playersData) {
+                if (p.dbUserId) {
+                    await User.update({
+                        gamesPlayed: sequelize.literal('"gamesPlayed" + 1')
+                    }, { where: { id: p.dbUserId } });
+                }
             }
         }
 
@@ -499,9 +509,9 @@ async function processGameOverMmr(session, io, sessionId) {
             participants: playersData
         });
 
-        console.log(`[MMR] Successfully processed ranked game ${sessionId}. Ratings updated.`);
+        console.log(`[Stats] Successfully processed game ${sessionId}. Ranked: ${isRanked}. History saved.`);
 
     } catch (err) {
-        console.error('[MMR] Failed to process game over logic:', err);
+        console.error('[Stats] Failed to process game over logic:', err);
     }
 }

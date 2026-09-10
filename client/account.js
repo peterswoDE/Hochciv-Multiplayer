@@ -126,7 +126,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('admin-lobbies-count').textContent = mData.lobbiesActive;
             document.getElementById('admin-players-count').textContent = mData.playersOnline;
             document.getElementById('admin-uptime').textContent = Math.floor(mData.uptime / 60) + ' min';
-            document.getElementById('admin-maintenance').checked = mData.maintenanceMode;
+            const btn = document.getElementById('btn-toggle-maintenance');
+            window._maintenanceMode = mData.maintenanceMode;
+            if (mData.maintenanceMode) {
+                btn.textContent = 'Deaktivieren';
+                btn.classList.add('error');
+            } else {
+                btn.textContent = 'Aktivieren';
+                btn.classList.remove('error');
+            }
             document.getElementById('admin-registration').checked = mData.registrationEnabled;
 
             // Lobbies
@@ -207,5 +215,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const err = await res.json();
             alert('Fehler: ' + (err.error || 'Unbekannt'));
         }
+    };
+
+    window.toggleMaintenance = async () => {
+        const newVal = !window._maintenanceMode;
+        await fetch('/api/admin/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ maintenanceMode: newVal })
+        });
+        loadAdminData();
     };
 });

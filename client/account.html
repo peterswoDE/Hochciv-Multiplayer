@@ -193,11 +193,14 @@
 
                 <div style="margin-bottom: 30px; background: rgba(0,0,0,0.03); padding: 15px; border-radius: 8px;">
                     <h3>Globale Einstellungen</h3>
-                    <label style="display: flex; align-items: center; gap: 10px; margin-top:10px; cursor: pointer;">
-                        <input type="checkbox" id="admin-maintenance" onchange="toggleConfig('maintenanceMode', this.checked)">
-                        Wartungsmodus (Keine neuen Spiele)
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 10px; margin-top:10px; cursor: pointer;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top:15px; padding-bottom:15px; border-bottom: 1px solid rgba(0,0,0,0.1);">
+                        <div>
+                            <strong>Wartungsmodus</strong><br>
+                            <small style="color:#666;">Verhindert das Erstellen neuer Lobbys.</small>
+                        </div>
+                        <button id="btn-toggle-maintenance" class="btn" onclick="toggleMaintenance()">Laden...</button>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 10px; margin-top:15px; cursor: pointer;">
                         <input type="checkbox" id="admin-registration" onchange="toggleConfig('registrationEnabled', this.checked)">
                         Registrierung erlauben
                     </label>
