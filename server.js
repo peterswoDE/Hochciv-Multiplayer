@@ -104,9 +104,19 @@ const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 app.use('/api', apiRoutes);
 
-// Host static frontend files from 'public' directory
-const path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+  // Host static frontend files
+  const path = require('path');
+  
+  // 1. Serve custom portal first (shadows public/index.html)
+  app.use(express.static(path.join(__dirname, 'client')));
+  
+  // 2. Explicitly serve the game at /game
+  app.get('/game', (req, res) => {
+      res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+  
+  // 3. Serve public game assets (js, css) as a fallback
+  app.use(express.static(path.join(__dirname, 'public')));
 
 
 // ── HTTP + Socket.IO ─────────────────────────────────────────────────────────
