@@ -1,6 +1,6 @@
 const sessions = require('../sessions');
 const engine = require('../engine-adapter');
-const { User, Game } = require('../models');
+const { User, Game, sequelize } = require('../models');
 const { calculateMMR } = require('../utils/mmr');
 /**
  * Register Socket.IO event handlers on the given server instance.
