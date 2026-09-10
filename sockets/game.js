@@ -276,9 +276,12 @@ module.exports = function registerHandlers(io) {
 
             const err = engine.applyAction(session.state, finalIndex, data.type, data.params, () => {
                 broadcastState(io, session);
-                if (session.state.over) {
+                if (session.state.over && !session.gameOverProcessed) {
+                    session.gameOverProcessed = true;
                     session.status = 'finished';
                     io.to(sessionId).emit('game:over', session.state.over);
+                    const isRanked = session.gameConfig && session.gameConfig.ranked === true;
+                    processGameOverMmr(session, io, sessionId, isRanked);
                 }
             });
             if (err) return ack?.({ error: err });
@@ -288,8 +291,9 @@ module.exports = function registerHandlers(io) {
             // Re-sync all connected clients immediately after a valid action
             broadcastState(io, session);
 
-            // Check for game over
-            if (session.state.over) {
+            // Check for game over (synchronous, if human won)
+            if (session.state.over && !session.gameOverProcessed) {
+                session.gameOverProcessed = true;
                 session.status = 'finished';
                 io.to(sessionId).emit('game:over', session.state.over);
 
