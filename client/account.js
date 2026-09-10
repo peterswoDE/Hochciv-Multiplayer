@@ -159,12 +159,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const uBody = document.querySelector('#table-admin-users tbody');
             uBody.innerHTML = users.map(u => {
                 let badges = '';
-                if (u.role === 'admin') badges += '<span class="badge admin">Admin</span> ';
                 if (u.isBanned) badges += '<span class="badge banned">Banned</span> ';
                 return `
                 <tr>
                     <td>${u.username} <br><small>${u.email}</small></td>
-                    <td>${badges || '-'}</td>
+                    <td>
+                        <select onchange="adminChangeRole('${u.id}', this.value)" style="margin-right:8px; padding:2px; border-radius:4px; font-size:12px; background:var(--bg); border:1px solid #ccc; color:var(--text);">
+                            <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                        ${badges}
+                    </td>
                     <td>${u.gamesPlayed}</td>
                     <td>${u.mmr}</td>
                     <td>
@@ -178,6 +183,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error(e);
         }
     }
+
+    window.adminChangeRole = async (id, role) => {
+        if (!confirm(`Sicher, dass du die Rolle auf '${role}' ändern möchtest?`)) {
+            loadAdminData(); // Reset dropdown visually
+            return;
+        }
+        const res = await fetch(`/api/admin/users/${id}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_role', role })
+        });
+        if (res.ok) {
+            loadAdminData();
+        } else {
+            const err = await res.json();
+            alert('Fehler: ' + (err.error || 'Unbekannt'));
+        }
+    };
 
     window.toggleConfig = async (key, val) => {
         await fetch('/api/admin/config', {

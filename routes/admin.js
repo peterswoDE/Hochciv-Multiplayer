@@ -64,6 +64,13 @@ router.post('/users/:id/action', async (req, res) => {
             targetUser.password_hash = await bcrypt.hash(newPassword, 10);
         } else if (action === 'make_admin') {
             targetUser.role = 'admin';
+        } else if (action === 'set_role') {
+            const { role } = req.body;
+            if (['user', 'admin'].includes(role)) {
+                targetUser.role = role;
+            } else {
+                return res.status(400).json({ error: 'Ungültige Rolle' });
+            }
         }
 
         await targetUser.save();
