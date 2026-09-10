@@ -87,7 +87,20 @@
         }
         .badge.admin { background: var(--red); color: white; }
         .badge.banned { background: #333; color: white; }
+
+        body.modal-mode .portal-header, 
+        body.modal-mode .portal-footer { display: none !important; }
+        body.modal-mode .portal-bg { background: transparent !important; padding: 0 !important; box-shadow: none !important; margin: 0 !important; width: 100%; max-width: none; }
+        body.modal-mode { background: transparent; padding: 15px; overflow-x: hidden; }
     </style>
+    <script>
+        if (window.self !== window.top || window.location.search.includes('modal=true')) {
+            document.documentElement.classList.add('modal-mode');
+            document.addEventListener('DOMContentLoaded', () => {
+                document.body.classList.add('modal-mode');
+            });
+        }
+    </script>
 </head>
 <body>
     <div class="portal-bg">

@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hochciv - Multiplayer Portal</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        body.modal-mode .portal-header, 
+        body.modal-mode .portal-footer { display: none !important; }
+        body.modal-mode .portal-bg { background: transparent !important; padding: 0 !important; box-shadow: none !important; margin: 0 !important; }
+        body.modal-mode .auth-box, body.modal-mode .dashboard-card { margin-top: 0; box-shadow: none; border: 1px solid #ddd; }
+        body.modal-mode { background: transparent; padding: 15px; }
+    </style>
+    <script>
+        if (window.self !== window.top || window.location.search.includes('modal=true')) {
+            document.documentElement.classList.add('modal-mode');
+            document.addEventListener('DOMContentLoaded', () => {
+                document.body.classList.add('modal-mode');
+            });
+        }
+    </script>
 </head>
 <body>
     <div class="portal-container">

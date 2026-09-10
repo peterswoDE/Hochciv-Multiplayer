@@ -263,7 +263,9 @@ const MP = {
                     Eingeloggt als <b>${this.user.username}</b> 
                     (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) 
                     <span style="opacity:0.5; margin:0 6px;">|</span> 
-                    <a href="/" style="text-decoration:underline; cursor:pointer;">Portal / Abmelden</a>
+                    <a onclick="MP.showAccountModal()" style="text-decoration:underline; cursor:pointer;">Account & Admin</a>
+                    <span style="opacity:0.5; margin:0 6px;">|</span>
+                    <a onclick="MP.logout()" style="text-decoration:underline; cursor:pointer;">Abmelden</a>
                 </div>
             `;
         } else {
@@ -271,12 +273,36 @@ const MP = {
                 <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
                     Gast <span style="opacity:0.7">(Ranked gesperrt)</span> 
                     <span style="opacity:0.5; margin:0 6px;">|</span> 
-                    <a href="/" style="text-decoration:underline; cursor:pointer;">Portal / Anmelden</a>
+                    <a onclick="MP.showAuthModal()" style="text-decoration:underline; cursor:pointer;">Anmelden</a>
                 </div>
             `;
         }
 
         if (this.renderLobby) this.renderLobby();
+    },
+
+    showAuthModal: function() {
+        if (typeof modal === 'function') {
+            modal('Anmelden', '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
+            document.getElementById('overlay').classList.add('wide');
+        }
+    },
+
+    showAccountModal: function() {
+        if (typeof modal === 'function') {
+            modal('Account Übersicht', '<iframe src="/client/account.html?modal=true" style="width:100%; height:80vh; min-height:600px; border:none; background:transparent;"></iframe>');
+            document.getElementById('overlay').classList.add('wide');
+        }
+    },
+
+    logout: async function() {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            sessionStorage.removeItem('hochciv_guest');
+            window.location.reload();
+        } catch(e) {
+            console.error('Logout failed', e);
+        }
     },
 
     showLobby: async function () {

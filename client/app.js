@@ -78,6 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 if (data.username) {
                     currentUser = data;
+                    if (window.self !== window.top) {
+                        window.parent.location.reload();
+                        return;
+                    }
                     dashUsername.innerText = data.username;
                     dashMmr.innerText = data.mmr || 1200;
                     dashGames.innerText = data.gamesPlayed || 0;
@@ -88,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error fetching profile:', e);
         }
-        showView(viewLanding);
+        showView(viewLanding ? viewLanding : viewAuth);
     }
 
     function showError(elementId, msg) {

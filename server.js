@@ -108,38 +108,28 @@ const adminRoutes = require('./routes/admin');
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
 
-  // Host static frontend files
-  const path = require('path');
-  
-  // 1. Serve custom portal first (shadows public/index.html)
-  
+  // Host static frontend files 
+const path = require('path');
+app.use('/client', express.static(path.join(__dirname, 'client')));
+
 app.get('/sw.js', (req, res) => {
     res.type('application/javascript');
     res.send(`
         self.addEventListener('install', e => { self.skipWaiting(); });
         self.addEventListener('activate', e => {
-            e.waitUntil(self.registration.unregister().then(() => self.clients.claim()));
+            e.waitUntil(
+                caches.keys().then(cacheNames => {
+                    return Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+                })
+            );
+            self.clients.claim();
         });
-        self.addEventListener('fetch', e => {
-            e.respondWith(fetch(e.request));
-        });
+        self.addEventListener('fetch', e => {});
     `);
 });
 
-app.use(express.static(path.join(__dirname, 'client')));
-
-  
-  // 2. Explicitly serve the game at /game
-  app.get('/account', (req, res) => {
-      res.sendFile(path.join(__dirname, 'client', 'account.html'));
-  });
-
-  app.get('/game', (req, res) => {
-      res.sendFile(path.join(__dirname, 'public', 'index.html'));
-  });
-  
-  // 3. Serve public game assets (js, css) as a fallback
-  app.use(express.static(path.join(__dirname, 'public')));
+// 3. Serve public game assets (js, css) as a fallback (this makes the game the root /)
+app.use(express.static(path.join(__dirname, 'public')));
 
 
 // ── HTTP + Socket.IO ─────────────────────────────────────────────────────────
