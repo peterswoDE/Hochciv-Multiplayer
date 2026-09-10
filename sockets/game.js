@@ -449,7 +449,8 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
 
             let points = 0;
             try {
-                points = engine.getEngine().victoryScore(session.state, i);
+                const scoreObj = engine.getEngine().victoryScore(session.state, i);
+                points = scoreObj ? scoreObj.total : 0;
             } catch (e) {
                 console.error('Error fetching score for player', i, e);
             }
