@@ -1,3 +1,14 @@
+
+// Unregister broken service worker
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+            registration.unregister();
+            console.log('Unregistered SW');
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Views
     const viewLoading = document.getElementById('view-loading');

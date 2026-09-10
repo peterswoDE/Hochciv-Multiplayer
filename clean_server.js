@@ -1,33 +1,3 @@
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const { Server } = require('socket.io');
-const config = require('./config');
-const apiRoutes = require('./routes/api');
-const registerGame = require('./sockets/game');
-
-const pg = require('pg');
-const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const bcrypt = require('bcryptjs');
-const { sequelize, User } = require('./models');
-
-// ── Passport Configuration ──────────────────────────────────────────────────
-passport.use(new LocalStrategy(
-    async (username, password, done) => {
-        try {
-            const user = await User.findOne({ where: { username } });
-            if (!user) return done(null, false, { message: 'Incorrect username.' });
-            const match = await bcrypt.compare(password, user.password_hash);
-            if (!match) return done(null, false, { message: 'Incorrect password.' });
-            return done(null, user);
-        } catch (err) {
-            return done(err);
-        }
-    }
-));
 
 passport.serializeUser((user, done) => {
     done(null, user.id);
@@ -131,10 +101,10 @@ app.use(express.static(path.join(__dirname, 'client')));
   
   // 2. Explicitly serve the game at /game
   app.get('/account', (req, res) => {
-      res.sendFile(path.join(__dirname, 'client', 'account.html'));
-  });
+    res.sendFile(path.join(__dirname, 'client', 'account.html'));
+});
 
-  app.get('/game', (req, res) => {
+app.get('/game', (req, res) => {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
   

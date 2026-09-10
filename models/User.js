@@ -51,6 +51,24 @@ module.exports = (sequelize) => {
         resetCodeExpiresAt: {
             type: DataTypes.DATE,
             allowNull: true,
+        },
+        role: {
+            type: DataTypes.STRING,
+            defaultValue: 'user',
+            allowNull: false,
+        },
+        isBanned: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+        },
+        googleId: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        discordId: {
+            type: DataTypes.STRING,
+            allowNull: true,
         }
     }, {
         tableName: 'users',
