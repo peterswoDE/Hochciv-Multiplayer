@@ -158,7 +158,14 @@ router.post('/reset-password/confirm', rateLimit, async (req, res) => {
 // Get current user (session check)
 router.get('/me', (req, res) => {
     if (req.isAuthenticated()) {
-        res.json({ id: req.user.id, username: req.user.username, email: req.user.email, mmr: req.user.mmr, gamesPlayed: req.user.gamesPlayed });
+        res.json({ 
+            id: req.user.id, 
+            username: req.user.username, 
+            email: req.user.email, 
+            mmr: req.user.mmr, 
+            gamesPlayed: req.user.gamesPlayed,
+            role: req.user.role 
+        });
     } else {
         res.status(401).json({ error: 'Not authenticated' });
     }

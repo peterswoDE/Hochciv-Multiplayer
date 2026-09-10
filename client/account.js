@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         currentUser = data;
         document.getElementById('input-email').value = data.email || '';
+        document.getElementById('display-username').textContent = data.username || '-';
 
         // Load History
         loadHistory();
