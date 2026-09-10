@@ -13,13 +13,21 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcryptjs');
 const { sequelize, User } = require('./models');
+const { Op } = require('sequelize');
 
 // ── Passport Configuration ──────────────────────────────────────────────────
 passport.use(new LocalStrategy(
     async (username, password, done) => {
         try {
-            const user = await User.findOne({ where: { username } });
-            if (!user) return done(null, false, { message: 'Incorrect username.' });
+            const user = await User.findOne({ 
+                where: { 
+                    [Op.or]: [
+                        { username: username },
+                        { email: username }
+                    ]
+                } 
+            });
+            if (!user) return done(null, false, { message: 'Incorrect username or email.' });
             const match = await bcrypt.compare(password, user.password_hash);
             if (!match) return done(null, false, { message: 'Incorrect password.' });
             return done(null, user);
