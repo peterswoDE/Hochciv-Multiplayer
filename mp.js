@@ -250,7 +250,7 @@ const MP = {
         await this.fetchUser();
         
         if (!this.user && !sessionStorage.getItem('hochciv_guest')) {
-            window.location.href = '/';
+            this.showAuthModal();
             return;
         }
 
