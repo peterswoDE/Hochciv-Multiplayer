@@ -790,6 +790,22 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- Monkey Patch redraw() to fix army reference sync bug ---
+// When the server sends a new state, the S.armies array contains completely new objects.
+// If the UI is currently tracking an army (ui.army) for movement, the reference equality 
+// check (!S.armies.includes(ui.army)) in the vanilla redraw() will falsely fail and clear the selection.
+// We intercept redraw() to proactively restore the reference using the army ID.
+const originalRedraw = window.redraw;
+if (originalRedraw) {
+    window.redraw = function() {
+        if (window.ui && window.ui.army && window.S && window.S.armies) {
+            const freshArmy = window.S.armies.find(a => a.id === window.ui.army.id);
+            if (freshArmy) window.ui.army = freshArmy;
+        }
+        return originalRedraw.apply(this, arguments);
+    };
+}
+
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────
 const ACTIONS = {
     doResearch: (state, pi, tech) => ({ type: 'research', params: { tech } }),
