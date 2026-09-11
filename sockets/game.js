@@ -448,8 +448,10 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
             const sp = session.state.players[i];
 
             let points = 0;
+            let scoreDetails = null;
             try {
                 const scoreObj = engine.getEngine().victoryScore(session.state, i);
+                scoreDetails = scoreObj || null;
                 points = scoreObj ? scoreObj.total : 0;
             } catch (e) {
                 console.error('Error fetching score for player', i, e);
@@ -462,7 +464,8 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                 civ: lp.civ,
                 ability: lp.ability,
                 isBot: lp.kind === 'bot',
-                points: points
+                points: points,
+                scoreDetails: scoreDetails
             });
         }
 

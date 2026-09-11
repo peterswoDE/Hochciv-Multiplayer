@@ -260,6 +260,15 @@
         </footer>
     </div>
     
+    <!-- History Details Modal -->
+    <div id="history-modal" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+        <div class="modal-content" style="background:#fff; padding:25px; border-radius:8px; max-width:600px; width:90%; position:relative; max-height:80vh; overflow-y:auto;">
+            <button onclick="document.getElementById('history-modal').style.display='none'" style="position:absolute; right:15px; top:15px; background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            <h2 id="hm-title" style="margin-top:0; font-family: Georgia, serif; color: var(--red);">Spielauswertung</h2>
+            <div id="hm-body" style="margin-top:15px;"></div>
+        </div>
+    </div>
+    
     <script src="account.js"></script>
 </body>
 </html>

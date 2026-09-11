@@ -87,24 +87,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    let historyGames = [];
+
     // --- History ---
     async function loadHistory() {
         const tbody = document.querySelector('#table-history tbody');
         try {
             const res = await fetch('/api/account/history');
-            const games = await res.json();
+            historyGames = await res.json();
             
-            if (games.length === 0) {
+            if (historyGames.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4">Keine vergangenen Spiele gefunden.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = games.map(g => {
+            tbody.innerHTML = historyGames.map((g, idx) => {
                 const date = new Date(g.matchDate).toLocaleString('de-DE');
                 const players = g.participants.map(p => p.name).join(', ');
-                const isWinner = g.winnerUsername === currentUser.username;
+                const isWinner = g.winnerUsername && g.winnerUsername === currentUser.username;
                 return `
-                    <tr style="background: ${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}">
+                    <tr style="background: ${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}; cursor:pointer;" onclick="showGameDetails(${idx})" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}'">
                         <td>${date}</td>
                         <td>${g.durationRounds}</td>
                         <td>${g.winnerUsername ? (isWinner ? '<b>Du!</b>' : g.winnerUsername) : '-'}</td>
@@ -116,6 +118,52 @@ document.addEventListener('DOMContentLoaded', async () => {
             tbody.innerHTML = '<tr><td colspan="4">Fehler beim Laden.</td></tr>';
         }
     }
+
+    window.showGameDetails = function(idx) {
+        const g = historyGames[idx];
+        if (!g) return;
+
+        const sorted = [...g.participants].sort((a, b) => (b.points || 0) - (a.points || 0));
+
+        let tafel = `<table style="width:100%; border-collapse: collapse; margin:10px 0; text-align:left;">
+            <tr style="border-bottom:2px solid #ccc;">
+                <th style="padding:8px;">Spieler</th>
+                <th style="padding:8px;">Nation</th>
+                <th style="padding:8px;">Bev.</th>
+                <th style="padding:8px;">Wunder</th>
+                <th style="padding:8px;">Techs</th>
+                <th style="padding:8px;">Punkte</th>
+                <th style="padding:8px;">MMR &Delta;</th>
+            </tr>`;
+
+        tafel += sorted.map(x => {
+            const isWinner = g.winnerUsername && (x.name === g.winnerUsername || x.dbUsername === g.winnerUsername);
+            const pop = x.scoreDetails ? x.scoreDetails.pop : '-';
+            const won = x.scoreDetails ? x.scoreDetails.wonders : '-';
+            const tech = x.scoreDetails ? x.scoreDetails.techs : '-';
+            
+            const mmrShift = x.mmrShift != null ? (x.mmrShift > 0 ? `+${x.mmrShift}` : `${x.mmrShift}`) : '-';
+            const mmrColor = x.mmrShift > 0 ? 'green' : (x.mmrShift < 0 ? 'red' : 'inherit');
+
+            return `<tr style="border-bottom:1px solid #eee; ${isWinner ? 'font-weight:bold; background:rgba(0,255,0,0.05);' : ''}">
+                <td style="padding:8px;">${x.name} ${x.isBot ? '(Bot)' : ''}</td>
+                <td style="padding:8px;">${x.civ || '-'}</td>
+                <td style="padding:8px;">${pop}</td>
+                <td style="padding:8px;">${won}</td>
+                <td style="padding:8px;">${tech}</td>
+                <td style="padding:8px;"><b>${x.points || 0}</b></td>
+                <td style="padding:8px; color:${mmrColor}; font-weight:bold;">${mmrShift}</td>
+            </tr>`;
+        }).join('');
+        tafel += '</table>';
+
+        const dateStr = new Date(g.matchDate).toLocaleString('de-DE');
+        
+        document.getElementById('hm-title').innerHTML = `Spielauswertung <span style="font-size:14px; color:#666; font-weight:normal; margin-left:10px;">(${dateStr})</span>`;
+        document.getElementById('hm-body').innerHTML = tafel;
+        
+        document.getElementById('history-modal').style.display = 'flex';
+    };
 
     // --- Admin Functions ---
     async function loadAdminData() {
