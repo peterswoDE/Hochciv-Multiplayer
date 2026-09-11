@@ -445,16 +445,23 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
         const playersData = [];
         for (let i = 0; i < session.players.length; i++) {
             const lp = session.players[i];
-            const sp = session.state.players[i];
+            
+            // Map lobby player to state player (indexes can differ due to sorting/barbarians)
+            const expectedName = lp.mappedName || lp.name || (engine.getEngine().CIVS.find(c => c.k === lp.civ) || {}).n;
+            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
+            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lp.civ) : sortedStateIndex;
 
             let points = 0;
             let scoreDetails = null;
-            try {
-                const scoreObj = engine.getEngine().victoryScore(session.state, i);
-                scoreDetails = scoreObj || null;
-                points = scoreObj ? scoreObj.total : 0;
-            } catch (e) {
-                console.error('Error fetching score for player', i, e);
+            
+            if (finalIndex !== -1) {
+                try {
+                    const scoreObj = engine.getEngine().victoryScore(session.state, finalIndex);
+                    scoreDetails = scoreObj || null;
+                    points = scoreObj ? scoreObj.total : 0;
+                } catch (e) {
+                    console.error('Error fetching score for player', finalIndex, e);
+                }
             }
 
             const isWinner = session.state.over && session.state.over.id ? (lp.civ === session.state.over.id) : false;
