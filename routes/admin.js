@@ -45,6 +45,46 @@ router.get('/users', async (req, res) => {
     }
 });
 
+router.get('/users/:id/mfa', async (req, res) => {
+    try {
+        const targetUser = await User.findByPk(req.params.id);
+        if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        
+        const tokens = [];
+        if (targetUser.totpEnabled) tokens.push({ type: 'totp', name: 'Authenticator App (TOTP)' });
+        if (targetUser.emailOtpEnabled) tokens.push({ type: 'email', name: 'E-Mail OTP' });
+        
+        const passkeys = await Passkey.findAll({ where: { UserId: targetUser.id } });
+        passkeys.forEach(pk => tokens.push({ type: 'passkey', id: pk.id, name: 'Passkey (' + new Date(pk.createdAt).toLocaleDateString() + ')' }));
+        
+        res.json(tokens);
+    } catch(err) {
+        res.status(500).json({error: 'Serverfehler'});
+    }
+});
+
+router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
+    try {
+        const targetUser = await User.findByPk(req.params.id);
+        if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        
+        const { type, tokenId } = req.params;
+        if (type === 'totp') {
+            targetUser.totpEnabled = false;
+            targetUser.totpSecret = null;
+            await targetUser.save();
+        } else if (type === 'email') {
+            targetUser.emailOtpEnabled = false;
+            await targetUser.save();
+        } else if (type === 'passkey' && tokenId) {
+            await Passkey.destroy({ where: { id: tokenId, UserId: targetUser.id } });
+        }
+        res.json({ ok: true });
+    } catch(err) {
+        res.status(500).json({error: 'Serverfehler'});
+    }
+});
+
 router.post('/users/:id/action', async (req, res) => {
     try {
         const { id } = req.params;

@@ -90,9 +90,20 @@ router.post('/toggle-email-otp', async (req, res) => {
 const rpName = 'Hochciv';
 const getRpID = (req) => req.hostname;
 
-router.get('/passkeys', async (req, res) => {
-    const passkeys = await Passkey.findAll({ where: { UserId: req.user.id } });
-    res.json(passkeys);
+router.get('/tokens', async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id);
+        const tokens = [];
+        if (user.totpEnabled) tokens.push({ type: 'totp', name: 'Authenticator App (TOTP)' });
+        if (user.emailOtpEnabled) tokens.push({ type: 'email', name: 'E-Mail OTP' });
+        
+        const passkeys = await Passkey.findAll({ where: { UserId: user.id } });
+        passkeys.forEach(pk => tokens.push({ type: 'passkey', id: pk.id, name: 'Passkey (' + new Date(pk.createdAt).toLocaleDateString() + ')' }));
+        
+        res.json(tokens);
+    } catch(err) {
+        res.status(500).json({error: 'Fehler'});
+    }
 });
 
 router.post('/passkey/generate-registration', async (req, res) => {
@@ -103,7 +114,7 @@ router.post('/passkey/generate-registration', async (req, res) => {
         const options = await generateRegistrationOptions({
             rpName,
             rpID: getRpID(req),
-            userID: Buffer.from(user.id),
+            userID: user.id,
             userName: user.email,
             timeout: 60000,
             attestationType: 'none',

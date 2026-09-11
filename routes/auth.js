@@ -205,7 +205,7 @@ router.post('/login/passkey/options', rateLimit, async (req, res) => {
         const options = await generateAuthenticationOptions({
             rpID: req.hostname,
             allowCredentials: passkeys.map(pk => ({
-                id: Buffer.from(pk.credentialID, 'base64url').toString('base64url'),
+                id: Buffer.from(pk.credentialID, 'base64url'),
                 type: 'public-key',
                 transports: pk.transports || []
             })),

@@ -167,15 +167,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- 2FA / MFA Setup ---
     const btnSetupTotp = document.getElementById('btn-setup-totp');
-    const btnDisableTotp = document.getElementById('btn-disable-totp');
     const btnSetupPasskey = document.getElementById('btn-setup-passkey');
+    const btnEnableEmailOtp = document.getElementById('btn-enable-email-otp');
     const totpModal = document.getElementById('totp-setup-modal');
     
-    if (currentUser && currentUser.totpEnabled) {
-        if(btnSetupTotp) btnSetupTotp.style.display = 'none';
-        if(btnDisableTotp) btnDisableTotp.style.display = 'inline-block';
-    }
-
     if(btnSetupTotp) btnSetupTotp.addEventListener('click', async () => {
         try {
             const res = await fetch('/api/mfa/setup-totp', { method: 'POST' });
@@ -202,31 +197,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (data.ok) {
             totpModal.style.display = 'none';
             btnSetupTotp.style.display = 'none';
-            btnDisableTotp.style.display = 'inline-block';
             alert('2FA erfolgreich aktiviert!');
+            loadTokens();
         } else {
             document.getElementById('totp-setup-msg').textContent = data.error || 'Falscher Code';
         }
     });
-
-    if(btnDisableTotp) btnDisableTotp.addEventListener('click', async () => {
-        if (!confirm('2FA wirklich deaktivieren?')) return;
-        const res = await fetch('/api/mfa/disable-totp', { method: 'POST' });
-        if ((await res.json()).ok) {
-            btnSetupTotp.style.display = 'inline-block';
-            btnDisableTotp.style.display = 'none';
-            alert('2FA deaktiviert.');
-        }
-    });
-
-    // --- Email OTP Settings ---
-    const btnEnableEmailOtp = document.getElementById('btn-enable-email-otp');
-    const btnDisableEmailOtp = document.getElementById('btn-disable-email-otp');
-
-    if (currentUser && currentUser.emailOtpEnabled) {
-        if(btnEnableEmailOtp) btnEnableEmailOtp.style.display = 'none';
-        if(btnDisableEmailOtp) btnDisableEmailOtp.style.display = 'inline-block';
-    }
 
     if (btnEnableEmailOtp) btnEnableEmailOtp.addEventListener('click', async () => {
         const res = await fetch('/api/mfa/toggle-email-otp', {
@@ -236,41 +212,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         if ((await res.json()).ok) {
             btnEnableEmailOtp.style.display = 'none';
-            btnDisableEmailOtp.style.display = 'inline-block';
             alert('E-Mail OTP aktiviert.');
+            loadTokens();
         }
     });
 
-    if (btnDisableEmailOtp) btnDisableEmailOtp.addEventListener('click', async () => {
-        const res = await fetch('/api/mfa/toggle-email-otp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: false })
-        });
-        if ((await res.json()).ok) {
-            btnEnableEmailOtp.style.display = 'inline-block';
-            btnDisableEmailOtp.style.display = 'none';
-            alert('E-Mail OTP deaktiviert.');
-        }
-    });
-
-    async function loadPasskeys() {
-        const res = await fetch('/api/mfa/passkeys');
+    async function loadTokens() {
+        const res = await fetch('/api/mfa/tokens');
         if(!res.ok) return;
-        const pks = await res.json();
-        const list = document.getElementById('passkeys-list');
+        const tokens = await res.json();
+        const list = document.getElementById('mfa-tokens-list');
         if(!list) return;
-        if (pks.length === 0) {
-            list.innerHTML = 'Keine Passkeys registriert.';
+        
+        // Hide setup buttons if token of that type is already active
+        if(btnSetupTotp) btnSetupTotp.style.display = tokens.some(t => t.type === 'totp') ? 'none' : 'inline-block';
+        if(btnEnableEmailOtp) btnEnableEmailOtp.style.display = tokens.some(t => t.type === 'email') ? 'none' : 'inline-block';
+
+        if (tokens.length === 0) {
+            list.innerHTML = 'Keine MFA-Methoden aktiv.';
             return;
         }
-        list.innerHTML = pks.map(pk => `<div>Passkey hinzugefügt am ${new Date(pk.createdAt).toLocaleDateString()} <button onclick="deletePasskey('${pk.id}')" style="margin-left:10px; color:red; background:none; border:none; cursor:pointer;">Löschen</button></div>`).join('');
+        list.innerHTML = tokens.map(t => {
+            let deleteCall = '';
+            if (t.type === 'totp') deleteCall = `deleteToken('totp', null)`;
+            else if (t.type === 'email') deleteCall = `deleteToken('email', null)`;
+            else if (t.type === 'passkey') deleteCall = `deleteToken('passkey', '${t.id}')`;
+            return `
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:5px;">
+                <span>${t.name}</span>
+                <button onclick="${deleteCall}" style="color:red; background:none; border:none; cursor:pointer;">Löschen</button>
+            </div>
+            `;
+        }).join('');
     }
 
-    window.deletePasskey = async function(id) {
-        if(!confirm('Passkey löschen?')) return;
-        await fetch('/api/mfa/passkey/' + id, { method: 'DELETE' });
-        loadPasskeys();
+    window.deleteToken = async function(type, id) {
+        if(!confirm(type === 'totp' ? 'Authenticator App wirklich entfernen?' : (type === 'email' ? 'E-Mail OTP deaktivieren?' : 'Passkey löschen?'))) return;
+        
+        if (type === 'passkey') {
+            await fetch('/api/mfa/passkey/' + id, { method: 'DELETE' });
+        } else if (type === 'totp') {
+            await fetch('/api/mfa/disable-totp', { method: 'POST' });
+        } else if (type === 'email') {
+            await fetch('/api/mfa/toggle-email-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) });
+        }
+        loadTokens();
     };
 
     if(btnSetupPasskey) btnSetupPasskey.addEventListener('click', async () => {
@@ -299,16 +285,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const vData = await verifyRes.json();
             if (vData.ok) {
                 alert('Passkey erfolgreich hinzugefügt!');
-                loadPasskeys();
+                loadTokens();
             } else {
                 alert('Fehler: ' + vData.error);
             }
         } catch (e) {
             console.error(e);
+            alert('Ein Fehler ist aufgetreten.');
         }
     });
 
-    loadPasskeys();
+    loadTokens();
 
     // --- Admin Functions ---
     async function loadAdminData() {
@@ -368,7 +355,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>
                         <button onclick="adminAction('user', '${u.id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? 'Entbannen' : 'Bannen'}</button>
                         <button onclick="adminAction('user', '${u.id}', 'force_password')" class="btn small">PW Reset</button>
-                        <button onclick="adminAction('user', '${u.id}', 'reset_mfa')" class="btn small error" style="margin-top: 4px;">MFA Reset</button>
+                        <button onclick="toggleAdminUserMfa('${u.id}')" class="btn small" style="margin-top: 4px;">MFA Verwalten</button>
+                        <div id="admin-user-mfa-${u.id}" style="display:none; margin-top: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; font-size: 13px;"></div>
                     </td>
                 </tr>
             `}).join('');
@@ -377,6 +365,59 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error(e);
         }
     }
+
+    window.toggleAdminUserMfa = async (id) => {
+        const container = document.getElementById(`admin-user-mfa-${id}`);
+        if (!container) return;
+        
+        if (container.style.display === 'block') {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        container.innerHTML = 'Lade...';
+        
+        try {
+            const res = await fetch(`/api/admin/users/${id}/mfa`);
+            if (!res.ok) throw new Error();
+            const tokens = await res.json();
+            
+            if (tokens.length === 0) {
+                container.innerHTML = 'Keine MFA-Tokens aktiv.';
+                return;
+            }
+            
+            container.innerHTML = tokens.map(t => {
+                const tokenId = t.id ? `'${t.id}'` : 'null';
+                return `
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid #ddd; padding-bottom:3px;">
+                    <span>${t.name}</span>
+                    <button onclick="adminDeleteUserMfa('${id}', '${t.type}', ${tokenId})" style="color:red; background:none; border:none; cursor:pointer;">Löschen</button>
+                </div>
+                `;
+            }).join('');
+            
+        } catch(e) {
+            container.innerHTML = '<span style="color:red;">Fehler beim Laden</span>';
+        }
+    };
+
+    window.adminDeleteUserMfa = async (userId, type, tokenId) => {
+        if (!confirm('Diesen MFA-Token wirklich löschen?')) return;
+        
+        let url = `/api/admin/users/${userId}/mfa/${type}`;
+        if (tokenId) url += `/${tokenId}`;
+        
+        const res = await fetch(url, { method: 'DELETE' });
+        if (res.ok) {
+            // Reload just the MFA container
+            document.getElementById(`admin-user-mfa-${userId}`).style.display = 'none';
+            window.toggleAdminUserMfa(userId);
+        } else {
+            alert('Fehler beim Löschen');
+        }
+    };
 
     window.adminChangeRole = async (id, role) => {
         if (!confirm(`Sicher, dass du die Rolle auf '${role}' ändern möchtest?`)) {

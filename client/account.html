@@ -159,14 +159,13 @@
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
                     <h3>Zwei-Faktor-Authentifizierung (2FA)</h3>
                     <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Sichere deinen Account zusätzlich mit einer Authenticator-App (TOTP), einem Passkey (WebAuthn) oder per E-Mail-Code.</p>
-                    <button class="btn btn-ghost" id="btn-setup-totp">Authenticator App (TOTP) einrichten</button>
-                    <button class="btn btn-ghost" id="btn-disable-totp" style="display:none; color: red;">TOTP Deaktivieren</button>
-                    <button class="btn btn-ghost" id="btn-setup-passkey" style="margin-left: 10px;">Passkey hinzufügen</button>
-                    <div style="margin-top: 10px;">
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-ghost" id="btn-setup-totp">Authenticator App (TOTP) hinzufügen</button>
                         <button class="btn btn-ghost" id="btn-enable-email-otp">E-Mail OTP aktivieren</button>
-                        <button class="btn btn-ghost" id="btn-disable-email-otp" style="display:none; color: red;">E-Mail OTP deaktivieren</button>
+                        <button class="btn btn-ghost" id="btn-setup-passkey">Passkey hinzufügen</button>
                     </div>
-                    <div id="passkeys-list" style="margin-top:15px; font-size:14px;"></div>
+                    <h4>Deine aktiven MFA-Methoden:</h4>
+                    <div id="mfa-tokens-list" style="margin-top:10px; font-size:14px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 4px;">Lade...</div>
                 </div>
 
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
