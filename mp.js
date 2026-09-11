@@ -259,21 +259,17 @@ const MP = {
 
         if (this.user) {
             authContainer.innerHTML = `
-                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
-                    Eingeloggt als <b>${this.user.username}</b> 
-                    (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) 
-                    <span style="opacity:0.5; margin:0 6px;">|</span> 
-                    <a onclick="MP.showAccountModal()" style="text-decoration:underline; cursor:pointer;">Account & Admin</a>
-                    <span style="opacity:0.5; margin:0 6px;">|</span>
-                    <a onclick="MP.logout()" style="text-decoration:underline; cursor:pointer;">Abmelden</a>
+                <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
+                    <span>Eingeloggt als <b>${this.user.username}</b> (${this.user.mmr} MMR, ${this.user.gamesPlayed} Spiele)</span>
+                    <button class="btn small" onclick="MP.showAccountModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Account & Admin</button>
+                    <button class="btn small" onclick="MP.logout()" style="margin:0; padding: 6px 12px; font-size: 13px; background: #c9302c; color: white; border: 1px solid #ac2925; box-shadow: none;">Abmelden</button>
                 </div>
             `;
         } else {
             authContainer.innerHTML = `
-                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
-                    Gast <span style="opacity:0.7">(Ranked gesperrt)</span> 
-                    <span style="opacity:0.5; margin:0 6px;">|</span> 
-                    <a onclick="MP.showAuthModal()" style="text-decoration:underline; cursor:pointer;">Anmelden</a>
+                <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
+                    <span>Gast <span style="opacity:0.7">(Ranked gesperrt)</span></span>
+                    <button class="btn small" onclick="MP.showAuthModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Anmelden</button>
                 </div>
             `;
         }
@@ -674,10 +670,22 @@ window.addEventListener('DOMContentLoaded', () => {
         // Auth Container for Main Menu
         const authDiv = document.createElement('div');
         authDiv.id = 'mp-main-auth-container';
-        // Insert right above the action boxes
-        const menuActions = document.querySelector('.menu-actions');
-        if (menuActions && menuActions.parentNode) {
-            menuActions.parentNode.insertBefore(authDiv, menuActions);
+        authDiv.style.position = 'absolute';
+        authDiv.style.top = '0';
+        authDiv.style.left = '0';
+        authDiv.style.right = '0';
+        authDiv.style.padding = '12px 24px';
+        authDiv.style.background = 'rgba(0, 0, 0, 0.4)';
+        authDiv.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
+        authDiv.style.display = 'flex';
+        authDiv.style.justifyContent = 'flex-end';
+        authDiv.style.alignItems = 'center';
+        authDiv.style.zIndex = '1000';
+        authDiv.style.backdropFilter = 'blur(5px)';
+
+        const screenMenu = $('screen-menu');
+        if (screenMenu) {
+            screenMenu.appendChild(authDiv);
         }
 
         // Render it
