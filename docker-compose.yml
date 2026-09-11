@@ -26,12 +26,6 @@ services:
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
       - UPDATE_INTERVAL_SEC=3600
-    volumes:
-      - ./mp.js:/app/mp.js
-      - ./server.js:/app/server.js
-      - ./sessions.js:/app/sessions.js
-      - ./sockets:/app/sockets
-      - ./engine-adapter.js:/app/engine-adapter.js
     networks:
       - nginx
       - internal
