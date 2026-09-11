@@ -23,6 +23,7 @@ services:
     environment:
       - PORT=3000
       - NODE_ENV=production
+      - SESSION_SECRET=hochciv_prod_secret_h7b82x9q
       - DATABASE_URL=postgres://hochciv:password123@hochciv-db:5432/hochciv
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
