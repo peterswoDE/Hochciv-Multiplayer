@@ -79,6 +79,19 @@ module.exports = (sequelize) => {
             defaultValue: false,
             allowNull: false,
         },
+        emailOtpEnabled: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+        },
+        emailOtpCode: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        emailOtpExpiry: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
         currentChallenge: {
             type: DataTypes.STRING,
             allowNull: true,

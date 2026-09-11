@@ -99,13 +99,14 @@ router.post('/login', rateLimit, (req, res, next) => {
         const passkeys = await Passkey.findAll({ where: { UserId: user.id } });
         const hasPasskeys = passkeys.length > 0;
 
-        if (user.totpEnabled || hasPasskeys) {
+        if (user.totpEnabled || hasPasskeys || user.emailOtpEnabled) {
             req.session.mfaPendingUserId = user.id;
             return res.json({
                 mfaRequired: true,
                 methods: {
                     totp: user.totpEnabled,
-                    passkey: hasPasskeys
+                    passkey: hasPasskeys,
+                    email: user.emailOtpEnabled
                 }
             });
         }
@@ -118,6 +119,59 @@ router.post('/login', rateLimit, (req, res, next) => {
 });
 
 // --- MFA Login Routes ---
+router.post('/login/email-otp/request', rateLimit, async (req, res) => {
+    try {
+        const pendingUserId = req.session.mfaPendingUserId;
+        if (!pendingUserId) return res.status(400).json({ error: 'Sitzung abgelaufen' });
+
+        const user = await User.findByPk(pendingUserId);
+        if (!user || !user.emailOtpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
+
+        const code = generateCode();
+        user.emailOtpCode = code;
+        user.emailOtpExpiry = new Date(Date.now() + 10 * 60000); // 10 minutes
+        await user.save();
+
+        const mailOptions = {
+            to: user.email,
+            subject: 'Dein Login-Code (2FA)',
+            text: `Dein Login-Code lautet: ${code}\nDieser Code ist 10 Minuten gültig.`,
+            html: `<p>Dein Login-Code lautet: <b>${code}</b></p><p>Dieser Code ist 10 Minuten gültig.</p>`
+        };
+        await sendMail(mailOptions);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler beim Senden' });
+    }
+});
+
+router.post('/login/email-otp/verify', rateLimit, async (req, res) => {
+    try {
+        const { code } = req.body;
+        const pendingUserId = req.session.mfaPendingUserId;
+        if (!pendingUserId || !code) return res.status(400).json({ error: 'Sitzung abgelaufen oder Code fehlt' });
+
+        const user = await User.findByPk(pendingUserId);
+        if (!user || !user.emailOtpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
+
+        if (user.emailOtpCode !== code || new Date() > user.emailOtpExpiry) {
+            return res.status(400).json({ error: 'Falscher oder abgelaufener Code' });
+        }
+
+        user.emailOtpCode = null;
+        user.emailOtpExpiry = null;
+        await user.save();
+
+        req.session.mfaPendingUserId = null;
+        req.login(user, (err) => {
+            if (err) return res.status(500).json({ error: 'Login failed' });
+            return res.json({ id: user.id, username: user.username, email: user.email, mmr: user.mmr, gamesPlayed: user.gamesPlayed, role: user.role });
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler' });
+    }
+});
+
 router.post('/login/totp', rateLimit, async (req, res) => {
     try {
         const { token } = req.body;

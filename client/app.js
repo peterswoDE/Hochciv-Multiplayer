@@ -129,12 +129,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const totpSection = document.getElementById('mfa-totp-section');
                     const passkeySection = document.getElementById('mfa-passkey-section');
+                    const emailSection = document.getElementById('mfa-email-section');
                     
                     if (data.methods.totp) totpSection.style.display = 'block';
                     else totpSection.style.display = 'none';
                     
                     if (data.methods.passkey) passkeySection.style.display = 'block';
                     else passkeySection.style.display = 'none';
+
+                    if (data.methods.email) emailSection.style.display = 'block';
+                    else emailSection.style.display = 'none';
                 } else {
                     sessionStorage.removeItem('hochciv_guest');
                     await fetchMe();
@@ -201,6 +205,52 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {
             showError('mfa-error', 'Ein Fehler ist aufgetreten.');
+        }
+    });
+
+    const btnRequestEmailOtp = document.getElementById('btn-request-email-otp');
+    if (btnRequestEmailOtp) btnRequestEmailOtp.addEventListener('click', async () => {
+        clearErrors();
+        btnRequestEmailOtp.disabled = true;
+        btnRequestEmailOtp.textContent = 'Wird gesendet...';
+        try {
+            const res = await fetch('/api/auth/login/email-otp/request', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                btnRequestEmailOtp.style.display = 'none';
+                document.getElementById('mfa-email-input-container').style.display = 'block';
+            } else {
+                showError('mfa-error', data.error || 'Fehler beim Senden.');
+                btnRequestEmailOtp.disabled = false;
+                btnRequestEmailOtp.textContent = 'Code per E-Mail anfordern';
+            }
+        } catch (e) {
+            showError('mfa-error', 'Netzwerkfehler');
+            btnRequestEmailOtp.disabled = false;
+            btnRequestEmailOtp.textContent = 'Code per E-Mail anfordern';
+        }
+    });
+
+    const btnSubmitEmailOtp = document.getElementById('btn-submit-mfa-email');
+    if (btnSubmitEmailOtp) btnSubmitEmailOtp.addEventListener('click', async () => {
+        clearErrors();
+        const code = document.getElementById('mfa-email-code').value;
+        if (!code) return;
+        try {
+            const res = await fetch('/api/auth/login/email-otp/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            const data = await res.json();
+            if (res.ok && !data.error) {
+                sessionStorage.removeItem('hochciv_guest');
+                await fetchMe();
+            } else {
+                showError('mfa-error', data.error || 'Falscher Code');
+            }
+        } catch (err) {
+            showError('mfa-error', 'Netzwerkfehler');
         }
     });
 

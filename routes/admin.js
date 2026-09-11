@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { User } = require('../models');
+const { User, Passkey } = require('../models');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const bcrypt = require('bcryptjs');
@@ -71,6 +71,11 @@ router.post('/users/:id/action', async (req, res) => {
             } else {
                 return res.status(400).json({ error: 'Ungültige Rolle' });
             }
+        } else if (action === 'reset_mfa') {
+            targetUser.totpEnabled = false;
+            targetUser.totpSecret = null;
+            await Passkey.destroy({ where: { UserId: targetUser.id } });
+            targetUser.emailOtpEnabled = true;
         }
 
         await targetUser.save();

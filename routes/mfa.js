@@ -72,6 +72,18 @@ router.post('/disable-totp', async (req, res) => {
     }
 });
 
+router.post('/toggle-email-otp', async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id);
+        user.emailOtpEnabled = !!req.body.enabled;
+        await user.save();
+        res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Fehler' });
+    }
+});
+
 // --- Passkeys (WebAuthn) ---
 
 // Define RP details dynamically based on request

@@ -219,6 +219,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- Email OTP Settings ---
+    const btnEnableEmailOtp = document.getElementById('btn-enable-email-otp');
+    const btnDisableEmailOtp = document.getElementById('btn-disable-email-otp');
+
+    if (currentUser && currentUser.emailOtpEnabled) {
+        if(btnEnableEmailOtp) btnEnableEmailOtp.style.display = 'none';
+        if(btnDisableEmailOtp) btnDisableEmailOtp.style.display = 'inline-block';
+    }
+
+    if (btnEnableEmailOtp) btnEnableEmailOtp.addEventListener('click', async () => {
+        const res = await fetch('/api/mfa/toggle-email-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true })
+        });
+        if ((await res.json()).ok) {
+            btnEnableEmailOtp.style.display = 'none';
+            btnDisableEmailOtp.style.display = 'inline-block';
+            alert('E-Mail OTP aktiviert.');
+        }
+    });
+
+    if (btnDisableEmailOtp) btnDisableEmailOtp.addEventListener('click', async () => {
+        const res = await fetch('/api/mfa/toggle-email-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: false })
+        });
+        if ((await res.json()).ok) {
+            btnEnableEmailOtp.style.display = 'inline-block';
+            btnDisableEmailOtp.style.display = 'none';
+            alert('E-Mail OTP deaktiviert.');
+        }
+    });
+
     async function loadPasskeys() {
         const res = await fetch('/api/mfa/passkeys');
         if(!res.ok) return;
@@ -333,6 +368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>
                         <button onclick="adminAction('user', '${u.id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? 'Entbannen' : 'Bannen'}</button>
                         <button onclick="adminAction('user', '${u.id}', 'force_password')" class="btn small">PW Reset</button>
+                        <button onclick="adminAction('user', '${u.id}', 'reset_mfa')" class="btn small error" style="margin-top: 4px;">MFA Reset</button>
                     </td>
                 </tr>
             `}).join('');
