@@ -714,6 +714,27 @@ window.addEventListener('DOMContentLoaded', () => {
             background: rgba(255,255,240,0.95); pointer-events: auto;
             border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
+            transition: width 0.2s, height 0.2s, border-radius 0.2s;
+        }
+        #mp-persistent-log-container.mp-log-minimized {
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 50% !important;
+            border: none !important;
+            background: #a89f91 !important;
+            cursor: pointer !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            padding: 0 !important;
+        }
+        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-header,
+        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-content {
+            display: none !important;
+        }
+        #mp-persistent-log-container.mp-log-minimized::before {
+            content: "📝";
+            font-size: 20px;
         }
         #mp-persistent-log-header {
             background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
@@ -731,21 +752,24 @@ window.addEventListener('DOMContentLoaded', () => {
     pLog.innerHTML = `
         <div id="mp-persistent-log-header">
             <span>Spiel-Log</span>
-            <span id="mp-log-toggle-icon">▼</span>
+            <span id="mp-log-toggle-icon" style="font-size: 16px;">✖</span>
         </div>
         <div id="mp-persistent-log-content"></div>
     `;
     document.body.appendChild(pLog);
 
-    document.getElementById('mp-persistent-log-header').addEventListener('click', () => {
-        const content = document.getElementById('mp-persistent-log-content');
-        const icon = document.getElementById('mp-log-toggle-icon');
-        if (content.style.display === 'none') {
-            content.style.display = 'block';
-            icon.innerText = '▼';
-        } else {
-            content.style.display = 'none';
-            icon.innerText = '▲';
+    document.getElementById('mp-persistent-log-header').addEventListener('click', (e) => {
+        const plc = document.getElementById('mp-persistent-log-container');
+        plc.classList.add('mp-log-minimized');
+        e.stopPropagation(); // prevent container click from firing immediately
+    });
+
+    document.getElementById('mp-persistent-log-container').addEventListener('click', (e) => {
+        const plc = document.getElementById('mp-persistent-log-container');
+        if (plc.classList.contains('mp-log-minimized')) {
+            plc.classList.remove('mp-log-minimized');
+            const pl = document.getElementById('mp-persistent-log-content');
+            if (pl) pl.scrollTop = pl.scrollHeight;
         }
     });
 
