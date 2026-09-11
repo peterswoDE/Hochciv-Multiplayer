@@ -9,13 +9,18 @@ const sequelize = new Sequelize(process.env.DATABASE_URL || 'postgres://hochciv:
 // Import models
 const User = require('./User')(sequelize);
 const Game = require('./Game')(sequelize);
+const Passkey = require('./Passkey')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
 Game.belongsTo(User, { foreignKey: 'winnerUsername', targetKey: 'username' });
 
+User.hasMany(Passkey);
+Passkey.belongsTo(User);
+
 module.exports = {
     sequelize,
     User,
-    Game
+    Game,
+    Passkey
 };

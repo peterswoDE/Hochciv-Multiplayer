@@ -113,8 +113,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api', apiRoutes);
 const accountRoutes = require('./routes/account');
 const adminRoutes = require('./routes/admin');
+const mfaRoutes = require('./routes/mfa');
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/mfa', mfaRoutes);
 
   // Host static frontend files 
 const path = require('path');

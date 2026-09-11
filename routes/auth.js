@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const bcrypt = require('bcryptjs');
-const { User } = require('../models');
+const { User, Passkey } = require('../models');
 const { sendMail } = require('../utils/mailer');
 const { Op } = require('sequelize');
+const { authenticator } = require('otplib');
+const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
 function generateCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -89,16 +91,125 @@ router.post('/activate', rateLimit, async (req, res) => {
 
 // Login endpoint
 router.post('/login', rateLimit, (req, res, next) => {
-    passport.authenticate('local', (err, user, info) => {
+    passport.authenticate('local', async (err, user, info) => {
         if (err) return res.status(500).json({ error: 'Internal Server Error' });
         if (!user) return res.status(401).json({ error: 'Falscher Benutzername oder Passwort' });
         if (!user.isActive) return res.status(403).json({ error: 'Konto noch nicht aktiviert' });
 
+        const passkeys = await Passkey.findAll({ where: { UserId: user.id } });
+        const hasPasskeys = passkeys.length > 0;
+
+        if (user.totpEnabled || hasPasskeys) {
+            req.session.mfaPendingUserId = user.id;
+            return res.json({
+                mfaRequired: true,
+                methods: {
+                    totp: user.totpEnabled,
+                    passkey: hasPasskeys
+                }
+            });
+        }
+
         req.login(user, (err) => {
             if (err) return res.status(500).json({ error: 'Login failed' });
-            return res.json({ id: req.user.id, username: req.user.username, email: req.user.email, mmr: req.user.mmr, gamesPlayed: req.user.gamesPlayed });
+            return res.json({ id: req.user.id, username: req.user.username, email: req.user.email, mmr: req.user.mmr, gamesPlayed: req.user.gamesPlayed, role: req.user.role });
         });
     })(req, res, next);
+});
+
+// --- MFA Login Routes ---
+router.post('/login/totp', rateLimit, async (req, res) => {
+    try {
+        const { token } = req.body;
+        const pendingUserId = req.session.mfaPendingUserId;
+        if (!pendingUserId || !token) return res.status(400).json({ error: 'Sitzung abgelaufen oder Token fehlt' });
+
+        const user = await User.findByPk(pendingUserId);
+        if (!user || !user.totpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
+
+        const isValid = authenticator.check(token, user.totpSecret);
+        if (!isValid) return res.status(400).json({ error: 'Ungültiger Code' });
+
+        req.session.mfaPendingUserId = null;
+        req.login(user, (err) => {
+            if (err) return res.status(500).json({ error: 'Login failed' });
+            return res.json({ id: user.id, username: user.username, email: user.email, mmr: user.mmr, gamesPlayed: user.gamesPlayed, role: user.role });
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler bei der MFA' });
+    }
+});
+
+router.post('/login/passkey/options', rateLimit, async (req, res) => {
+    try {
+        const pendingUserId = req.session.mfaPendingUserId;
+        if (!pendingUserId) return res.status(400).json({ error: 'Sitzung abgelaufen' });
+
+        const user = await User.findByPk(pendingUserId);
+        const passkeys = await Passkey.findAll({ where: { UserId: user.id } });
+
+        const options = await generateAuthenticationOptions({
+            rpID: req.hostname,
+            allowCredentials: passkeys.map(pk => ({
+                id: Buffer.from(pk.credentialID, 'base64url').toString('base64url'),
+                type: 'public-key',
+                transports: pk.transports || []
+            })),
+            userVerification: 'preferred',
+        });
+
+        user.currentChallenge = options.challenge;
+        await user.save();
+
+        res.json(options);
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler' });
+    }
+});
+
+router.post('/login/passkey/verify', rateLimit, async (req, res) => {
+    try {
+        const pendingUserId = req.session.mfaPendingUserId;
+        if (!pendingUserId) return res.status(400).json({ error: 'Sitzung abgelaufen' });
+
+        const user = await User.findByPk(pendingUserId);
+        const passkeys = await Passkey.findAll({ where: { UserId: user.id } });
+
+        const body = req.body;
+        const passkey = passkeys.find(pk => Buffer.from(pk.credentialID, 'base64url').toString('base64url') === body.id || pk.credentialID === body.id);
+        
+        if (!passkey) return res.status(400).json({ error: 'Unbekannter Passkey' });
+
+        const verification = await verifyAuthenticationResponse({
+            response: body,
+            expectedChallenge: user.currentChallenge,
+            expectedOrigin: req.protocol + '://' + req.get('host'),
+            expectedRPID: req.hostname,
+            authenticator: {
+                credentialPublicKey: passkey.credentialPublicKey,
+                credentialID: Buffer.from(passkey.credentialID, 'base64url'),
+                counter: Number(passkey.counter),
+            }
+        });
+
+        if (verification.verified) {
+            passkey.counter = verification.authenticationInfo.newCounter;
+            await passkey.save();
+
+            user.currentChallenge = null;
+            await user.save();
+
+            req.session.mfaPendingUserId = null;
+            req.login(user, (err) => {
+                if (err) return res.status(500).json({ error: 'Login failed' });
+                return res.json({ id: user.id, username: user.username, email: user.email, mmr: user.mmr, gamesPlayed: user.gamesPlayed, role: user.role });
+            });
+        } else {
+            res.status(400).json({ error: 'Verifizierung fehlgeschlagen' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler' });
+    }
 });
 
 // Password reset request

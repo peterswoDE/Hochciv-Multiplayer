@@ -69,6 +69,19 @@ module.exports = (sequelize) => {
         discordId: {
             type: DataTypes.STRING,
             allowNull: true,
+        },
+        totpSecret: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        totpEnabled: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+        },
+        currentChallenge: {
+            type: DataTypes.STRING,
+            allowNull: true,
         }
     }, {
         tableName: 'users',

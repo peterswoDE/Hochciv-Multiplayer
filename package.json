@@ -15,12 +15,15 @@
         "express-rate-limit": "^8.7.0",
         "express-session": "^1.19.0",
         "nodemailer": "^9.0.6",
+        "otplib": "^12.0.1",
         "passport": "^0.7.0",
         "passport-local": "^1.0.0",
         "pg": "^8.23.0",
         "pg-hstore": "^2.3.4",
+        "qrcode": "^1.5.3",
         "sequelize": "^6.37.8",
         "socket.io": "^4.8.0",
-        "trueskill": "^0.0.2"
+        "trueskill": "^0.0.2",
+        "@simplewebauthn/server": "^9.0.3"
     }
 }
