@@ -101,7 +101,7 @@ router.post('/passkey/generate-registration', async (req, res) => {
                 transports: pk.transports || []
             })),
             authenticatorSelection: {
-                residentKey: 'discouraged',
+                residentKey: 'preferred',
                 userVerification: 'preferred',
             },
             supportedAlgorithmIDs: [-7, -257],

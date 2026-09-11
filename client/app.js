@@ -204,6 +204,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Direct Passwordless Passkey Logic ---
+    const btnDirectPasskey = document.getElementById('btn-login-passkey-direct');
+    if (btnDirectPasskey) {
+        btnDirectPasskey.addEventListener('click', async () => {
+            clearErrors();
+            try {
+                const { startAuthentication } = window.SimpleWebAuthnBrowser;
+                const res = await fetch('/api/auth/login/passkey/options-passwordless', { method: 'POST' });
+                if (!res.ok) throw new Error('Options failed');
+                const options = await res.json();
+                
+                let asseResp;
+                try {
+                    asseResp = await startAuthentication(options);
+                } catch (error) {
+                    showError('login-error', 'Authentifizierung abgebrochen.');
+                    return;
+                }
+
+                const verifyRes = await fetch('/api/auth/login/passkey/verify-passwordless', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(asseResp),
+                });
+                const vData = await verifyRes.json();
+                if (verifyRes.ok && !vData.error) {
+                    sessionStorage.removeItem('hochciv_guest');
+                    await fetchMe();
+                } else {
+                    showError('login-error', vData.error || 'Verifizierung fehlgeschlagen');
+                }
+            } catch (e) {
+                showError('login-error', 'Ein Fehler ist aufgetreten.');
+            }
+        });
+    }
+
     formRegister.addEventListener('submit', async (e) => {
         e.preventDefault();
         clearErrors();
