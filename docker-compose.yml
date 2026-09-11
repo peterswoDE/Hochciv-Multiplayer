@@ -1,22 +1,30 @@
 version: '3.8'
 
 services:
+  hochciv-db:
+    image: postgres:15-alpine
+    container_name: hochciv-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hochciv
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: hochciv
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+
   hochciv:
     image: peterswode/hochciv-multiplayer:latest
     container_name: hochciv-multiplayer
     restart: unless-stopped
-    # By default, Docker inherits DNS from the host system.
-    # If your specific deployment requires custom DNS servers, uncomment below:
-    # dns:
-    #   - 8.8.8.8
-    #   - 1.1.1.1
+    depends_on:
+      - hochciv-db
     environment:
       - PORT=3000
-      # Original repository URL
+      - DATABASE_URL=postgres://hochciv:password123@hochciv-db:5432/hochciv
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
-      # Branch to pull (defaults to main)
       - CORE_REPO_BRANCH=main
-      # Update interval in seconds (default 3600 = 1 hour)
       - UPDATE_INTERVAL_SEC=3600
     volumes:
       - ./mp.js:/app/mp.js
@@ -25,9 +33,13 @@ services:
       - ./sockets:/app/sockets
       - ./engine-adapter.js:/app/engine-adapter.js
     networks:
-      nginx:
+      - nginx
+      - internal
 
 networks:
-
   nginx:
     external: true
+  internal:
+
+volumes:
+  pgdata:
