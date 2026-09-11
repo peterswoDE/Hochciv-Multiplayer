@@ -68,7 +68,7 @@ router.get('/history', isAuthenticated, async (req, res) => {
         // This is safe since games isn't thousands of records yet, or we can use raw query.
         const userGames = games.filter(g => {
             if (!g.participants || !Array.isArray(g.participants)) return false;
-            return g.participants.some(p => p.name === req.user.username);
+            return g.participants.some(p => p.dbUserId === req.user.id);
         });
 
         res.json(userGames);
