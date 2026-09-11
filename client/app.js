@@ -92,7 +92,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error fetching profile:', e);
         }
-        showView(viewLanding ? viewLanding : viewAuth);
+        
+        const isModal = window.location.search.includes('modal=true');
+        if (isModal) {
+            showView(viewAuth);
+        } else {
+            showView(viewLanding ? viewLanding : viewAuth);
+        }
     }
 
     function showError(elementId, msg) {
@@ -349,7 +355,12 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetch('/api/auth/logout', { method: 'POST' });
             currentUser = null;
             sessionStorage.removeItem('hochciv_guest');
-            showView(viewLanding);
+            const isModal = window.location.search.includes('modal=true');
+            if (isModal) {
+                showView(viewAuth);
+            } else {
+                showView(viewLanding ? viewLanding : viewAuth);
+            }
             switchAuthTab('form-login');
         } catch (e) {
             console.error(e);

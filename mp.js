@@ -249,11 +249,6 @@ const MP = {
                 renderMainMenuAuth: async function () {
         await this.fetchUser();
         
-        if (!this.user && !sessionStorage.getItem('hochciv_guest')) {
-            this.showAuthModal();
-            return;
-        }
-
         const authContainer = $('mp-main-auth-container');
         if (!authContainer) return;
 
