@@ -224,8 +224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const list = document.getElementById('mfa-tokens-list');
         if(!list) return;
         
-        // Hide setup buttons if token of that type is already active
-        if(btnSetupTotp) btnSetupTotp.style.display = tokens.some(t => t.type === 'totp') ? 'none' : 'inline-block';
+        // Hide email setup button if email OTP is already active
         if(btnEnableEmailOtp) btnEnableEmailOtp.style.display = tokens.some(t => t.type === 'email') ? 'none' : 'inline-block';
 
         if (tokens.length === 0) {

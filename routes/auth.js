@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const bcrypt = require('bcryptjs');
-const { User, Passkey } = require('../models');
+const { User, Passkey, TotpToken } = require('../models');
 const { sendMail } = require('../utils/mailer');
 const { Op } = require('sequelize');
 const { authenticator } = require('otplib');
@@ -181,7 +181,19 @@ router.post('/login/totp', rateLimit, async (req, res) => {
         const user = await User.findByPk(pendingUserId);
         if (!user || !user.totpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
 
-        const isValid = authenticator.check(token, user.totpSecret);
+        let isValid = false;
+        if (user.totpSecret && authenticator.check(token, user.totpSecret)) {
+            isValid = true;
+        } else {
+            const totpTokens = await TotpToken.findAll({ where: { UserId: user.id } });
+            for (let t of totpTokens) {
+                if (authenticator.check(token, t.secret)) {
+                    isValid = true;
+                    break;
+                }
+            }
+        }
+
         if (!isValid) return res.status(400).json({ error: 'Ungültiger Code' });
 
         req.session.mfaPendingUserId = null;

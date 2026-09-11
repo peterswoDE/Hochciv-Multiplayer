@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { User, Passkey } = require('../models');
+const { User, Passkey, TotpToken } = require('../models');
 const { authenticator } = require('otplib');
 const qrcode = require('qrcode');
 const { generateRegistrationOptions, verifyRegistrationResponse } = require('@simplewebauthn/server');
@@ -47,7 +47,13 @@ router.post('/verify-totp', async (req, res) => {
         }
 
         const user = await User.findByPk(req.user.id);
-        user.totpSecret = secret;
+        
+        await TotpToken.create({
+            secret: secret,
+            UserId: user.id,
+            name: 'Authenticator App (' + new Date().toLocaleDateString() + ')'
+        });
+        
         user.totpEnabled = true;
         await user.save();
 
@@ -55,15 +61,26 @@ router.post('/verify-totp', async (req, res) => {
         res.json({ ok: true });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Fehler bei der Verifizierung' });
+        res.status(500).json({ error: 'Fehler' });
     }
 });
 
-router.post('/disable-totp', async (req, res) => {
+router.delete('/totp/:id?', async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
-        user.totpSecret = null;
-        user.totpEnabled = false;
+        const tokenId = req.params.id;
+        
+        if (tokenId && tokenId !== 'null') {
+            await TotpToken.destroy({ where: { id: tokenId, UserId: user.id } });
+        } else {
+            user.totpSecret = null;
+        }
+        
+        // Check if any TOTP tokens are left
+        const remaining = await TotpToken.count({ where: { UserId: user.id } });
+        if (remaining === 0 && !user.totpSecret) {
+            user.totpEnabled = false;
+        }
         await user.save();
         res.json({ ok: true });
     } catch (err) {
@@ -94,7 +111,11 @@ router.get('/tokens', async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
         const tokens = [];
-        if (user.totpEnabled) tokens.push({ type: 'totp', name: 'Authenticator App (TOTP)' });
+        if (user.totpSecret) tokens.push({ type: 'totp', id: null, name: 'Authenticator App (Legacy)' });
+        
+        const totpTokens = await TotpToken.findAll({ where: { UserId: user.id } });
+        totpTokens.forEach(t => tokens.push({ type: 'totp', id: t.id, name: t.name }));
+        
         if (user.emailOtpEnabled) tokens.push({ type: 'email', name: 'E-Mail OTP' });
         
         const passkeys = await Passkey.findAll({ where: { UserId: user.id } });

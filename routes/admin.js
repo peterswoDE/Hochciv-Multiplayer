@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { User, Passkey } = require('../models');
+const { User, Passkey, TotpToken } = require('../models');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const bcrypt = require('bcryptjs');
@@ -51,7 +51,11 @@ router.get('/users/:id/mfa', async (req, res) => {
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         
         const tokens = [];
-        if (targetUser.totpEnabled) tokens.push({ type: 'totp', name: 'Authenticator App (TOTP)' });
+        if (targetUser.totpSecret) tokens.push({ type: 'totp', id: null, name: 'Authenticator App (Legacy)' });
+        
+        const totpTokens = await TotpToken.findAll({ where: { UserId: targetUser.id } });
+        totpTokens.forEach(t => tokens.push({ type: 'totp', id: t.id, name: t.name }));
+
         if (targetUser.emailOtpEnabled) tokens.push({ type: 'email', name: 'E-Mail OTP' });
         
         const passkeys = await Passkey.findAll({ where: { UserId: targetUser.id } });
@@ -70,8 +74,16 @@ router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
         
         const { type, tokenId } = req.params;
         if (type === 'totp') {
-            targetUser.totpEnabled = false;
-            targetUser.totpSecret = null;
+            if (tokenId && tokenId !== 'null') {
+                await TotpToken.destroy({ where: { id: tokenId, UserId: targetUser.id } });
+            } else {
+                targetUser.totpSecret = null;
+            }
+            
+            const remaining = await TotpToken.count({ where: { UserId: targetUser.id } });
+            if (remaining === 0 && !targetUser.totpSecret) {
+                targetUser.totpEnabled = false;
+            }
             await targetUser.save();
         } else if (type === 'email') {
             targetUser.emailOtpEnabled = false;
