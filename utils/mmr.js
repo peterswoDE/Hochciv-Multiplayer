@@ -31,8 +31,16 @@ function calculateMMR(players) {
             // Actual outcome score
             let S_A = 0.5;
             let S_B = 0.5;
-            if (A.points > B.points) { S_A = 1; S_B = 0; }
-            else if (A.points < B.points) { S_A = 0; S_B = 1; }
+            
+            if (A.isWinner) {
+                S_A = 1; S_B = 0;
+            } else if (B.isWinner) {
+                S_A = 0; S_B = 1;
+            } else {
+                // If neither is the absolute winner (or comparing 2nd vs 3rd place), fallback to points
+                if (A.points > B.points) { S_A = 1; S_B = 0; }
+                else if (A.points < B.points) { S_A = 0; S_B = 1; }
+            }
 
             A.mmrChange += K * (S_A - E_A);
             B.mmrChange += K * (S_B - E_B);

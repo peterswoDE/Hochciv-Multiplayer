@@ -457,6 +457,8 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                 console.error('Error fetching score for player', i, e);
             }
 
+            const isWinner = session.state.over && session.state.over.id ? (lp.civ === session.state.over.id) : false;
+
             playersData.push({
                 dbUserId: lp.dbUserId,
                 dbUsername: lp.dbUsername,
@@ -465,7 +467,8 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                 ability: lp.ability,
                 isBot: lp.kind === 'bot',
                 points: points,
-                scoreDetails: scoreDetails
+                scoreDetails: scoreDetails,
+                isWinner: isWinner
             });
         }
 
