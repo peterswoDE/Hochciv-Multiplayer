@@ -798,9 +798,9 @@ window.addEventListener('DOMContentLoaded', () => {
 const originalRedraw = window.redraw;
 if (originalRedraw) {
     window.redraw = function() {
-        if (window.ui && window.ui.army && window.S && window.S.armies) {
-            const freshArmy = window.S.armies.find(a => a.id === window.ui.army.id);
-            if (freshArmy) window.ui.army = freshArmy;
+        if (typeof ui !== 'undefined' && ui && ui.army && typeof S !== 'undefined' && S && S.armies) {
+            const freshArmy = S.armies.find(a => a.id === ui.army.id);
+            if (freshArmy) ui.army = freshArmy;
         }
         return originalRedraw.apply(this, arguments);
     };
