@@ -1,6 +1,7 @@
 const sessions = require('../sessions');
 const engine = require('../engine-adapter');
-
+const { User, Game, sequelize } = require('../models');
+const { calculateMMR } = require('../utils/mmr');
 /**
  * Register Socket.IO event handlers on the given server instance.
  * @param {import('socket.io').Server} io
@@ -32,6 +33,11 @@ module.exports = function registerHandlers(io) {
             // Mark connected
             s.players[playerIndex].connected = true;
             s.players[playerIndex].socketId = socket.id;
+            if (socket.request.user) {
+                s.players[playerIndex].dbUserId = socket.request.user.id;
+                s.players[playerIndex].dbUsername = socket.request.user.username;
+                s.players[playerIndex].mmr = socket.request.user.mmr;
+            }
 
             // Reclaim host if the lobby was abandoned
             if (oldHostOffline && s.hostIndex !== playerIndex) {
@@ -268,7 +274,16 @@ module.exports = function registerHandlers(io) {
             if (session.state.cur !== finalIndex)
                 return ack?.({ error: 'Du bist nicht am Zug.' });
 
-            const err = engine.applyAction(session.state, finalIndex, data.type, data.params);
+            const err = engine.applyAction(session.state, finalIndex, data.type, data.params, () => {
+                broadcastState(io, session);
+                if (session.state.over && !session.gameOverProcessed) {
+                    session.gameOverProcessed = true;
+                    session.status = 'finished';
+                    io.to(sessionId).emit('game:over', session.state.over);
+                    const isRanked = session.gameConfig && session.gameConfig.ranked === true;
+                    processGameOverMmr(session, io, sessionId, isRanked);
+                }
+            });
             if (err) return ack?.({ error: err });
 
             ack?.({ ok: true });
@@ -276,10 +291,15 @@ module.exports = function registerHandlers(io) {
             // Re-sync all connected clients immediately after a valid action
             broadcastState(io, session);
 
-            // Check for game over
-            if (session.state.over) {
+            // Check for game over (synchronous, if human won)
+            if (session.state.over && !session.gameOverProcessed) {
+                session.gameOverProcessed = true;
                 session.status = 'finished';
                 io.to(sessionId).emit('game:over', session.state.over);
+
+                // Always record history, calculate MMR only if ranked
+                const isRanked = session.gameConfig && session.gameConfig.ranked === true;
+                processGameOverMmr(session, io, sessionId, isRanked);
             }
         });
 
@@ -370,10 +390,13 @@ module.exports = function registerHandlers(io) {
     // Start the global 15-second synchronization loop
     if (!io.__syncInterval) {
         io.__syncInterval = setInterval(() => {
+            const now = Date.now();
             for (const session of sessions.getAllSessions().values()) {
                 if (session.status === 'playing' && session.state) {
                     try {
-                        broadcastState(io, session);
+                        if (now - session.lastActivity < 30000) {
+                            broadcastState(io, session);
+                        }
                     } catch (err) {
                         console.error(`[Sync] Error syncing session ${session.id}:`, err);
                     }
@@ -392,21 +415,111 @@ function publicPlayers(session) {
         civ: p.civ,
         ability: p.ability,
         connected: p.connected,
+        mmr: p.mmr || 1000
     }));
 }
 
 function broadcastState(io, session) {
-    for (const lobbyPlayer of session.players) {
-        if (lobbyPlayer.socketId) {
-            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
-            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
-            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+    if (!session || !session.state) return;
 
-            io.to(lobbyPlayer.socketId).emit('state:update', {
-                state: engine.stateForPlayer(session.state, finalIndex),
-                currentPlayer: session.state.cur,
-                round: session.state.round,
+    // Instead of deep cloning per-player in a loop, clone the state exactly once.
+    // The engine's stateForPlayer currently treats the state as fully visible for all players.
+    const sharedState = engine.stateForPlayer(session.state, 0);
+
+    // Broadcast universally to everyone in the room. This avoids individual serialization per socket.
+    io.to(session.id).emit('state:update', {
+        state: sharedState,
+        currentPlayer: session.state.cur,
+        round: session.state.round,
+    });
+}
+
+/**
+ * Handle game over stats processing, database persistence, and Rating scaling.
+ */
+async function processGameOverMmr(session, io, sessionId, isRanked = false) {
+    try {
+        if (!engine.getEngine().victoryScore) return console.error('victoryScore function not exposed from engine');
+
+        // Compile participant data
+        const playersData = [];
+        for (let i = 0; i < session.players.length; i++) {
+            const lp = session.players[i];
+            const sp = session.state.players[i];
+
+            let points = 0;
+            let scoreDetails = null;
+            try {
+                const scoreObj = engine.getEngine().victoryScore(session.state, i);
+                scoreDetails = scoreObj || null;
+                points = scoreObj ? scoreObj.total : 0;
+            } catch (e) {
+                console.error('Error fetching score for player', i, e);
+            }
+
+            playersData.push({
+                dbUserId: lp.dbUserId,
+                dbUsername: lp.dbUsername,
+                name: lp.name,
+                civ: lp.civ,
+                ability: lp.ability,
+                isBot: lp.kind === 'bot',
+                points: points,
+                scoreDetails: scoreDetails
             });
         }
+
+        // Fetch current MMR for all human users from DB
+        for (let p of playersData) {
+            if (p.dbUserId) {
+                const u = await User.findByPk(p.dbUserId);
+                p.mmr = u ? u.mmr : 1000;
+            } else {
+                p.mmr = 1000; // Fill bot MMR or missing user as baseline
+            }
+        }
+
+        if (isRanked) {
+            // Execute Custom ELO/MMR Engine
+            const mmrResults = calculateMMR(playersData);
+
+            // Map results back for DB persistence
+            for (let res of mmrResults) {
+                const p = playersData.find(x => x.dbUserId === res.dbUserId && x.dbUserId != null);
+                if (p) {
+                    p.mmrShift = res.mmrChange;
+                    p.oldMmr = res.oldMmr;
+                    p.newMmr = res.newMmr;
+
+                    // Persist new MMR to DB
+                    await User.update({
+                        mmr: res.newMmr,
+                        gamesPlayed: sequelize.literal('"gamesPlayed" + 1')
+                    }, { where: { id: p.dbUserId } });
+                }
+            }
+        } else {
+            // Unranked games just increment gamesPlayed
+            for (let p of playersData) {
+                if (p.dbUserId) {
+                    await User.update({
+                        gamesPlayed: sequelize.literal('"gamesPlayed" + 1')
+                    }, { where: { id: p.dbUserId } });
+                }
+            }
+        }
+
+        // Log the Historic Match Record
+        await Game.create({
+            version: engine.getEngine().APP_VERSION || 'Unknown',
+            durationRounds: session.state.round,
+            winnerUsername: session.state.over && session.state.over.id ? playersData.find(p => p.civ === session.state.over.id)?.dbUsername : null,
+            participants: playersData
+        });
+
+        console.log(`[Stats] Successfully processed game ${sessionId}. Ranked: ${isRanked}. History saved.`);
+
+    } catch (err) {
+        console.error('[Stats] Failed to process game over logic:', err);
     }
 }

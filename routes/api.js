@@ -1,9 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const sessions = require('../sessions');
+const serverState = require('../utils/serverState');
 
 // ── POST /api/sessions — create a new session ───────────────────────────────
 router.post('/sessions', (req, res) => {
+    if (serverState.state.maintenanceMode) {
+        return res.status(503).json({ error: 'Der Server befindet sich im Wartungsmodus. Es können keine neuen Lobbys erstellt werden.' });
+    }
+
     const { config, host } = req.body || {};
     if (!host || !host.name || !host.clientId) {
         return res.status(400).json({ error: 'host.name und host.clientId sind erforderlich.' });
@@ -57,6 +62,23 @@ router.delete('/sessions/:id', (req, res) => {
     if (!session) return res.status(404).json({ error: 'Sitzung nicht gefunden.' });
     sessions.removeSession(req.params.id);
     res.json({ ok: true });
+});
+
+// ── GET /api/leaderboard — global ranking ──────────────────────────────────
+const { User } = require('../models');
+
+router.get('/leaderboard', async (req, res) => {
+    try {
+        const users = await User.findAll({
+            attributes: ['id', 'username', 'mmr', 'gamesPlayed'],
+            order: [['mmr', 'DESC']],
+            limit: 100
+        });
+        res.json(users);
+    } catch (err) {
+        console.error('Leaderboard error', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 module.exports = router;

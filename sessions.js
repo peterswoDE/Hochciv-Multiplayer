@@ -139,10 +139,8 @@ function cleanup() {
     for (const [id, s] of sessions) {
         let shouldTerminate = false;
 
-        // 1. Session absolute timeout
-        if (now - s.createdAt > config.SESSION_TIMEOUT_MS) {
-            shouldTerminate = true;
-        }
+        // 1. Session absolute timeout (REMOVED)
+        // Rely purely on inactivity or empty room timeout.
 
         // 2. Empty room termination
         const hasConnectedPlayers = s.players.some(p => p.connected);

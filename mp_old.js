@@ -246,30 +246,28 @@ const MP = {
 
 
 
-                renderMainMenuAuth: async function () {
+    renderMainMenuAuth: async function () {
         await this.fetchUser();
-        
-        if (!this.user && !sessionStorage.getItem('hochciv_guest')) {
-            this.showAuthModal();
-            return;
-        }
-
         const authContainer = $('mp-main-auth-container');
         if (!authContainer) return;
 
         if (this.user) {
             authContainer.innerHTML = `
-                <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
-                    <span>Eingeloggt als <b>${this.user.username}</b> (${this.user.mmr} MMR, ${this.user.gamesPlayed} Spiele)</span>
-                    <button class="btn small" onclick="MP.showAccountModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Account & Admin</button>
-                    <button class="btn small" onclick="MP.logout()" style="margin:0; padding: 6px 12px; font-size: 13px; background: #c9302c; color: white; border: 1px solid #ac2925; box-shadow: none;">Abmelden</button>
+                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
+                    Eingeloggt als <b>${this.user.username}</b> 
+                    (<b>${this.user.mmr} MMR</b>, ${this.user.gamesPlayed} Spiele) 
+                    <span style="opacity:0.5; margin:0 6px;">|</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.logout(); return false;">Logout</a>
                 </div>
             `;
         } else {
             authContainer.innerHTML = `
-                <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
-                    <span>Gast <span style="opacity:0.7">(Ranked gesperrt)</span></span>
-                    <button class="btn small" onclick="MP.showAuthModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Anmelden</button>
+                <div style="background:rgba(128,128,128,0.15); padding:8px; border-radius:4px; margin-bottom:15px; text-align:center; font-size:14px;">
+                    Gast <span style="opacity:0.7">(Ranked gesperrt)</span> 
+                    <span style="opacity:0.5; margin:0 6px;">|</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.showAuthDialog('login'); return false;">Anmelden</a> 
+                    <span style="opacity:0.5; margin:0 6px;">oder</span> 
+                    <a href="#" style="text-decoration:underline; cursor:pointer;" onclick="MP.showAuthDialog('register'); return false;">Registrieren</a>
                 </div>
             `;
         }
@@ -277,28 +275,57 @@ const MP = {
         if (this.renderLobby) this.renderLobby();
     },
 
-    showAuthModal: function() {
-        if (typeof modal === 'function') {
-            modal('Anmelden', '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
-            document.getElementById('overlay').classList.add('wide');
+    showAuthDialog: function (mode, context = {}) {
+        let h = '';
+        if (mode === 'login') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Anmelden</h3>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+              <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('login')">Einloggen</button>
+              <div style="text-align:center; margin-top:10px;"><a href="#" style="color:#666; font-size:12px; text-decoration:underline;" onclick="MP.showAuthDialog('reset-request'); return false;">Passwort vergessen?</a></div>
+            `;
+        } else if (mode === 'register') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Konto erstellen</h3>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px"></label>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+              <label class="row"><span>Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('register')">Registrieren</button>
+            `;
+        } else if (mode === 'activate') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Konto aktivieren</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Wir haben dir einen 6-stelligen Code per E-Mail geschickt.</p>
+              <label class="row"><span>Benutzername</span><input type="text" id="mp-auth-usn" style="width:120px" value="${context.username || ''}" readonly></label>
+              <label class="row"><span>6-stelliger Code</span><input type="text" id="mp-auth-code" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('activate')">Aktivieren & Einloggen</button>
+            `;
+        } else if (mode === 'reset-request') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Passwort zurücksetzen</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Bitte gib deine registrierte E-Mail-Adresse ein.</p>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('reset-request')">Code senden</button>
+              <button class="btn wide ghost" style="margin-top:10px" onclick="MP.showAuthDialog('login')">Zurück</button>
+            `;
+        } else if (mode === 'reset-confirm') {
+            h = `
+              <h3 style="margin-bottom:15px; text-align:center;">Passwort neu setzen</h3>
+              <p style="font-size:13px; color:#666; line-height:1.2; margin-bottom:10px;">Gib den Code aus deiner E-Mail und ein neues Passwort ein.</p>
+              <label class="row"><span>E-Mail</span><input type="email" id="mp-auth-em" style="width:120px" value="${context.email || ''}" readonly></label>
+              <label class="row"><span>6-stelliger Code</span><input type="text" id="mp-auth-code" style="width:120px"></label>
+              <label class="row"><span>Neues Passwort</span><input type="password" id="mp-auth-pw" style="width:120px"></label>
+              <div id="mp-auth-err" class="error" style="margin-top:10px; font-size:12px; display:none;"></div>
+              <button class="btn wide primary" style="margin-top:20px" onclick="MP.auth('reset-confirm')">Passwort ändern</button>
+              <button class="btn wide ghost" style="margin-top:10px" onclick="MP.showAuthDialog('login')">Abbrechen</button>
+            `;
         }
-    },
-
-    showAccountModal: function() {
-        if (typeof modal === 'function') {
-            modal('Account Übersicht', '<iframe src="/client/account.html?modal=true" style="width:100%; height:80vh; min-height:600px; border:none; background:transparent;"></iframe>');
-            document.getElementById('overlay').classList.add('wide');
-        }
-    },
-
-    logout: async function() {
-        try {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            sessionStorage.removeItem('hochciv_guest');
-            window.location.reload();
-        } catch(e) {
-            console.error('Logout failed', e);
-        }
+        modal('Account', h);
     },
 
     showLobby: async function () {
@@ -467,8 +494,76 @@ const MP = {
         this.socket.emit('lobby:config', newConfig);
     },
 
+    auth: async function (type) {
+        const payload = {};
+        if ($('mp-auth-usn')) payload.username = $('mp-auth-usn').value.trim();
+        if ($('mp-auth-pw')) payload.password = $('mp-auth-pw').value.trim();
+        if ($('mp-auth-em')) payload.email = $('mp-auth-em').value.trim();
+        if ($('mp-auth-code')) payload.code = $('mp-auth-code').value.trim();
 
-updateLobbyPlayer: function () {
+        if (type === 'reset-confirm') {
+            payload.newPassword = payload.password;
+        }
+
+        const errEl = $('mp-auth-err');
+
+        try {
+            let apiPath = type;
+            if (type === 'reset-request') apiPath = 'reset-password/request';
+            if (type === 'reset-confirm') apiPath = 'reset-password/confirm';
+
+            errEl.innerText = 'Laden...';
+            errEl.style.display = 'block';
+
+            const res = await fetch(`${this.serverUrl}/api/auth/${apiPath}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                errEl.innerText = data.error || 'Fehler beim Abrufen';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            // Flow Transitions
+            if (type === 'register') {
+                this.showAuthDialog('activate', { username: payload.username });
+                return;
+            }
+            if (type === 'reset-request') {
+                this.showAuthDialog('reset-confirm', { email: payload.email });
+                return;
+            }
+            if (type === 'reset-confirm') {
+                this.showAuthDialog('login');
+                toast('Dein Passwort wurde erfolgreich aktualisiert.');
+                return;
+            }
+
+            // Login / Activate
+            this.user = data;
+
+            // Close the auth modal
+            closeModal();
+            this.renderMainMenuAuth();
+        } catch (e) {
+            errEl.innerText = 'Netzwerkfehler';
+            errEl.style.display = 'block';
+        }
+    },
+
+    logout: async function () {
+        try {
+            await fetch(`${this.serverUrl}/api/auth/logout`, { method: 'POST' });
+            this.user = null;
+            this.renderMainMenuAuth();
+        } catch (e) { }
+    },
+
+    updateLobbyPlayer: function () {
         if (this.lobbyIndex == null) return;
         const civSelect = $(`mp-p-civ-${this.lobbyIndex}`);
         const abSelect = $(`mp-p-ab-${this.lobbyIndex}`);
@@ -670,22 +765,10 @@ window.addEventListener('DOMContentLoaded', () => {
         // Auth Container for Main Menu
         const authDiv = document.createElement('div');
         authDiv.id = 'mp-main-auth-container';
-        authDiv.style.position = 'absolute';
-        authDiv.style.top = '0';
-        authDiv.style.left = '0';
-        authDiv.style.right = '0';
-        authDiv.style.padding = '12px 24px';
-        authDiv.style.background = 'rgba(0, 0, 0, 0.4)';
-        authDiv.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
-        authDiv.style.display = 'flex';
-        authDiv.style.justifyContent = 'flex-end';
-        authDiv.style.alignItems = 'center';
-        authDiv.style.zIndex = '1000';
-        authDiv.style.backdropFilter = 'blur(5px)';
-
-        const screenMenu = $('screen-menu');
-        if (screenMenu) {
-            screenMenu.appendChild(authDiv);
+        // Insert right above the action boxes
+        const menuActions = document.querySelector('.menu-actions');
+        if (menuActions && menuActions.parentNode) {
+            menuActions.parentNode.insertBefore(authDiv, menuActions);
         }
 
         // Render it
@@ -714,27 +797,6 @@ window.addEventListener('DOMContentLoaded', () => {
             background: rgba(255,255,240,0.95); pointer-events: auto;
             border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
-            transition: width 0.2s, height 0.2s, border-radius 0.2s;
-        }
-        #mp-persistent-log-container.mp-log-minimized {
-            width: 44px !important;
-            height: 44px !important;
-            border-radius: 50% !important;
-            border: none !important;
-            background: #a89f91 !important;
-            cursor: pointer !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            padding: 0 !important;
-        }
-        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-header,
-        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-content {
-            display: none !important;
-        }
-        #mp-persistent-log-container.mp-log-minimized::before {
-            content: "📝";
-            font-size: 20px;
         }
         #mp-persistent-log-header {
             background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
@@ -752,24 +814,21 @@ window.addEventListener('DOMContentLoaded', () => {
     pLog.innerHTML = `
         <div id="mp-persistent-log-header">
             <span>Spiel-Log</span>
-            <span id="mp-log-toggle-icon" style="font-size: 16px;">✖</span>
+            <span id="mp-log-toggle-icon">▼</span>
         </div>
         <div id="mp-persistent-log-content"></div>
     `;
     document.body.appendChild(pLog);
 
-    document.getElementById('mp-persistent-log-header').addEventListener('click', (e) => {
-        const plc = document.getElementById('mp-persistent-log-container');
-        plc.classList.add('mp-log-minimized');
-        e.stopPropagation(); // prevent container click from firing immediately
-    });
-
-    document.getElementById('mp-persistent-log-container').addEventListener('click', (e) => {
-        const plc = document.getElementById('mp-persistent-log-container');
-        if (plc.classList.contains('mp-log-minimized')) {
-            plc.classList.remove('mp-log-minimized');
-            const pl = document.getElementById('mp-persistent-log-content');
-            if (pl) pl.scrollTop = pl.scrollHeight;
+    document.getElementById('mp-persistent-log-header').addEventListener('click', () => {
+        const content = document.getElementById('mp-persistent-log-content');
+        const icon = document.getElementById('mp-log-toggle-icon');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.innerText = '▼';
+        } else {
+            content.style.display = 'none';
+            icon.innerText = '▲';
         }
     });
 

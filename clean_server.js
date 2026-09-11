@@ -1,41 +1,3 @@
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const { Server } = require('socket.io');
-const config = require('./config');
-const apiRoutes = require('./routes/api');
-const registerGame = require('./sockets/game');
-
-const pg = require('pg');
-const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const bcrypt = require('bcryptjs');
-const { sequelize, User } = require('./models');
-const { Op } = require('sequelize');
-
-// ── Passport Configuration ──────────────────────────────────────────────────
-passport.use(new LocalStrategy(
-    async (username, password, done) => {
-        try {
-            const user = await User.findOne({ 
-                where: { 
-                    [Op.or]: [
-                        { username: username },
-                        { email: username }
-                    ]
-                } 
-            });
-            if (!user) return done(null, false, { message: 'Incorrect username or email.' });
-            const match = await bcrypt.compare(password, user.password_hash);
-            if (!match) return done(null, false, { message: 'Incorrect password.' });
-            return done(null, user);
-        } catch (err) {
-            return done(err);
-        }
-    }
-));
 
 passport.serializeUser((user, done) => {
     done(null, user.id);
@@ -113,33 +75,41 @@ app.use('/api/auth', authRoutes);
 app.use('/api', apiRoutes);
 const accountRoutes = require('./routes/account');
 const adminRoutes = require('./routes/admin');
-const mfaRoutes = require('./routes/mfa');
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/mfa', mfaRoutes);
 
-  // Host static frontend files 
-const path = require('path');
-app.use('/client', express.static(path.join(__dirname, 'client')));
-
+  // Host static frontend files
+  const path = require('path');
+  
+  // 1. Serve custom portal first (shadows public/index.html)
+  
 app.get('/sw.js', (req, res) => {
     res.type('application/javascript');
     res.send(`
         self.addEventListener('install', e => { self.skipWaiting(); });
         self.addEventListener('activate', e => {
-            e.waitUntil(
-                caches.keys().then(cacheNames => {
-                    return Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
-                })
-            );
-            self.clients.claim();
+            e.waitUntil(self.registration.unregister().then(() => self.clients.claim()));
         });
-        self.addEventListener('fetch', e => {});
+        self.addEventListener('fetch', e => {
+            e.respondWith(fetch(e.request));
+        });
     `);
 });
 
-// 3. Serve public game assets (js, css) as a fallback (this makes the game the root /)
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'client')));
+
+  
+  // 2. Explicitly serve the game at /game
+  app.get('/account', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client', 'account.html'));
+});
+
+app.get('/game', (req, res) => {
+      res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+  
+  // 3. Serve public game assets (js, css) as a fallback
+  app.use(express.static(path.join(__dirname, 'public')));
 
 
 // ── HTTP + Socket.IO ─────────────────────────────────────────────────────────

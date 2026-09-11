@@ -8,3 +8,4 @@ npm-debug.log
 *.log
 *.txt
 instructions.md
+secrets.env

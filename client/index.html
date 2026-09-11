@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hochciv - Multiplayer Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body.modal-mode .portal-header, 
+        body.modal-mode .portal-footer { display: none !important; }
+        body.modal-mode .portal-bg { background: transparent !important; padding: 0 !important; box-shadow: none !important; margin: 0 !important; }
+        body.modal-mode .auth-box, body.modal-mode .dashboard-card { margin-top: 0; box-shadow: none; border: 1px solid #ddd; }
+        body.modal-mode { background: transparent; padding: 15px; }
+    </style>
+    <script>
+        if (window.self !== window.top || window.location.search.includes('modal=true')) {
+            document.documentElement.classList.add('modal-mode');
+            document.addEventListener('DOMContentLoaded', () => {
+                document.body.classList.add('modal-mode');
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="portal-container">
+        <header class="portal-header">
+            <h1>Hochciv Multiplayer</h1>
+            <p>Erobere die Welt, baue Wunder und messe dich mit anderen Spielern!</p>
+        </header>
+
+        <main id="app">
+            <!-- Loading State -->
+            <div id="view-loading" class="view-section active">
+                <div class="loader"></div>
+                <p>Lade Profil...</p>
+            </div>
+
+            <!-- Landing State (Not Logged In) -->
+            <div id="view-landing" class="view-section">
+                <div class="landing-card" style="text-align: center;">
+                    <button id="btn-guest" class="btn btn-primary btn-huge">Als Gast spielen</button>
+                    <p style="margin: 15px 0; font-size: 13px; color: var(--text-muted);">
+                        Gäste können spielen, aber keine gewerteten (Ranked) Spiele bestreiten.
+                    </p>
+                    <button id="btn-show-login" class="btn btn-ghost">Login / Registrieren</button>
+                </div>
+            </div>
+
+            <!-- Unauthenticated: Login/Register Forms -->
+            <div id="view-auth" class="view-section">
+                <div class="auth-card">
+                    <div class="auth-tabs">
+                        <button class="tab-btn active" data-target="form-login">Anmelden</button>
+                        <button class="tab-btn" data-target="form-register">Registrieren</button>
+                    </div>
+
+                    <div class="auth-forms">
+                        <!-- Login Form -->
+                        <form id="form-login" class="auth-form active">
+                            <div class="form-group">
+                                <label for="login-username">Benutzername oder E-Mail</label>
+                                <input type="text" id="login-username" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="login-password">Passwort</label>
+                                <input type="password" id="login-password" required>
+                            </div>
+                            <div class="form-options">
+                                <a href="#" id="link-forgot-password">Passwort vergessen?</a>
+                            </div>
+                            <div id="login-error" class="error-msg"></div>
+                            <button type="submit" class="btn btn-primary">Einloggen</button>
+                            
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center;">
+                                <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Oder passwortlos anmelden</p>
+                                <button type="button" class="btn btn-ghost" id="btn-login-passkey-direct" style="width: 100%;">Mit Passkey anmelden</button>
+                            </div>
+                        </form>
+
+                        <!-- MFA Form (Hidden by default) -->
+                        <form id="form-mfa" class="auth-form" style="display:none;">
+                            <h3 style="margin-top:0; font-family: Georgia, serif; color: var(--red);">Zwei-Faktor-Authentifizierung</h3>
+                            <p style="font-size:14px; margin-bottom:15px; color:#555;">Bitte bestätige deine Identität.</p>
+                            
+                            <div id="mfa-totp-section" style="display:none;">
+                                <div class="form-group">
+                                    <label for="mfa-totp-code">6-stelliger Authenticator-Code</label>
+                                    <input type="text" id="mfa-totp-code" maxlength="6" style="text-align:center; font-size:20px; letter-spacing:5px;" placeholder="123456">
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="btn-submit-mfa-totp">Code bestätigen</button>
+                            </div>
+
+                            <div id="mfa-passkey-section" style="display:none; margin-top:15px; padding-top:15px; border-top: 1px solid #ddd;">
+                                <button type="button" class="btn btn-ghost" id="btn-submit-mfa-passkey" style="width:100%;">Mit Passkey anmelden</button>
+                            </div>
+
+                            <div id="mfa-email-section" style="display:none; margin-top:15px; padding-top:15px; border-top: 1px solid #ddd;">
+                                <button type="button" class="btn btn-ghost" id="btn-request-email-otp" style="width:100%; margin-bottom: 15px;">Code per E-Mail anfordern</button>
+                                <div id="mfa-email-input-container" style="display:none;">
+                                    <div class="form-group">
+                                        <label for="mfa-email-code">6-stelliger E-Mail-Code</label>
+                                        <input type="text" id="mfa-email-code" maxlength="6" style="text-align:center; font-size:20px; letter-spacing:5px;" placeholder="123456">
+                                    </div>
+                                    <button type="button" class="btn btn-primary" id="btn-submit-mfa-email">E-Mail Code bestätigen</button>
+                                </div>
+                            </div>
+
+                            <div id="mfa-error" class="error-msg"></div>
+                            <button type="button" class="btn btn-ghost" onclick="window.location.reload()" style="margin-top:10px; width:100%;">Abbrechen</button>
+                        </form>
+
+                        <!-- Register Form -->
+                        <form id="form-register" class="auth-form">
+                            <div class="form-group">
+                                <label for="reg-username">Benutzername</label>
+                                <input type="text" id="reg-username" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="reg-email">E-Mail Adresse</label>
+                                <input type="email" id="reg-email" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="reg-password">Passwort</label>
+                                <input type="password" id="reg-password" required>
+                            </div>
+                            <div id="reg-error" class="error-msg"></div>
+                            <button type="submit" class="btn btn-primary">Account erstellen</button>
+                        </form>
+
+                        <!-- Activation Form -->
+                        <form id="form-activate" class="auth-form">
+                            <p class="form-desc">Wir haben dir einen 6-stelligen Code per E-Mail gesendet.</p>
+                            <div class="form-group">
+                                <label for="act-username">Benutzername</label>
+                                <input type="text" id="act-username" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label for="act-code">6-stelliger Code</label>
+                                <input type="text" id="act-code" required>
+                            </div>
+                            <div id="act-error" class="error-msg"></div>
+                            <button type="submit" class="btn btn-primary">Aktivieren & Einloggen</button>
+                        </form>
+
+                        <!-- Reset Request Form -->
+                        <form id="form-reset-request" class="auth-form">
+                            <h3 style="margin-bottom:15px; text-align:center; font-family:Georgia,serif;">Passwort zurücksetzen</h3>
+                            <p class="form-desc">Bitte gib deine registrierte E-Mail-Adresse ein.</p>
+                            <div class="form-group">
+                                <label for="reset-email">E-Mail</label>
+                                <input type="email" id="reset-email" required>
+                            </div>
+                            <div id="reset-req-error" class="error-msg"></div>
+                            <button type="submit" class="btn btn-primary">Code senden</button>
+                            <button type="button" class="btn btn-ghost" style="margin-top:10px;" id="btn-back-to-login">Zurück</button>
+                        </form>
+
+                        <!-- Reset Confirm Form -->
+                        <form id="form-reset-confirm" class="auth-form">
+                            <h3 style="margin-bottom:15px; text-align:center; font-family:Georgia,serif;">Passwort neu setzen</h3>
+                            <p class="form-desc">Gib den Code aus deiner E-Mail und ein neues Passwort ein.</p>
+                            <div class="form-group">
+                                <label for="reset-conf-email">E-Mail</label>
+                                <input type="email" id="reset-conf-email" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label for="reset-conf-code">6-stelliger Code</label>
+                                <input type="text" id="reset-conf-code" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="reset-conf-pw">Neues Passwort</label>
+                                <input type="password" id="reset-conf-pw" required>
+                            </div>
+                            <div id="reset-conf-error" class="error-msg"></div>
+                            <button type="submit" class="btn btn-primary">Passwort ändern</button>
+                            <button type="button" class="btn btn-ghost" style="margin-top:10px;" id="btn-cancel-reset">Abbrechen</button>
+                        </form>
+                    </div>
+
+                    <div class="divider">
+                        <span>Oder</span>
+                    </div>
+
+                    <div class="oauth-providers">
+                        <button class="btn btn-oauth google" disabled title="Coming Soon">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M21.35,11.1H12.18V13.83H18.69C18.36,17.64 15.19,19.27 12.19,19.27C8.36,19.27 5,16.25 5,12C5,7.9 8.2,4.73 12.2,4.73C15.29,4.73 17.1,6.7 17.1,6.7L19,4.72C19,4.72 16.56,2 12.1,2C6.42,2 2.03,6.8 2.03,12C2.03,17.05 6.36,22 12.22,22C17.74,22 21.5,18.33 21.5,12.91C21.5,11.76 21.35,11.1 21.35,11.1V11.1Z"/></svg>
+                            Google
+                        </button>
+                        <button class="btn btn-oauth discord" disabled title="Coming Soon">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19.27,5.33C17.94,4.71 16.5,4.26 15,4C14.84,4.32 14.66,4.74 14.5,5.11C12.95,4.88 11.4,4.88 9.85,5.11C9.69,4.74 9.5,4.32 9.32,4C7.81,4.26 6.37,4.71 5.04,5.33C2.36,9.33 1.62,13.23 2.02,17.06C3.79,18.37 5.5,19.16 7.18,19.68C7.59,19.12 7.96,18.52 8.28,17.9C7.68,17.67 7.1,17.4 6.56,17.06C6.7,16.96 6.84,16.85 6.97,16.74C10.23,18.25 13.82,18.25 17.04,16.74C17.17,16.85 17.31,16.96 17.45,17.06C16.9,17.4 16.32,17.67 15.72,17.9C16.05,18.52 16.42,19.12 16.82,19.68C18.5,19.16 20.21,18.37 21.98,17.06C22.45,12.63 21.38,8.76 19.27,5.33M8.52,14.61C7.52,14.61 6.7,13.7 6.7,12.57C6.7,11.43 7.5,10.52 8.52,10.52C9.55,10.52 10.37,11.43 10.35,12.57C10.35,13.7 9.55,14.61 8.52,14.61M15.48,14.61C14.48,14.61 13.67,13.7 13.67,12.57C13.67,11.43 14.47,10.52 15.48,10.52C16.51,10.52 17.33,11.43 17.31,12.57C17.31,13.7 16.5,14.61 15.48,14.61Z"/></svg>
+                            Discord
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Authenticated: Dashboard -->
+            <div id="view-dashboard" class="view-section">
+                <div class="dashboard-card">
+                    <div class="dashboard-header">
+                        <h2>Willkommen, <span id="dash-username">Spieler</span>!</h2>
+                        <button id="btn-logout" class="btn btn-ghost">Abmelden</button>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Ranking (MMR)</span>
+                            <span class="stat-value" id="dash-mmr">1200</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Spiele gespielt</span>
+                            <span class="stat-value" id="dash-games">0</span>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-actions">
+                        <a href="/game" class="btn btn-huge btn-primary">Jetzt Spielen</a>
+                        <a href="/account" class="btn btn-huge btn-ghost" style="margin-top:10px; width:100%; box-sizing:border-box; display:block; text-align:center;">Account & Historie</a>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="portal-footer">
+            <p>&copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten.</p>
+        </footer>
+    </div>
+    
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
