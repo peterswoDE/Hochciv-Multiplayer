@@ -19,7 +19,7 @@ module.exports = (sequelize) => {
         },
         password_hash: {
             type: DataTypes.STRING,
-            allowNull: false,
+            allowNull: true,
         },
         mmr: {
             type: DataTypes.INTEGER,
@@ -67,6 +67,10 @@ module.exports = (sequelize) => {
             allowNull: true,
         },
         discordId: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        avatarUrl: {
             type: DataTypes.STRING,
             allowNull: true,
         },

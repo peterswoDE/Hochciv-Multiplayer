@@ -1,8 +1,8 @@
 
 // Unregister broken service worker
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
+    navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (let registration of registrations) {
             registration.unregister();
             console.log('Unregistered SW');
         }
@@ -92,13 +92,30 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error fetching profile:', e);
         }
-        
+
         const isModal = window.location.search.includes('modal=true');
         if (isModal) {
             showView(viewAuth);
         } else {
             showView(viewLanding ? viewLanding : viewAuth);
         }
+
+        // Load OAuth provider status and show/hide buttons
+        try {
+            const oauthRes = await fetch('/api/auth/oauth-status');
+            if (oauthRes.ok) {
+                const oauthStatus = await oauthRes.json();
+                const gBtn = document.getElementById('btn-oauth-google');
+                const dBtn = document.getElementById('btn-oauth-discord');
+                if (gBtn && oauthStatus.google) gBtn.style.display = 'inline-flex';
+                if (dBtn && oauthStatus.discord) dBtn.style.display = 'inline-flex';
+                // Show divider only if at least one provider is enabled
+                const divider = document.querySelector('.auth-divider');
+                if (divider && (oauthStatus.google || oauthStatus.discord)) {
+                    divider.style.display = 'flex';
+                }
+            }
+        } catch (e) { /* OAuth status unavailable, buttons stay hidden */ }
     }
 
     function showError(elementId, msg) {
@@ -126,20 +143,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ username, password })
             });
             const data = await res.json();
-            
+
             if (res.ok && !data.error) {
                 if (data.mfaRequired) {
                     document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
                     document.getElementById('form-mfa').classList.add('active');
                     document.getElementById('form-mfa').style.display = 'block';
-                    
+
                     const totpSection = document.getElementById('mfa-totp-section');
                     const passkeySection = document.getElementById('mfa-passkey-section');
                     const emailSection = document.getElementById('mfa-email-section');
-                    
+
                     if (data.methods.totp) totpSection.style.display = 'block';
                     else totpSection.style.display = 'none';
-                    
+
                     if (data.methods.passkey) passkeySection.style.display = 'block';
                     else passkeySection.style.display = 'none';
 
@@ -188,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/auth/login/passkey/options', { method: 'POST' });
             if (!res.ok) throw new Error('Options failed');
             const options = await res.json();
-            
+
             let asseResp;
             try {
                 asseResp = await startAuthentication(options);
@@ -270,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/auth/login/passkey/options-passwordless', { method: 'POST' });
                 if (!res.ok) throw new Error('Options failed');
                 const options = await res.json();
-                
+
                 let asseResp;
                 try {
                     asseResp = await startAuthentication(options);
@@ -311,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ username, email, password })
             });
             const data = await res.json();
-            
+
             if (res.ok && !data.error) {
                 // Show activate form
                 document.getElementById('act-username').value = username;
@@ -338,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ username, code })
             });
             const data = await res.json();
-            
+
             if (res.ok && !data.error) {
                 sessionStorage.removeItem('hochciv_guest');
                 await fetchMe();
@@ -367,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    
+
     // Forgot Password Flow
     document.getElementById('link-forgot-password').addEventListener('click', (e) => {
         e.preventDefault();
@@ -395,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ email })
             });
             const data = await res.json();
-            
+
             if (res.ok && !data.error) {
                 document.getElementById('reset-conf-email').value = email;
                 document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
@@ -422,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ email, code, newPassword })
             });
             const data = await res.json();
-            
+
             if (res.ok && !data.error) {
                 alert('Dein Passwort wurde erfolgreich aktualisiert.');
                 switchAuthTab('form-login');

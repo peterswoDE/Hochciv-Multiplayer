@@ -11,6 +11,7 @@ const User = require('./User')(sequelize);
 const Game = require('./Game')(sequelize);
 const Passkey = require('./Passkey')(sequelize);
 const TotpToken = require('./TotpToken')(sequelize);
+const OAuthProvider = require('./OAuthProvider')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
@@ -27,5 +28,6 @@ module.exports = {
     User,
     Game,
     Passkey,
-    TotpToken
+    TotpToken,
+    OAuthProvider
 };

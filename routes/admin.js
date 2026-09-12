@@ -1,14 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { User, Passkey, TotpToken } = require('../models');
+const { User, Passkey, TotpToken, OAuthProvider } = require('../models');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const bcrypt = require('bcryptjs');
 
-// Admin Middleware
+// Admin Middleware (allows admin and superadmin)
 function isAdmin(req, res, next) {
-    if (req.isAuthenticated() && req.user.role === 'admin') return next();
-    res.status(403).json({ error: 'Nur fr Administratoren' });
+    if (req.isAuthenticated() && (req.user.role === 'admin' || req.user.role === 'superadmin')) return next();
+    res.status(403).json({ error: 'Nur für Administratoren' });
+}
+
+// Super Admin Middleware (superadmin only)
+function isSuperAdmin(req, res, next) {
+    if (req.isAuthenticated() && req.user.role === 'superadmin') return next();
+    res.status(403).json({ error: 'Nur für Super-Administratoren' });
 }
 
 router.use(isAdmin);
@@ -17,7 +23,7 @@ router.use(isAdmin);
 router.get('/metrics', (req, res) => {
     const activeLobbies = Array.from(sessions.getAllSessions().values());
     const playersOnline = activeLobbies.reduce((sum, lobby) => sum + lobby.players.length, 0);
-    
+
     res.json({
         ...serverState.getMetrics(),
         lobbiesActive: activeLobbies.length,
@@ -49,21 +55,21 @@ router.get('/users/:id/mfa', async (req, res) => {
     try {
         const targetUser = await User.findByPk(req.params.id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        
+
         const tokens = [];
         if (targetUser.totpSecret) tokens.push({ type: 'totp', id: null, name: 'Authenticator App (Legacy)' });
-        
+
         const totpTokens = await TotpToken.findAll({ where: { UserId: targetUser.id } });
         totpTokens.forEach(t => tokens.push({ type: 'totp', id: t.id, name: t.name }));
 
         if (targetUser.emailOtpEnabled) tokens.push({ type: 'email', name: 'E-Mail OTP' });
-        
+
         const passkeys = await Passkey.findAll({ where: { UserId: targetUser.id } });
         passkeys.forEach(pk => tokens.push({ type: 'passkey', id: pk.id, name: 'Passkey (' + new Date(pk.createdAt).toLocaleDateString() + ')' }));
-        
+
         res.json(tokens);
-    } catch(err) {
-        res.status(500).json({error: 'Serverfehler'});
+    } catch (err) {
+        res.status(500).json({ error: 'Serverfehler' });
     }
 });
 
@@ -71,7 +77,7 @@ router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
     try {
         const targetUser = await User.findByPk(req.params.id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        
+
         const { type, tokenId } = req.params;
         if (type === 'totp') {
             if (tokenId && tokenId !== 'null') {
@@ -79,7 +85,7 @@ router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
             } else {
                 targetUser.totpSecret = null;
             }
-            
+
             const remaining = await TotpToken.count({ where: { UserId: targetUser.id } });
             if (remaining === 0 && !targetUser.totpSecret) {
                 targetUser.totpEnabled = false;
@@ -92,8 +98,8 @@ router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
             await Passkey.destroy({ where: { id: tokenId, UserId: targetUser.id } });
         }
         res.json({ ok: true });
-    } catch(err) {
-        res.status(500).json({error: 'Serverfehler'});
+    } catch (err) {
+        res.status(500).json({ error: 'Serverfehler' });
     }
 });
 
@@ -101,7 +107,7 @@ router.post('/users/:id/action', async (req, res) => {
     try {
         const { id } = req.params;
         const { action, mmr, newPassword } = req.body;
-        
+
         const targetUser = await User.findByPk(id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
 
@@ -118,7 +124,7 @@ router.post('/users/:id/action', async (req, res) => {
             targetUser.role = 'admin';
         } else if (action === 'set_role') {
             const { role } = req.body;
-            if (['user', 'admin'].includes(role)) {
+            if (['user', 'admin', 'superadmin'].includes(role)) {
                 targetUser.role = role;
             } else {
                 return res.status(400).json({ error: 'Ungültige Rolle' });
@@ -152,7 +158,7 @@ router.get('/lobbies', (req, res) => {
 router.post('/lobbies/:id/action', (req, res) => {
     const { id } = req.params;
     const { action, message } = req.body;
-    
+
     if (action === 'close') {
         sessions.removeSession(id);
         // Force disconnect sockets if we have io instance attached to app locals
@@ -170,6 +176,62 @@ router.post('/lobbies/:id/action', (req, res) => {
         }
     } else {
         res.status(400).json({ error: 'Unbekannte Aktion' });
+    }
+});
+
+
+// --- OAuth Provider Management (Super Admin only) ---
+router.get('/oauth', isSuperAdmin, async (req, res) => {
+    try {
+        const providers = await OAuthProvider.findAll({
+            attributes: ['id', 'provider', 'clientId', 'clientSecret', 'enabled']
+        });
+        // Return a map with all known providers, filling in defaults for missing ones
+        const result = { google: null, discord: null };
+        for (const p of providers) {
+            result[p.provider] = {
+                id: p.id,
+                clientId: p.clientId,
+                clientSecret: p.clientSecret,
+                enabled: p.enabled
+            };
+        }
+        res.json(result);
+    } catch (err) {
+        console.error('OAuth config load error', err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
+    try {
+        const { provider } = req.params;
+        if (!['google', 'discord'].includes(provider)) {
+            return res.status(400).json({ error: 'Ungültiger Provider' });
+        }
+        const { clientId, clientSecret, enabled } = req.body;
+
+        const [oauthProvider] = await OAuthProvider.findOrCreate({
+            where: { provider },
+            defaults: { clientId: clientId || '', clientSecret: clientSecret || '', enabled: !!enabled }
+        });
+
+        // Update fields
+        if (clientId !== undefined) oauthProvider.clientId = clientId;
+        if (clientSecret !== undefined) oauthProvider.clientSecret = clientSecret;
+        if (enabled !== undefined) oauthProvider.enabled = enabled;
+        await oauthProvider.save();
+
+        // Refresh Passport strategies
+        const { refreshOAuthStrategies } = require('../server');
+        if (typeof refreshOAuthStrategies === 'function') {
+            await refreshOAuthStrategies();
+        }
+
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('OAuth config save error', err);
+        res.status(500).json({ error: 'Serverfehler' });
     }
 });
 

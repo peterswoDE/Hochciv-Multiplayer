@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!res.ok) throw new Error('Not logged in');
         const data = await res.json();
         if (!data.username) throw new Error('Not logged in');
-        
+
         currentUser = data;
         document.getElementById('input-email').value = data.email || '';
         document.getElementById('display-username').textContent = data.username || '-';
@@ -29,10 +29,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadHistory();
 
         // Admin mode
-        if (data.role === 'admin') {
+        if (data.role === 'admin' || data.role === 'superadmin') {
             document.querySelectorAll('.admin-tab').forEach(el => el.style.display = 'block');
             loadAdminData();
             setInterval(loadAdminData, 10000); // refresh every 10s
+        }
+
+        // Super Admin mode — show OAuth settings tab
+        if (data.role === 'superadmin') {
+            document.querySelectorAll('.superadmin-tab').forEach(el => el.style.display = 'block');
+            loadOAuthConfig();
+        }
+
+        // Check OAuth status to enable link buttons
+        try {
+            const oauthRes = await fetch('/api/auth/oauth-status');
+            if (oauthRes.ok) {
+                const oauthStatus = await oauthRes.json();
+                const btnGoogle = document.getElementById('btn-link-google');
+                const btnDiscord = document.getElementById('btn-link-discord');
+                if (btnGoogle && oauthStatus.google) {
+                    btnGoogle.removeAttribute('disabled');
+                    btnGoogle.textContent = data.googleId ? 'Google aktualisieren' : 'Google verknüpfen';
+                    btnGoogle.onclick = () => window.location.href = '/api/auth/google';
+                }
+                if (btnDiscord && oauthStatus.discord) {
+                    btnDiscord.removeAttribute('disabled');
+                    btnDiscord.textContent = data.discordId ? 'Discord aktualisieren' : 'Discord verknüpfen';
+                    btnDiscord.onclick = () => window.location.href = '/api/auth/discord';
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load OAuth status for link buttons', e);
         }
 
     } catch (e) {
@@ -71,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const res = await fetch('/api/account/update-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 currentPassword: document.getElementById('input-current-pw').value,
                 newPassword: document.getElementById('input-new-pw').value
             })
@@ -95,7 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const res = await fetch('/api/account/history');
             historyGames = await res.json();
-            
+
             if (historyGames.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4">Keine vergangenen Spiele gefunden.</td></tr>';
                 return;
@@ -119,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    window.showGameDetails = function(idx) {
+    window.showGameDetails = function (idx) {
         const g = historyGames[idx];
         if (!g) return;
 
@@ -141,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const pop = x.scoreDetails ? x.scoreDetails.pop : '-';
             const won = x.scoreDetails ? x.scoreDetails.wonders : '-';
             const tech = x.scoreDetails ? x.scoreDetails.techs : '-';
-            
+
             const mmrShift = x.mmrShift != null ? (x.mmrShift > 0 ? `+${x.mmrShift}` : `${x.mmrShift}`) : '-';
             const mmrColor = x.mmrShift > 0 ? 'green' : (x.mmrShift < 0 ? 'red' : 'inherit');
 
@@ -158,10 +186,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         tafel += '</table>';
 
         const dateStr = new Date(g.matchDate).toLocaleString('de-DE');
-        
+
         document.getElementById('hm-title').innerHTML = `Spielauswertung <span style="font-size:14px; color:#666; font-weight:normal; margin-left:10px;">(${dateStr})</span>`;
         document.getElementById('hm-body').innerHTML = tafel;
-        
+
         document.getElementById('history-modal').style.display = 'flex';
     };
 
@@ -170,8 +198,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnSetupPasskey = document.getElementById('btn-setup-passkey');
     const btnEnableEmailOtp = document.getElementById('btn-enable-email-otp');
     const totpModal = document.getElementById('totp-setup-modal');
-    
-    if(btnSetupTotp) btnSetupTotp.addEventListener('click', async () => {
+
+    if (btnSetupTotp) btnSetupTotp.addEventListener('click', async () => {
         try {
             const res = await fetch('/api/mfa/setup-totp', { method: 'POST' });
             const data = await res.json();
@@ -182,11 +210,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('totp-setup-msg').textContent = '';
                 totpModal.style.display = 'flex';
             }
-        } catch (e) {}
+        } catch (e) { }
     });
 
     const btnVerifyTotp = document.getElementById('btn-verify-totp');
-    if(btnVerifyTotp) btnVerifyTotp.addEventListener('click', async () => {
+    if (btnVerifyTotp) btnVerifyTotp.addEventListener('click', async () => {
         const token = document.getElementById('totp-verify-input').value;
         const res = await fetch('/api/mfa/verify-totp', {
             method: 'POST',
@@ -219,13 +247,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadTokens() {
         const res = await fetch('/api/mfa/tokens');
-        if(!res.ok) return;
+        if (!res.ok) return;
         const tokens = await res.json();
         const list = document.getElementById('mfa-tokens-list');
-        if(!list) return;
-        
+        if (!list) return;
+
         // Hide email setup button if email OTP is already active
-        if(btnEnableEmailOtp) btnEnableEmailOtp.style.display = tokens.some(t => t.type === 'email') ? 'none' : 'inline-block';
+        if (btnEnableEmailOtp) btnEnableEmailOtp.style.display = tokens.some(t => t.type === 'email') ? 'none' : 'inline-block';
 
         if (tokens.length === 0) {
             list.innerHTML = 'Keine MFA-Methoden aktiv.';
@@ -245,9 +273,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }).join('');
     }
 
-    window.deleteToken = async function(type, id) {
-        if(!confirm(type === 'totp' ? 'Authenticator App wirklich entfernen?' : (type === 'email' ? 'E-Mail OTP deaktivieren?' : 'Passkey löschen?'))) return;
-        
+    window.deleteToken = async function (type, id) {
+        if (!confirm(type === 'totp' ? 'Authenticator App wirklich entfernen?' : (type === 'email' ? 'E-Mail OTP deaktivieren?' : 'Passkey löschen?'))) return;
+
         if (type === 'passkey') {
             await fetch('/api/mfa/passkey/' + id, { method: 'DELETE' });
         } else if (type === 'totp') {
@@ -258,12 +286,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadTokens();
     };
 
-    if(btnSetupPasskey) btnSetupPasskey.addEventListener('click', async () => {
+    if (btnSetupPasskey) btnSetupPasskey.addEventListener('click', async () => {
         try {
             const { startRegistration } = window.SimpleWebAuthnBrowser;
             const res = await fetch('/api/mfa/passkey/generate-registration', { method: 'POST' });
             const options = await res.json();
-            
+
             let attResp;
             try {
                 attResp = await startRegistration(options);
@@ -346,6 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <select onchange="adminChangeRole('${u.id}', this.value)" style="margin-right:8px; padding:2px; border-radius:4px; font-size:12px; background:var(--bg); border:1px solid #ccc; color:var(--text);">
                             <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
                             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                            <option value="superadmin" ${u.role === 'superadmin' ? 'selected' : ''}>Super Admin</option>
                         </select>
                         ${badges}
                     </td>
@@ -359,7 +388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </td>
                 </tr>
             `}).join('');
-            
+
         } catch (e) {
             console.error(e);
         }
@@ -368,25 +397,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.toggleAdminUserMfa = async (id) => {
         const container = document.getElementById(`admin-user-mfa-${id}`);
         if (!container) return;
-        
+
         if (container.style.display === 'block') {
             container.style.display = 'none';
             return;
         }
-        
+
         container.style.display = 'block';
         container.innerHTML = 'Lade...';
-        
+
         try {
             const res = await fetch(`/api/admin/users/${id}/mfa`);
             if (!res.ok) throw new Error();
             const tokens = await res.json();
-            
+
             if (tokens.length === 0) {
                 container.innerHTML = 'Keine MFA-Tokens aktiv.';
                 return;
             }
-            
+
             container.innerHTML = tokens.map(t => {
                 const tokenId = t.id ? `'${t.id}'` : 'null';
                 return `
@@ -396,18 +425,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 `;
             }).join('');
-            
-        } catch(e) {
+
+        } catch (e) {
             container.innerHTML = '<span style="color:red;">Fehler beim Laden</span>';
         }
     };
 
     window.adminDeleteUserMfa = async (userId, type, tokenId) => {
         if (!confirm('Diesen MFA-Token wirklich löschen?')) return;
-        
+
         let url = `/api/admin/users/${userId}/mfa/${type}`;
         if (tokenId) url += `/${tokenId}`;
-        
+
         const res = await fetch(url, { method: 'DELETE' });
         if (res.ok) {
             // Reload just the MFA container
@@ -446,7 +475,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.adminAction = async (type, id, action) => {
         let payload = { action };
-        
+
         if (action === 'broadcast') {
             const msg = prompt('Nachricht an Lobby senden:');
             if (!msg) return;
@@ -482,5 +511,65 @@ document.addEventListener('DOMContentLoaded', async () => {
             body: JSON.stringify({ maintenanceMode: newVal })
         });
         loadAdminData();
+    };
+
+    // --- OAuth Config (Super Admin) ---
+    async function loadOAuthConfig() {
+        try {
+            const res = await fetch('/api/admin/oauth');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // Populate callback URLs
+            const baseUrl = window.location.origin;
+            const cbGoogle = document.getElementById('oauth-callback-google');
+            const cbDiscord = document.getElementById('oauth-callback-discord');
+            if (cbGoogle) cbGoogle.textContent = `Google: ${baseUrl}/api/auth/google/callback`;
+            if (cbDiscord) cbDiscord.textContent = `Discord: ${baseUrl}/api/auth/discord/callback`;
+
+            // Populate Google fields
+            if (data.google) {
+                document.getElementById('oauth-google-clientid').value = data.google.clientId || '';
+                document.getElementById('oauth-google-secret').value = data.google.clientSecret || '';
+                document.getElementById('oauth-google-enabled').checked = data.google.enabled || false;
+            }
+            // Populate Discord fields
+            if (data.discord) {
+                document.getElementById('oauth-discord-clientid').value = data.discord.clientId || '';
+                document.getElementById('oauth-discord-secret').value = data.discord.clientSecret || '';
+                document.getElementById('oauth-discord-enabled').checked = data.discord.enabled || false;
+            }
+        } catch (e) {
+            console.error('Failed to load OAuth config', e);
+        }
+    }
+
+    window.saveOAuthConfig = async (provider) => {
+        const msg = document.getElementById(`oauth-${provider}-msg`);
+        msg.textContent = 'Speichert...';
+        msg.style.color = 'black';
+
+        const clientId = document.getElementById(`oauth-${provider}-clientid`).value;
+        const clientSecret = document.getElementById(`oauth-${provider}-secret`).value;
+        const enabled = document.getElementById(`oauth-${provider}-enabled`).checked;
+
+        try {
+            const res = await fetch(`/api/admin/oauth/${provider}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientId, clientSecret, enabled })
+            });
+            if (res.ok) {
+                msg.textContent = 'Gespeichert! Strategien neu geladen.';
+                msg.style.color = 'green';
+            } else {
+                const err = await res.json();
+                msg.textContent = err.error || 'Fehler beim Speichern.';
+                msg.style.color = 'red';
+            }
+        } catch (e) {
+            msg.textContent = 'Netzwerkfehler.';
+            msg.style.color = 'red';
+        }
     };
 });

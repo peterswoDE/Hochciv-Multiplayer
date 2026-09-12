@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
+const { OAuthProvider } = require('../models');
 const bcrypt = require('bcryptjs');
 const { User, Passkey, TotpToken } = require('../models');
 const { sendMail } = require('../utils/mailer');
@@ -243,7 +244,7 @@ router.post('/login/passkey/verify', rateLimit, async (req, res) => {
 
         const body = req.body;
         const passkey = passkeys.find(pk => Buffer.from(pk.credentialID, 'base64url').toString('base64url') === body.id || pk.credentialID === body.id);
-        
+
         if (!passkey) return res.status(400).json({ error: 'Unbekannter Passkey' });
 
         const verification = await verifyAuthenticationResponse({
@@ -397,13 +398,13 @@ router.post('/reset-password/confirm', rateLimit, async (req, res) => {
 // Get current user (session check)
 router.get('/me', (req, res) => {
     if (req.isAuthenticated()) {
-        res.json({ 
-            id: req.user.id, 
-            username: req.user.username, 
-            email: req.user.email, 
-            mmr: req.user.mmr, 
+        res.json({
+            id: req.user.id,
+            username: req.user.username,
+            email: req.user.email,
+            mmr: req.user.mmr,
             gamesPlayed: req.user.gamesPlayed,
-            role: req.user.role 
+            role: req.user.role
         });
     } else {
         res.status(401).json({ error: 'Not authenticated' });
@@ -416,6 +417,55 @@ router.post('/logout', (req, res) => {
         if (err) return res.status(500).json({ error: 'Error logging out' });
         req.session.destroy();
         res.json({ ok: true });
+    });
+});
+// --- OAuth Social Login Routes ---
+
+// Public endpoint: which OAuth providers are enabled?
+router.get('/oauth-status', async (req, res) => {
+    try {
+        const providers = await OAuthProvider.findAll({ where: { enabled: true } });
+        const result = { google: false, discord: false };
+        for (const p of providers) {
+            if (p.clientId && p.clientSecret) result[p.provider] = true;
+        }
+        res.json(result);
+    } catch (err) {
+        res.json({ google: false, discord: false });
+    }
+});
+
+// Google OAuth
+router.get('/google', (req, res, next) => {
+    if (!passport._strategies || !passport._strategies['google']) {
+        return res.status(404).json({ error: 'Google Login ist nicht konfiguriert.' });
+    }
+    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
+
+router.get('/google/callback', (req, res, next) => {
+    if (!passport._strategies || !passport._strategies['google']) {
+        return res.redirect('/client/');
+    }
+    passport.authenticate('google', { failureRedirect: '/client/' })(req, res, () => {
+        res.redirect('/client/');
+    });
+});
+
+// Discord OAuth
+router.get('/discord', (req, res, next) => {
+    if (!passport._strategies || !passport._strategies['discord']) {
+        return res.status(404).json({ error: 'Discord Login ist nicht konfiguriert.' });
+    }
+    passport.authenticate('discord')(req, res, next);
+});
+
+router.get('/discord/callback', (req, res, next) => {
+    if (!passport._strategies || !passport._strategies['discord']) {
+        return res.redirect('/client/');
+    }
+    passport.authenticate('discord', { failureRedirect: '/client/' })(req, res, () => {
+        res.redirect('/client/');
     });
 });
 
