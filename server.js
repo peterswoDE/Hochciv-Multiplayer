@@ -128,6 +128,11 @@ app.use('/api/mfa', mfaRoutes);
 const path = require('path');
 app.use('/client', express.static(path.join(__dirname, 'client')));
 
+// Explicit routes for legal pages at root
+app.get('/impressum.html', (req, res) => res.sendFile(path.join(__dirname, 'client/impressum.html')));
+app.get('/datenschutz.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
+app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
+
 app.get('/sw.js', (req, res) => {
     res.type('application/javascript');
     res.send(`
