@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy dependency files first
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm config set strict-ssl false && npm install --omit=dev
 
 # Copy application files
 COPY . .
@@ -31,6 +31,9 @@ RUN mkdir -p public && \
       cp -r public/* /app/public_bundled/; \
     fi
 
+RUN chown -R node:node /app
+
+USER node
 EXPOSE 3000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
