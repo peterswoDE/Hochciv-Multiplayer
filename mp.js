@@ -246,9 +246,9 @@ const MP = {
 
 
 
-                renderMainMenuAuth: async function () {
+    renderMainMenuAuth: async function () {
         await this.fetchUser();
-        
+
         const authContainer = $('mp-main-auth-container');
         if (!authContainer) return;
 
@@ -272,26 +272,26 @@ const MP = {
         if (this.renderLobby) this.renderLobby();
     },
 
-    showAuthModal: function() {
+    showAuthModal: function () {
         if (typeof modal === 'function') {
             modal('Anmelden', '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
             document.getElementById('overlay').classList.add('wide');
         }
     },
 
-    showAccountModal: function() {
+    showAccountModal: function () {
         if (typeof modal === 'function') {
             modal('Account Übersicht', '<iframe src="/client/account.html?modal=true" style="width:100%; height:80vh; min-height:600px; border:none; background:transparent;"></iframe>');
             document.getElementById('overlay').classList.add('wide');
         }
     },
 
-    logout: async function() {
+    logout: async function () {
         try {
             await fetch('/api/auth/logout', { method: 'POST' });
             sessionStorage.removeItem('hochciv_guest');
             window.location.reload();
-        } catch(e) {
+        } catch (e) {
             console.error('Logout failed', e);
         }
     },
@@ -463,7 +463,7 @@ const MP = {
     },
 
 
-updateLobbyPlayer: function () {
+    updateLobbyPlayer: function () {
         if (this.lobbyIndex == null) return;
         const civSelect = $(`mp-p-civ-${this.lobbyIndex}`);
         const abSelect = $(`mp-p-ab-${this.lobbyIndex}`);
@@ -683,6 +683,22 @@ window.addEventListener('DOMContentLoaded', () => {
             screenMenu.appendChild(authDiv);
         }
 
+        // Legal Footer for Main Menu
+        const mVersion = $('m-version');
+        if (mVersion && mVersion.parentNode) {
+            const footer = document.createElement('p');
+            footer.id = 'mp-legal-footer';
+            footer.style.textAlign = 'center';
+            footer.style.fontSize = '0.8rem';
+            footer.style.marginTop = '20px';
+            footer.innerHTML = `
+              &copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten. | 
+              <a href="/datenschutzerklaerung.html" target="_blank" style="color:inherit">Datenschutzerklärung</a> | 
+              <a href="/impressum.html" target="_blank" style="color:inherit">Impressum</a>
+            `;
+            mVersion.parentNode.appendChild(footer);
+        }
+
         // Render it
         MP.renderMainMenuAuth();
     }
@@ -797,7 +813,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // We intercept redraw() to proactively restore the reference using the army ID.
 const originalRedraw = window.redraw;
 if (originalRedraw) {
-    window.redraw = function() {
+    window.redraw = function () {
         if (typeof ui !== 'undefined' && ui && ui.army && typeof S !== 'undefined' && S && S.armies) {
             const freshArmy = S.armies.find(a => a.id === ui.army.id);
             if (freshArmy) ui.army = freshArmy;
