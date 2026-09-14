@@ -447,9 +447,23 @@ router.get('/google/callback', (req, res, next) => {
     if (!passport._strategies || !passport._strategies['google']) {
         return res.redirect('/client/');
     }
-    passport.authenticate('google', { failureRedirect: '/client/' })(req, res, () => {
-        res.redirect('/client/');
-    });
+    passport.authenticate('google', (err, user, info) => {
+        if (err) {
+            console.error('[OAuth] Google Callback Error:', err);
+            return res.redirect(`/client/?error=oauth_google_error`);
+        }
+        if (!user) {
+            console.error('[OAuth] Google Auth failed. Info:', info);
+            return res.redirect('/client/?error=oauth_google_failed');
+        }
+        req.login(user, (loginErr) => {
+            if (loginErr) {
+                console.error('[OAuth] Google Login Error:', loginErr);
+                return res.redirect(`/client/?error=oauth_google_login`);
+            }
+            res.redirect('/client/');
+        });
+    })(req, res, next);
 });
 
 // Discord OAuth
@@ -457,16 +471,30 @@ router.get('/discord', (req, res, next) => {
     if (!passport._strategies || !passport._strategies['discord']) {
         return res.status(404).json({ error: 'Discord Login ist nicht konfiguriert.' });
     }
-    passport.authenticate('discord')(req, res, next);
+    passport.authenticate('discord', { scope: ['identify', 'email'] })(req, res, next);
 });
 
 router.get('/discord/callback', (req, res, next) => {
     if (!passport._strategies || !passport._strategies['discord']) {
         return res.redirect('/client/');
     }
-    passport.authenticate('discord', { failureRedirect: '/client/' })(req, res, () => {
-        res.redirect('/client/');
-    });
+    passport.authenticate('discord', (err, user, info) => {
+        if (err) {
+            console.error('[OAuth] Discord Callback Error:', err);
+            return res.redirect(`/client/?error=oauth_discord_error`);
+        }
+        if (!user) {
+            console.error('[OAuth] Discord Auth failed. Info:', info);
+            return res.redirect('/client/?error=oauth_discord_failed');
+        }
+        req.login(user, (loginErr) => {
+            if (loginErr) {
+                console.error('[OAuth] Discord Login Error:', loginErr);
+                return res.redirect(`/client/?error=oauth_discord_login`);
+            }
+            res.redirect('/client/');
+        });
+    })(req, res, next);
 });
 
 module.exports = router;
