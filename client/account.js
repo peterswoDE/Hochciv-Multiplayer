@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (btnDiscord && oauthStatus.discord) {
                     btnDiscord.removeAttribute('disabled');
                     btnDiscord.textContent = data.discordId ? 'Discord aktualisieren' : 'Discord verknüpfen';
-                    btnDiscord.onclick = () => window.location.href = '/api/auth/discord';
+                    btnDiscord.onclick = () => window.top.location.href = '/api/auth/discord';
                 }
             }
         } catch (e) {
