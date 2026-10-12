@@ -241,24 +241,8 @@ patch_frontend() {
     cp ../mp.js public/js/mp.js
   fi
 
-  node -e '
-  const fs = require("fs");
-  const htmlPath = "public/index.html";
-  if (fs.existsSync(htmlPath)) {
-    let html = fs.readFileSync(htmlPath, "utf8");
-    if (!html.includes("js/mp.js")) {
-      const snippet = "<script src=\"https://cdn.socket.io/4.8.0/socket.io.min.js\"></script>\n<script src=\"js/mp.js\"></script>\n";
-      html = html.replace("</body>", snippet + "</body>");
-      fs.writeFileSync(htmlPath, html, "utf8");
-    }
-  }
-  const jsPath = "public/js/mp.js";
-  if (fs.existsSync(jsPath)) {
-    let js = fs.readFileSync(jsPath, "utf8");
-    js = js.replace(/serverUrl:\s*["\x27]http:\/\/localhost:3000["\x27]/g, "serverUrl: \"\"");
-    fs.writeFileSync(jsPath, js, "utf8");
-  }
-  '
+  # Socket.IO client from this server, mp.js and the Discord Activity bridge (see inject.js)
+  node inject.js public
 
   echo "[Completed] Frontend integration ready."
   return 0

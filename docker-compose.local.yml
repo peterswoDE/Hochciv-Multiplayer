@@ -50,6 +50,9 @@ services:
       - ./config.js:/app/config.js
       - ./engine-adapter.js:/app/engine-adapter.js
       - ./elevate.js:/app/elevate.js
+      - ./inject.js:/app/inject.js
+      # The Discord Activity bundle is built into the image – changes to activity/bridge.js need --build
+      - ./activity:/app/activity
 
 volumes:
   pgdata:

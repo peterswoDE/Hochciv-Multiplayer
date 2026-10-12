@@ -6,6 +6,7 @@ Authoritative multiplayer backend for **Hochciv**, built with Node.js, Express, 
 
 * **Live multiplayer:** Lobbies with a 6-character join code and a 6-digit password, public lobby list, up to 4 players (empty seats are filled with bots). The host configures map, difficulty, events, wonders and ranked mode.
 * **Server-side rules:** Every move is checked and applied by the real Hochciv engine on the server; clients only display the state.
+* **Discord Activity:** Play inside Discord voice channels and DMs. Everyone in the call lands in the same lobby automatically.
 * **Rundenspiele (asynchronous games):** Play turn by turn over days, with e-mail notifications when it is your turn.
 * **Accounts:** Registration with e-mail activation, password reset, Google and Discord login, two-factor authentication (authenticator app, passkeys, e-mail code), MMR ranking and match history.
 * **Admin panel:** Server status, maintenance mode, registration switch, lobby and user management, OAuth configuration.
@@ -16,7 +17,7 @@ Authoritative multiplayer backend for **Hochciv**, built with Node.js, Express, 
 The game itself lives in a separate repository ([timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv)). This server adds multiplayer on top of it:
 
 1. **Fetch** – at container start, `entrypoint.sh` fetches the game into `public/` (exactly the pinned commit if `CORE_REPO_COMMIT` is set, otherwise the head of `CORE_REPO_BRANCH`). There are **no automatic updates while running**; restart the container to pick up a newer game version.
-2. **Inject** – it copies `mp.js` into the game and adds it plus the Socket.IO client to the game's `index.html`.
+2. **Inject** – it copies `mp.js` into the game and, via `inject.js`, adds three scripts to the game's `index.html`: the Socket.IO client (served by this server), `mp.js` and the Discord Activity bridge.
 3. **Hook** – in the browser, `mp.js` replaces the game's action functions so that moves are sent to the server, and adds the lobby, login and account UI.
 4. **Rules on the server** – `engine-adapter.js` loads the same game files into the server and applies every move there.
 
@@ -57,6 +58,7 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
+| `DISCORD_BOT_TOKEN` | no | Bot token of the Discord application. Lets the Discord Activity check that a player really belongs to the call whose lobby they join. |
 
 ### Google / Discord login
 
@@ -67,6 +69,29 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 3. As superadmin, open *Account & Admin → OAuth*, enter client ID and secret, tick *Aktiviert* and save. The tab shows the callback URLs the server really uses and warns if they do not match the address you opened the page with.
 
 After logging in or linking an account, players return to the game with a short confirmation message.
+
+### Discord Activity
+
+The game runs as a [Discord Activity](https://discord.com/developers/docs/activities/overview). Players start it from the Activity launcher of a voice channel or DM. They are signed in with Discord and everyone in the call lands in the same lobby, with no join codes. The first player is host.
+
+It uses the same Discord application as the Discord login above:
+
+1. Set up Discord login as described above (client ID and secret in *Account & Admin → OAuth*). The Activity only needs ID and secret; *Aktiviert* only controls the website login.
+2. Discord Developer Portal → your app:
+   * **Activities → Settings:** enable Activities.
+   * **Activities → URL Mappings:** prefix `/` → target your domain without the scheme, e.g. `hochciv.example`.
+   * **OAuth2 → Redirects:** besides the login callback, add `https://127.0.0.1` as a placeholder. Discord requires one for the Activity's authorization.
+   * **Installation:** allow *Guild Install* and/or *User Install*.
+3. Optional: set `DISCORD_BOT_TOKEN` (Developer Portal → Bot) so that only players who are in the call can join its lobby.
+
+Notes:
+
+* **Guests only.** Inside Discord, players play as guests under their Discord name. Account login, ranked games and Rundenspiele are hidden there, because login cannot run in Discord's iframe.
+* **Joining by code still works.** The normal *Multiplayer* menu works, so Discord players can also play with people on the website.
+* **Framing.** Discord may embed the game: the server sends `Content-Security-Policy: frame-ancestors 'self'` plus the Discord domains, instead of `X-Frame-Options`.
+* **Reconnects.** Reopening the Activity puts a player back into their seat. If the host leaves before the start, or the game ends, the next player who joins gets a fresh lobby.
+
+For local testing, Discord needs a public HTTPS URL. Use a tunnel, e.g. `cloudflared tunnel --url http://localhost:3000`, and enter its host as the URL mapping target. Outside Discord, the Activity script does nothing.
 
 ### Updating
 
@@ -92,7 +117,7 @@ docker compose -f docker-compose.local.yml up -d --build
 ```
 
 * Game: <http://localhost:3000>, database: `localhost:5432` (only from this machine; user/password `hochciv` / `password123`).
-* The server code is mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local`. Changes to `package.json`, `Dockerfile` or `entrypoint.sh` need `--build`.
+* The server code is mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local`. Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
 * Runs without `NODE_ENV=production`: e-mails (activation codes, reset codes) are printed to the log (`docker logs hochciv-multiplayer-local`).
 * Optional SMTP settings can go into `secrets.env` (gitignored).
 * Make yourself admin: `docker exec hochciv-multiplayer-local node elevate.js <username> superadmin`.
@@ -111,6 +136,9 @@ You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`
 * `server.js` – Express entry point: sessions, login (Passport), routes, static files, Socket.IO.
 * `config.js` – Central settings (port, `BASE_URL`, limits).
 * `routes/` – REST API: `auth.js` (login, registration, 2FA login, OAuth), `account.js`, `mfa.js`, `admin.js`, `api.js` (lobbies, leaderboard), `async.js` (Rundenspiele).
+* `routes/activity.js` – Discord Activity: OAuth code exchange and one lobby per activity instance.
+* `activity/` – Discord Activity bridge for the browser (`bridge.js`). `build.js` bundles it with the Embedded App SDK (`npm run build:activity`; the Dockerfile does this in a build stage). The bundle is served as `/js/activity.js`.
+* `inject.js` – Patches the fetched game's `index.html` (Socket.IO client, `mp.js`, Activity bridge).
 * `sockets/game.js` – Live games: lobby, start, moves, placement, draft, reconnects.
 * `sockets/async.js`, `async/` – Rundenspiele: rules, storage, notifications, timeouts.
 * `sessions.js` – In-memory store for live lobbies and games.
