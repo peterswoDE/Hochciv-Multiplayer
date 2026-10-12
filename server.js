@@ -16,7 +16,7 @@ const bcrypt = require('bcryptjs');
 const { sequelize, User, OAuthProvider } = require('./models');
 const { Op } = require('sequelize');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const DiscordStrategy = require('passport-discord').Strategy;
+const DiscordStrategy = require('./utils/discordStrategy').Strategy;
 
 // ── Passport Configuration ──────────────────────────────────────────────────
 passport.use(new LocalStrategy(

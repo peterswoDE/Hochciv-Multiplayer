@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { User, Passkey, TotpToken } = require('../models');
-const { authenticator } = require('otplib');
+const totp = require('../utils/totp');
 const qrcode = require('qrcode');
 const { generateRegistrationOptions, verifyRegistrationResponse } = require('@simplewebauthn/server');
 
@@ -18,8 +18,8 @@ router.use(isAuthenticated);
 router.post('/setup-totp', async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
-        const secret = authenticator.generateSecret();
-        const uri = authenticator.keyuri(user.email, 'Hochciv', secret);
+        const secret = totp.newSecret();
+        const uri = totp.keyUri(user.email, 'Hochciv', secret);
         const qrCodeUrl = await qrcode.toDataURL(uri);
 
         // Temporarily store the secret until they verify it
@@ -41,7 +41,7 @@ router.post('/verify-totp', async (req, res) => {
             return res.status(400).json({ error: 'Kein Setup im Gange oder Token fehlt' });
         }
 
-        const isValid = authenticator.check(token, secret);
+        const isValid = totp.checkToken(token, secret);
         if (!isValid) {
             return res.status(400).json({ error: 'Ungültiger Code' });
         }
@@ -135,13 +135,13 @@ router.post('/passkey/generate-registration', async (req, res) => {
         const options = await generateRegistrationOptions({
             rpName,
             rpID: getRpID(req),
-            userID: user.id,
+            // v9 used the UTF-8 bytes of the id string as user handle – keep it that way
+            userID: new Uint8Array(Buffer.from(user.id, 'utf8')),
             userName: user.email,
             timeout: 60000,
             attestationType: 'none',
             excludeCredentials: passkeys.map(pk => ({
-                id: Buffer.from(pk.credentialID, 'base64url'),
-                type: 'public-key',
+                id: pk.credentialID,
                 transports: pk.transports || []
             })),
             authenticatorSelection: {
@@ -180,12 +180,12 @@ router.post('/passkey/verify-registration', async (req, res) => {
         const { verified, registrationInfo } = verification;
 
         if (verified && registrationInfo) {
-            const { credentialID, credentialPublicKey, counter } = registrationInfo;
+            const { credential } = registrationInfo;
 
             await Passkey.create({
-                credentialID: Buffer.from(credentialID).toString('base64url'),
-                credentialPublicKey: Buffer.from(credentialPublicKey),
-                counter,
+                credentialID: credential.id,
+                credentialPublicKey: Buffer.from(credential.publicKey),
+                counter: credential.counter,
                 transports: body.response.transports || [],
                 UserId: user.id
             });

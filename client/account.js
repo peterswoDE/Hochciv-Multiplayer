@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let attResp;
             try {
-                attResp = await startRegistration(options);
+                attResp = await startRegistration({ optionsJSON: options });
             } catch (error) {
                 if (error.name === 'InvalidStateError') {
                     alert('Dieser Passkey ist bereits registriert.');

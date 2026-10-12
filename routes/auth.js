@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const { User, Passkey, TotpToken } = require('../models');
 const { sendMail } = require('../utils/mailer');
 const { Op } = require('sequelize');
-const { authenticator } = require('otplib');
+const totp = require('../utils/totp');
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
 function generateCode() {
@@ -182,12 +182,12 @@ router.post('/login/totp', rateLimit, async (req, res) => {
         if (!user || !user.totpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
 
         let isValid = false;
-        if (user.totpSecret && authenticator.check(token, user.totpSecret)) {
+        if (user.totpSecret && totp.checkToken(token, user.totpSecret)) {
             isValid = true;
         } else {
             const totpTokens = await TotpToken.findAll({ where: { UserId: user.id } });
             for (let t of totpTokens) {
-                if (authenticator.check(token, t.secret)) {
+                if (totp.checkToken(token, t.secret)) {
                     isValid = true;
                     break;
                 }
@@ -217,8 +217,7 @@ router.post('/login/passkey/options', rateLimit, async (req, res) => {
         const options = await generateAuthenticationOptions({
             rpID: req.hostname,
             allowCredentials: passkeys.map(pk => ({
-                id: Buffer.from(pk.credentialID, 'base64url'),
-                type: 'public-key',
+                id: pk.credentialID,
                 transports: pk.transports || []
             })),
             userVerification: 'preferred',
@@ -251,10 +250,11 @@ router.post('/login/passkey/verify', rateLimit, async (req, res) => {
             expectedChallenge: user.currentChallenge,
             expectedOrigin: req.protocol + '://' + req.get('host'),
             expectedRPID: req.hostname,
-            authenticator: {
-                credentialPublicKey: passkey.credentialPublicKey,
-                credentialID: Buffer.from(passkey.credentialID, 'base64url'),
+            credential: {
+                id: passkey.credentialID,
+                publicKey: new Uint8Array(passkey.credentialPublicKey),
                 counter: Number(passkey.counter),
+                transports: passkey.transports || undefined,
             }
         });
 
@@ -316,10 +316,11 @@ router.post('/login/passkey/verify-passwordless', rateLimit, async (req, res) =>
             expectedChallenge: challenge,
             expectedOrigin: req.protocol + '://' + req.get('host'),
             expectedRPID: req.hostname,
-            authenticator: {
-                credentialPublicKey: passkey.credentialPublicKey,
-                credentialID: Buffer.from(passkey.credentialID, 'base64url'),
+            credential: {
+                id: passkey.credentialID,
+                publicKey: new Uint8Array(passkey.credentialPublicKey),
                 counter: Number(passkey.counter),
+                transports: passkey.transports || undefined,
             }
         });
 

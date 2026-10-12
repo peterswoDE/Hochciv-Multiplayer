@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let asseResp;
             try {
-                asseResp = await startAuthentication(options);
+                asseResp = await startAuthentication({ optionsJSON: options });
             } catch (error) {
                 showError('mfa-error', 'Authentifizierung abgebrochen.');
                 return;
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let asseResp;
                 try {
-                    asseResp = await startAuthentication(options);
+                    asseResp = await startAuthentication({ optionsJSON: options });
                 } catch (error) {
                     showError('login-error', 'Authentifizierung abgebrochen.');
                     return;
