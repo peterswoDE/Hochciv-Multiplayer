@@ -33,21 +33,6 @@ const sandbox = {
 vm.createContext(sandbox);
 
 let isLoaded = false;
-let lastMtime = 0;
-
-function checkUpdateTrigger() {
-    try {
-        const triggerPath = path.resolve(__dirname, '.update_trigger');
-        if (fs.existsSync(triggerPath)) {
-            const stat = fs.statSync(triggerPath);
-            if (stat.mtimeMs > lastMtime) {
-                lastMtime = stat.mtimeMs;
-                console.log('[Engine Adapter] .update_trigger modified, forcing engine reload.');
-                isLoaded = false;
-            }
-        }
-    } catch (err) {}
-}
 
 function resolveEngineDir() {
     let dir = path.resolve(__dirname, 'public', 'js');
@@ -66,7 +51,6 @@ function resolveEngineDir() {
 }
 
 function ensureEngineLoaded() {
-    checkUpdateTrigger();
     if (isLoaded) return true;
     const dir = resolveEngineDir();
     if (!dir) {
@@ -288,8 +272,36 @@ function draftPayload(session) {
  * @param {function} onStateChanged - callback for async state changes
  * @returns {string|null}  error message or null on success
  */
+/**
+ * The engine was written for a trusted local client. Over the network every parameter
+ * must be a plain value: keys are short identifiers (never __proto__ & co.), counts are
+ * small positive integers, coordinates/ids are finite numbers.
+ */
+const KEY_PARAMS = ['tech', 'mode', 'kind', 'wonder'];
+const COUNT_PARAMS = ['n', 'amount'];
+const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+function checkParams(params) {
+    for (const [k, v] of Object.entries(params)) {
+        if (v === null || v === undefined || typeof v === 'boolean') continue;
+        if (KEY_PARAMS.includes(k)) {
+            if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(v) || FORBIDDEN_KEYS.has(v)) return `Ungültiger Parameter: ${k}`;
+        } else if (COUNT_PARAMS.includes(k)) {
+            if (!Number.isInteger(v) || v < 1 || v > 100000) return `Ungültiger Parameter: ${k}`;
+        } else if (typeof v === 'number') {
+            if (!Number.isFinite(v)) return `Ungültiger Parameter: ${k}`;
+        } else if (typeof v !== 'string' || v.length > 100 || FORBIDDEN_KEYS.has(v)) {
+            return `Ungültiger Parameter: ${k}`;
+        }
+    }
+    return null;
+}
+
 function applyAction(state, pi, action, params, onStateChanged) {
     if (!ensureEngineLoaded()) return 'Game Engine ist noch nicht bereit (Frontend-Dateien fehlen).';
+    if (typeof action !== 'string') return 'Ungültige Aktion.';
+    params = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
+    const paramErr = checkParams(params);
+    if (paramErr) return paramErr;
     // Only the current player may act
     if (state.cur !== pi) return 'Du bist nicht am Zug.';
     if (state.over) return 'Das Spiel ist vorbei.';

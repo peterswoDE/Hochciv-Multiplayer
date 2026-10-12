@@ -21,6 +21,17 @@ function generateJoinCode() {
     return code;
 }
 
+/** Display names are plain text of limited length. */
+function cleanName(name, fallback) {
+    const n = typeof name === 'string' ? name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, config.MAX_NAME_LENGTH) : '';
+    return n || fallback;
+}
+
+/** civ / ability keys: short identifiers only. */
+function cleanKey(key, fallback) {
+    return typeof key === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(key) ? key : fallback;
+}
+
 function generatePassword() {
     let pw = '';
     for (let i = 0; i < config.PASSWORD_LENGTH; i++)
@@ -35,6 +46,7 @@ function generatePassword() {
  * @returns {object} { sessionId, joinCode, password }
  */
 function createSession(gameConfig, hostInfo) {
+    if (sessions.size >= config.MAX_SESSIONS) return 'Der Server ist voll. Bitte versuche es später erneut.';
     const sessionId = generateId();
     const joinCode = generateJoinCode();
     const password = generatePassword();
@@ -53,10 +65,10 @@ function createSession(gameConfig, hostInfo) {
         players: [
             {
                 index: 0,
-                name: hostInfo.name || 'Host',
-                clientId: hostInfo.clientId,
-                civ: hostInfo.civ || 'griechenland',
-                ability: hostInfo.ability || 'basis',
+                name: cleanName(hostInfo.name, 'Host'),
+                clientId: String(hostInfo.clientId).slice(0, 100),
+                civ: cleanKey(hostInfo.civ, 'griechenland'),
+                ability: cleanKey(hostInfo.ability, 'basis'),
                 kind: 'human',
                 connected: false,
                 socketId: null,
@@ -95,7 +107,7 @@ function joinSession(joinCode, password, playerInfo) {
     if (session.players.length >= config.MAX_PLAYERS) return 'Sitzung ist voll.';
 
     const playerIndex = session.players.length;
-    let fallbackName = playerInfo.name || `Spieler ${playerIndex + 1}`;
+    let fallbackName = cleanName(playerInfo.name, `Spieler ${playerIndex + 1}`);
 
     // Safety check for duplicate names upon initial join to prevent reconnect mixing
     if (session.players.some(p => p.name === fallbackName)) {
@@ -105,9 +117,9 @@ function joinSession(joinCode, password, playerInfo) {
     session.players.push({
         index: playerIndex,
         name: fallbackName,
-        clientId: playerInfo.clientId,
-        civ: playerInfo.civ || 'griechenland',
-        ability: playerInfo.ability || 'basis',
+        clientId: String(playerInfo.clientId).slice(0, 100),
+        civ: cleanKey(playerInfo.civ, 'griechenland'),
+        ability: cleanKey(playerInfo.ability, 'basis'),
         kind: 'human',
         connected: false,
         socketId: null,
@@ -185,7 +197,10 @@ function kickPlayer(sessionId, playerIndex, force = false) {
 function updateConfig(sessionId, newConfig) {
     const session = sessions.get(sessionId);
     if (!session || session.status !== 'lobby') return false;
-    session.gameConfig = { ...session.gameConfig, ...newConfig };
+    if (!newConfig || typeof newConfig !== 'object' || Array.isArray(newConfig)) return false;
+    if (JSON.stringify(newConfig).length > 10000) return false;
+    const { map, setup, ...allowed } = newConfig;      // both are set by the server at game start
+    session.gameConfig = { ...session.gameConfig, ...allowed };
     return session.gameConfig;
 }
 
@@ -196,16 +211,18 @@ function updatePlayer(sessionId, playerIndex, updates) {
     if (!player) return false;
 
     let civChanged = false;
-    if (updates.civ && player.civ !== updates.civ) {
-        player.civ = updates.civ;
+    const civ = cleanKey(updates && updates.civ, null);
+    const ability = cleanKey(updates && updates.ability, null);
+    if (civ && player.civ !== civ) {
+        player.civ = civ;
         civChanged = true;
     }
 
     // If the civ changed, forcefully reset the ability to 'basis' since the old ability key is invalid for the new civ.
     if (civChanged) {
         player.ability = player.civ === 'random' ? 'random' : 'basis';
-    } else if (updates.ability) {
-        player.ability = updates.ability;
+    } else if (ability) {
+        player.ability = ability;
     }
     return true;
 }

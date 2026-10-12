@@ -23,11 +23,13 @@ services:
     environment:
       - PORT=3000
       - NODE_ENV=production
-      - SESSION_SECRET=${SESSION_SECRET:-hochciv_prod_secret_h7b82x9q}
+      - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in .env to a long random string}
+      - BASE_URL=${BASE_URL:-}
       - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:-password123}@hochciv-db:5432/${POSTGRES_DB:-hochciv}
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
-      - UPDATE_INTERVAL_SEC=3600
+      # Pin the game engine to a reviewed commit (full SHA). Empty = latest main at start.
+      - CORE_REPO_COMMIT=${CORE_REPO_COMMIT:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}

@@ -1,30 +1,38 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { User, Game } = require('../models');
+const { sequelize, User, Game } = require('../models');
+const {
+    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, str, validPassword, destroyOtherSessions,
+} = require('../utils/auth');
 
-// Middleware to ensure user is logged in
-function isAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) return next();
-    res.status(401).json({ error: 'Nicht autorisiert' });
+router.use(isAuthenticated);
+
+/** Accounts with a password must confirm it; OAuth-only accounts have none to confirm. */
+async function checkCurrentPassword(user, currentPassword) {
+    if (!user.password_hash) return true;
+    const pw = str(currentPassword);
+    return !!pw && bcrypt.compare(pw, user.password_hash);
 }
 
-// Update Password
-router.post('/update-password', isAuthenticated, async (req, res) => {
+// Update Password (also sets a first password for OAuth-only accounts)
+router.post('/update-password', async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
-        if (!currentPassword || !newPassword) {
+        const user = await User.findByPk(req.user.id);
+        if (user.password_hash && !currentPassword) {
             return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich.' });
         }
-
-        const user = await User.findByPk(req.user.id);
-        const match = await bcrypt.compare(currentPassword, user.password_hash);
-        if (!match) {
+        if (!validPassword(newPassword)) {
+            return res.status(400).json({ error: `Das neue Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.` });
+        }
+        if (!(await checkCurrentPassword(user, currentPassword))) {
             return res.status(400).json({ error: 'Das aktuelle Passwort ist falsch.' });
         }
 
         user.password_hash = await bcrypt.hash(newPassword, 10);
         await user.save();
+        await destroyOtherSessions(sequelize, user.id, req.sessionID);
         res.json({ ok: true });
     } catch (err) {
         console.error(err);
@@ -33,17 +41,22 @@ router.post('/update-password', isAuthenticated, async (req, res) => {
 });
 
 // Update Email
-router.post('/update-email', isAuthenticated, async (req, res) => {
+router.post('/update-email', async (req, res) => {
     try {
-        const { email } = req.body;
+        const email = str(req.body.email, 254);
         if (!email) return res.status(400).json({ error: 'Email erforderlich.' });
+        if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Ungültige E-Mail-Adresse.' });
+
+        const user = await User.findByPk(req.user.id);
+        if (!(await checkCurrentPassword(user, req.body.currentPassword))) {
+            return res.status(400).json({ error: 'Bitte bestätige die Änderung mit deinem aktuellen Passwort.' });
+        }
 
         const existing = await User.findOne({ where: { email } });
-        if (existing && existing.id !== req.user.id) {
+        if (existing && existing.id !== user.id) {
             return res.status(400).json({ error: 'Diese E-Mail wird bereits verwendet.' });
         }
 
-        const user = await User.findByPk(req.user.id);
         user.email = email;
         await user.save();
         res.json({ ok: true });
@@ -53,25 +66,17 @@ router.post('/update-email', isAuthenticated, async (req, res) => {
     }
 });
 
-// Match History
-router.get('/history', isAuthenticated, async (req, res) => {
+// Match History: the last 50 games this user took part in
+router.get('/history', async (req, res) => {
     try {
-        // Find games where this user was a participant
-        // For simplicity, we can fetch all games and filter, or just return all games the user played in.
-        // Wait, JSON querying in Postgres:
         const games = await Game.findAll({
+            where: sequelize.literal(
+                `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: req.user.id }]))}::jsonb`
+            ),
             order: [['matchDate', 'DESC']],
             limit: 50
         });
-
-        // Filter games where the user was in the participants array.
-        // This is safe since games isn't thousands of records yet, or we can use raw query.
-        const userGames = games.filter(g => {
-            if (!g.participants || !Array.isArray(g.participants)) return false;
-            return g.participants.some(p => p.dbUserId === req.user.id);
-        });
-
-        res.json(userGames);
+        res.json(games);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });

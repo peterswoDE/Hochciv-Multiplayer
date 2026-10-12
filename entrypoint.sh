@@ -9,8 +9,14 @@ REPO_URL=$(echo "$RAW_REPO" | tr -d '\r' | xargs)
 RAW_BRANCH=${CORE_REPO_BRANCH:-"main"}
 BRANCH=$(echo "$RAW_BRANCH" | tr -d '\r' | xargs)
 
-RAW_INTERVAL=${UPDATE_INTERVAL_SEC:-3600}
-INTERVAL=$(echo "$RAW_INTERVAL" | tr -d '\r' | xargs)
+# Optional: pin the frontend/engine to one exact commit (full 40-char SHA). The engine code
+# runs inside this server, so pinning means only reviewed code is ever executed.
+RAW_COMMIT=${CORE_REPO_COMMIT:-""}
+COMMIT=$(echo "$RAW_COMMIT" | tr -d '\r' | xargs)
+if [ -n "$COMMIT" ] && ! [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "[Error] CORE_REPO_COMMIT must be a full 40-character commit SHA."
+  exit 1
+fi
 
 echo "======================================"
 echo "Starting Hochciv Multiplayer Server"
@@ -150,7 +156,21 @@ ensure_dns() {
 download_frontend() {
   rm -rf public_tmp
 
-  # Strategy 1: Git shallow clone
+  # Strategy 1: Git shallow clone (or exactly the pinned commit)
+  if [ -n "$COMMIT" ]; then
+    echo "[Download] Fetching pinned commit $COMMIT from $REPO_URL..."
+    if git init -q public_tmp && git -C public_tmp remote add origin "$REPO_URL" \
+       && git -C public_tmp fetch -q --depth 1 origin "$COMMIT" 2>/dev/null \
+       && git -C public_tmp checkout -q --detach FETCH_HEAD \
+       && [ "$(git -C public_tmp rev-parse HEAD)" = "$COMMIT" ] && [ -f "public_tmp/index.html" ]; then
+      rm -rf public
+      mv public_tmp public
+      echo "[Download] Pinned commit checked out and verified."
+      return 0
+    fi
+    rm -rf public_tmp
+    echo "[Download] Could not fetch pinned commit; no unpinned fallback is used."
+  else
   echo "[Download] Attempting git shallow clone from $REPO_URL ($BRANCH)..."
   if git clone --depth 1 -b "$BRANCH" "$REPO_URL" public_tmp 2>/dev/null; then
     if [ -f "public_tmp/index.html" ]; then
@@ -161,10 +181,13 @@ download_frontend() {
     fi
   fi
   rm -rf public_tmp
+  fi
 
-  # Strategy 2: Direct HTTP archive tarball download
-  local gh_path
-  gh_path=$(echo "$REPO_URL" | sed -E 's/.*github\.com[\/:]([^\/]+)\/([^\/\.]+)(\.git)?/\1\/\2/')
+  # Strategy 2: Direct HTTP archive tarball download (unpinned only – a tarball cannot be verified)
+  local gh_path=""
+  if [ -z "$COMMIT" ]; then
+    gh_path=$(echo "$REPO_URL" | sed -E 's/.*github\.com[\/:]([^\/]+)\/([^\/\.]+)(\.git)?/\1\/\2/')
+  fi
   if [ -n "$gh_path" ] && [ "$gh_path" != "$REPO_URL" ]; then
     echo "[Download] Git clone failed; attempting HTTP tarball download for $gh_path ($BRANCH)..."
     local tar_url1="https://codeload.github.com/${gh_path}/tar.gz/refs/heads/${BRANCH}"
@@ -183,8 +206,9 @@ download_frontend() {
     rm -rf public_tmp
   fi
 
-  # Strategy 3: Restore from pre-bundled image backup
-  if [ -d "/app/public_bundled" ] && [ -f "/app/public_bundled/index.html" ]; then
+  # Strategy 3: Restore from pre-bundled image backup (when pinned: only if built from that commit)
+  if [ -d "/app/public_bundled" ] && [ -f "/app/public_bundled/index.html" ] \
+     && { [ -z "$COMMIT" ] || [ "$(cat /app/public_bundled/.commit 2>/dev/null)" = "$COMMIT" ]; }; then
     echo "[Download] Network downloads failed; restoring pre-bundled frontend from image..."
     rm -rf public
     mkdir -p public
@@ -192,8 +216,9 @@ download_frontend() {
     return 0
   fi
 
-  # Strategy 4: Keep existing public if valid
-  if [ -f "public/index.html" ]; then
+  # Strategy 4: Keep existing public if valid (when pinned: only if it is that commit)
+  if [ -f "public/index.html" ] \
+     && { [ -z "$COMMIT" ] || [ "$(git -C public rev-parse HEAD 2>/dev/null)" = "$COMMIT" ]; }; then
     echo "[Download] Using existing frontend files in public/."
     return 0
   fi
@@ -263,7 +288,14 @@ run_cmd_with_retries() {
 update_frontend() {
   ensure_dns
 
-  if [ -d "public/.git" ]; then
+  if [ -n "$COMMIT" ] && [ -d "public/.git" ] && [ "$(git -C public rev-parse HEAD 2>/dev/null)" = "$COMMIT" ]; then
+    echo "[Update] Frontend is at pinned commit $COMMIT."
+  elif [ -n "$COMMIT" ]; then
+    if ! run_cmd_with_retries "download_frontend"; then
+      echo "[Error] Pinned frontend could not be fetched."
+      return 1
+    fi
+  elif [ -d "public/.git" ]; then
     echo "[Update] Pulling latest changes from Hochciv repository..."
     cd public
     git reset --hard HEAD >/dev/null 2>&1 || true
@@ -286,53 +318,17 @@ update_frontend() {
 
 # 1. Initial frontend setup before starting server
 if ! update_frontend; then
-  echo "[Warning] Initial frontend fetch failed; continuing. Auto-updater will retry periodically."
+  if [ -n "$COMMIT" ]; then
+    # Pinned: never run engine code that is not the pinned commit
+    echo "[Error] Pinned frontend $COMMIT is not available; refusing to start."
+    exit 1
+  fi
+  echo "[Warning] Initial frontend fetch failed; continuing with whatever frontend is available."
 fi
 
-# 2. Background auto-updater
-(
-  while true; do
-    sleep "$INTERVAL"
-    echo "[Auto-Updater] Checking for updates on original repository..."
-    ensure_dns
-    if [ -d "public/.git" ]; then
-      cd public
-      if git fetch origin "$BRANCH" >/dev/null 2>&1; then
-        LOCAL=$(git rev-parse HEAD 2>/dev/null || echo "")
-        REMOTE=$(git rev-parse origin/"$BRANCH" 2>/dev/null || echo "")
-        if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
-          echo "[Auto-Updater] New updates found ($LOCAL -> $REMOTE). Updating..."
-          cd ..
-          if update_frontend; then
-            echo "[Auto-Updater] Update applied successfully."
-            touch .update_trigger
-          else
-            echo "[Auto-Updater] update_frontend failed; will retry later."
-          fi
-        else
-          echo "[Auto-Updater] Already up to date."
-          cd ..
-        fi
-      else
-        echo "[Auto-Updater] git fetch failed; will retry later."
-        cd ..
-      fi
-    else
-      echo "[Auto-Updater] public/.git missing; checking if frontend download is needed..."
-      if [ ! -f "public/index.html" ]; then
-        if update_frontend; then
-          echo "[Auto-Updater] Frontend downloaded successfully."
-          touch .update_trigger
-        else
-          echo "[Auto-Updater] Download failed; will retry later."
-        fi
-      else
-        echo "[Auto-Updater] Frontend already available."
-      fi
-    fi
-  done
-) &
+# The frontend is only checked for updates here, at container start.
+# To pick up a newer Hochciv version, restart the container.
 
-# 3. Start the Node.js server
+# 2. Start the Node.js server
 echo "Starting Node.js server..."
 exec node server.js

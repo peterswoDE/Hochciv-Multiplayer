@@ -34,7 +34,10 @@ In the `docker-compose.yml`, you can customize the following variables:
 - `MAX_PLAYERS` (default: `4`): Maximum number of players allowed in a single lobby.
 - `CORE_REPO_URL`: The Git URL from which it clones the original frontend Hochciv repository.
 - `CORE_REPO_BRANCH`: The branch to clone for the frontend (e.g. `main`).
-- `UPDATE_INTERVAL_SEC`: How often (in seconds) the container queries the frontend repo for updates.
+- The frontend repo is checked for updates once, at container start. Restart the container to pick up a newer version.
+- `CORE_REPO_COMMIT` (optional, recommended): full 40-character commit SHA. The game engine from that repo runs *inside* this server, so pinning it means only reviewed code is executed. When set, exactly that commit is fetched and verified; if it cannot be fetched the container refuses to start instead of running other code.
+- `SESSION_SECRET` (required): long random string. The server refuses to start in production with one of the publicly known example values.
+- `BASE_URL` (recommended): public URL without trailing slash, e.g. `https://hochciv.example.org`. Used for OAuth callbacks, e-mail links and as the fixed passkey (WebAuthn) origin.
 
 Notes on resilience & offline operation:
 - **Build-Time Bundling**: Pre-built Docker images ship with the core Hochciv frontend already bundled and patched, allowing the server to start up immediately without requiring internet access at startup.

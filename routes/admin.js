@@ -1,9 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { User, Passkey, TotpToken, OAuthProvider } = require('../models');
+const { sequelize, User, Passkey, TotpToken, OAuthProvider } = require('../models');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
+const { refreshOAuthStrategies } = require('../utils/oauth');
+const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
+
+const ROLES = ['user', 'admin', 'superadmin'];
+const isPrivileged = role => role === 'admin' || role === 'superadmin';
+
+/**
+ * Admins manage normal users. Anything that touches an admin/superadmin account, or that
+ * hands out admin rights, needs a superadmin.
+ */
+function mayManage(actor, target) {
+    if (actor.role === 'superadmin') return true;
+    return !isPrivileged(target.role);
+}
 
 // Admin Middleware (allows admin and superadmin)
 function isAdmin(req, res, next) {
@@ -33,8 +47,8 @@ router.get('/metrics', (req, res) => {
 
 router.post('/config', (req, res) => {
     const { maintenanceMode, registrationEnabled } = req.body;
-    if (maintenanceMode !== undefined) serverState.state.maintenanceMode = maintenanceMode;
-    if (registrationEnabled !== undefined) serverState.state.registrationEnabled = registrationEnabled;
+    if (maintenanceMode !== undefined) serverState.state.maintenanceMode = maintenanceMode === true;
+    if (registrationEnabled !== undefined) serverState.state.registrationEnabled = registrationEnabled === true;
     res.json({ ok: true });
 });
 
@@ -77,6 +91,7 @@ router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
     try {
         const targetUser = await User.findByPk(req.params.id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (!mayManage(req.user, targetUser)) return res.status(403).json({ error: 'Nur für Super-Administratoren' });
 
         const { type, tokenId } = req.params;
         if (type === 'totp') {
@@ -110,33 +125,44 @@ router.post('/users/:id/action', async (req, res) => {
 
         const targetUser = await User.findByPk(id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (!mayManage(req.user, targetUser)) return res.status(403).json({ error: 'Nur für Super-Administratoren' });
 
+        let logoutEverywhere = false;
         if (action === 'ban') {
+            if (targetUser.id === req.user.id) return res.status(400).json({ error: 'Du kannst dich nicht selbst bannen.' });
             targetUser.isBanned = true;
+            logoutEverywhere = true;
         } else if (action === 'unban') {
             targetUser.isBanned = false;
         } else if (action === 'set_mmr') {
-            targetUser.mmr = mmr || 1000;
+            const value = Number(mmr);
+            targetUser.mmr = Number.isInteger(value) && value >= 0 && value <= 10000 ? value : 1000;
         } else if (action === 'force_password') {
-            if (!newPassword) return res.status(400).json({ error: 'Neues Passwort fehlt.' });
-            targetUser.password_hash = await bcrypt.hash(newPassword, 10);
-        } else if (action === 'make_admin') {
-            targetUser.role = 'admin';
-        } else if (action === 'set_role') {
-            const { role } = req.body;
-            if (['user', 'admin', 'superadmin'].includes(role)) {
-                targetUser.role = role;
-            } else {
-                return res.status(400).json({ error: 'Ungültige Rolle' });
+            if (!validPassword(newPassword)) {
+                return res.status(400).json({ error: `Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.` });
             }
+            targetUser.password_hash = await bcrypt.hash(newPassword, 10);
+            logoutEverywhere = true;
+        } else if (action === 'make_admin' || action === 'set_role') {
+            const role = action === 'make_admin' ? 'admin' : req.body.role;
+            if (!ROLES.includes(role)) return res.status(400).json({ error: 'Ungültige Rolle' });
+            if (isPrivileged(role) && req.user.role !== 'superadmin') {
+                return res.status(403).json({ error: 'Nur Super-Administratoren vergeben Admin-Rechte.' });
+            }
+            if (targetUser.id === req.user.id) return res.status(400).json({ error: 'Du kannst deine eigene Rolle nicht ändern.' });
+            targetUser.role = role;
         } else if (action === 'reset_mfa') {
             targetUser.totpEnabled = false;
             targetUser.totpSecret = null;
+            await TotpToken.destroy({ where: { UserId: targetUser.id } });
             await Passkey.destroy({ where: { UserId: targetUser.id } });
             targetUser.emailOtpEnabled = true;
+        } else {
+            return res.status(400).json({ error: 'Unbekannte Aktion' });
         }
 
         await targetUser.save();
+        if (logoutEverywhere) await destroyOtherSessions(sequelize, targetUser.id);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: 'Serverfehler' });
@@ -168,8 +194,8 @@ router.post('/lobbies/:id/action', (req, res) => {
         }
         res.json({ ok: true });
     } else if (action === 'broadcast') {
-        if (req.app.locals.io && message) {
-            req.app.locals.io.to(id).emit('sys:message', message);
+        if (req.app.locals.io && typeof message === 'string' && message) {
+            req.app.locals.io.to(id).emit('sys:message', message.slice(0, 500));
             res.json({ ok: true });
         } else {
             res.status(400).json({ error: 'Keine Nachricht oder io nicht bereit' });
@@ -223,10 +249,7 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
         await oauthProvider.save();
 
         // Refresh Passport strategies
-        const { refreshOAuthStrategies } = require('../server');
-        if (typeof refreshOAuthStrategies === 'function') {
-            await refreshOAuthStrategies();
-        }
+        await refreshOAuthStrategies();
 
         res.json({ ok: true });
     } catch (err) {

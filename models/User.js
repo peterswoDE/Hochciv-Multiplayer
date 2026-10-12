@@ -52,6 +52,12 @@ module.exports = (sequelize) => {
             type: DataTypes.DATE,
             allowNull: true,
         },
+        // Wrong guesses on the current activation / reset / e-mail login code
+        codeAttempts: {
+            type: DataTypes.INTEGER,
+            defaultValue: 0,
+            allowNull: false,
+        },
         role: {
             type: DataTypes.STRING,
             defaultValue: 'user',

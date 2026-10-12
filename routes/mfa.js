@@ -4,12 +4,8 @@ const { User, Passkey, TotpToken } = require('../models');
 const totp = require('../utils/totp');
 const qrcode = require('qrcode');
 const { generateRegistrationOptions, verifyRegistrationResponse } = require('@simplewebauthn/server');
-
-// Middleware to ensure authentication
-function isAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) return next();
-    res.status(401).json({ error: 'Nicht eingeloggt' });
-}
+const { isAuthenticated, str } = require('../utils/auth');
+const { rp } = require('../utils/webauthn');
 
 router.use(isAuthenticated);
 
@@ -34,7 +30,7 @@ router.post('/setup-totp', async (req, res) => {
 
 router.post('/verify-totp', async (req, res) => {
     try {
-        const { token } = req.body;
+        const token = str(req.body.token, 10);
         const secret = req.session.pendingTotpSecret;
 
         if (!secret || !token) {
@@ -103,9 +99,7 @@ router.post('/toggle-email-otp', async (req, res) => {
 
 // --- Passkeys (WebAuthn) ---
 
-// Define RP details dynamically based on request
 const rpName = 'Hochciv';
-const getRpID = (req) => req.hostname;
 
 router.get('/tokens', async (req, res) => {
     try {
@@ -134,7 +128,7 @@ router.post('/passkey/generate-registration', async (req, res) => {
 
         const options = await generateRegistrationOptions({
             rpName,
-            rpID: getRpID(req),
+            rpID: rp(req).rpID,
             // v9 used the UTF-8 bytes of the id string as user handle – keep it that way
             userID: new Uint8Array(Buffer.from(user.id, 'utf8')),
             userName: user.email,
@@ -169,12 +163,15 @@ router.post('/passkey/verify-registration', async (req, res) => {
         if (!user.currentChallenge) {
             return res.status(400).json({ error: 'Keine aktive Challenge' });
         }
+        const challenge = user.currentChallenge;
+        user.currentChallenge = null;           // one attempt per challenge
+        await user.save();
 
         const verification = await verifyRegistrationResponse({
             response: body,
-            expectedChallenge: user.currentChallenge,
-            expectedOrigin: req.protocol + '://' + req.get('host'),
-            expectedRPID: getRpID(req),
+            expectedChallenge: challenge,
+            expectedOrigin: rp(req).origin,
+            expectedRPID: rp(req).rpID,
         });
 
         const { verified, registrationInfo } = verification;
@@ -186,12 +183,9 @@ router.post('/passkey/verify-registration', async (req, res) => {
                 credentialID: credential.id,
                 credentialPublicKey: Buffer.from(credential.publicKey),
                 counter: credential.counter,
-                transports: body.response.transports || [],
+                transports: Array.isArray(body.response && body.response.transports) ? body.response.transports : [],
                 UserId: user.id
             });
-
-            user.currentChallenge = null;
-            await user.save();
 
             res.json({ ok: true });
         } else {

@@ -2,25 +2,40 @@ const express = require('express');
 const router = express.Router();
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
+const rateLimitLib = require('express-rate-limit');
+
+// Lobbies live in memory – limit how fast one client can create/join them
+const lobbyLimit = rateLimitLib({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 // ── POST /api/sessions — create a new session ───────────────────────────────
-router.post('/sessions', (req, res) => {
+router.post('/sessions', lobbyLimit, (req, res) => {
     if (serverState.state.maintenanceMode) {
         return res.status(503).json({ error: 'Der Server befindet sich im Wartungsmodus. Es können keine neuen Lobbys erstellt werden.' });
     }
 
     const { config, host } = req.body || {};
-    if (!host || !host.name || !host.clientId) {
+    if (!host || typeof host.name !== 'string' || typeof host.clientId !== 'string' || !host.name || !host.clientId) {
         return res.status(400).json({ error: 'host.name und host.clientId sind erforderlich.' });
     }
+    if (config != null && (typeof config !== 'object' || Array.isArray(config))) {
+        return res.status(400).json({ error: 'Ungültige Konfiguration.' });
+    }
     const result = sessions.createSession(config || {}, host);
+    if (typeof result === 'string') return res.status(503).json({ error: result });
     res.status(201).json(result);
 });
 
 // ── POST /api/sessions/join — join with code + password ─────────────────────
-router.post('/sessions/join', (req, res) => {
+router.post('/sessions/join', lobbyLimit, (req, res) => {
     const { joinCode, password, player } = req.body || {};
-    if (!joinCode || !password || !player || !player.name || !player.clientId) {
+    if (typeof joinCode !== 'string' || typeof password !== 'string' || !joinCode || !password || !player
+        || typeof player.name !== 'string' || typeof player.clientId !== 'string' || !player.name || !player.clientId) {
         return res.status(400).json({ error: 'joinCode, password, player.name und player.clientId sind erforderlich.' });
     }
     const result = sessions.joinSession(joinCode, password, player);
@@ -56,10 +71,15 @@ router.get('/sessions/:id', (req, res) => {
     });
 });
 
-// ── DELETE /api/sessions/:id — host cancels session ─────────────────────────
+// ── DELETE /api/sessions/:id — host cancels session (body: { clientId } of the host)
 router.delete('/sessions/:id', (req, res) => {
     const session = sessions.getSession(req.params.id);
     if (!session) return res.status(404).json({ error: 'Sitzung nicht gefunden.' });
+    const host = session.players[session.hostIndex];
+    const clientId = (req.body || {}).clientId;
+    if (!host || typeof clientId !== 'string' || host.clientId !== clientId) {
+        return res.status(403).json({ error: 'Nur der Host kann die Sitzung beenden.' });
+    }
     sessions.removeSession(req.params.id);
     res.json({ ok: true });
 });

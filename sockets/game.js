@@ -2,6 +2,27 @@ const sessions = require('../sessions');
 const engine = require('../engine-adapter');
 const { User, Game, sequelize } = require('../models');
 const { calculateMMR } = require('../utils/mmr');
+
+/**
+ * Register a socket event handler that cannot take the process down: the payload is
+ * always an object, `ack` is always a function and any exception is logged and acked.
+ */
+function on(socket, event, handler) {
+    socket.on(event, (data, ack) => {
+        const reply = typeof ack === 'function' ? ack : () => { };
+        const payload = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+        try {
+            const r = handler(payload, reply);
+            if (r && typeof r.catch === 'function') {
+                r.catch(err => { console.error(`[Socket] ${event} failed:`, err); reply({ error: 'Serverfehler' }); });
+            }
+        } catch (err) {
+            console.error(`[Socket] ${event} failed:`, err);
+            reply({ error: 'Serverfehler' });
+        }
+    });
+}
+
 /**
  * Register Socket.IO event handlers on the given server instance.
  * @param {import('socket.io').Server} io
@@ -10,33 +31,43 @@ module.exports = function registerHandlers(io) {
 
     io.on('connection', (socket) => {
         let sessionId = null;
-        let playerIndex = null;
         let session = null;
+        let me = null;          // this socket's player object in session.players
+
+        // Players are re-indexed when someone leaves the lobby, so the index is always looked up
+        const myIndex = () => (session ? session.players.indexOf(me) : -1);
+        const bound = () => !!session && myIndex() !== -1;
+        const isHost = () => bound() && myIndex() === session.hostIndex;
 
         // ── Authenticate / bind to a session ─────────────────────────────────
-        socket.on('session:connect', (data, ack) => {
+        // The seat is found by the client's secret clientId (from /api/sessions or /join),
+        // never by an index the client picks.
+        on(socket, 'session:connect', (data, ack) => {
             const s = sessions.getSession(data.sessionId);
-            if (!s) return ack?.({ error: 'Sitzung nicht gefunden.' });
-            if (data.playerIndex == null || !s.players[data.playerIndex])
-                return ack?.({ error: 'Ungültiger Spielerindex.' });
-            if (s.password !== data.password)
-                return ack?.({ error: 'Falsches Passwort.' });
+            if (!s) return ack({ error: 'Sitzung nicht gefunden.' });
+            if (typeof data.password !== 'string' || s.password !== data.password)
+                return ack({ error: 'Falsches Passwort.' });
+            const player = typeof data.clientId === 'string'
+                ? s.players.find(p => p.kind === 'human' && p.clientId === data.clientId) : null;
+            if (!player) return ack({ error: 'Ungültiger Spieler. Bitte erneut beitreten.' });
 
             sessionId = s.id;
-            playerIndex = data.playerIndex;
             session = s;
+            me = player;
+            const playerIndex = myIndex();
 
             sessions.recordActivity(sessionId);
 
-            const oldHostOffline = !s.players[s.hostIndex].connected;
+            const host = s.players[s.hostIndex];
+            const oldHostOffline = !host || !host.connected;
 
             // Mark connected
-            s.players[playerIndex].connected = true;
-            s.players[playerIndex].socketId = socket.id;
+            me.connected = true;
+            me.socketId = socket.id;
             if (socket.request.user) {
-                s.players[playerIndex].dbUserId = socket.request.user.id;
-                s.players[playerIndex].dbUsername = socket.request.user.username;
-                s.players[playerIndex].mmr = socket.request.user.mmr;
+                me.dbUserId = socket.request.user.id;
+                me.dbUsername = socket.request.user.username;
+                me.mmr = socket.request.user.mmr;
             }
 
             // Reclaim host if the lobby was abandoned
@@ -47,13 +78,13 @@ module.exports = function registerHandlers(io) {
             // Join a Socket.IO room for this session
             socket.join(sessionId);
 
-            ack?.({ ok: true, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex });
+            ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
                 playerIndex,
-                name: s.players[playerIndex].name,
-                civ: s.players[playerIndex].civ,
+                name: me.name,
+                civ: me.civ,
                 players: publicPlayers(s),
                 newHostIndex: s.hostIndex
             });
@@ -65,7 +96,7 @@ module.exports = function registerHandlers(io) {
 
             // If game is already playing, send current state to the reconnecting player right away
             if (s.status === 'playing' && s.state) {
-                const sortedStateIndex = engine.stateIndexOf(s.state, playerIndex, s.players[playerIndex]);
+                const sortedStateIndex = engine.stateIndexOf(s.state, playerIndex, me);
                 socket.emit('game:start', {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
                     yourIndex: sortedStateIndex,
@@ -74,12 +105,13 @@ module.exports = function registerHandlers(io) {
         });
 
         // ── Kick Player (Host only) ──────────────────────────────────────────
-        socket.on('session:kick', (data, ack) => {
-            if (!session) return ack?.({ error: 'Nicht verbunden.' });
-            if (playerIndex !== session.hostIndex) return ack?.({ error: 'Nur der Host kann kicken.' });
+        on(socket, 'session:kick', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost()) return ack({ error: 'Nur der Host kann kicken.' });
             sessions.recordActivity(sessionId);
 
             const targetIndex = data.playerIndex;
+            if (!Number.isInteger(targetIndex) || targetIndex === myIndex()) return ack({ error: 'Ungültiger Spieler.' });
             const kickedPlayer = session.players[targetIndex];
 
             if (sessions.kickPlayer(sessionId, targetIndex)) {
@@ -91,64 +123,67 @@ module.exports = function registerHandlers(io) {
                         targetSocket.leave(sessionId);
                     }
                 }
+                fixHostAfterRemoval(session, targetIndex);
 
-                ack?.({ ok: true });
+                ack({ ok: true });
                 io.to(sessionId).emit('player:left', {
                     playerIndex: targetIndex,
                     name: kickedPlayer ? kickedPlayer.name : 'Spieler',
                     players: publicPlayers(session),
+                    newHostIndex: session.hostIndex
                 });
+                sendIndices(io, session);
             } else {
-                ack?.({ error: 'Konnte Spieler nicht kicken.' });
+                ack({ error: 'Konnte Spieler nicht kicken.' });
             }
         });
 
         // ── Update Lobby Config (Host only) ──────────────────────────────────
-        socket.on('lobby:config', (newConfig, ack) => {
-            if (!session) return ack?.({ error: 'Nicht verbunden.' });
-            if (playerIndex !== session.hostIndex) return ack?.({ error: 'Nur der Host kann Einstellungen ändern.' });
+        on(socket, 'lobby:config', (newConfig, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost()) return ack({ error: 'Nur der Host kann Einstellungen ändern.' });
             sessions.recordActivity(sessionId);
 
             const updated = sessions.updateConfig(sessionId, newConfig);
             if (updated) {
-                ack?.({ ok: true });
+                ack({ ok: true });
                 io.to(sessionId).emit('lobby:config:update', updated);
             } else {
-                ack?.({ error: 'Konnte Einstellungen nicht aktualisieren.' });
+                ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
         });
 
         // ── Update Player Config (Lobby) ─────────────────────────────────────
-        socket.on('lobby:player:update', (updates, ack) => {
-            if (!session) return ack?.({ error: 'Nicht verbunden.' });
-            if (session.status !== 'lobby') return ack?.({ error: 'Spiel läuft bereits.' });
+        on(socket, 'lobby:player:update', (updates, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'lobby') return ack({ error: 'Spiel läuft bereits.' });
             sessions.recordActivity(sessionId);
 
-            const updated = sessions.updatePlayer(sessionId, playerIndex, updates);
+            const updated = sessions.updatePlayer(sessionId, myIndex(), updates);
             if (updated) {
-                ack?.({ ok: true });
+                ack({ ok: true });
                 io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
             } else {
-                ack?.({ error: 'Konnte Einstellungen nicht aktualisieren.' });
+                ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
         });
 
         // ── Start the game (host only) ───────────────────────────────────────
-        socket.on('game:start', (_data, ack) => {
-            if (!session) return ack?.({ error: 'Nicht verbunden.' });
-            if (playerIndex !== session.hostIndex)
-                return ack?.({ error: 'Nur der Host kann das Spiel starten.' });
+        on(socket, 'game:start', (_data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost())
+                return ack({ error: 'Nur der Host kann das Spiel starten.' });
             if (session.status !== 'lobby')
-                return ack?.({ error: 'Spiel läuft bereits.' });
+                return ack({ error: 'Spiel läuft bereits.' });
             if (session.players.filter(p => p.kind === 'human').length < 1)
-                return ack?.({ error: 'Mindestens ein Spieler nötig.' });
+                return ack({ error: 'Mindestens ein Spieler nötig.' });
             sessions.recordActivity(sessionId);
 
             const isPlaettchen = session.gameConfig.mapKey === 'plaettchen' || session.gameConfig.mapKey === 'random';
             // Marathon (v83): random map 24 × 36, always four realms, abilities are drafted
             const isMarathon = session.gameConfig.mapKey === 'marathon';
             if (isMarathon && !engine.marathonAvailable())
-                return ack?.({ error: 'Diese Hochciv-Version kennt den Marathon noch nicht.' });
+                return ack({ error: 'Diese Hochciv-Version kennt den Marathon noch nicht.' });
 
             // Check for duplicate civilizations (only if not on a random map).
             // On the marathon map "random" is fine – it is resolved to a civ nobody else has.
@@ -157,9 +192,9 @@ module.exports = function registerHandlers(io) {
                 for (const p of session.players) {
                     if (p.civ === 'random' || p.civ === 'zufall') {
                         if (isMarathon) continue;
-                        return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
+                        return ack({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
                     }
-                    if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Dies ist nur auf der Zufallskarte erlaubt.` });
+                    if (usedCivs.has(p.civ)) return ack({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Dies ist nur auf der Zufallskarte erlaubt.` });
                     usedCivs.add(p.civ);
                 }
             }
@@ -199,9 +234,9 @@ module.exports = function registerHandlers(io) {
 
             try {
                 if (isPlaettchen) {
-                    const seed = session.gameConfig.seed || Math.floor(Math.random() * 2 ** 31);
+                    const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
                     const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
-                    if (!plan) return ack?.({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
+                    if (!plan) return ack({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
 
                     const rnd = engineApi.mapRng(seed + 12345);
                     const humanSeats = [];
@@ -226,7 +261,7 @@ module.exports = function registerHandlers(io) {
                         placedCount: 0
                     };
 
-                    ack?.({ ok: true });
+                    ack({ ok: true });
                     const { setup: _setup, ...publicCfg } = session.gameConfig;
                     io.to(sessionId).emit('placement:start', {
                         cfg: publicCfg,
@@ -242,7 +277,7 @@ module.exports = function registerHandlers(io) {
                     // Map + starting techs first; everyone sees them and drafts abilities
                     engine.startDraft(session);
                     session.status = 'draft';
-                    ack?.({ ok: true });
+                    ack({ ok: true });
                     if (engine.isDraftDone(session)) return finishDraft(io, session);
                     io.to(sessionId).emit('draft:update', engine.draftPayload(session));
                     return;
@@ -252,85 +287,70 @@ module.exports = function registerHandlers(io) {
                 session.status = 'playing';
             } catch (err) {
                 console.error('Error creating game:', err);
-                return ack?.({ error: 'Fehler beim Spielstart: ' + err.message });
+                return ack({ error: 'Fehler beim Spielstart.' });
             }
 
-            ack?.({ ok: true });
+            ack({ ok: true });
             emitGameStart(io, session);
         });
 
         // ── Marathon draft: a human picks an ability ─────────────────────────
-        socket.on('draft:pick', (data, ack) => {
-            if (!session) return ack?.({ error: 'Nicht verbunden.' });
-            if (session.status !== 'draft') return ack?.({ error: 'Kein Draft aktiv.' });
+        on(socket, 'draft:pick', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'draft') return ack({ error: 'Kein Draft aktiv.' });
             sessions.recordActivity(sessionId);
 
-            const err = engine.draftPick(session, playerIndex, data && data.id);
-            if (err) return ack?.({ error: err });
-            ack?.({ ok: true });
+            const err = engine.draftPick(session, myIndex(), data.id);
+            if (err) return ack({ error: err });
+            ack({ ok: true });
 
             if (engine.isDraftDone(session)) return finishDraft(io, session);
             io.to(sessionId).emit('draft:update', engine.draftPayload(session));
         });
 
         // ── Game action ──────────────────────────────────────────────────────
-        socket.on('action', (data, ack) => {
-            if (!session) return ack?.({ error: 'Nicht verbunden.' });
+        on(socket, 'action', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
             if (session.status !== 'playing')
-                return ack?.({ error: 'Spiel läuft nicht.' });
+                return ack({ error: 'Spiel läuft nicht.' });
             if (!session.state)
-                return ack?.({ error: 'Spielstatus fehlt.' });
+                return ack({ error: 'Spielstatus fehlt.' });
+            if (typeof data.type !== 'string') return ack({ error: 'Ungültige Aktion.' });
+            const params = data.params && typeof data.params === 'object' ? data.params : {};
 
-            const lobbyPlayer = session.players[playerIndex];
-            const finalIndex = engine.stateIndexOf(session.state, playerIndex, lobbyPlayer);
+            const finalIndex = engine.stateIndexOf(session.state, myIndex(), me);
 
             if (session.state.cur !== finalIndex)
-                return ack?.({ error: 'Du bist nicht am Zug.' });
+                return ack({ error: 'Du bist nicht am Zug.' });
 
-            const err = engine.applyAction(session.state, finalIndex, data.type, data.params, () => {
+            const err = engine.applyAction(session.state, finalIndex, data.type, params, () => {
                 broadcastState(io, session);
-                if (session.state.over && !session.gameOverProcessed) {
-                    session.gameOverProcessed = true;
-                    session.status = 'finished';
-                    io.to(sessionId).emit('game:over', session.state.over);
-                    const isRanked = session.gameConfig && session.gameConfig.ranked === true;
-                    processGameOverMmr(session, io, sessionId, isRanked);
-                }
+                checkGameOver(io, session);
             });
-            if (err) return ack?.({ error: err });
+            if (err) return ack({ error: err });
 
-            ack?.({ ok: true });
+            ack({ ok: true });
 
             // Re-sync all connected clients immediately after a valid action
             broadcastState(io, session);
-
-            // Check for game over (synchronous, if human won)
-            if (session.state.over && !session.gameOverProcessed) {
-                session.gameOverProcessed = true;
-                session.status = 'finished';
-                io.to(sessionId).emit('game:over', session.state.over);
-
-                // Always record history, calculate MMR only if ranked
-                const isRanked = session.gameConfig && session.gameConfig.ranked === true;
-                processGameOverMmr(session, io, sessionId, isRanked);
-            }
+            checkGameOver(io, session);
         });
 
         // ── Placement actions (for simultaneous plaettchen map) ─────────────────────
-        socket.on('placement:action', (data, ack) => {
-            if (!session || session.status !== 'placement') return ack?.({ error: 'Falscher Status' });
+        on(socket, 'placement:action', (data, ack) => {
+            if (!bound() || session.status !== 'placement') return ack({ error: 'Falscher Status' });
 
             const st = session.placementState;
-            const seat = st.humanSeats.find(s => s.idx === playerIndex);
+            const seat = st.humanSeats.find(s => s.idx === myIndex());
 
-            if (!seat) return ack?.({ error: 'Kein Startplatz für dich reserviert.' });
-            if (seat.cell != null) return ack?.({ error: 'Du hast dein Startplättchen bereits platziert.' });
+            if (!seat) return ack({ error: 'Kein Startplatz für dich reserviert.' });
+            if (seat.cell != null) return ack({ error: 'Du hast dein Startplättchen bereits platziert.' });
 
             const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
-            if (err) return ack?.({ error: err });
+            if (err) return ack({ error: err });
 
             st.placedCount++;
-            ack?.({ ok: true });
+            ack({ ok: true });
 
             if (st.placedCount >= st.humanSeats.length) {
                 // All players have placed! Generate map!
@@ -338,16 +358,7 @@ module.exports = function registerHandlers(io) {
                 try {
                     session.state = engine.createGame(session);
                     session.status = 'playing';
-
-                    session.players.forEach((lobbyPlayer, lobbyIndex) => {
-                        if (lobbyPlayer.socketId) {
-                            const finalIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
-                            io.to(lobbyPlayer.socketId).emit('game:start', {
-                                state: engine.stateForPlayer(session.state, finalIndex),
-                                yourIndex: finalIndex,
-                            });
-                        }
-                    });
+                    emitGameStart(io, session);
                 } catch (e) {
                     console.error('Error starting game after placement', e);
                 }
@@ -356,12 +367,15 @@ module.exports = function registerHandlers(io) {
 
         // ── Disconnect ───────────────────────────────────────────────────────
         socket.on('disconnect', () => {
-            if (session && session.players[playerIndex]) {
-                const isHost = session.hostIndex === playerIndex;
-                const pName = session.players[playerIndex].name;
+            try {
+                // Ignore if this socket was kicked or replaced by a newer connection of the same player
+                if (!bound() || me.socketId !== socket.id) return;
+                const playerIndex = myIndex();
+                const wasHost = session.hostIndex === playerIndex;
+                const pName = me.name;
 
                 if (session.status === 'lobby') {
-                    if (isHost) {
+                    if (wasHost) {
                         sessions.removeSession(sessionId);
                         io.to(sessionId).emit('session:kicked', { reason: 'Der Host hat die Lobby geschlossen.' });
                     } else {
@@ -369,22 +383,24 @@ module.exports = function registerHandlers(io) {
                         if (session.players.length === 0) {
                             sessions.removeSession(sessionId);
                         } else {
+                            fixHostAfterRemoval(session, playerIndex);
                             io.to(sessionId).emit('player:left', {
                                 playerIndex,
                                 name: pName,
                                 players: publicPlayers(session),
                                 newHostIndex: session.hostIndex
                             });
+                            sendIndices(io, session);
                         }
                     }
                 } else {
-                    session.players[playerIndex].connected = false;
-                    session.players[playerIndex].socketId = null;
+                    me.connected = false;
+                    me.socketId = null;
 
-                    if (isHost) {
-                        const nextHost = session.players.find(p => p.connected && p.index !== playerIndex);
+                    if (wasHost) {
+                        const nextHost = session.players.find(p => p.connected && p !== me);
                         if (nextHost) {
-                            session.hostIndex = nextHost.index;
+                            session.hostIndex = session.players.indexOf(nextHost);
                         }
                     }
 
@@ -395,6 +411,8 @@ module.exports = function registerHandlers(io) {
                         newHostIndex: session.hostIndex
                     });
                 }
+            } catch (err) {
+                console.error('[Socket] disconnect failed:', err);
             }
         });
     });
@@ -418,6 +436,30 @@ module.exports = function registerHandlers(io) {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** A lobby player was removed at `removedIndex` – keep hostIndex pointing at the same player. */
+function fixHostAfterRemoval(session, removedIndex) {
+    if (session.hostIndex > removedIndex) session.hostIndex--;
+    if (session.hostIndex >= session.players.length) session.hostIndex = 0;
+}
+
+/** After re-indexing, tell every connected player their new lobby index. */
+function sendIndices(io, session) {
+    session.players.forEach((p, i) => {
+        if (p.socketId) io.to(p.socketId).emit('session:index', { playerIndex: i, hostIndex: session.hostIndex });
+    });
+}
+
+/** Finish the game once: notify everyone and record history / MMR. */
+function checkGameOver(io, session) {
+    if (!session.state.over || session.gameOverProcessed) return;
+    session.gameOverProcessed = true;
+    session.status = 'finished';
+    io.to(session.id).emit('game:over', session.state.over);
+    // Always record history, calculate MMR only if ranked
+    const isRanked = session.gameConfig && session.gameConfig.ranked === true;
+    processGameOverMmr(session, io, session.id, isRanked);
+}
 
 /** Send every connected player the fresh game state and their own state index. */
 function emitGameStart(io, session) {
@@ -527,6 +569,13 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
             } else {
                 p.mmr = 1000; // Fill bot MMR or missing user as baseline
             }
+        }
+
+        // One account on several seats would rate itself against itself – no MMR then
+        const userIds = playersData.map(p => p.dbUserId).filter(Boolean);
+        if (isRanked && new Set(userIds).size !== userIds.length) {
+            console.warn(`[Stats] Game ${sessionId}: one account held several seats – not rated.`);
+            isRanked = false;
         }
 
         if (isRanked) {

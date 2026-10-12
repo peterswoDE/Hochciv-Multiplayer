@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy dependency files first
 COPY package*.json ./
-RUN npm config set strict-ssl false && npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copy application files
 COPY . .
@@ -18,9 +18,17 @@ RUN chmod +x entrypoint.sh
 # Pre-bundle the frontend at build time so the container is fully self-contained and offline-ready
 ARG CORE_REPO_URL="https://github.com/timooom-hash/Hochciv.git"
 ARG CORE_REPO_BRANCH="main"
+# Optional full commit SHA – pins the bundled engine to exactly that commit
+ARG CORE_REPO_COMMIT=""
 RUN mkdir -p public && \
-    (git clone --depth 1 -b "$CORE_REPO_BRANCH" "$CORE_REPO_URL" public || \
-     (curl -fsSL "https://codeload.github.com/timooom-hash/Hochciv/tar.gz/refs/heads/${CORE_REPO_BRANCH}" | tar -xz --strip-components=1 -C public) || \
+    (if [ -n "$CORE_REPO_COMMIT" ]; then \
+       git init -q public && git -C public remote add origin "$CORE_REPO_URL" && \
+       git -C public fetch -q --depth 1 origin "$CORE_REPO_COMMIT" && git -C public checkout -q --detach FETCH_HEAD && \
+       [ "$(git -C public rev-parse HEAD)" = "$CORE_REPO_COMMIT" ]; \
+     else \
+       git clone --depth 1 -b "$CORE_REPO_BRANCH" "$CORE_REPO_URL" public || \
+       (curl -fsSL "https://codeload.github.com/timooom-hash/Hochciv/tar.gz/refs/heads/${CORE_REPO_BRANCH}" | tar -xz --strip-components=1 -C public); \
+     fi || \
      echo "[Build Warning] Could not pre-bundle Hochciv frontend during docker build; will download at runtime.") && \
     if [ -f public/index.html ]; then \
       mkdir -p public/js && \
@@ -28,7 +36,8 @@ RUN mkdir -p public && \
       node -e 'const fs = require("fs"); let h = fs.readFileSync("public/index.html","utf8"); if(!h.includes("js/mp.js")){ h = h.replace("</body>","<script src=\"https://cdn.socket.io/4.8.0/socket.io.min.js\"></script>\n<script src=\"js/mp.js\"></script>\n</body>"); fs.writeFileSync("public/index.html",h); }' && \
       node -e 'const fs = require("fs"); let j = fs.readFileSync("public/js/mp.js","utf8"); j = j.replace(/serverUrl:\s*["\x27]http:\/\/localhost:3000["\x27]/g, "serverUrl: \"\""); fs.writeFileSync("public/js/mp.js", j);' && \
       mkdir -p /app/public_bundled && \
-      cp -r public/* /app/public_bundled/; \
+      cp -r public/* /app/public_bundled/ && \
+      (git -C public rev-parse HEAD > /app/public_bundled/.commit 2>/dev/null || true); \
     fi
 
 RUN chown -R node:node /app

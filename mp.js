@@ -1,3 +1,7 @@
+/** Escape text for use inside HTML (names come from other players). */
+const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const MP = {
     active: false,
     socket: null,
@@ -105,7 +109,7 @@ const MP = {
                 if (sPlayer.kind === 'bot' || sPlayer.kind === 'ki') {
                     displayName += ' <span style="opacity:0.75;font-weight:normal;">(· Bot)</span>';
                 } else if (p && p.name) {
-                    displayName += ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
+                    displayName += ` <span style="opacity:0.75;font-weight:normal;">(${escHtml(p.name)})</span>`;
                     if (p.mmr) {
                         displayName += ` <span style="opacity:0.6;font-size:11px;background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px;margin-left:4px">[${p.mmr} MMR]</span>`;
                     }
@@ -158,8 +162,10 @@ const MP = {
                 } else if (MP.active && MP.sessionId) {
                     MP.socket.emit('session:connect', {
                         sessionId: MP.sessionId,
-                        playerIndex: MP.lobbyIndex,
+                        clientId: MP.getClientId(),
                         password: MP.password
+                    }, ack => {
+                        if (ack && ack.playerIndex !== undefined) MP.lobbyIndex = ack.playerIndex;
                     });
                 }
                 resolve();
@@ -185,6 +191,11 @@ const MP = {
                 MP.active = false;
                 toast(data && data.reason ? data.reason : 'Du wurdest vom Host gekickt.');
                 MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
+            });
+            this.socket.on('session:index', data => {
+                MP.lobbyIndex = data.playerIndex;
+                if (data.hostIndex !== undefined) MP.hostIndex = data.hostIndex;
+                if (MP.renderLobby) MP.renderLobby();
             });
             this.socket.on('lobby:config:update', (newConfig) => {
                 MP.gameConfig = newConfig;
@@ -295,7 +306,7 @@ const MP = {
         if (this.user) {
             authContainer.innerHTML = `
                 <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
-                    <span>Eingeloggt als <b>${this.user.username}</b> (${this.user.mmr} MMR, ${this.user.gamesPlayed} Spiele)</span>
+                    <span>Eingeloggt als <b>${escHtml(this.user.username)}</b> (${escHtml(this.user.mmr)} MMR, ${escHtml(this.user.gamesPlayed)} Spiele)</span>
                     <button class="btn small" onclick="MP.showAccountModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Account & Admin</button>
                     <button class="btn small" onclick="MP.logout()" style="margin:0; padding: 6px 12px; font-size: 13px; background: #c9302c; color: white; border: 1px solid #ac2925; box-shadow: none;">Abmelden</button>
                 </div>
@@ -387,9 +398,9 @@ const MP = {
                             c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
                                 list.map(l => `
                                 <tr style="border-bottom:1px solid #ccc;">
-                                    <td style="padding: 8px 4px;"><b>${l.hostName}</b><br><small>${l.playersCount}/${l.maxPlayers} Spieler</small></td>
+                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${escHtml(l.playersCount)}/${escHtml(l.maxPlayers)} Spieler</small></td>
                                     <td style="padding: 8px 4px; text-align:right;">
-                                        <button class="btn small primary" onclick="MP.joinPublic('${l.joinCode}', '${l.password}')">Beitreten</button>
+                                        <button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">Beitreten</button>
                                     </td>
                                 </tr>
                             `).join('') + '</table>';
@@ -420,7 +431,7 @@ const MP = {
 
                     return `
                     <tr>
-                        <td><b>${p.name}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${p.mmr} MMR]</span>` : ''}</td>
+                        <td><b>${escHtml(p.name)}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${escHtml(p.mmr)} MMR]</span>` : ''}</td>
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
@@ -552,10 +563,11 @@ const MP = {
 
             this.socket.emit('session:connect', {
                 sessionId: this.sessionId,
-                playerIndex: this.lobbyIndex,
+                clientId: this.getClientId(),
                 password: this.password
             }, (ack) => {
                 if (ack.error) return toast(ack.error);
+                if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
                 this.players = ack.players;
@@ -605,10 +617,11 @@ const MP = {
 
             this.socket.emit('session:connect', {
                 sessionId: this.sessionId,
-                playerIndex: this.lobbyIndex,
+                clientId: this.getClientId(),
                 password: this.password
             }, (ack) => {
                 if (ack.error) return toast(ack.error);
+                if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
                 this.players = ack.players;
@@ -669,10 +682,11 @@ const MP = {
 
             this.socket.emit('session:connect', {
                 sessionId: this.sessionId,
-                playerIndex: this.lobbyIndex,
+                clientId: this.getClientId(),
                 password: this.password
             }, (ack) => {
                 if (ack.error) return toast(ack.error);
+                if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
                 this.active = true;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || config;
@@ -920,7 +934,7 @@ if (originalDrawDraft) {
                 note.innerHTML = '<b>Du bist dran!</b> ' + note.innerHTML;
             } else {
                 const seat = MP.players.find(x => x.index === draftState.V.players[cur].slot);
-                note.innerHTML = `Warte auf <b>${seat ? seat.name : 'andere Spieler'}</b> … ` + note.innerHTML;
+                note.innerHTML = `Warte auf <b>${seat ? escHtml(seat.name) : 'andere Spieler'}</b> … ` + note.innerHTML;
             }
         }
         return out;

@@ -1,3 +1,7 @@
+/** Escape text for use inside HTML (usernames, e-mails, player names, …). */
+const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 document.addEventListener('DOMContentLoaded', async () => {
     let currentUser = null;
 
@@ -78,12 +82,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const res = await fetch('/api/account/update-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: document.getElementById('input-email').value })
+            body: JSON.stringify({
+                email: document.getElementById('input-email').value,
+                currentPassword: document.getElementById('input-email-pw').value
+            })
         });
         const json = await res.json();
         if (res.ok) {
             msg.textContent = 'E-Mail erfolgreich aktualisiert!';
             msg.style.color = 'green';
+            document.getElementById('input-email-pw').value = '';
         } else {
             msg.textContent = json.error || 'Fehler beim Speichern.';
             msg.style.color = 'red';
@@ -131,13 +139,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             tbody.innerHTML = historyGames.map((g, idx) => {
                 const date = new Date(g.matchDate).toLocaleString('de-DE');
-                const players = g.participants.map(p => p.name).join(', ');
+                const players = g.participants.map(p => esc(p.name)).join(', ');
                 const isWinner = g.winnerUsername && g.winnerUsername === currentUser.username;
                 return `
                     <tr style="background: ${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}; cursor:pointer;" onclick="showGameDetails(${idx})" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}'">
-                        <td>${date}</td>
-                        <td>${g.durationRounds}</td>
-                        <td>${g.winnerUsername ? (isWinner ? '<b>Du!</b>' : g.winnerUsername) : '-'}</td>
+                        <td>${esc(date)}</td>
+                        <td>${esc(g.durationRounds)}</td>
+                        <td>${g.winnerUsername ? (isWinner ? '<b>Du!</b>' : esc(g.winnerUsername)) : '-'}</td>
                         <td style="font-size:13px">${players}</td>
                     </tr>
                 `;
@@ -174,13 +182,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const mmrColor = x.mmrShift > 0 ? 'green' : (x.mmrShift < 0 ? 'red' : 'inherit');
 
             return `<tr style="border-bottom:1px solid #eee; ${isWinner ? 'font-weight:bold; background:rgba(0,255,0,0.05);' : ''}">
-                <td style="padding:8px;">${x.name} ${x.isBot ? '(Bot)' : ''}</td>
-                <td style="padding:8px;">${x.civ || '-'}</td>
-                <td style="padding:8px;">${pop}</td>
-                <td style="padding:8px;">${won}</td>
-                <td style="padding:8px;">${tech}</td>
-                <td style="padding:8px;"><b>${x.points || 0}</b></td>
-                <td style="padding:8px; color:${mmrColor}; font-weight:bold;">${mmrShift}</td>
+                <td style="padding:8px;">${esc(x.name)} ${x.isBot ? '(Bot)' : ''}</td>
+                <td style="padding:8px;">${esc(x.civ || '-')}</td>
+                <td style="padding:8px;">${esc(pop)}</td>
+                <td style="padding:8px;">${esc(won)}</td>
+                <td style="padding:8px;">${esc(tech)}</td>
+                <td style="padding:8px;"><b>${esc(x.points || 0)}</b></td>
+                <td style="padding:8px; color:${mmrColor}; font-weight:bold;">${esc(mmrShift)}</td>
             </tr>`;
         }).join('');
         tafel += '</table>';
@@ -261,12 +269,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         list.innerHTML = tokens.map(t => {
             let deleteCall = '';
-            if (t.type === 'totp') deleteCall = `deleteToken('totp', null)`;
+            const id = t.id ? `'${esc(t.id)}'` : 'null';
+            if (t.type === 'totp') deleteCall = `deleteToken('totp', ${id})`;
             else if (t.type === 'email') deleteCall = `deleteToken('email', null)`;
-            else if (t.type === 'passkey') deleteCall = `deleteToken('passkey', '${t.id}')`;
+            else if (t.type === 'passkey') deleteCall = `deleteToken('passkey', ${id})`;
             return `
             <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #ccc; padding-bottom:5px;">
-                <span>${t.name}</span>
+                <span>${esc(t.name)}</span>
                 <button onclick="${deleteCall}" style="color:red; background:none; border:none; cursor:pointer;">Löschen</button>
             </div>
             `;
@@ -277,9 +286,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!confirm(type === 'totp' ? 'Authenticator App wirklich entfernen?' : (type === 'email' ? 'E-Mail OTP deaktivieren?' : 'Passkey löschen?'))) return;
 
         if (type === 'passkey') {
-            await fetch('/api/mfa/passkey/' + id, { method: 'DELETE' });
+            await fetch('/api/mfa/passkey/' + encodeURIComponent(id), { method: 'DELETE' });
         } else if (type === 'totp') {
-            await fetch('/api/mfa/disable-totp', { method: 'POST' });
+            await fetch('/api/mfa/totp/' + encodeURIComponent(id || 'null'), { method: 'DELETE' });
         } else if (type === 'email') {
             await fetch('/api/mfa/toggle-email-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) });
         }
@@ -350,12 +359,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const lBody = document.querySelector('#table-admin-lobbies tbody');
             lBody.innerHTML = lobbies.length === 0 ? '<tr><td colspan="4">Keine Lobbys aktiv.</td></tr>' : lobbies.map(l => `
                 <tr>
-                    <td><b>${l.joinCode}</b></td>
-                    <td>${l.status}</td>
+                    <td><b>${esc(l.joinCode)}</b></td>
+                    <td>${esc(l.status)}</td>
                     <td>${l.players.length} Spieler</td>
                     <td>
-                        <button onclick="adminAction('lobby', '${l.id}', 'broadcast')" class="btn small">Rundruf</button>
-                        <button onclick="adminAction('lobby', '${l.id}', 'close')" class="btn small error">Schließen</button>
+                        <button onclick="adminAction('lobby', '${esc(l.id)}', 'broadcast')" class="btn small">Rundruf</button>
+                        <button onclick="adminAction('lobby', '${esc(l.id)}', 'close')" class="btn small error">Schließen</button>
                     </td>
                 </tr>
             `).join('');
@@ -365,26 +374,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const users = await uRes.json();
             const uBody = document.querySelector('#table-admin-users tbody');
             uBody.innerHTML = users.map(u => {
+                const id = esc(u.id);
                 let badges = '';
                 if (u.isBanned) badges += '<span class="badge banned">Banned</span> ';
                 return `
                 <tr>
-                    <td>${u.username} <br><small>${u.email}</small></td>
+                    <td>${esc(u.username)} <br><small>${esc(u.email)}</small></td>
                     <td>
-                        <select onchange="adminChangeRole('${u.id}', this.value)" style="margin-right:8px; padding:2px; border-radius:4px; font-size:12px; background:var(--bg); border:1px solid #ccc; color:var(--text);">
+                        <select onchange="adminChangeRole('${id}', this.value)" style="margin-right:8px; padding:2px; border-radius:4px; font-size:12px; background:var(--bg); border:1px solid #ccc; color:var(--text);">
                             <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
                             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                             <option value="superadmin" ${u.role === 'superadmin' ? 'selected' : ''}>Super Admin</option>
                         </select>
                         ${badges}
                     </td>
-                    <td>${u.gamesPlayed}</td>
-                    <td>${u.mmr}</td>
+                    <td>${esc(u.gamesPlayed)}</td>
+                    <td>${esc(u.mmr)}</td>
                     <td>
-                        <button onclick="adminAction('user', '${u.id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? 'Entbannen' : 'Bannen'}</button>
-                        <button onclick="adminAction('user', '${u.id}', 'force_password')" class="btn small">PW Reset</button>
-                        <button onclick="toggleAdminUserMfa('${u.id}')" class="btn small" style="margin-top: 4px;">MFA Verwalten</button>
-                        <div id="admin-user-mfa-${u.id}" style="display:none; margin-top: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; font-size: 13px;"></div>
+                        <button onclick="adminAction('user', '${id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? 'Entbannen' : 'Bannen'}</button>
+                        <button onclick="adminAction('user', '${id}', 'force_password')" class="btn small">PW Reset</button>
+                        <button onclick="toggleAdminUserMfa('${id}')" class="btn small" style="margin-top: 4px;">MFA Verwalten</button>
+                        <div id="admin-user-mfa-${id}" style="display:none; margin-top: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; font-size: 13px;"></div>
                     </td>
                 </tr>
             `}).join('');
@@ -417,11 +427,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             container.innerHTML = tokens.map(t => {
-                const tokenId = t.id ? `'${t.id}'` : 'null';
+                const tokenId = t.id ? `'${esc(t.id)}'` : 'null';
                 return `
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px; border-bottom:1px solid #ddd; padding-bottom:3px;">
-                    <span>${t.name}</span>
-                    <button onclick="adminDeleteUserMfa('${id}', '${t.type}', ${tokenId})" style="color:red; background:none; border:none; cursor:pointer;">Löschen</button>
+                    <span>${esc(t.name)}</span>
+                    <button onclick="adminDeleteUserMfa('${esc(id)}', '${esc(t.type)}', ${tokenId})" style="color:red; background:none; border:none; cursor:pointer;">Löschen</button>
                 </div>
                 `;
             }).join('');

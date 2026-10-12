@@ -20,6 +20,7 @@ const REMINDER_MS = Number(process.env.ASYNC_REMINDER_MS) || 5 * DAY;
 const SWEEP_MS = Number(process.env.ASYNC_SWEEP_MS) || 10 * 60 * 1000;
 const ACTIVE = ['setup', 'placement', 'draft', 'playing'];
 const MAX_ACTIVE_PER_USER = 30;
+const MAX_PENDING_INVITES = 6;
 
 let io = null;
 const cache = new Map();          // id → { g, queue, touched, busy }
@@ -305,6 +306,10 @@ async function invite(user, id, username) {
         if (!g.seats.some(s => s.userId === user.id)) return { error: 'Nur Mitspieler können einladen.' };
         if (!L.freeSeats(g).length) return { error: 'Es ist kein Platz mehr frei.' };
         if (g.seats.some(s => s.userId === target.id)) return { error: `${target.username} spielt schon mit.` };
+        // Every invitation sends an e-mail – keep the number per game small
+        if (g.invites.filter(i => i.status === 'pending').length >= MAX_PENDING_INVITES) {
+            return { error: 'Zu viele offene Einladungen für dieses Spiel.' };
+        }
         const inv = g.invites.find(i => i.userId === target.id);
         if (inv) inv.status = 'pending';
         else g.invites.push({ userId: target.id, username: target.username, status: 'pending', by: user.username });
