@@ -1492,7 +1492,21 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 0));
     MP.fetchUser().then(() => {
         ASYNC.refreshBadge();
-        const id = new URLSearchParams(location.search).get('async');
+        const params = new URLSearchParams(location.search);
+        // Back from Google/Discord: the server redirects here with ?oauth=<result>
+        const oauth = params.get('oauth');
+        if (oauth) {
+            history.replaceState(null, '', location.pathname);
+            const OAUTH_MESSAGES = {
+                ok: MP.user ? `Angemeldet als ${MP.user.username}.` : 'Anmeldung erfolgreich.',
+                linked: 'Konto erfolgreich verknüpft.',
+                failed: 'Anmeldung abgebrochen oder abgelehnt.',
+                error: 'Bei der Anmeldung ist ein Fehler aufgetreten. Bitte versuche es erneut.',
+            };
+            toast(OAUTH_MESSAGES[oauth] || OAUTH_MESSAGES.error);
+            if (MP.renderMainMenuAuth) MP.renderMainMenuAuth();
+        }
+        const id = params.get('async');
         if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);

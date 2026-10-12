@@ -436,25 +436,27 @@ for (const provider of ['google', 'discord']) {
         passport.authenticate(provider)(req, res, next);
     });
 
+    // Back to the game (served at /); mp.js shows a message for ?oauth=<result>
     router.get(`/${provider}/callback`, (req, res, next) => {
         if (!oauth.isEnabled(provider)) {
-            return res.redirect('/client/');
+            return res.redirect('/?oauth=error');
         }
+        const linking = req.isAuthenticated();     // started from the account page
         passport.authenticate(provider, (err, user, info) => {
             if (err) {
                 console.error(`[OAuth] ${label} Callback Error:`, err);
-                return res.redirect(`/client/?error=oauth_${provider}_error`);
+                return res.redirect('/?oauth=error');
             }
             if (!user) {
                 console.error(`[OAuth] ${label} Auth failed. Info:`, info);
-                return res.redirect(`/client/?error=oauth_${provider}_failed`);
+                return res.redirect('/?oauth=failed');
             }
             req.login(user, (loginErr) => {
                 if (loginErr) {
                     console.error(`[OAuth] ${label} Login Error:`, loginErr);
-                    return res.redirect(`/client/?error=oauth_${provider}_login`);
+                    return res.redirect('/?oauth=error');
                 }
-                res.redirect('/client/');
+                res.redirect(linking ? '/?oauth=linked' : '/?oauth=ok');
             });
         })(req, res, next);
     });
