@@ -4,6 +4,7 @@ const { sequelize, User, Passkey, TotpToken, OAuthProvider } = require('../model
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const { refreshOAuthStrategies } = require('../utils/oauth');
+const config = require('../config');
 const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
 
@@ -213,7 +214,8 @@ router.get('/oauth', isSuperAdmin, async (req, res) => {
             attributes: ['id', 'provider', 'clientId', 'clientSecret', 'enabled']
         });
         // Return a map with all known providers, filling in defaults for missing ones
-        const result = { google: null, discord: null };
+        // callbackBase: what the server really uses in redirect_uri (from BASE_URL)
+        const result = { google: null, discord: null, callbackBase: config.BASE_URL };
         for (const p of providers) {
             result[p.provider] = {
                 id: p.id,

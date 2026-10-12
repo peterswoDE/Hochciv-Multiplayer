@@ -72,6 +72,10 @@ if (process.env.NODE_ENV === 'production') {
         throw new Error('CRITICAL: SESSION_SECRET is a publicly known default. Set a long random value.');
     }
     if (sessionSecret.length < 32) console.warn('[Security] SESSION_SECRET is shorter than 32 characters.');
+    if (!config.WEBAUTHN) {
+        console.warn('[Config] BASE_URL is not set – Google/Discord login will redirect to http://localhost:3000 and fail. ' +
+            'Set BASE_URL=https://<your domain> in the .env next to docker-compose.yml.');
+    }
 }
 
 const pgPool = new pg.Pool({ connectionString: dbUrl });

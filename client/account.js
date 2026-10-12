@@ -55,7 +55,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (btnGoogle && oauthStatus.google) {
                     btnGoogle.removeAttribute('disabled');
                     btnGoogle.textContent = data.googleId ? 'Google aktualisieren' : 'Google verknüpfen';
-                    btnGoogle.onclick = () => window.location.href = '/api/auth/google';
+                    // Top-level navigation: Google refuses to show its login inside the account iframe
+                    btnGoogle.onclick = () => window.top.location.href = '/api/auth/google';
                 }
                 if (btnDiscord && oauthStatus.discord) {
                     btnDiscord.removeAttribute('disabled');
@@ -530,12 +531,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res.ok) return;
             const data = await res.json();
 
-            // Populate callback URLs
-            const baseUrl = window.location.origin;
+            // Callback URLs exactly as the server sends them to Google/Discord (from BASE_URL)
+            const baseUrl = data.callbackBase || window.location.origin;
             const cbGoogle = document.getElementById('oauth-callback-google');
             const cbDiscord = document.getElementById('oauth-callback-discord');
             if (cbGoogle) cbGoogle.textContent = `Google: ${baseUrl}/api/auth/google/callback`;
             if (cbDiscord) cbDiscord.textContent = `Discord: ${baseUrl}/api/auth/discord/callback`;
+            if (cbDiscord && baseUrl !== window.location.origin) {
+                const warn = document.createElement('div');
+                warn.style.cssText = 'color:#c0392b; font-weight:bold; margin-top:6px;';
+                warn.textContent = `Achtung: Der Server verwendet ${baseUrl}, die Seite läuft aber unter ${window.location.origin}. ` +
+                    'BASE_URL in der .env des Servers setzen, sonst schlägt der Login fehl (redirect_uri).';
+                cbDiscord.after(warn);
+            }
 
             // Populate Google fields
             if (data.google) {
