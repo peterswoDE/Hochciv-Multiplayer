@@ -52,7 +52,8 @@ const MP = {
             if (hn && typeof S !== 'undefined' && S && S.players && S.cur !== undefined) {
                 const curCiv = S.players[S.cur].civ;
                 const sPlayer = S.players[S.cur];
-                const p = MP.players.find(x => x.civ === curCiv);
+                // Match by seat (state player .slot = lobby index); fall back to civ for old states
+                const p = MP.players.find(x => sPlayer.slot != null ? x.index === sPlayer.slot : x.civ === curCiv);
 
                 const civDef = typeof CIV_BY_KEY !== 'undefined' ? CIV_BY_KEY[curCiv] : null;
                 const nationName = civDef ? civDef.n : curCiv;
@@ -69,7 +70,7 @@ const MP = {
                 const abBadge = ` <span title="${abDesc.replace(/"/g, '&quot;')}" style="cursor:help; background:rgba(0,0,0,0.1); border:1px solid rgba(0,0,0,0.2); border-radius:4px; padding:1px 6px; font-size:11px; margin-left:6px; display:inline-block; vertical-align:middle; line-height:1.2">${abName}</span>`;
 
                 let displayName = nationName;
-                if (sPlayer.kind === 'bot') {
+                if (sPlayer.kind === 'bot' || sPlayer.kind === 'ki') {
                     displayName += ' <span style="opacity:0.75;font-weight:normal;">(· Bot)</span>';
                 } else if (p && p.name) {
                     displayName += ` <span style="opacity:0.75;font-weight:normal;">(${p.name})</span>`;
@@ -822,6 +823,34 @@ if (originalRedraw) {
     };
 }
 
+// ── Monkey Patch automatic turns ────────────────────────────────────────────
+// ui.js plays bot / KI turns locally (startGameScreen → runBots, afterAutoTurn). In a
+// multiplayer game the server plays them and pushes the result via 'state:update', so
+// running them here as well would desync the client.
+const originalRunBots = window.runBots;
+if (originalRunBots) {
+    window.runBots = function () {
+        if (MP.active) {
+            if (typeof S !== 'undefined' && S && S.over) return gameOver();
+            if (S && S.cur === MP.playerIndex) return humanTurnStart();
+            MP.syncTurnBlocker();
+            return redraw();
+        }
+        return originalRunBots.apply(this, arguments);
+    };
+}
+const originalHumanTurnStart = window.humanTurnStart;
+if (originalHumanTurnStart) {
+    window.humanTurnStart = function () {
+        // Only open the turn-start dialogs (food, free pick …) for the player whose turn it is.
+        if (MP.active && typeof S !== 'undefined' && S && !S.over && S.cur !== MP.playerIndex) {
+            MP.syncTurnBlocker();
+            return redraw();
+        }
+        return originalHumanTurnStart.apply(this, arguments);
+    };
+}
+
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────
 const ACTIONS = {
     doResearch: (state, pi, tech) => ({ type: 'research', params: { tech } }),
@@ -871,7 +900,15 @@ const patchTurnButton = setInterval(() => {
         const origEnd = aEnd.onclick;
         aEnd.onclick = () => {
             if (MP.active) {
+                if (!S || S.over) return;
                 if (MP.playerIndex !== S.cur) return toast('Du bist nicht am Zug!');
+                if (typeof ui !== 'undefined' && ui.botLock) return;
+                // Hard block from ui.js (v80+): an army still standing in a city prevents
+                // ending the turn – the server rejects it too.
+                if (typeof blockingIssues === 'function') {
+                    const stop = blockingIssues(S, S.cur);
+                    if (stop.length) return toast(stop[0]);
+                }
                 // Keep warnings check from original ui.js
                 const warn = pendingWarnings(S, S.cur);
                 if (warn.length && !ui.confirmedEnd) {
@@ -881,7 +918,9 @@ const patchTurnButton = setInterval(() => {
                 ui.confirmedEnd = false; ui.army = null; ui.sel = null; ui.mode = null;
                 closeSheet();
 
-                MP.socket.emit('action', { type: 'endTurn' });
+                MP.socket.emit('action', { type: 'endTurn' }, res => {
+                    if (res && res.error) toast(res.error);
+                });
                 toast('Warte auf Server...');
             } else {
                 origEnd();

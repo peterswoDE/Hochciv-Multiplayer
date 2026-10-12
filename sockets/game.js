@@ -60,7 +60,7 @@ module.exports = function registerHandlers(io) {
 
             // If game is already playing, send current state to the reconnecting player right away
             if (s.status === 'playing' && s.state) {
-                const sortedStateIndex = s.state.players.findIndex(p => p.civ === s.players[playerIndex].civ);
+                const sortedStateIndex = engine.stateIndexOf(s.state, playerIndex, s.players[playerIndex]);
                 socket.emit('game:start', {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
                     yourIndex: sortedStateIndex,
@@ -196,7 +196,8 @@ module.exports = function registerHandlers(io) {
                 if (zaehler[p.civ] > 1 && civ) {
                     const k = lauf[p.civ] = (lauf[p.civ] || 0) + 1;
                     const ROMAN = ['I', 'II', 'III', 'IV'];
-                    p.mappedName = `${civ.n} ${ROMAN[k - 1] || k}`;
+                    p.roman = ROMAN[k - 1] || String(k);
+                    p.mappedName = `${civ.n} ${p.roman}`;
                 }
             });
 
@@ -220,6 +221,11 @@ module.exports = function registerHandlers(io) {
                         }
                     });
 
+                    // v66+: starting techs and wonder pools are rolled before placement
+                    // (the clients roll the same thing locally from the same seed).
+                    session.gameConfig.seed = seed;
+                    session.gameConfig.setup = engine.rollSetup(session, seed);
+
                     session.status = 'placement';
                     session.placementState = {
                         plan, seed, rnd,
@@ -228,8 +234,9 @@ module.exports = function registerHandlers(io) {
                     };
 
                     ack?.({ ok: true });
+                    const { setup: _setup, ...publicCfg } = session.gameConfig;
                     io.to(sessionId).emit('placement:start', {
-                        cfg: session.gameConfig,
+                        cfg: publicCfg,
                         seed,
                         queue: humanSeats,
                         at: 0,
@@ -247,15 +254,15 @@ module.exports = function registerHandlers(io) {
 
             ack?.({ ok: true });
 
-            for (const lobbyPlayer of session.players) {
+            session.players.forEach((lobbyPlayer, lobbyIndex) => {
                 if (lobbyPlayer.socketId) {
-                    const sortedStateIndex = session.state.players.findIndex(p => p.civ === lobbyPlayer.civ);
+                    const sortedStateIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
                     io.to(lobbyPlayer.socketId).emit('game:start', {
                         state: engine.stateForPlayer(session.state, sortedStateIndex),
                         yourIndex: sortedStateIndex,
                     });
                 }
-            }
+            });
         });
 
         // ── Game action ──────────────────────────────────────────────────────
@@ -267,9 +274,7 @@ module.exports = function registerHandlers(io) {
                 return ack?.({ error: 'Spielstatus fehlt.' });
 
             const lobbyPlayer = session.players[playerIndex];
-            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
-            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
-            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+            const finalIndex = engine.stateIndexOf(session.state, playerIndex, lobbyPlayer);
 
             if (session.state.cur !== finalIndex)
                 return ack?.({ error: 'Du bist nicht am Zug.' });
@@ -326,17 +331,15 @@ module.exports = function registerHandlers(io) {
                     session.state = engine.createGame(session);
                     session.status = 'playing';
 
-                    for (const lobbyPlayer of session.players) {
+                    session.players.forEach((lobbyPlayer, lobbyIndex) => {
                         if (lobbyPlayer.socketId) {
-                            const expectedName = lobbyPlayer.mappedName || lobbyPlayer.name || (engine.getEngine().CIVS.find(c => c.k === lobbyPlayer.civ) || {}).n;
-                            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
-                            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lobbyPlayer.civ) : sortedStateIndex;
+                            const finalIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
                             io.to(lobbyPlayer.socketId).emit('game:start', {
                                 state: engine.stateForPlayer(session.state, finalIndex),
                                 yourIndex: finalIndex,
                             });
                         }
-                    }
+                    });
                 } catch (e) {
                     console.error('Error starting game after placement', e);
                 }
@@ -447,9 +450,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
             const lp = session.players[i];
             
             // Map lobby player to state player (indexes can differ due to sorting/barbarians)
-            const expectedName = lp.mappedName || lp.name || (engine.getEngine().CIVS.find(c => c.k === lp.civ) || {}).n;
-            let sortedStateIndex = session.state.players.findIndex(p => p.name === expectedName);
-            const finalIndex = sortedStateIndex === -1 ? session.state.players.findIndex(p => p.civ === lp.civ) : sortedStateIndex;
+            const finalIndex = engine.stateIndexOf(session.state, i, lp);
 
             let points = 0;
             let scoreDetails = null;
@@ -464,7 +465,11 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                 }
             }
 
-            const isWinner = session.state.over && session.state.over.id ? (lp.civ === session.state.over.id) : false;
+            // S.over = { winner, winners: [stateIndex, ...], how, ... } (current engine);
+            // very old engines used { id: civ }.
+            const over = session.state.over || {};
+            const isWinner = Array.isArray(over.winners) ? (finalIndex !== -1 && over.winners.includes(finalIndex))
+                : over.id ? (lp.civ === over.id) : false;
 
             playersData.push({
                 dbUserId: lp.dbUserId,
@@ -523,7 +528,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
         await Game.create({
             version: engine.getEngine().APP_VERSION || 'Unknown',
             durationRounds: session.state.round,
-            winnerUsername: session.state.over && session.state.over.id ? playersData.find(p => p.civ === session.state.over.id)?.dbUsername : null,
+            winnerUsername: playersData.find(p => p.isWinner)?.dbUsername || null,
             participants: playersData
         });
 

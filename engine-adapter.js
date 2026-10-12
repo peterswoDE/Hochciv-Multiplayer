@@ -12,7 +12,10 @@ const vm = require('vm');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
-const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js'];
+// Same order as the <script> tags in Hochciv's index.html (minus the DOM-only tutorial.js/ui.js).
+// ki.js (KI players, kiPlaceSeat) and marathon.js (v83) are pure rule code and must be loaded too.
+const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js', 'ki.js', 'marathon.js'];
+const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js']);
 
 // The sandbox shares a single global object so every file can see the
 // constants and functions defined by the previous one – just like a browser.
@@ -72,7 +75,10 @@ function ensureEngineLoaded() {
     try {
         for (const file of FILES) {
             const filePath = path.join(dir, file);
-            if (!fs.existsSync(filePath)) return false;
+            if (!fs.existsSync(filePath)) {
+                if (OPTIONAL_FILES.has(file)) continue; // older Hochciv versions
+                return false;
+            }
             const code = fs.readFileSync(filePath, 'utf8');
             vm.runInContext(code, sandbox, { filename: file });
         }
@@ -111,20 +117,29 @@ function createGame(session) {
     }
     const cfg = session.gameConfig || {};
 
-    // Build the players array from session.players (lobby order)
+    // Build the players array from session.players (lobby order).
+    // IMPORTANT: newGame() stores the position in this array as `slot` on every state
+    // player. Tile maps (Plättchen) place capitals by slot, and the server maps lobby
+    // players to state players by slot – so the order here must equal lobby order.
     const players = session.players.map(p => ({
         civ: p.civ,
         kind: p.kind || 'human',
         ability: p.ability || 'basis',
-        name: p.name || null,
+        // Humans keep their player name; bots show the nation name (or "England II").
+        name: (p.kind || 'human') === 'human' ? (p.name || null) : null,
+        roman: p.roman || null,
+        color: p.color || null,
         diff: cfg.difficulty || 'prinz',
     }));
 
-    // Fill remaining slots with bots
+    // Fill remaining slots with bots (only if the lobby has fewer than 4 seats; the
+    // socket layer normally fills the lobby up to 4 already). Never add a 5th player –
+    // on tile maps the same civ may appear twice, so "missing civs" is not a criterion.
     const allCivs = ['russland', 'griechenland', 'england', 'wikinger'];
     const taken = new Set(players.map(p => p.civ));
     if (!cfg.duel) {
         for (const civ of allCivs) {
+            if (players.length >= 4) break;
             if (!taken.has(civ)) {
                 players.push({
                     civ, kind: 'bot', ability: 'basis',
@@ -139,7 +154,7 @@ function createGame(session) {
     let map;
     if (cfg.map) {
         map = cfg.map; // Honor map passed from interactive placement or custom setup
-    } else if (cfg.duel && players.length === 2) {
+    } else if (cfg.duel && players.length === 2 && typeof E.duelMap === 'function') {
         map = E.duelMap(players[0].civ, players[1].civ, cfg.seed);
     } else if (cfg.mapKey === 'gross') {
         map = JSON.parse(JSON.stringify(vm.runInContext('MAP_GROSS', sandbox)));
@@ -159,6 +174,12 @@ function createGame(session) {
         wonders: !!cfg.wonders,
         startPlayer: cfg.startPlayer ?? 0,
     };
+    // Tile maps (v66+): starting techs / wonder pools were rolled BEFORE placement
+    // (rollSetup) so players could see them while placing. Reuse that roll.
+    if (cfg.setup) {
+        if (cfg.setup.avail) gameCfg.avail = cfg.setup.avail;
+        if (cfg.setup.wpool) gameCfg.wpool = cfg.setup.wpool;
+    }
 
     return E.newGame(gameCfg);
 }
@@ -179,8 +200,8 @@ function applyAction(state, pi, action, params, onStateChanged) {
     // Only the current player may act
     if (state.cur !== pi) return 'Du bist nicht am Zug.';
     if (state.over) return 'Das Spiel ist vorbei.';
-    // Bots are not controllable
-    if (state.players[pi].kind === 'bot') return 'Bot-Spieler werden automatisch gesteuert.';
+    // Bots / KI are not controllable
+    if (isAutoPlayer(state.players[pi])) return 'Bot-Spieler werden automatisch gesteuert.';
 
     try {
         switch (action) {
@@ -258,11 +279,17 @@ function applyAction(state, pi, action, params, onStateChanged) {
                 return E.nuke(state, pi, params.r, params.c);
 
             // ── Turn ──────────────────────────────────────────────────
-            case 'endTurn':
+            case 'endTurn': {
+                // v80+: an army still standing in a city blocks the end of the turn.
+                if (typeof E.blockingIssues === 'function') {
+                    const stop = E.blockingIssues(state, pi);
+                    if (stop && stop.length) return stop[0];
+                }
                 E.endTurn(state);
                 // Auto-play bot turns
                 runBots(state, onStateChanged);
                 return null;
+            }
 
             default:
                 return `Unbekannte Aktion: ${action}`;
@@ -273,27 +300,62 @@ function applyAction(state, pi, action, params, onStateChanged) {
     }
 }
 
+/** Bots (bot rules) and KI players (human rules, js/ki.js) both move on their own. */
+function isAutoPlayer(p) {
+    if (typeof E.isAuto === 'function') return E.isAuto(p);
+    return !!p && (p.kind === 'bot' || p.kind === 'ki');
+}
+
 /**
- * After a human ends their turn, auto-play all consecutive bot turns asynchronously.
+ * After a human ends their turn, auto-play all consecutive bot / KI turns asynchronously.
+ * Mirrors runBots()/afterAutoTurn() in Hochciv's ui.js: move, finishTurn (combat +
+ * victory check), advanceTurn.
  */
 function runBots(state, onStateChanged) {
     if (!E.botTurn) return;
     const processBots = async () => {
         let guard = 0;
-        while (!state.over && state.players[state.cur].kind === 'bot' && guard < 50) {
+        while (!state.over && isAutoPlayer(state.players[state.cur]) && guard < 50) {
             await new Promise(resolve => setImmediate(resolve));
-            if (state.over || state.players[state.cur].kind !== 'bot') break;
-            
-            E.botTurn(state, state.cur);
+            if (state.over || !isAutoPlayer(state.players[state.cur])) break;
+
+            const p = state.players[state.cur];
+            try {
+                if (p.kind === 'ki' && typeof E.kiTurn === 'function') E.kiTurn(state, state.cur);
+                else E.botTurn(state, state.cur);
+            } catch (err) {
+                console.error(`[Engine Adapter] ${p.kind} turn failed for player ${state.cur}:`, err);
+            }
             E.endTurn(state);
             guard++;
-            
+
             if (onStateChanged) {
                 onStateChanged(state);
             }
         }
     };
     processBots().catch(err => console.error('[Engine Adapter] Bot run error:', err));
+}
+
+/**
+ * Map a lobby seat (index in session.players) to the index in state.players.
+ * newGame() sorts players into turn order and records the original seat as `slot`.
+ */
+function stateIndexOf(state, lobbyIndex, lobbyPlayer) {
+    if (!state || !state.players) return -1;
+    let i = state.players.findIndex(p => p.slot === lobbyIndex);
+    if (i === -1 && lobbyPlayer) i = state.players.findIndex(p => p.civ === lobbyPlayer.civ); // pre-v66 states
+    return i;
+}
+
+/** Roll starting techs / wonder pools for a tile-map game before placement (v66+). */
+function rollSetup(session, seed) {
+    if (!ensureEngineLoaded() || typeof E.rollSetup !== 'function') return null;
+    const cfg = session.gameConfig || {};
+    return E.rollSetup({
+        players: session.players.map(p => ({ civ: p.civ, kind: p.kind || 'human', ability: p.ability || 'basis' })),
+        seed, wonders: !!cfg.wonders, events: !!cfg.events, eventMode: cfg.eventMode || 'hard',
+    });
 }
 
 /**
@@ -307,4 +369,4 @@ function stateForPlayer(state, _pi) {
     return JSON.parse(JSON.stringify(state));
 }
 
-module.exports = { createGame, applyAction, stateForPlayer, getEngine: () => E };
+module.exports = { createGame, applyAction, stateForPlayer, stateIndexOf, rollSetup, getEngine: () => E };
