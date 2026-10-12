@@ -1501,6 +1501,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 ok: MP.user ? `Angemeldet als ${MP.user.username}.` : 'Anmeldung erfolgreich.',
                 linked: 'Konto erfolgreich verknüpft.',
                 failed: 'Anmeldung abgebrochen oder abgelehnt.',
+                taken: 'Dieses Google-/Discord-Konto ist bereits mit einem anderen Hochciv-Konto verknüpft.',
+                banned: 'Dieses Konto ist gesperrt.',
+                state: 'Die Anmeldung ist abgelaufen. Bitte starte sie erneut.',
                 error: 'Bei der Anmeldung ist ein Fehler aufgetreten. Bitte versuche es erneut.',
             };
             toast(OAUTH_MESSAGES[oauth] || OAUTH_MESSAGES.error);

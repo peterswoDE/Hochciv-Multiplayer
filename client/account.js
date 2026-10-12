@@ -54,13 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const btnDiscord = document.getElementById('btn-link-discord');
                 if (btnGoogle && oauthStatus.google) {
                     btnGoogle.removeAttribute('disabled');
-                    btnGoogle.textContent = data.googleId ? 'Google aktualisieren' : 'Google verknüpfen';
+                    btnGoogle.textContent = data.googleLinked ? '✓ Google verknüpft – erneut verknüpfen' : 'Google verknüpfen';
                     // Top-level navigation: Google refuses to show its login inside the account iframe
                     btnGoogle.onclick = () => window.top.location.href = '/api/auth/google';
                 }
                 if (btnDiscord && oauthStatus.discord) {
                     btnDiscord.removeAttribute('disabled');
-                    btnDiscord.textContent = data.discordId ? 'Discord aktualisieren' : 'Discord verknüpfen';
+                    btnDiscord.textContent = data.discordLinked ? '✓ Discord verknüpft – erneut verknüpfen' : 'Discord verknüpfen';
                     btnDiscord.onclick = () => window.top.location.href = '/api/auth/discord';
                 }
             }

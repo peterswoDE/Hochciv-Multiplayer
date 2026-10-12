@@ -1,4 +1,6 @@
-version: '3.8'
+# Local development: builds the image from this folder and mounts the server code, so
+# changes only need a container restart (docker compose -f docker-compose.local.yml restart hochciv-local).
+# Optional SMTP settings go into secrets.env (gitignored). See README.md.
 
 services:
   hochciv-db:
@@ -12,7 +14,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Only reachable from this machine (for DB tools / psql)
+      - "127.0.0.1:5432:5432"
 
   hochciv-local:
     build: .
@@ -24,11 +27,15 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
+      # No NODE_ENV=production: mails are printed to the log, cookies work over http
+      - BASE_URL=http://localhost:3000
       - DATABASE_URL=postgres://hochciv:password123@hochciv-db:5432/hochciv
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
+      # - CORE_REPO_COMMIT=<full commit SHA>   # test a pinned engine version
     env_file:
-      - secrets.env
+      - path: secrets.env
+        required: false
     volumes:
       - ./client:/app/client
       - ./mp.js:/app/mp.js
@@ -42,6 +49,7 @@ services:
       - ./async:/app/async
       - ./config.js:/app/config.js
       - ./engine-adapter.js:/app/engine-adapter.js
+      - ./elevate.js:/app/elevate.js
 
 volumes:
   pgdata:

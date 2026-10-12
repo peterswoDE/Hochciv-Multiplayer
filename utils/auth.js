@@ -24,6 +24,9 @@ function userJson(user) {
         mmr: user.mmr,
         gamesPlayed: user.gamesPlayed,
         role: user.role,
+        // Only whether an account is linked – the provider ids stay on the server
+        googleLinked: !!user.googleId,
+        discordLinked: !!user.discordId,
     };
 }
 

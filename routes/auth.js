@@ -449,7 +449,12 @@ for (const provider of ['google', 'discord']) {
             }
             if (!user) {
                 console.error(`[OAuth] ${label} Auth failed. Info:`, info);
-                return res.redirect('/?oauth=failed');
+                const msg = String((info && info.message) || '');
+                const reason = msg === 'banned' ? 'banned'
+                    : msg.includes('bereits mit einem anderen') ? 'taken'
+                        : /state/i.test(msg) ? 'state'
+                            : 'failed';
+                return res.redirect(`/?oauth=${reason}`);
             }
             req.login(user, (loginErr) => {
                 if (loginErr) {
