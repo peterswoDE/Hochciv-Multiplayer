@@ -96,6 +96,12 @@ module.exports = (sequelize) => {
             type: DataTypes.DATE,
             allowNull: true,
         },
+        // Async games: e-mail when it is your turn, invitations, reminders (opt-out)
+        notifyEmail: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: true,
+            allowNull: false,
+        },
         currentChallenge: {
             type: DataTypes.STRING,
             allowNull: true,

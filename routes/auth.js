@@ -133,13 +133,12 @@ router.post('/login/email-otp/request', rateLimit, async (req, res) => {
         user.emailOtpExpiry = new Date(Date.now() + 10 * 60000); // 10 minutes
         await user.save();
 
-        const mailOptions = {
-            to: user.email,
-            subject: 'Dein Login-Code (2FA)',
-            text: `Dein Login-Code lautet: ${code}\nDieser Code ist 10 Minuten gültig.`,
-            html: `<p>Dein Login-Code lautet: <b>${code}</b></p><p>Dieser Code ist 10 Minuten gültig.</p>`
-        };
-        await sendMail(mailOptions);
+        await sendMail(
+            user.email,
+            'Dein Login-Code (2FA)',
+            `Dein Login-Code lautet: ${code}\nDieser Code ist 10 Minuten gültig.`,
+            `<p>Dein Login-Code lautet: <b>${code}</b></p><p>Dieser Code ist 10 Minuten gültig.</p>`
+        );
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: 'Fehler beim Senden' });

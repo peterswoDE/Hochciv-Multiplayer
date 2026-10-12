@@ -191,6 +191,7 @@ function buildPlayers(session) {
             color: p.color || null,
             diff: cfg.difficulty || 'prinz',
         };
+        if (p.kind === 'ki' && p.kiLevel) pc.kiLevel = p.kiLevel;
         // Marathon: the two abilities chosen in the draft replace the lobby ability
         if (cfg.marathon && Array.isArray(p.drafted)) pc.drafted = p.drafted.slice();
         return pc;
@@ -451,6 +452,93 @@ function rollSetup(session, seed) {
 }
 
 /**
+ * Duplicate civs (tile maps): "England I/II" and a free colour for the second one.
+ * Mutates the lobby-style players ({ civ, roman, color, mappedName }).
+ */
+function assignDoubles(players) {
+    const CIVS = E.CIVS || [];
+    const zaehler = {};
+    players.forEach(p => { zaehler[p.civ] = (zaehler[p.civ] || 0) + 1; });
+    const belegt = new Set();
+    players.forEach(p => { if (!belegt.has(p.civ)) { belegt.add(p.civ); p.colorOf = p.civ; } });
+    players.forEach(p => {
+        if (p.colorOf) return;
+        const frei = CIVS.map(c => c.k).find(k => !belegt.has(k)) || p.civ;
+        belegt.add(frei); p.colorOf = frei;
+    });
+    const lauf = {};
+    const ROMAN = ['I', 'II', 'III', 'IV'];
+    players.forEach(p => {
+        const civ = CIVS.find(c => c.k === p.civ);
+        p.color = p.colorOf === p.civ ? null : (CIVS.find(c => c.k === p.colorOf) || {}).color;
+        delete p.colorOf;
+        p.roman = null; delete p.mappedName;
+        if (zaehler[p.civ] > 1 && civ) {
+            const k = lauf[p.civ] = (lauf[p.civ] || 0) + 1;
+            p.roman = ROMAN[k - 1] || String(k);
+            p.mappedName = `${civ.n} ${p.roman}`;
+        }
+    });
+}
+
+// ── Asynchronous games (play by turn) ────────────────────────────────────────
+// The engine runs a turn as finishTurn → advanceTurn (→ beginTurn of the next player).
+// An async game may have to wait for a seat nobody has claimed yet. It waits BEFORE that
+// seat's beginTurn, so a late joiner's ability already counts for its first income.
+
+/** A constant declared with const/let in the engine files (not visible on the sandbox). */
+function engineConst(name) {
+    ensureEngineLoaded();
+    return vm.runInContext(`typeof ${name} !== 'undefined' ? ${name} : undefined`, sandbox);
+}
+
+/** Lobby slots in turn order, starting with `startSlot` – the same sort as newGame(). */
+function turnOrderSlots(civs, startSlot) {
+    const ORDER = engineConst('ORDER') || [];
+    const slots = civs.map((_, i) => i).sort((a, b) => ORDER.indexOf(civs[a]) - ORDER.indexOf(civs[b]));
+    const k = Math.max(0, slots.indexOf(startSlot));
+    return slots.slice(k).concat(slots.slice(0, k));
+}
+
+/** Index of the player advanceTurn() would move to (skips eliminated players). */
+function peekNext(S) {
+    let i = S.cur, guard = 0;
+    do { i = (i + 1) % S.players.length; guard++; } while (S.players[i].dead && guard < 20);
+    return i;
+}
+
+/** advanceTurn() without the beginTurn() of the next player (round change etc. included). */
+function advanceWithoutBegin(S) {
+    const begin = sandbox.beginTurn;
+    sandbox.beginTurn = () => {};
+    try { E.advanceTurn(S); } finally { sandbox.beginTurn = begin; }
+}
+
+/**
+ * A seat claimed after newGame() gets its ability now. Only valid while the seat has not
+ * had a turn yet. Redoes what newGame() derives from the ability: Siedlertrecks (capital
+ * starts with 2 pop) and the free Viking army.
+ */
+function applyLateAbility(S, pi, ability) {
+    const p = S.players[pi];
+    p.ability = ability || 'basis';
+    const cap = S.cities.find(c => c.owner === pi && c.cap);
+    if (!cap) return;
+    cap.pop = E.isAbil(p, 'siedler') ? 2 : 1;
+    const wantArmy = E.hasAbil(p, 'wikinger', 'basis');
+    const has = S.armies.some(a => a.owner === pi);
+    if (wantArmy && !has) S.armies.push({ id: S.nextId++, owner: pi, r: cap.r, c: cap.c, mp: 0, born: S.round });
+    if (!wantArmy) S.armies = S.armies.filter(a => a.owner !== pi);
+}
+
+/** Play the automatic part of the current player's turn (bot or KI), without ending it. */
+function autoTurn(S) {
+    const p = S.players[S.cur];
+    if (p.kind === 'ki' && typeof E.kiTurn === 'function') E.kiTurn(S, S.cur);
+    else E.botTurn(S, S.cur);
+}
+
+/**
  * Return a sanitised copy of the state for a specific player.
  * Currently sends the full state (the board game has no hidden info
  * beyond dice-roll results, which are seeded).
@@ -464,5 +552,8 @@ function stateForPlayer(state, _pi) {
 module.exports = {
     createGame, applyAction, stateForPlayer, stateIndexOf, rollSetup,
     marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
+    advanceDraft, assignDoubles, isAutoPlayer,
+    engineConst, turnOrderSlots, peekNext, advanceWithoutBegin, applyLateAbility, autoTurn,
+    ensureEngineLoaded,
     getEngine: () => E,
 };

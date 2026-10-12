@@ -41,6 +41,8 @@ services:
       - ./routes:/app/routes
       - ./models:/app/models
       - ./utils:/app/utils
+      - ./async:/app/async
+      - ./config.js:/app/config.js
       - ./engine-adapter.js:/app/engine-adapter.js
 
 volumes:

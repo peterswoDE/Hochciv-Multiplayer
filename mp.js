@@ -12,6 +12,41 @@ const MP = {
     gameConfig: {},
     serverUrl: "",
     user: null,
+    asyncId: null,          // id of the open asynchronous game ("Rundenspiel"), else null
+    lastTurnKey: null,
+
+    /** Send a game action to the server – live lobby or asynchronous game. */
+    sendAction: function (payload, cb) {
+        if (this.asyncId) {
+            this.socket.emit('async:action', { id: this.asyncId, type: payload.type, params: payload.params }, res => {
+                if (res && res.error) { toast(res.error); ASYNC.reload(); }
+                if (cb) cb(res);
+            });
+        } else {
+            this.socket.emit('action', payload, cb);
+        }
+    },
+
+    /** A new authoritative state arrived: redraw, start our turn if it just began. */
+    applyState: function (state) {
+        S = state;
+        MP.syncTurnBlocker();
+        MP.updateHudDelayed();
+        MP.updatePersistentLog();
+        // round + player: also correct when the same player moves again (everyone else bots)
+        const key = S.round + ':' + S.cur;
+        if (S.cur === MP.playerIndex && MP.lastTurnKey !== key && !S.over) {
+            MP.lastTurnKey = key;
+            MP.lastTurn = S.cur;
+            humanTurnStart();
+            MP.animDeinZug();
+        } else {
+            MP.lastTurnKey = key;
+            MP.lastTurn = S.cur;
+            redraw();
+        }
+        if (S.over) gameOver();
+    },
 
     fetchUser: async function () {
         try {
@@ -118,7 +153,9 @@ const MP = {
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
-                if (MP.active && MP.sessionId) {
+                if (MP.active && MP.asyncId) {
+                    ASYNC.reload();
+                } else if (MP.active && MP.sessionId) {
                     MP.socket.emit('session:connect', {
                         sessionId: MP.sessionId,
                         playerIndex: MP.lobbyIndex,
@@ -205,9 +242,11 @@ const MP = {
             });
 
             this.socket.on('game:start', data => {
+                if (MP.asyncId) return;
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
+                MP.lastTurnKey = S.round + ':' + S.cur;
 
                 window.placeState = null;
                 if (typeof draftState !== 'undefined') draftState = null;
@@ -221,22 +260,13 @@ const MP = {
 
 
             this.socket.on('state:update', data => {
-                S = data.state;
-                MP.syncTurnBlocker();
-                MP.updateHudDelayed();
-                MP.updatePersistentLog();
-                // If it's a new turn for us, trigger UI events
-                if (S.cur === MP.playerIndex && MP.lastTurn !== S.cur && !S.over) {
-                    MP.lastTurn = S.cur;
-                    humanTurnStart();
-                    MP.animDeinZug();
-                } else {
-                    MP.lastTurn = S.cur;
-                    redraw();
-                }
-                if (S.over) {
-                    gameOver();
-                }
+                if (MP.asyncId) return;
+                MP.applyState(data.state);
+            });
+
+            // Asynchronous games: the full view (status, seats, state / placement / draft)
+            this.socket.on('async:update', view => {
+                if (view && view.id === MP.asyncId) ASYNC.apply(view);
             });
 
             this.socket.on('game:over', winData => {
@@ -904,9 +934,9 @@ if (originalDraftChoose) {
             if (!D || D.at >= D.order.length) return;
             if (D.order[D.at] !== MP.draftMine()) return toast('Du bist nicht am Zug!');
             $('dr-pool').querySelectorAll('[data-ab]').forEach(b => { b.disabled = true; });
-            MP.socket.emit('draft:pick', { id }, res => {
-                if (res && res.error) { toast(res.error); drawDraft(); }
-            });
+            const done = res => { if (res && res.error) { toast(res.error); drawDraft(); } };
+            if (MP.asyncId) MP.socket.emit('async:draft', { id: MP.asyncId, abilityId: id }, done);
+            else MP.socket.emit('draft:pick', { id }, done);
             return;
         }
         return originalDraftChoose.apply(this, arguments);
@@ -947,7 +977,7 @@ for (const [fnName, makePayload] of Object.entries(ACTIONS)) {
             if (err) return err;
 
             // 2) Validation passed, send command definitively to authoritative server
-            MP.socket.emit('action', makePayload(state, ...args));
+            MP.sendAction(makePayload(state, ...args));
             return null;
         }
         return orig(state, ...args);
@@ -980,8 +1010,8 @@ const patchTurnButton = setInterval(() => {
                 ui.confirmedEnd = false; ui.army = null; ui.sel = null; ui.mode = null;
                 closeSheet();
 
-                MP.socket.emit('action', { type: 'endTurn' }, res => {
-                    if (res && res.error) toast(res.error);
+                MP.sendAction({ type: 'endTurn' }, res => {
+                    if (res && res.error && !MP.asyncId) toast(res.error);
                 });
                 toast('Warte auf Server...');
             } else {
@@ -990,3 +1020,489 @@ const patchTurnButton = setInterval(() => {
         };
     }
 }, 100);
+
+// ════════════════════════════════════════════════════════════════════════════
+// Rundenspiele – asynchronous games (play by turn)
+// Games live in the server database, not in an open lobby. Login required. The list
+// shows your games (badge where it is your turn), invitations and open public games.
+// Opening a game joins its Socket.IO room: every change arrives as 'async:update' with
+// the full view { status, seats, state | placement | draft, … }.
+// ════════════════════════════════════════════════════════════════════════════
+const ASYNC = {
+    view: null,
+    data: null,
+    placing: false,
+    form: null,
+
+    esc: t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+    civ: k => (typeof CIVS !== 'undefined' && CIVS.find(c => c.k === k)) || null,
+    civLabel: function (k) {
+        const c = this.civ(k);
+        return c ? `${typeof SYM !== 'undefined' ? SYM[c.sym] + ' ' : ''}${this.esc(c.n)}` : '?';
+    },
+    mapName: k => ({ '0': 'Originalkarte', gross: 'Große Karte', plaettchen: 'Plättchenkarte', marathon: 'Marathon' })[k] || k,
+    seatsHtml: function (seats, mySlot) {
+        return `<div class="mpa-seats">${seats.map(s => {
+            const who = s.kind === 'bot' ? 'Bot' : s.replaced ? `KI (für ${this.esc(s.name)})` : s.kind === 'ki' ? 'KI'
+                : s.name ? this.esc(s.name) : '<i>frei</i>';
+            return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
+        }).join('')}</div>`;
+    },
+
+    api: async function (path, body) {
+        const res = await fetch(`${MP.serverUrl}/api/async${path}`, body
+            ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'include' }
+            : { cache: 'no-cache', credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Fehler');
+        return data;
+    },
+
+    requireLogin: async function () {
+        await MP.fetchUser();
+        if (MP.user) return true;
+        toast('Rundenspiele gibt es nur mit Anmeldung.');
+        MP.showAuthModal();
+        return false;
+    },
+
+    // ── Menu button with "your turn" badge ───────────────────────────────────
+    refreshBadge: async function () {
+        const btn = $('mp-async-btn');
+        if (!btn) return;
+        let n = 0;
+        if (MP.user) {
+            try { n = (await this.api('')).mine.filter(g => g.yourTurn).length; } catch (_) { }
+        }
+        btn.innerHTML = 'Rundenspiele' + (n ? ` <span class="mpa-badge">${n}</span>` : '');
+    },
+
+    // ── List ─────────────────────────────────────────────────────────────────
+    showList: async function () {
+        if (!(await this.requireLogin())) return;
+        try { this.data = await this.api(''); } catch (e) { return toast(e.message); }
+        const d = this.data;
+        const active = d.mine.filter(g => ['setup', 'placement', 'draft', 'playing'].includes(g.status) && !g.replaced);
+        const turn = active.filter(g => g.yourTurn);
+        const waiting = active.filter(g => !g.yourTurn);
+        const done = d.mine.filter(g => !active.includes(g));
+        const section = (title, list, empty) => `<h4 class="mpa-h">${title}</h4>` +
+            (list.length ? list.map(g => this.row(g)).join('') : `<p class="sub">${empty}</p>`);
+        modal('Rundenspiele', `
+            <div class="mpa-top">
+              <button class="btn primary" onclick="ASYNC.showCreate()">Neues Rundenspiel</button>
+              <span class="mpa-code"><input id="mpa-code" placeholder="Code" maxlength="8">
+              <button class="btn small" onclick="ASYNC.joinByCode()">Beitreten</button></span>
+            </div>
+            <p class="sub">Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer ${d.timeoutDays} Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).</p>
+            ${section('Du bist am Zug', turn, 'Gerade nirgends.')}
+            ${section('Warten auf andere', waiting, 'Keine.')}
+            ${section('Einladungen', d.invites, 'Keine offenen Einladungen.')}
+            ${section('Offene Spiele', d.open, 'Keine öffentlichen Spiele mit freiem Platz.')}
+            ${done.length ? section('Beendet', done.slice(0, 15), '') : ''}
+            <label class="row mpa-notify"><span>E-Mail, wenn ich am Zug bin</span>
+              <input type="checkbox" ${d.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>`);
+        $('overlay').classList.add('wide');
+        this.refreshBadge();
+    },
+
+    row: function (g) {
+        const c = g.config;
+        const statusText = {
+            setup: `Sucht Mitspieler (${g.seats.filter(s => s.userId).length}/${c.humanCount})`,
+            placement: 'Startplättchen legen', draft: 'Fähigkeiten draften',
+            playing: `Runde ${g.round}`, finished: 'Beendet', cancelled: 'Abgebrochen',
+        }[g.status] || g.status;
+        const days = g.deadline ? Math.max(0, Math.ceil((g.deadline - Date.now()) / 864e5)) : null;
+        let info = '';
+        if (g.yourTurn) info = '<span class="mpa-badge">Du bist am Zug</span>' + (days != null ? ` noch ${days} Tag(e)` : '');
+        else if (g.status === 'finished') info = `Gewonnen: ${(g.winners || []).map(this.esc).join(', ') || '—'}`;
+        else if (g.replaced) info = 'Von der KI übernommen';
+        else if (g.waitingFor) info = `Wartet auf ${this.esc(g.waitingFor)}`;
+        const member = g.mySlot != null;
+        const btns = [];
+        if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">Öffnen</button>`);
+        else btns.push(`<button class="btn small primary" onclick="ASYNC.showJoin('${g.id}')">Beitreten</button>`);
+        if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">Ablehnen</button>`);
+        if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">Einladen</button>`);
+        return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
+            <div class="mpa-title"><b>${this.mapName(c.mapKey)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'}${c.ranked ? ' · 🔥 Gewertet' : ''}${c.isPublic ? ' · öffentlich' : ''} · ${statusText}
+              ${member ? `<small class="mpa-c">Code ${g.joinCode}</small>` : ''}</div>
+            ${this.seatsHtml(g.seats, g.mySlot)}
+            <div class="mpa-foot"><span>${info}</span><span>${btns.join(' ')}</span></div></div>`;
+    },
+
+    setNotify: function (on) {
+        this.api('/notify', { email: on }).then(() => toast(on ? 'E-Mails an.' : 'E-Mails aus.')).catch(e => toast(e.message));
+    },
+
+    // ── Create ───────────────────────────────────────────────────────────────
+    showCreate: function () {
+        const f = this.form = this.form || {
+            mapKey: '0', civMode: 'fixed', humanCount: 2, civ: 'russland', ability: 'basis',
+            events: false, eventMode: 'hard', wonders: false, difficulty: 'prinz', ranked: false, isPublic: false, invite: '',
+        };
+        const civ = this.civ(f.civ) || CIVS[0];
+        const marathon = f.mapKey === 'marathon', random = f.civMode === 'random';
+        const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
+        let hint;
+        if (f.mapKey === 'plaettchen' || marathon)
+            hint = 'Erst wenn alle beigetreten sind, ' + (marathon ? 'wird gedraftet' : 'legt jeder sein Startplättchen') + ' – dann beginnt die Partie mit deinem Zug.';
+        else hint = random ? 'Du spielst sofort deinen ersten Zug. Wer beitritt, bekommt den nächsten Platz in der Zugfolge.'
+            : 'Du spielst sofort deinen ersten Zug. Kommt eine Nation an die Reihe, die noch niemand gewählt hat, wartet das Spiel auf sie.';
+        const hardest = DIFFICULTIES[DIFFICULTIES.length - 1].k;
+        modal('Neues Rundenspiel', `
+          <div class="mpa-form" onchange="ASYNC.readForm(true)">
+            <label class="row"><span>Karte</span><select id="mpa-map">
+              ${opt('0', f.mapKey, 'Originalkarte (12 × 18)')}${opt('gross', f.mapKey, 'Große Karte (15 × 24)')}
+              ${opt('plaettchen', f.mapKey, 'Plättchenkarte')}
+              ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, 'Marathon (24 × 36)') : ''}</select></label>
+            <label class="row"><span>Nationen</span><select id="mpa-mode">
+              ${opt('fixed', f.civMode, 'Fest – jeder wählt seine Nation')}${opt('random', f.civMode, 'Zufall – Zugfolge nach Beitritt')}</select></label>
+            <label class="row"><span>Menschliche Spieler</span><select id="mpa-count">
+              ${[2, 3, 4].map(n => opt(n, f.humanCount, n + (n < 4 ? ` (+${4 - n} Bot)` : ''))).join('')}</select></label>
+            ${random ? '' : `<label class="row"><span>Deine Nation</span><select id="mpa-civ">
+              ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
+            ${random || marathon ? '' : `<label class="row"><span>Fähigkeit</span><select id="mpa-ab">
+              ${opt('random', f.ability, 'Zufall')}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select></label>`}
+            <label class="row"><span>Mit Ereignissen</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
+            ${f.events ? `<label class="row"><span>Ereignisstärke</span><select id="mpa-evmode">
+              ${opt('hard', f.eventMode, 'Hart (jede Runde)')}${opt('easy', f.eventMode, 'Leicht (selten)')}</select></label>` : ''}
+            <label class="row"><span>Mit Weltwundern</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
+            <label class="row"><span>Schwierigkeit (Bots)</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
+              ${DIFFICULTIES.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
+            <label class="row"><span>🔥 Gewertet <small>(Bots auf schwerster Stufe)</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
+            <label class="row"><span>Öffentlich auffindbar</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
+            <label class="row"><span>Einladen <small>(Benutzernamen, mit Komma)</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
+          </div>
+          <p class="sub">${hint}</p>
+          <button class="btn wide primary" onclick="ASYNC.create()">Erstellen</button>
+          <button class="btn wide ghost" onclick="ASYNC.showList()">Zurück</button>`);
+    },
+
+    readForm: function (rerender) {
+        const f = this.form, v = id => $(id) ? $(id).value : null, c = id => $(id) ? $(id).checked : false;
+        const civBefore = f.civ;
+        Object.assign(f, {
+            mapKey: v('mpa-map'), civMode: v('mpa-mode'), humanCount: +v('mpa-count'),
+            civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
+            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
+            difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
+            invite: v('mpa-invite') || '',
+        });
+        if (f.civ !== civBefore) f.ability = 'basis';
+        if (rerender) this.showCreate();
+    },
+
+    create: async function () {
+        this.readForm(false);
+        const f = this.form;
+        try {
+            toast('Erstelle Rundenspiel…');
+            const r = await this.api('', {
+                config: {
+                    mapKey: f.mapKey, civMode: f.civMode, humanCount: f.humanCount, events: f.events, eventMode: f.eventMode,
+                    wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic,
+                },
+                civ: f.civ, ability: f.ability,
+                invite: f.invite.split(',').map(x => x.trim()).filter(Boolean),
+            });
+            if (r.inviteErrors && r.inviteErrors.length) toast(r.inviteErrors.join(' '));
+            this.open(r.id);
+        } catch (e) { toast(e.message); }
+    },
+
+    // ── Join / invite / decline ──────────────────────────────────────────────
+    joinByCode: async function () {
+        const code = ($('mpa-code') && $('mpa-code').value || '').trim().toUpperCase();
+        if (!code) return toast('Bitte einen Code eingeben.');
+        try {
+            const g = await this.api('/code/' + encodeURIComponent(code));
+            if (g.mySlot != null) return this.open(g.id);
+            this.showJoin(g.id, code, g);
+        } catch (e) { toast(e.message); }
+    },
+
+    showJoin: async function (id, code, g) {
+        try { g = g || await this.api('/' + id + (code ? '?code=' + encodeURIComponent(code) : '')); }
+        catch (e) { return toast(e.message); }
+        if (!g.freeSeats.length) return toast('Kein Platz mehr frei.');
+        this.joining = { id, code };
+        const c = g.config;
+        let pickHtml;
+        if (c.civMode === 'random') {
+            const s = g.seats[g.freeSeats[0].slot];
+            const ab = (this.civ(s.civ) || { abilities: [] }).abilities.find(a => a.k === s.ability);
+            pickHtml = `<p>Du bekommst den nächsten Platz in der Zugfolge: <b>${this.civLabel(s.civ)}</b>${ab && c.mapKey !== 'marathon' ? ` mit „${this.esc(ab.n)}"` : ''}.</p>`;
+        } else {
+            const civs = [...new Set(g.freeSeats.map(s => s.civ))];
+            pickHtml = `<label class="row"><span>Nation</span><select id="mpa-jciv" onchange="ASYNC.joinAbilities()">
+                ${civs.map(k => `<option value="${k}">${this.esc((this.civ(k) || {}).n || k)}</option>`).join('')}</select></label>
+              ${c.mapKey === 'marathon' ? '<p class="sub">Fähigkeiten werden vor dem ersten Zug gedraftet.</p>'
+                : '<label class="row"><span>Fähigkeit</span><select id="mpa-jab"></select></label>'}`;
+        }
+        modal('Rundenspiel beitreten', `
+            <p><b>${this.mapName(c.mapKey)}</b> · ${c.humanCount} Spieler${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
+            ${this.seatsHtml(g.seats, null)}
+            ${pickHtml}
+            <p class="sub">Du kannst sofort beitreten – ziehen kannst du, sobald du an der Reihe bist. Bis zu deinem ersten Zug kannst du ohne Folgen wieder aussteigen.</p>
+            <button class="btn wide primary" onclick="ASYNC.join()">Beitreten</button>
+            <button class="btn wide ghost" onclick="ASYNC.showList()">Zurück</button>`);
+        this.joinAbilities();
+    },
+
+    joinAbilities: function () {
+        const sel = $('mpa-jab'), civ = $('mpa-jciv') && this.civ($('mpa-jciv').value);
+        if (!sel || !civ) return;
+        sel.innerHTML = '<option value="random">Zufall</option>' +
+            civ.abilities.map(a => `<option value="${a.k}" ${a.k === 'basis' ? 'selected' : ''}>${this.esc(a.n)}</option>`).join('');
+    },
+
+    join: async function () {
+        const j = this.joining;
+        if (!j) return;
+        try {
+            await this.api(`/${j.id}/join`, {
+                code: j.code, civ: $('mpa-jciv') ? $('mpa-jciv').value : undefined,
+                ability: $('mpa-jab') ? $('mpa-jab').value : undefined,
+            });
+            this.open(j.id);
+        } catch (e) { toast(e.message); }
+    },
+
+    decline: async function (id) {
+        try { await this.api(`/${id}/decline`, {}); this.showList(); } catch (e) { toast(e.message); }
+    },
+
+    showInvite: function (id, code) {
+        const back = MP.asyncId === id ? 'ASYNC.reopenModal()' : 'ASYNC.showList()';
+        modal('Mitspieler einladen', `
+            <p>Code zum Weitergeben: <b style="font-family:monospace;font-size:16px">${code}</b></p>
+            <p class="sub">Oder Link: <span style="user-select:all">${this.esc(location.origin + location.pathname + '?async=' + id)}</span></p>
+            <label class="row"><span>Benutzername</span><input type="text" id="mpa-inv-name"></label>
+            <button class="btn wide primary" onclick="ASYNC.invite('${id}')">Einladen</button>
+            <button class="btn wide ghost" onclick="${back}">Zurück</button>`);
+    },
+
+    reopenModal: function () {
+        if (this.view && ['setup', 'placement'].includes(this.view.status)) this.apply(this.view);
+        else closeModal();
+    },
+
+    invite: async function (id) {
+        const name = ($('mpa-inv-name') && $('mpa-inv-name').value || '').trim();
+        if (!name) return toast('Bitte einen Benutzernamen eingeben.');
+        try { await this.api(`/${id}/invite`, { username: name }); toast(`${name} ist eingeladen.`); $('mpa-inv-name').value = ''; }
+        catch (e) { toast(e.message); }
+    },
+
+    leave: async function (id) {
+        if (!confirm('Dieses Rundenspiel verlassen?')) return;
+        try { await this.api(`/${id}/leave`, {}); this.close(); show('screen-menu'); this.showList(); } catch (e) { toast(e.message); }
+    },
+
+    cancel: async function (id) {
+        if (!confirm('Dieses Rundenspiel für alle abbrechen?')) return;
+        try { await this.api(`/${id}/cancel`, {}); this.close(); show('screen-menu'); this.showList(); } catch (e) { toast(e.message); }
+    },
+
+    // ── Open a game ──────────────────────────────────────────────────────────
+    open: async function (id) {
+        if (!(await this.requireLogin())) return;
+        await MP.connect();
+        MP.socket.emit('async:open', { id }, res => {
+            if (res && res.error === 'Bitte anmelden.' && MP.user && !this._retried) {
+                // the socket was opened before logging in – reconnect with the session cookie
+                this._retried = true;
+                MP.socket.disconnect(); MP.socket = null;
+                return this.open(id);
+            }
+            this._retried = false;
+            if (!res || res.error) return toast((res && res.error) || 'Fehler');
+            this.enter(res.view);
+        });
+    },
+
+    reload: function () {
+        if (!MP.asyncId || !MP.socket) return;
+        MP.socket.emit('async:open', { id: MP.asyncId }, res => { if (res && res.view) this.apply(res.view); });
+    },
+
+    enter: function (view) {
+        MP.active = true;
+        MP.asyncId = view.id;
+        MP.sessionId = null;
+        MP.renderLobby = null;
+        MP.lobbyIndex = view.mySlot;
+        MP.lastTurnKey = null;
+        this.view = null;
+        this.placing = false;
+        const credBox = $('mp-cred-box');
+        if (credBox) credBox.textContent = `Rundenspiel ${view.joinCode} · Liste`;
+        this.apply(view);
+    },
+
+    /** Leave the game view (the game itself goes on). */
+    close: function () {
+        if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
+        MP.asyncId = null;
+        MP.active = false;
+        this.view = null;
+        this.placing = false;
+        document.body.classList.remove('mp-waiting');
+        const credBox = $('mp-cred-box');
+        if (credBox) credBox.textContent = '';
+    },
+
+    apply: function (view) {
+        const prev = this.view;
+        this.view = view;
+        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ }));
+        const toastEl = document.querySelector('.mp-waiting-toast');
+        if (toastEl) toastEl.textContent = view.waitingFor ? `Warte auf ${view.waitingFor} …` : 'Warte auf deinen Zug...';
+
+        if (view.status === 'cancelled') {
+            toast('Das Rundenspiel wurde abgebrochen.');
+            this.close(); show('screen-menu'); return this.showList();
+        }
+        if (view.status === 'setup') return this.waitingModal(view, 'Das Spiel beginnt, sobald alle beigetreten sind.');
+        if (view.status === 'placement') {
+            if (view.placement.placed) {
+                this.placing = false;
+                return this.waitingModal(view, 'Dein Startplättchen liegt. Aufgedeckt wird, wenn alle gelegt haben.');
+            }
+            if (!this.placing) this.startPlacement(view);
+            return;
+        }
+        if (view.status === 'draft') {
+            closeModal();
+            draftState = { cfg: null, V: view.draft.V, D: view.draft.D };
+            if (!$('screen-draft').classList.contains('show')) show('screen-draft');
+            return drawDraft();
+        }
+        // playing / finished
+        this.placing = false;
+        const fresh = !prev || !['playing', 'finished'].includes(prev.status) || !$('screen-game').classList.contains('show');
+        MP.playerIndex = view.myIndex;
+        if (fresh) {
+            closeModal();
+            if (typeof draftState !== 'undefined') draftState = null;
+            placeState = null;
+            S = view.state;
+            MP.lastTurnKey = S.round + ':' + S.cur;
+            MP.lastTurn = S.cur;
+            MP.syncTurnBlocker();
+            startGameScreen();
+            MP.updateHudDelayed();
+            MP.updatePersistentLog();
+            if (S.cur === MP.playerIndex && !S.over) MP.animDeinZug();
+        } else {
+            MP.applyState(view.state);
+        }
+    },
+
+    waitingModal: function (view, text) {
+        const c = view.config;
+        const me = view.seats.find(s => s.slot === view.mySlot);
+        const host = view.isHost;
+        modal('Rundenspiel', `
+            <p><b>${this.mapName(c.mapKey)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'} · ${c.humanCount} Spieler${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
+            ${this.seatsHtml(view.seats, view.mySlot)}
+            <p>${text}</p>
+            ${view.waitingFor ? `<p class="sub">Wartet auf: ${this.esc(view.waitingFor)}</p>` : ''}
+            ${view.freeSeats.length ? `<button class="btn wide" onclick="ASYNC.showInvite('${view.id}', '${view.joinCode}')">Mitspieler einladen (Code ${view.joinCode})</button>` : ''}
+            <button class="btn wide primary" onclick="ASYNC.close(); show('screen-menu'); ASYNC.showList()">Zur Liste</button>
+            ${view.status === 'setup' && host ? `<button class="btn wide ghost" onclick="ASYNC.cancel('${view.id}')">Spiel abbrechen</button>` : ''}
+            ${view.status === 'setup' && !host && me ? `<button class="btn wide ghost" onclick="ASYNC.leave('${view.id}')">Spiel verlassen</button>` : ''}`);
+    },
+
+    // ── Start tile placement (tile maps) ─────────────────────────────────────
+    startPlacement: function (view) {
+        const pl = view.placement;
+        const seat = pl.plan.seats.find(s => s.idx === view.mySlot);
+        if (!seat) return this.waitingModal(view, 'Warte auf die anderen Spieler.');
+        closeModal();
+        this.placing = true;
+        placeState = {
+            cfg: { players: pl.players, wonders: pl.wonders }, plan: pl.plan, rnd: mapRng(1),
+            setup: pl.setup, queue: [seat], at: 0, o: 0, cell: null, done: false,
+        };
+        show('screen-place');
+        placeStep();
+        // "Fertig" is bound to placeConfirm at boot – route it to the server while placing
+        $('pl-ok').onclick = () => (ASYNC.placing && MP.asyncId ? ASYNC.confirmPlacement() : placeConfirm());
+    },
+
+    confirmPlacement: function () {
+        const st = placeState;
+        if (!st) return;
+        if (st.cell == null) return toast('Erst die Hauptstadt setzen.');
+        MP.socket.emit('async:place', { id: MP.asyncId, o: st.o, cell: st.cell }, res => {
+            if (res && res.error) return toast(res.error);
+            toast('Startplättchen gelegt.');
+        });
+    },
+};
+
+// Menu button "Rundenspiele" (after "Multiplayer"), and ?async=<id> links from e-mails
+window.addEventListener('DOMContentLoaded', () => {
+    const mNew = $('m-new');
+    if (mNew && !$('mp-async-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'btn primary';
+        btn.id = 'mp-async-btn';
+        btn.textContent = 'Rundenspiele';
+        btn.onclick = () => ASYNC.showList();
+        mNew.parentNode.insertBefore(btn, $('m-continue'));
+    }
+    // Tap the code box in the HUD to go back to the list (the game goes on)
+    const cred = $('mp-cred-wrapper');
+    if (cred) cred.addEventListener('click', () => {
+        if (!MP.asyncId) return;
+        ASYNC.close(); show('screen-menu'); ASYNC.showList();
+    });
+    // In-game menu (☰) of a Rundenspiel: "Zurück zum Hauptmenü" instead of "Spiel beenden"
+    // (which would wipe the local single-player save). Deferred so ui.js has built the modal.
+    const gMenu = $('g-menu');
+    if (gMenu) gMenu.addEventListener('click', () => setTimeout(() => {
+        if (!MP.asyncId) return;
+        const quit = $('mm-quit');
+        if (!quit || $('mm-async-menu')) return;
+        const btn = document.createElement('button');
+        btn.className = 'btn wide primary';
+        btn.id = 'mm-async-menu';
+        btn.textContent = 'Zurück zum Hauptmenü';
+        btn.onclick = () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); };
+        quit.parentNode.insertBefore(btn, quit);
+        quit.remove();
+    }, 0));
+    MP.fetchUser().then(() => {
+        ASYNC.refreshBadge();
+        const id = new URLSearchParams(location.search).get('async');
+        if (id) {
+            history.replaceState(null, '', location.pathname);
+            ASYNC.open(id);
+        }
+    });
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
+        .mpa-top { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+        .mpa-top .btn { width:auto; margin:0; }
+        .mpa-code { display:flex; gap:4px; align-items:center; margin-left:auto; }
+        .mpa-code input { width:90px; text-transform:uppercase; }
+        .mpa-h { margin:14px 0 6px; }
+        .mpa-row { border:1px solid rgba(0,0,0,.15); border-radius:6px; padding:8px 10px; margin-bottom:8px; background:rgba(255,255,255,.4); }
+        .mpa-row.turn { border-color:#c0392b; box-shadow:0 0 0 1px #c0392b inset; }
+        .mpa-title { font-size:14px; }
+        .mpa-c { float:right; font-family:monospace; opacity:.6; }
+        .mpa-seats { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; margin:4px 0; }
+        .mpa-seat.me { font-weight:bold; }
+        .mpa-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; }
+        .mpa-foot .btn { width:auto; margin:0; }
+        .mpa-notify { margin-top:14px; border-top:1px solid rgba(0,0,0,.1); padding-top:10px; }
+        #mp-cred-wrapper { cursor:pointer; }
+    `;
+    document.head.appendChild(style);
+});

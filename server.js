@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const config = require('./config');
 const apiRoutes = require('./routes/api');
 const registerGame = require('./sockets/game');
+const registerAsync = require('./sockets/async');
 
 const pg = require('pg');
 const session = require('express-session');
@@ -123,6 +124,8 @@ const mfaRoutes = require('./routes/mfa');
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/mfa', mfaRoutes);
+// Asynchronous games ("Rundenspiele", play by turn)
+app.use('/api/async', require('./routes/async'));
 
 // Host static frontend files 
 const path = require('path');
@@ -171,6 +174,7 @@ io.engine.use(passport.initialize());
 io.engine.use(passport.session());
 
 registerGame(io);
+registerAsync(io);
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

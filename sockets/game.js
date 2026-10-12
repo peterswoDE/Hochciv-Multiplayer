@@ -192,27 +192,7 @@ module.exports = function registerHandlers(io) {
                 p.ability = pick(civDef.abilities).k;
             });
 
-            const zaehler = {};
-            session.players.forEach(p => { zaehler[p.civ] = (zaehler[p.civ] || 0) + 1; });
-            const belegt = new Set();
-            session.players.forEach(p => { if (!belegt.has(p.civ)) { belegt.add(p.civ); p.colorOf = p.civ; } });
-            session.players.forEach(p => {
-                if (p.colorOf) return;
-                const frei = CIVS.map(c => c.k).find(k => !belegt.has(k)) || p.civ;
-                belegt.add(frei); p.colorOf = frei;
-            });
-            const lauf = {};
-            session.players.forEach(p => {
-                const civ = CIVS.find(c => c.k === p.civ);
-                p.color = p.colorOf === p.civ ? null : (CIVS.find(c => c.k === p.colorOf) || {}).color;
-                delete p.colorOf;
-                if (zaehler[p.civ] > 1 && civ) {
-                    const k = lauf[p.civ] = (lauf[p.civ] || 0) + 1;
-                    const ROMAN = ['I', 'II', 'III', 'IV'];
-                    p.roman = ROMAN[k - 1] || String(k);
-                    p.mappedName = `${civ.n} ${p.roman}`;
-                }
-            });
+            engine.assignDoubles(session.players);
 
             // Update clients immediately with finalized synced randomly rolled names & abilities
             io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));

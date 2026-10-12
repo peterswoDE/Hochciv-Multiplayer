@@ -10,13 +10,14 @@ const transporter = nodemailer.createTransport({
 });
 
 const sendMail = async (to, subject, text, html) => {
-    // If SMTP is not configured, we just log it to output so the user can test locally without an email server
-    if (!process.env.SMTP_HOST) {
+    // Outside production (local/staging) always log mails, so codes and links can be read from the console
+    if (process.env.NODE_ENV !== 'production' || !process.env.SMTP_HOST) {
         console.log('\n--- SIMULATED EMAIL ---');
         console.log(`To: ${to}\nSubject: ${subject}\nText:\n${text}`);
         console.log('-----------------------\n');
-        return true;
     }
+    // If SMTP is not configured, logging is all we do
+    if (!process.env.SMTP_HOST) return true;
 
     try {
         await transporter.sendMail({
