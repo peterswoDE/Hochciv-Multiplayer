@@ -58,6 +58,11 @@ module.exports = function registerHandlers(io) {
                 newHostIndex: s.hostIndex
             });
 
+            // Marathon draft in progress: show the reconnecting player the draft screen
+            if (s.status === 'draft' && s.draft) {
+                socket.emit('draft:update', engine.draftPayload(s));
+            }
+
             // If game is already playing, send current state to the reconnecting player right away
             if (s.status === 'playing' && s.state) {
                 const sortedStateIndex = engine.stateIndexOf(s.state, playerIndex, s.players[playerIndex]);
@@ -140,12 +145,20 @@ module.exports = function registerHandlers(io) {
             sessions.recordActivity(sessionId);
 
             const isPlaettchen = session.gameConfig.mapKey === 'plaettchen' || session.gameConfig.mapKey === 'random';
+            // Marathon (v83): random map 24 × 36, always four realms, abilities are drafted
+            const isMarathon = session.gameConfig.mapKey === 'marathon';
+            if (isMarathon && !engine.marathonAvailable())
+                return ack?.({ error: 'Diese Hochciv-Version kennt den Marathon noch nicht.' });
 
-            // Check for duplicate civilizations (only if not on a random map)
+            // Check for duplicate civilizations (only if not on a random map).
+            // On the marathon map "random" is fine – it is resolved to a civ nobody else has.
             if (!isPlaettchen) {
                 const usedCivs = new Set();
                 for (const p of session.players) {
-                    if (p.civ === 'random' || p.civ === 'zufall') return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
+                    if (p.civ === 'random' || p.civ === 'zufall') {
+                        if (isMarathon) continue;
+                        return ack?.({ error: 'Zufällige Zivilisationen sind nur auf der Zufallskarte erlaubt!' });
+                    }
                     if (usedCivs.has(p.civ)) return ack?.({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Dies ist nur auf der Zufallskarte erlaubt.` });
                     usedCivs.add(p.civ);
                 }
@@ -245,6 +258,16 @@ module.exports = function registerHandlers(io) {
                     return;
                 }
 
+                if (isMarathon) {
+                    // Map + starting techs first; everyone sees them and drafts abilities
+                    engine.startDraft(session);
+                    session.status = 'draft';
+                    ack?.({ ok: true });
+                    if (engine.isDraftDone(session)) return finishDraft(io, session);
+                    io.to(sessionId).emit('draft:update', engine.draftPayload(session));
+                    return;
+                }
+
                 session.state = engine.createGame(session);
                 session.status = 'playing';
             } catch (err) {
@@ -253,16 +276,21 @@ module.exports = function registerHandlers(io) {
             }
 
             ack?.({ ok: true });
+            emitGameStart(io, session);
+        });
 
-            session.players.forEach((lobbyPlayer, lobbyIndex) => {
-                if (lobbyPlayer.socketId) {
-                    const sortedStateIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
-                    io.to(lobbyPlayer.socketId).emit('game:start', {
-                        state: engine.stateForPlayer(session.state, sortedStateIndex),
-                        yourIndex: sortedStateIndex,
-                    });
-                }
-            });
+        // ── Marathon draft: a human picks an ability ─────────────────────────
+        socket.on('draft:pick', (data, ack) => {
+            if (!session) return ack?.({ error: 'Nicht verbunden.' });
+            if (session.status !== 'draft') return ack?.({ error: 'Kein Draft aktiv.' });
+            sessions.recordActivity(sessionId);
+
+            const err = engine.draftPick(session, playerIndex, data && data.id);
+            if (err) return ack?.({ error: err });
+            ack?.({ ok: true });
+
+            if (engine.isDraftDone(session)) return finishDraft(io, session);
+            io.to(sessionId).emit('draft:update', engine.draftPayload(session));
         });
 
         // ── Game action ──────────────────────────────────────────────────────
@@ -411,12 +439,38 @@ module.exports = function registerHandlers(io) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Send every connected player the fresh game state and their own state index. */
+function emitGameStart(io, session) {
+    session.players.forEach((lobbyPlayer, lobbyIndex) => {
+        if (lobbyPlayer.socketId) {
+            const finalIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
+            io.to(lobbyPlayer.socketId).emit('game:start', {
+                state: engine.stateForPlayer(session.state, finalIndex),
+                yourIndex: finalIndex,
+            });
+        }
+    });
+}
+
+/** Marathon: all abilities are drafted – start the real game with them. */
+function finishDraft(io, session) {
+    try {
+        session.state = engine.finishDraft(session);
+        session.status = 'playing';
+        io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
+        emitGameStart(io, session);
+    } catch (e) {
+        console.error('Error starting game after draft', e);
+    }
+}
+
 function publicPlayers(session) {
     return session.players.map(p => ({
         index: p.index,
         name: p.name,
         civ: p.civ,
         ability: p.ability,
+        drafted: p.drafted || null,     // Marathon: the two drafted abilities
         connected: p.connected,
         mmr: p.mmr || 1000
     }));
@@ -477,6 +531,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                 name: lp.name,
                 civ: lp.civ,
                 ability: lp.ability,
+                drafted: lp.drafted || null,
                 isBot: lp.kind === 'bot',
                 points: points,
                 scoreDetails: scoreDetails,

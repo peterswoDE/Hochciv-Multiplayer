@@ -58,16 +58,13 @@ const MP = {
                 const civDef = typeof CIV_BY_KEY !== 'undefined' ? CIV_BY_KEY[curCiv] : null;
                 const nationName = civDef ? civDef.n : curCiv;
 
-                let abName = sPlayer.ability || 'basis';
-                let abDesc = '';
-                if (civDef && civDef.abilities) {
-                    const abDef = civDef.abilities.find(a => a.k === abName);
-                    if (abDef) {
-                        abName = abDef.n;
-                        abDesc = abDef.e;
-                    }
+                // abilInfos (v83) knows both the lobby ability and the two drafted in Marathon
+                let abils = typeof abilInfos === 'function' ? abilInfos(sPlayer) : null;
+                if (!abils) {
+                    const abDef = civDef && civDef.abilities ? civDef.abilities.find(a => a.k === (sPlayer.ability || 'basis')) : null;
+                    abils = [abDef || { n: sPlayer.ability || 'basis', e: '' }];
                 }
-                const abBadge = ` <span title="${abDesc.replace(/"/g, '&quot;')}" style="cursor:help; background:rgba(0,0,0,0.1); border:1px solid rgba(0,0,0,0.2); border-radius:4px; padding:1px 6px; font-size:11px; margin-left:6px; display:inline-block; vertical-align:middle; line-height:1.2">${abName}</span>`;
+                const abBadge = abils.map(a => ` <span title="${(a.e || '').replace(/"/g, '&quot;')}" style="cursor:help; background:rgba(0,0,0,0.1); border:1px solid rgba(0,0,0,0.2); border-radius:4px; padding:1px 6px; font-size:11px; margin-left:6px; display:inline-block; vertical-align:middle; line-height:1.2">${a.n}</span>`).join('');
 
                 let displayName = nationName;
                 if (sPlayer.kind === 'bot' || sPlayer.kind === 'ki') {
@@ -196,12 +193,24 @@ const MP = {
                 }
             });
 
+            // Marathon (v83): the server runs the ability draft; we draw Hochciv's own draft
+            // screen from its preview state V and draft D (see drawDraft/draftChoose patches).
+            this.socket.on('draft:update', data => {
+                if (!data || typeof drawDraft !== 'function') return;
+                MP.renderLobby = null; closeModal();
+                document.body.classList.remove('mp-waiting');
+                draftState = { cfg: null, V: data.V, D: data.D };
+                if (!$('screen-draft').classList.contains('show')) show('screen-draft');
+                drawDraft();
+            });
+
             this.socket.on('game:start', data => {
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastTurn = S.cur;
 
                 window.placeState = null;
+                if (typeof draftState !== 'undefined') draftState = null;
                 document.body.classList.remove('mp-waiting');
 
                 MP.syncTurnBlocker();
@@ -365,6 +374,8 @@ const MP = {
                 this._publicListTimer = setInterval(fetchList, 5000);
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
+                // Marathon (v83): abilities are drafted before the first turn – no choice here
+                const isMarathon = this.gameConfig.mapKey === 'marathon';
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
@@ -383,7 +394,8 @@ const MP = {
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
-                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
+                            ${isMarathon ? '<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">Fähigkeiten: Draft vor dem ersten Zug</small>' : ''}
                         </td>
                         <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
@@ -404,8 +416,10 @@ const MP = {
                   <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>Originalkarte (12 × 18)</option>
                   <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>Große Karte (15 × 24)</option>
                   <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>Zufall</option>
+                  ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>Marathon (24 × 36)</option>` : ''}
                 </select>
               </label>
+              ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.</p>` : ''}
               <label class="row"><span>Mit Ereignissen</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
@@ -521,7 +535,7 @@ const MP = {
                 const credBox = $('mp-cred-box');
                 if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
 
-                if (ack.status === 'playing') {
+                if (ack.status === 'playing' || ack.status === 'draft') {
                     toast('Spiel läuft, lade Zustand...');
                 }
                 else {
@@ -574,7 +588,7 @@ const MP = {
                 const credBox = $('mp-cred-box');
                 if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
 
-                if (ack.status === 'playing') {
+                if (ack.status === 'playing' || ack.status === 'draft') {
                     toast('Spiel läuft, lade Zustand...');
                 }
                 else {
@@ -848,6 +862,54 @@ if (originalHumanTurnStart) {
             return redraw();
         }
         return originalHumanTurnStart.apply(this, arguments);
+    };
+}
+
+// ── Monkey Patch Marathon draft (v83) ───────────────────────────────────────
+// The server holds the draft and plays the KI picks. Locally we only draw it; a click
+// goes to the server, which answers every client with 'draft:update' – and with
+// 'game:start' once the last ability is picked (so there is no "Spiel beginnen" here).
+MP.draftMine = function () {
+    if (typeof draftState === 'undefined' || !draftState || !draftState.V) return -1;
+    return draftState.V.players.findIndex(p => p.slot === MP.lobbyIndex);
+};
+const originalDrawDraft = window.drawDraft;
+if (originalDrawDraft) {
+    window.drawDraft = function () {
+        const out = originalDrawDraft.apply(this, arguments);
+        if (MP.active && draftState && draftState.D) {
+            const D = draftState.D;
+            const cur = D.at < D.order.length ? D.order[D.at] : null;
+            const mine = cur != null && cur === MP.draftMine();
+            $('dr-go').hidden = true;
+            if (!mine) $('dr-pool').querySelectorAll('[data-ab]').forEach(b => { b.disabled = true; });
+            const note = $('dr-note');
+            if (cur == null) {
+                note.innerHTML += ' Das Spiel startet …';
+            } else if (mine) {
+                note.innerHTML = '<b>Du bist dran!</b> ' + note.innerHTML;
+            } else {
+                const seat = MP.players.find(x => x.index === draftState.V.players[cur].slot);
+                note.innerHTML = `Warte auf <b>${seat ? seat.name : 'andere Spieler'}</b> … ` + note.innerHTML;
+            }
+        }
+        return out;
+    };
+}
+const originalDraftChoose = window.draftChoose;
+if (originalDraftChoose) {
+    window.draftChoose = function (id) {
+        if (MP.active) {
+            const D = draftState && draftState.D;
+            if (!D || D.at >= D.order.length) return;
+            if (D.order[D.at] !== MP.draftMine()) return toast('Du bist nicht am Zug!');
+            $('dr-pool').querySelectorAll('[data-ab]').forEach(b => { b.disabled = true; });
+            MP.socket.emit('draft:pick', { id }, res => {
+                if (res && res.error) { toast(res.error); drawDraft(); }
+            });
+            return;
+        }
+        return originalDraftChoose.apply(this, arguments);
     };
 }
 

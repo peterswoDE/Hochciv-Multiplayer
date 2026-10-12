@@ -116,21 +116,7 @@ function createGame(session) {
         throw new Error('Game Engine ist noch nicht bereit (Frontend-Dateien fehlen). Bitte kurz warten.');
     }
     const cfg = session.gameConfig || {};
-
-    // Build the players array from session.players (lobby order).
-    // IMPORTANT: newGame() stores the position in this array as `slot` on every state
-    // player. Tile maps (Plättchen) place capitals by slot, and the server maps lobby
-    // players to state players by slot – so the order here must equal lobby order.
-    const players = session.players.map(p => ({
-        civ: p.civ,
-        kind: p.kind || 'human',
-        ability: p.ability || 'basis',
-        // Humans keep their player name; bots show the nation name (or "England II").
-        name: (p.kind || 'human') === 'human' ? (p.name || null) : null,
-        roman: p.roman || null,
-        color: p.color || null,
-        diff: cfg.difficulty || 'prinz',
-    }));
+    const players = buildPlayers(session);
 
     // Fill remaining slots with bots (only if the lobby has fewer than 4 seats; the
     // socket layer normally fills the lobby up to 4 already). Never add a 5th player –
@@ -173,15 +159,121 @@ function createGame(session) {
         eventMode: cfg.eventMode || 'hard',
         wonders: !!cfg.wonders,
         startPlayer: cfg.startPlayer ?? 0,
+        // Marathon (v83): bigger tech costs; the map and drafted abilities come from the draft
+        marathon: !!cfg.marathon,
     };
-    // Tile maps (v66+): starting techs / wonder pools were rolled BEFORE placement
-    // (rollSetup) so players could see them while placing. Reuse that roll.
+    // Tile maps (v66+) and Marathon: starting techs / wonder pools were rolled BEFORE
+    // placement / the draft (rollSetup) so players could see them. Reuse that roll.
     if (cfg.setup) {
         if (cfg.setup.avail) gameCfg.avail = cfg.setup.avail;
         if (cfg.setup.wpool) gameCfg.wpool = cfg.setup.wpool;
     }
 
     return E.newGame(gameCfg);
+}
+
+/**
+ * Players array for newGame() from session.players (lobby order).
+ * IMPORTANT: newGame() stores the position in this array as `slot` on every state
+ * player. Tile maps (Plättchen) and Marathon maps place capitals by slot, and the server
+ * maps lobby players to state players by slot – so the order here must equal lobby order.
+ */
+function buildPlayers(session) {
+    const cfg = session.gameConfig || {};
+    return session.players.map(p => {
+        const pc = {
+            civ: p.civ,
+            kind: p.kind || 'human',
+            ability: p.ability || 'basis',
+            // Humans keep their player name; bots show the nation name (or "England II").
+            name: (p.kind || 'human') === 'human' ? (p.name || null) : null,
+            roman: p.roman || null,
+            color: p.color || null,
+            diff: cfg.difficulty || 'prinz',
+        };
+        // Marathon: the two abilities chosen in the draft replace the lobby ability
+        if (cfg.marathon && Array.isArray(p.drafted)) pc.drafted = p.drafted.slice();
+        return pc;
+    });
+}
+
+// ── Marathon (v83): map, starting techs and ability draft ────────────────────
+// Mirrors startMarathon()/draftAdvance()/draftGo() in Hochciv's ui.js, but the server
+// holds the draft: { V: preview state without abilities, D: pool / order / picks }.
+// D.picks and D.order use indices into V.players (turn order), not lobby seats.
+
+function marathonAvailable() {
+    return ensureEngineLoaded() && typeof E.marathonMap === 'function' && typeof E.draftNew === 'function';
+}
+
+const draftCurrent = D => D.at < D.order.length ? D.order[D.at] : null;
+const draftDone = D => D.at >= D.order.length;
+
+/** Generate the map, roll starting techs and open the draft. Stores it on session.draft. */
+function startDraft(session) {
+    if (!marathonAvailable()) throw new Error('Diese Hochciv-Version kennt den Marathon noch nicht.');
+    const cfg = session.gameConfig;
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    const base = {
+        players: buildPlayers(session),
+        map: E.marathonMap(seed),
+        seed, marathon: true,
+        events: !!cfg.events, eventMode: cfg.eventMode || 'hard',
+        wonders: !!cfg.wonders,
+        startPlayer: cfg.startPlayer ?? 0,
+    };
+    const setup = E.rollSetup(base);
+    base.avail = setup.avail; base.wpool = setup.wpool;
+    const V = E.draftView(base);                 // the same game, still without abilities
+    const D = E.draftNew(V, seed + 1);
+
+    // createGame() later starts the real game with exactly this map and these rolls
+    Object.assign(cfg, { seed, marathon: true, map: base.map, setup });
+    session.players.forEach(p => { delete p.drafted; });
+    session.draft = { V, D };
+    advanceDraft(session);
+}
+
+/** KI seats pick immediately when it is their turn (bots do not draft). */
+function advanceDraft(session) {
+    const { V, D } = session.draft;
+    while (!draftDone(D) && V.players[draftCurrent(D)].kind === 'ki') {
+        const pi = draftCurrent(D);
+        E.draftPick(D, pi, E.kiDraftPick(V, D, pi));
+    }
+}
+
+/** A lobby player picks ability `id`. Returns an error message or null. */
+function draftPick(session, lobbyIndex, id) {
+    if (!session.draft) return 'Kein Draft aktiv.';
+    const { V, D } = session.draft;
+    const vi = stateIndexOf(V, lobbyIndex, session.players[lobbyIndex]);
+    if (vi === -1 || draftCurrent(D) !== vi) return 'Du bist nicht am Zug.';
+    const err = E.draftPick(D, vi, String(id));
+    if (err) return err;
+    advanceDraft(session);
+    return null;
+}
+
+function isDraftDone(session) {
+    return !!session.draft && draftDone(session.draft.D);
+}
+
+/** Hand the drafted abilities to the lobby players and create the real game. */
+function finishDraft(session) {
+    const { V, D } = session.draft;
+    V.players.forEach((p, i) => {
+        if (p.kind !== 'bot' && session.players[p.slot]) session.players[p.slot].drafted = D.picks[i].slice();
+    });
+    const state = createGame(session);
+    session.draft = null;
+    return state;
+}
+
+/** What the clients need to draw the draft screen (deep copy). */
+function draftPayload(session) {
+    if (!session.draft) return null;
+    return JSON.parse(JSON.stringify({ V: session.draft.V, D: session.draft.D }));
 }
 
 // ── Action dispatch ──────────────────────────────────────────────────────────
@@ -369,4 +461,8 @@ function stateForPlayer(state, _pi) {
     return JSON.parse(JSON.stringify(state));
 }
 
-module.exports = { createGame, applyAction, stateForPlayer, stateIndexOf, rollSetup, getEngine: () => E };
+module.exports = {
+    createGame, applyAction, stateForPlayer, stateIndexOf, rollSetup,
+    marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
+    getEngine: () => E,
+};
