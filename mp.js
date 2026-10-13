@@ -752,7 +752,8 @@ window.addEventListener('DOMContentLoaded', () => {
             footer.style.marginTop = '20px';
             footer.innerHTML = `
               &copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten. | 
-              <a href="/datenschutzerklaerung.html" target="_blank" style="color:inherit">Datenschutzerklärung</a> | 
+              <a href="/datenschutzerklaerung.html" target="_blank" style="color:inherit">Datenschutzerklärung</a> |
+              <a href="/nutzungsbedingungen.html" target="_blank" style="color:inherit">Nutzungsbedingungen</a> |
               <a href="/impressum.html" target="_blank" style="color:inherit">Impressum</a>
             `;
             mVersion.parentNode.appendChild(footer);
