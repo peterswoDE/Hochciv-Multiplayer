@@ -15,6 +15,8 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 const params = new URLSearchParams(location.search);
 // Discord starts the Activity with ?frame_id=…&instance_id=…; anywhere else this does nothing.
 const IN_DISCORD = params.has('frame_id');
+const FRAME_ID = params.get('frame_id') || '';
+const INSTANCE_ID = params.get('instance_id') || '';
 
 const state = {
     sdk: null,
@@ -66,8 +68,49 @@ async function postJson(url, body, token) {
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Fehler ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(data.error || `Fehler ${res.status}`), { status: res.status });
     return data;
+}
+
+// ── Login of this Activity window ────────────────────────────────────────────
+// After a reload Discord does not answer the SDK handshake again, so the login is kept in
+// sessionStorage for this frame and reused (it only lives as long as the Activity window).
+
+const AUTH_KEY = 'hochciv-activity-auth';
+
+function saveAuth() {
+    try {
+        sessionStorage.setItem(AUTH_KEY, JSON.stringify({ frame: FRAME_ID, accessToken: state.accessToken, user: state.user }));
+    } catch (e) { /* storage blocked */ }
+}
+
+function loadAuth() {
+    try {
+        const a = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null');
+        return a && a.frame === FRAME_ID && a.accessToken && a.user ? a : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function clearAuth() {
+    try { sessionStorage.removeItem(AUTH_KEY); } catch (e) { /* storage blocked */ }
+    state.accessToken = null;
+}
+
+/** With a stored login: connect the SDK in the background, only for openExternalLink. */
+async function connectSdkQuietly() {
+    try {
+        const res = await withTimeout(fetch('/api/activity/config'), 15000, 'Konfiguration');
+        if (!res.ok) return;
+        state.config = await res.json();
+        const sdk = new DiscordSDK(state.config.clientId);
+        await withTimeout(sdk.ready(), 20000, 'Discord ready');
+        state.sdk = sdk;
+        report('Discord-SDK nach Neuladen verbunden');
+    } catch (err) {
+        report(`Discord-SDK nach Neuladen nicht verfügbar (${err.message}) – Links öffnen nicht extern`);
+    }
 }
 
 // ── Discord handshake ────────────────────────────────────────────────────────
@@ -100,6 +143,7 @@ async function authenticate() {
 
     state.accessToken = access_token;
     state.user = auth.user;
+    saveAuth();
     // mp.js prefills its name fields from here
     try { localStorage.setItem('mp-name', auth.user.global_name || auth.user.username); } catch (e) { /* storage blocked */ }
 }
@@ -137,7 +181,7 @@ async function joinGroupLobby() {
     try {
         await domReady;
         const seat = await withTimeout(
-            postJson('/api/activity/lobby', { instanceId: state.sdk.instanceId }, state.accessToken), 20000, 'Lobby');
+            postJson('/api/activity/lobby', { instanceId: (state.sdk && state.sdk.instanceId) || INSTANCE_ID }, state.accessToken), 20000, 'Lobby');
         report(`Lobby ${seat.joinCode}, Platz ${seat.playerIndex}${seat.created ? ' (neu, Host)' : ''}`);
 
         if (MP.sessionId && MP.sessionId !== seat.sessionId) {
@@ -181,11 +225,48 @@ async function joinGroupLobby() {
         step(`Lobby ${MP.joinCode}`);
     } catch (err) {
         report(`Lobby fehlgeschlagen: ${err && err.message}`, 'error');
+        // Token expired: forget it, the next click logs in again
+        if (err && err.status === 401) clearAuth();
         notify(err.message);
         setStatus('Keine Lobby');
     } finally {
         state.joining = false;
     }
+}
+
+// ── Back to the menu without reloading ──────────────────────────────────────
+// The game leaves a finished or quit game with location.reload(). Inside Discord a reloaded
+// page gets no SDK handshake, so these buttons return to the menu directly instead.
+
+function backToMenu() {
+    if (typeof store === 'function') store('hochciv.save', null);      // as the game does
+    if (MP.socket || MP.active) resetSocket();
+    MP.sessionId = null;
+    MP.asyncId = null;
+    document.body.classList.remove('mp-waiting');
+    const log = $('mp-persistent-log-container');
+    if (log) log.style.display = 'none';
+    const cred = $('mp-cred-box');
+    if (cred) cred.textContent = '';
+    const cont = $('m-continue');
+    if (cont) cont.hidden = true;
+    if (typeof closeModal === 'function') closeModal();
+    show('screen-menu');
+    setStatus('Bereit');
+}
+
+function interceptReloads() {
+    document.addEventListener('click', e => {
+        const btn = e.target.closest && e.target.closest('#go-menu, #mm-quit, #go-again');
+        if (!btn) return;
+        // "Nochmal spielen" stays as it is in single player; in multiplayer it means a new group round
+        if (btn.id === 'go-again' && !MP.active) return;
+        e.preventDefault();
+        e.stopPropagation();        // capture phase: the game's own onclick does not run
+        const again = btn.id === 'go-again';
+        backToMenu();
+        if (again) joinGroupLobby();
+    }, true);
 }
 
 // ── Inline event handlers ────────────────────────────────────────────────────
@@ -300,6 +381,7 @@ function injectUi() {
         if (target) state.sdk.commands.openExternalLink({ url: target }).catch(() => { });
     }, true);
 
+    interceptReloads();
     renderBar();
 }
 
@@ -310,7 +392,15 @@ function start() {
     if (starting) return starting;
     starting = (async () => {
         try {
-            await authenticate();
+            const saved = loadAuth();
+            if (saved) {
+                state.accessToken = saved.accessToken;
+                state.user = saved.user;
+                report('Seite neu geladen – Discord-Anmeldung dieses Fensters wird weiterverwendet');
+                connectSdkQuietly();
+            } else {
+                await authenticate();
+            }
             starting = null;            // joinGroupLobby must not see the start as still running
             await joinGroupLobby();
         } catch (err) {
