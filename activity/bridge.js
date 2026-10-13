@@ -188,6 +188,53 @@ async function joinGroupLobby() {
     }
 }
 
+// ── Inline event handlers ────────────────────────────────────────────────────
+// Discord's proxy sends a Content-Security-Policy whose script-src only allows scripts from
+// this origin and with a nonce – inline handlers like onclick="MP.startGame()" (used all over
+// mp.js) are blocked. It does allow 'unsafe-eval', so each handler attribute is compiled into
+// a handler function and set as the element's property, which the policy permits. Same
+// semantics: one handler slot per event type, `this` is the element, `return false` cancels.
+
+const HANDLER_ATTRS = ['onclick', 'ondblclick', 'onchange', 'oninput', 'onsubmit', 'onkeydown', 'onkeyup',
+    'onkeypress', 'onmousedown', 'onmouseup', 'onmouseover', 'onmouseout', 'onmouseenter', 'onmouseleave',
+    'onpointerdown', 'onpointerup', 'ontouchstart', 'ontouchend', 'onfocus', 'onblur', 'oncontextmenu',
+    'onwheel', 'onload', 'onerror'];
+const HANDLER_SELECTOR = HANDLER_ATTRS.map(a => `[${a}]`).join(',');
+const compiled = new WeakMap();     // element → { attr: source it was compiled from }
+
+function compileHandlers(el) {
+    let done = compiled.get(el);
+    for (const attr of HANDLER_ATTRS) {
+        const code = el.getAttribute(attr);
+        if (code == null || (done && done[attr] === code)) continue;
+        try {
+            el[attr] = new Function('event', code);
+        } catch (err) {
+            report(`Inline-Handler ${attr} nicht übersetzbar: ${err.message}`, 'error');
+            continue;
+        }
+        if (!done) compiled.set(el, done = {});
+        done[attr] = code;
+    }
+}
+
+function compileTree(root) {
+    if (root.nodeType !== 1) return;
+    if (root.matches(HANDLER_SELECTOR)) compileHandlers(root);
+    root.querySelectorAll(HANDLER_SELECTOR).forEach(compileHandlers);
+}
+
+function enableInlineHandlers() {
+    compileTree(document.documentElement);
+    // Modals and lobby lists are rendered with innerHTML – compile whatever appears later
+    new MutationObserver(records => {
+        for (const r of records) {
+            if (r.type === 'attributes') compileHandlers(r.target);
+            else r.addedNodes.forEach(compileTree);
+        }
+    }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: HANDLER_ATTRS });
+}
+
 // ── Page adjustments ─────────────────────────────────────────────────────────
 
 function setStatus(text) {
@@ -285,12 +332,25 @@ if (IN_DISCORD) {
         const r = e.reason;
         report(`Unbehandelter Fehler: ${(r && (r.stack || r.message)) || r}`, 'error');
     });
+    // Anything the CSP still blocks shows up in the server log, too
+    document.addEventListener('securitypolicyviolation', e => {
+        report(`CSP blockiert ${e.violatedDirective}: ${e.blockedURI || 'inline'} ${(e.sample || '').slice(0, 80)}`, 'error');
+    });
+    enableInlineHandlers();
     domReady.then(() => {
         if (typeof MP === 'undefined') {
             report('mp.js ist nicht geladen – Multiplayer nicht verfügbar.', 'error');
             return;
         }
         injectUi();
+        // Toasts carry the server's answers ("Nur der Host …") – mirror them into the log
+        if (typeof window.toast === 'function') {
+            const origToast = window.toast;
+            window.toast = function (msg) {
+                report(`Toast: ${msg}`);
+                return origToast.apply(this, arguments);
+            };
+        }
     });
     start();
 }
