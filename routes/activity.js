@@ -8,7 +8,10 @@
  *   POST /api/activity/lobby   – seats the Discord user in the lobby of their activity instance
  *
  * The Activity uses the Discord application configured as OAuth provider in the admin panel
- * (client ID + secret); DISCORD_BOT_TOKEN optionally checks instance membership.
+ * (client ID + secret; the optional bot token there checks instance membership).
+ *
+ *   POST /api/activity/log     – progress and errors of the bridge, written to the server log
+ *                                (Discord's console is hard to reach while testing)
  *
  * One lobby per activity instance: everyone who launches the Activity in the same call lands
  * in the same lobby. Each Discord user gets a secret clientId per instance, so reopening the
@@ -25,7 +28,6 @@ const config = require('../config');
 
 const router = express.Router();
 const DISCORD_API = 'https://discord.com/api/v10';
-const BOT_TOKEN = (process.env.DISCORD_BOT_TOKEN || '').trim();
 const INSTANCE_TTL_MS = 12 * 60 * 60 * 1000;
 
 const limit = rateLimitLib({
@@ -39,10 +41,11 @@ const limit = rateLimitLib({
 /** Express 4 does not catch rejected promises of async handlers. */
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
-/** { clientId, clientSecret } of the Discord application, or null if not configured. */
+/** { clientId, clientSecret, botToken } of the Discord application, or null if not configured. */
 async function discordApp() {
     const p = await OAuthProvider.findOne({ where: { provider: 'discord' } });
-    return p && p.clientId && p.clientSecret ? { clientId: p.clientId, clientSecret: p.clientSecret } : null;
+    return p && p.clientId && p.clientSecret
+        ? { clientId: p.clientId, clientSecret: p.clientSecret, botToken: p.botToken || '' } : null;
 }
 
 async function discordFetch(url, init) {
@@ -52,10 +55,11 @@ async function discordFetch(url, init) {
 }
 
 /** With a bot token: is the user really part of that activity instance? Without one: yes. */
-async function inInstance(clientId, instanceId, userId) {
-    if (!BOT_TOKEN) return true;
-    const r = await discordFetch(`${DISCORD_API}/applications/${clientId}/activity-instances/${encodeURIComponent(instanceId)}`,
-        { headers: { Authorization: `Bot ${BOT_TOKEN}` } });
+async function inInstance(app, instanceId, userId) {
+    if (!app.botToken) return true;
+    const r = await discordFetch(`${DISCORD_API}/applications/${app.clientId}/activity-instances/${encodeURIComponent(instanceId)}`,
+        { headers: { Authorization: `Bot ${app.botToken}` } });
+    if (!r.ok) console.warn(`[Activity] Instance check failed (${r.status}) – does the bot token belong to app ${app.clientId}?`);
     return r.ok && Array.isArray(r.data.users) && r.data.users.includes(userId);
 }
 
@@ -179,7 +183,7 @@ router.post('/lobby', limit, wrap(async (req, res) => {
 
     const me = await discordFetch(`${DISCORD_API}/users/@me`, { headers: { Authorization: `Bearer ${token}` } });
     if (!me.ok || !me.data.id) return res.status(401).json({ error: 'Discord-Anmeldung abgelaufen. Bitte die Activity neu starten.' });
-    if (!(await inInstance(app.clientId, instanceId, me.data.id))) {
+    if (!(await inInstance(app, instanceId, me.data.id))) {
         return res.status(403).json({ error: 'Du bist nicht Teil dieser Activity.' });
     }
 
@@ -187,6 +191,16 @@ router.post('/lobby', limit, wrap(async (req, res) => {
     if (typeof result === 'string') return res.status(409).json({ error: result });
     res.json(result);
 }));
+
+const logLimit = rateLimitLib({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+router.post('/log', logLimit, (req, res) => {
+    const b = req.body || {};
+    const level = b.level === 'error' ? 'error' : 'info';
+    const text = String(b.msg || '').replace(/[\u0000-\u001f]/g, ' ').slice(0, 500);
+    const frame = String(b.frame || '').replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 64);
+    (level === 'error' ? console.error : console.log)(`[Activity client ${frame}] ${text}`);
+    res.status(204).end();
+});
 
 module.exports = router;
 // For tests: seat a user without the Discord round trip

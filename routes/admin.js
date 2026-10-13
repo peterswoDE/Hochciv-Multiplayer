@@ -211,7 +211,7 @@ router.post('/lobbies/:id/action', (req, res) => {
 router.get('/oauth', isSuperAdmin, async (req, res) => {
     try {
         const providers = await OAuthProvider.findAll({
-            attributes: ['id', 'provider', 'clientId', 'clientSecret', 'enabled']
+            attributes: ['id', 'provider', 'clientId', 'clientSecret', 'botToken', 'enabled']
         });
         // Return a map with all known providers, filling in defaults for missing ones
         // callbackBase: what the server really uses in redirect_uri (from BASE_URL)
@@ -221,6 +221,7 @@ router.get('/oauth', isSuperAdmin, async (req, res) => {
                 id: p.id,
                 clientId: p.clientId,
                 clientSecret: p.clientSecret,
+                botToken: p.botToken,
                 enabled: p.enabled
             };
         }
@@ -237,7 +238,7 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
         if (!['google', 'discord'].includes(provider)) {
             return res.status(400).json({ error: 'Ungültiger Provider' });
         }
-        const { clientId, clientSecret, enabled } = req.body;
+        const { clientId, clientSecret, botToken, enabled } = req.body;
 
         const [oauthProvider] = await OAuthProvider.findOrCreate({
             where: { provider },
@@ -247,6 +248,8 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
         // Update fields
         if (clientId !== undefined) oauthProvider.clientId = clientId;
         if (clientSecret !== undefined) oauthProvider.clientSecret = clientSecret;
+        // Bot token: Discord Activity only
+        if (provider === 'discord' && typeof botToken === 'string') oauthProvider.botToken = botToken.trim();
         if (enabled !== undefined) oauthProvider.enabled = enabled;
         await oauthProvider.save();
 

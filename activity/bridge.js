@@ -32,6 +32,35 @@ const domReady = new Promise(resolve => {
 
 const notify = msg => (typeof toast === 'function' ? toast(msg) : console.log('[Activity]', msg));
 
+/** Progress and errors go to the console and the server log (docker logs) – Discord's own
+ *  console is hard to open while testing. */
+function report(msg, level = 'info') {
+    (level === 'error' ? console.error : console.log)('[Activity]', msg);
+    if (!IN_DISCORD) return;
+    try {
+        fetch('/api/activity/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level, msg: String(msg), frame: params.get('frame_id') || '' }),
+            keepalive: true,
+        }).catch(() => { });
+    } catch (e) { /* ignore */ }
+}
+
+/** Reject if a step hangs, naming the step – the bar then shows where it got stuck. */
+function withTimeout(promise, ms, step) {
+    let timer;
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${step}: keine Antwort nach ${ms / 1000} s`)), ms); }),
+    ]).finally(() => clearTimeout(timer));
+}
+
+function step(text) {
+    report(text);
+    setStatus(text);
+}
+
 async function postJson(url, body, token) {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -44,13 +73,17 @@ async function postJson(url, body, token) {
 // ── Discord handshake ────────────────────────────────────────────────────────
 
 async function authenticate() {
-    const res = await fetch('/api/activity/config');
+    step('Lade Konfiguration …');
+    const res = await withTimeout(fetch('/api/activity/config'), 15000, 'Konfiguration');
     if (!res.ok) throw new Error('Discord-Activity ist auf diesem Server nicht eingerichtet.');
     state.config = await res.json();
 
+    step('Verbinde mit Discord (ready) …');
     state.sdk = new DiscordSDK(state.config.clientId);
-    await state.sdk.ready();
+    await withTimeout(state.sdk.ready(), 20000, 'Discord ready');
 
+    // May show Discord's consent dialog – the user can take their time, so no timeout here
+    step('Warte auf Discord-Freigabe (authorize) …');
     const { code } = await state.sdk.commands.authorize({
         client_id: state.config.clientId,
         response_type: 'code',
@@ -58,9 +91,12 @@ async function authenticate() {
         prompt: 'none',
         scope: ['identify'],
     });
-    const { access_token } = await postJson('/api/activity/token', { code });
-    const auth = await state.sdk.commands.authenticate({ access_token });
+    step('Tausche Code gegen Token …');
+    const { access_token } = await withTimeout(postJson('/api/activity/token', { code }), 20000, 'Token');
+    step('Melde bei Discord an (authenticate) …');
+    const auth = await withTimeout(state.sdk.commands.authenticate({ access_token }), 20000, 'Discord authenticate');
     if (!auth || !auth.user) throw new Error('Discord-Anmeldung fehlgeschlagen.');
+    report(`Angemeldet als Discord-Nutzer ${auth.user.id}`);
 
     state.accessToken = access_token;
     state.user = auth.user;
@@ -91,13 +127,18 @@ function watchSocket() {
 }
 
 async function joinGroupLobby() {
-    if (!state.accessToken) return start();
+    if (!state.accessToken) {
+        if (starting) return notify(`Noch nicht verbunden: ${state.status}`);
+        return start();
+    }
     if (state.joining) return;
     state.joining = true;
-    setStatus('Trete der Lobby bei …');
+    step('Trete der Lobby bei …');
     try {
         await domReady;
-        const seat = await postJson('/api/activity/lobby', { instanceId: state.sdk.instanceId }, state.accessToken);
+        const seat = await withTimeout(
+            postJson('/api/activity/lobby', { instanceId: state.sdk.instanceId }, state.accessToken), 20000, 'Lobby');
+        report(`Lobby ${seat.joinCode}, Platz ${seat.playerIndex}${seat.created ? ' (neu, Host)' : ''}`);
 
         if (MP.sessionId && MP.sessionId !== seat.sessionId) {
             resetSocket();
@@ -110,14 +151,15 @@ async function joinGroupLobby() {
         MP.joinCode = seat.joinCode;
         MP.password = seat.password;
 
-        await MP.connect();
+        step('Verbinde mit dem Spielserver (Socket.IO) …');
+        await withTimeout(MP.connect(), 20000, 'Socket.IO');
         watchSocket();
 
-        const ack = await new Promise(resolve => MP.socket.emit('session:connect', {
+        const ack = await withTimeout(new Promise(resolve => MP.socket.emit('session:connect', {
             sessionId: MP.sessionId,
             clientId: seat.clientId,
             password: MP.password,
-        }, resolve));
+        }, resolve)), 20000, 'Lobby-Verbindung');
         if (!ack || ack.error) throw new Error((ack && ack.error) || 'Verbindung zur Lobby fehlgeschlagen.');
 
         // Same as mp.js after joining by code
@@ -136,9 +178,9 @@ async function joinGroupLobby() {
         } else {
             notify('Spiel läuft, lade Zustand …');        // mp.js receives 'game:start'
         }
-        setStatus(`Lobby ${MP.joinCode}`);
+        step(`Lobby ${MP.joinCode}`);
     } catch (err) {
-        console.error('[Activity] Lobby:', err);
+        report(`Lobby fehlgeschlagen: ${err && err.message}`, 'error');
         notify(err.message);
         setStatus('Keine Lobby');
     } finally {
@@ -221,13 +263,12 @@ function start() {
     if (starting) return starting;
     starting = (async () => {
         try {
-            setStatus('Verbinde mit Discord …');
             await authenticate();
-            setStatus('Angemeldet');
+            starting = null;            // joinGroupLobby must not see the start as still running
             await joinGroupLobby();
         } catch (err) {
-            console.error('[Activity] Discord:', err);
-            setStatus('Discord-Anmeldung fehlgeschlagen – Button erneut drücken');
+            report(`Anmeldung fehlgeschlagen: ${(err && err.message) || err}`, 'error');
+            setStatus(`Fehler: ${(err && err.message) || err} – Button erneut drücken`);
             notify(err.message || 'Discord-Anmeldung fehlgeschlagen.');
         } finally {
             starting = null;
@@ -237,9 +278,16 @@ function start() {
 }
 
 if (IN_DISCORD) {
+    report(`Bridge geladen (${navigator.userAgent})`);
+    // Errors anywhere on the page (game, mp.js) – visible in the server log while testing
+    window.addEventListener('error', e => report(`JS-Fehler: ${e.message} @ ${e.filename}:${e.lineno}`, 'error'));
+    window.addEventListener('unhandledrejection', e => {
+        const r = e.reason;
+        report(`Unbehandelter Fehler: ${(r && (r.stack || r.message)) || r}`, 'error');
+    });
     domReady.then(() => {
         if (typeof MP === 'undefined') {
-            console.error('[Activity] mp.js is not loaded – multiplayer is unavailable.');
+            report('mp.js ist nicht geladen – Multiplayer nicht verfügbar.', 'error');
             return;
         }
         injectUi();

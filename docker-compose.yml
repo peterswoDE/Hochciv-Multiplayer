@@ -44,8 +44,6 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
-      # Optional: Discord Activity – only players of an activity instance may join its lobby
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
     networks:
       - nginx
       - internal

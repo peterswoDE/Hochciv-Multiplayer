@@ -555,6 +555,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (data.discord) {
                 document.getElementById('oauth-discord-clientid').value = data.discord.clientId || '';
                 document.getElementById('oauth-discord-secret').value = data.discord.clientSecret || '';
+                document.getElementById('oauth-discord-bottoken').value = data.discord.botToken || '';
                 document.getElementById('oauth-discord-enabled').checked = data.discord.enabled || false;
             }
         } catch (e) {
@@ -570,12 +571,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const clientId = document.getElementById(`oauth-${provider}-clientid`).value;
         const clientSecret = document.getElementById(`oauth-${provider}-secret`).value;
         const enabled = document.getElementById(`oauth-${provider}-enabled`).checked;
+        const botTokenEl = document.getElementById(`oauth-${provider}-bottoken`);
+        const body = { clientId, clientSecret, enabled };
+        if (botTokenEl) body.botToken = botTokenEl.value;
 
         try {
             const res = await fetch(`/api/admin/oauth/${provider}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clientId, clientSecret, enabled })
+                body: JSON.stringify(body)
             });
             if (res.ok) {
                 msg.textContent = 'Gespeichert! Strategien neu geladen.';

@@ -386,8 +386,13 @@
                             <input type="password" id="oauth-discord-secret"
                                 placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
                         </div>
+                        <div class="form-group">
+                            <label>Bot-Token (Discord Activity, optional)</label>
+                            <input type="password" id="oauth-discord-bottoken" placeholder="Developer Portal → Bot → Token">
+                            <small style="opacity:0.7">Damit prüft der Server, dass nur Spieler aus dem Anruf der Lobby ihrer Activity beitreten.</small>
+                        </div>
                         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:15px;">
-                            <input type="checkbox" id="oauth-discord-enabled"> Aktiviert
+                            <input type="checkbox" id="oauth-discord-enabled"> Aktiviert (Website-Login)
                         </label>
                         <button class="btn btn-primary" onclick="saveOAuthConfig('discord')">Discord speichern</button>
                         <p id="oauth-discord-msg" style="margin-top:8px; font-size:13px;"></p>

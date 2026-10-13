@@ -25,6 +25,13 @@ module.exports = (sequelize) => {
             allowNull: false,
             defaultValue: '',
         },
+        // Discord only, optional: lets the Discord Activity check that a player belongs to
+        // the activity instance whose lobby they join
+        botToken: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: '',
+        },
         enabled: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,

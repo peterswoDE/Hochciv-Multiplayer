@@ -58,7 +58,6 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
-| `DISCORD_BOT_TOKEN` | no | Bot token of the Discord application. Lets the Discord Activity check that a player really belongs to the call whose lobby they join. |
 
 ### Google / Discord login
 
@@ -82,7 +81,7 @@ It uses the same Discord application as the Discord login above:
    * **Activities → URL Mappings:** prefix `/` → target your domain without the scheme, e.g. `hochciv.example`.
    * **OAuth2 → Redirects:** besides the login callback, add `https://127.0.0.1` as a placeholder. Discord requires one for the Activity's authorization.
    * **Installation:** allow *Guild Install* and/or *User Install*.
-3. Optional: set `DISCORD_BOT_TOKEN` (Developer Portal → Bot) so that only players who are in the call can join its lobby.
+3. Optional: enter the app's bot token (Developer Portal → Bot) in the same OAuth tab. The server then checks that only players who are in the call can join its lobby. It must be the token of the same app.
 
 Notes:
 
@@ -90,6 +89,8 @@ Notes:
 * **Joining by code still works.** The normal *Multiplayer* menu works, so Discord players can also play with people on the website.
 * **Framing.** Discord may embed the game: the server sends `Content-Security-Policy: frame-ancestors 'self'` plus the Discord domains, instead of `X-Frame-Options`.
 * **Reconnects.** Reopening the Activity puts a player back into their seat. If the host leaves before the start, or the game ends, the next player who joins gets a fresh lobby.
+
+* **Troubleshooting.** Inside Discord, the Activity script writes every step and any page error to the server log (`[Activity client …]` lines in `docker logs`). The bar at the top of the menu shows the current step.
 
 For local testing, Discord needs a public HTTPS URL. Use a tunnel, e.g. `cloudflared tunnel --url http://localhost:3000`, and enter its host as the URL mapping target. Outside Discord, the Activity script does nothing.
 
