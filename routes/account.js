@@ -1,12 +1,55 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const rateLimitLib = require('express-rate-limit');
 const { sequelize, User, Game } = require('../models');
+const totp = require('../utils/totp');
+const { sendMail } = require('../utils/mailer');
 const {
-    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, str, validPassword, destroyOtherSessions,
+    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, markAuthenticated, requireRecentAuth,
+    str, validPassword, issueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
 
 router.use(isAuthenticated);
+
+// Password / code guesses and e-mails sent: limit per IP
+const rateLimit = rateLimitLib({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+/**
+ * Accounts with a password confirm changes with it (checkCurrentPassword). Accounts without one
+ * (Google/Discord only) need a recent login or re-confirmation instead.
+ */
+function passwordlessNeedsRecentAuth(req, res, next) {
+    return req.user.password_hash ? next() : requireRecentAuth(req, res, next);
+}
+
+/** A real address that mails can go to (not the placeholder of OAuth accounts without e-mail). */
+const mailable = email => !!email && !email.endsWith('@oauth.local');
+
+// Re-confirm the identity for sensitive changes (utils/auth.js requireRecentAuth):
+// { password } or { token } (authenticator app). Google/Discord-only accounts log in again instead.
+router.post('/reauth', rateLimit, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id);
+        const password = str(req.body.password);
+        const token = str(req.body.token, 10);
+        let ok = false;
+        if (password && user.password_hash) ok = await bcrypt.compare(password, user.password_hash);
+        else if (token && user.totpEnabled) ok = await totp.checkUserToken(user, token);
+        if (!ok) return res.status(400).json({ error: password ? 'Das Passwort ist falsch.' : 'Ungültiger Code.' });
+        markAuthenticated(req);
+        res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
 
 /** Accounts with a password must confirm it; OAuth-only accounts have none to confirm. */
 async function checkCurrentPassword(user, currentPassword) {
@@ -16,7 +59,7 @@ async function checkCurrentPassword(user, currentPassword) {
 }
 
 // Update Password (also sets a first password for OAuth-only accounts)
-router.post('/update-password', async (req, res) => {
+router.post('/update-password', passwordlessNeedsRecentAuth, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         const user = await User.findByPk(req.user.id);
@@ -40,8 +83,10 @@ router.post('/update-password', async (req, res) => {
     }
 });
 
-// Update Email
-router.post('/update-email', async (req, res) => {
+// Update Email, step 1: a code goes to the new address; `email` only changes once it is entered
+// (confirm-email). An unproven address would otherwise be linked to whoever logs in with it via
+// Google/Discord (utils/oauth.js) and receive password resets.
+router.post('/update-email', rateLimit, passwordlessNeedsRecentAuth, async (req, res) => {
     try {
         const email = str(req.body.email, 254);
         if (!email) return res.status(400).json({ error: 'Email erforderlich.' });
@@ -51,28 +96,71 @@ router.post('/update-email', async (req, res) => {
         if (!(await checkCurrentPassword(user, req.body.currentPassword))) {
             return res.status(400).json({ error: 'Bitte bestätige die Änderung mit deinem aktuellen Passwort.' });
         }
+        if (email === user.email) return res.status(400).json({ error: 'Das ist bereits deine E-Mail-Adresse.' });
 
         const existing = await User.findOne({ where: { email } });
         if (existing && existing.id !== user.id) {
             return res.status(400).json({ error: 'Diese E-Mail wird bereits verwendet.' });
         }
 
-        user.email = email;
+        user.pendingEmail = email;
+        const code = issueCode(user, 'emailChangeCode', 'emailChangeCodeExpiresAt', 30 * 60 * 1000); // 30 minutes
         await user.save();
-        res.json({ ok: true });
+
+        const text = `Dein Code zum Bestätigen deiner neuen Hochciv E-Mail-Adresse lautet: ${code}
+Dieser Code ist 30 Minuten gültig.`;
+        await sendMail(email, 'Hochciv E-Mail-Adresse bestätigen', text, text);
+        res.json({ ok: true, pending: true });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
     }
 });
 
-// Match History: the last 50 games this user took part in
+// Update Email, step 2: the code from the mail to the new address
+router.post('/confirm-email', rateLimit, async (req, res) => {
+    try {
+        const code = str(req.body.code, 10);
+        if (!code) return res.status(400).json({ error: 'Code fehlt.' });
+
+        const user = await User.findByPk(req.user.id);
+        if (!user.pendingEmail) return res.status(400).json({ error: 'Keine E-Mail-Änderung offen.' });
+        const err = await consumeCode(user, 'emailChangeCode', 'emailChangeCodeExpiresAt', code);
+        if (err) return res.status(400).json({ error: err });
+
+        // Someone may have taken the address in the meantime
+        const existing = await User.findOne({ where: { email: user.pendingEmail } });
+        if (existing && existing.id !== user.id) {
+            user.pendingEmail = null;
+            await user.save();
+            return res.status(400).json({ error: 'Diese E-Mail wird bereits verwendet.' });
+        }
+
+        const oldEmail = user.email;
+        user.email = user.pendingEmail;
+        user.pendingEmail = null;
+        user.emailChangeCodeExpiresAt = null;
+        await user.save();
+
+        if (mailable(oldEmail)) {
+            const text = `Die E-Mail-Adresse deines Hochciv-Kontos ${user.username} wurde auf ${user.email} geändert. ` +
+                'Warst du das nicht, setze bitte sofort dein Passwort zurück und melde dich beim Betreiber.';
+            await sendMail(oldEmail, 'Hochciv E-Mail-Adresse geändert', text, text);
+        }
+        res.json({ ok: true, email: user.email });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Match History: the last 50 games this user took part in – including Rundenspiele in which
+// the AI took over their seat after the 7-day timeout (stored as replacedUserId)
 router.get('/history', async (req, res) => {
     try {
+        const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: req.user.id }]))}::jsonb`;
         const games = await Game.findAll({
-            where: sequelize.literal(
-                `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: req.user.id }]))}::jsonb`
-            ),
+            where: sequelize.literal(`(${has('dbUserId')} OR ${has('replacedUserId')})`),
             order: [['matchDate', 'DESC']],
             limit: 50
         });

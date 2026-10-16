@@ -86,7 +86,8 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.set({
         'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'SAMEORIGIN',
+        // Like X-Frame-Options: SAMEORIGIN, but Discord may frame the game as an Activity
+        'Content-Security-Policy': "frame-ancestors 'self' https://discord.com https://*.discord.com https://*.discordsays.com",
         'Referrer-Policy': 'same-origin',
     });
     next();
@@ -146,8 +147,12 @@ const mfaRoutes = require('./routes/mfa');
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/mfa', mfaRoutes);
+// Public player profiles (client/profile.js)
+app.use('/api/profile', require('./routes/profile'));
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
+// Discord Activity (Embedded App SDK)
+app.use('/api/activity', require('./routes/activity'));
 
 // Host static frontend files 
 const path = require('path');
@@ -157,6 +162,8 @@ app.use('/client', express.static(path.join(__dirname, 'client')));
 app.get('/impressum.html', (req, res) => res.sendFile(path.join(__dirname, 'client/impressum.html')));
 app.get('/datenschutz.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
 app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
+app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
+app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
 app.get('/sw.js', (req, res) => {
     res.type('application/javascript');
@@ -172,6 +179,19 @@ app.get('/sw.js', (req, res) => {
         });
         self.addEventListener('fetch', e => {});
     `);
+});
+
+// Discord Activity bridge, bundled by activity/build.js (does nothing outside Discord)
+const { OUT_FILE: ACTIVITY_BUNDLE } = require('./activity/build');
+const fs = require('fs');
+if (!fs.existsSync(ACTIVITY_BUNDLE)) {
+    console.warn('[Activity] Bridge bundle missing – run "npm run build:activity". The Discord Activity is unavailable.');
+}
+app.get('/js/activity.js', (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(ACTIVITY_BUNDLE, err => {
+        if (err && !res.headersSent) res.type('application/javascript').send('/* Discord Activity bundle not built */');
+    });
 });
 
 // 3. Serve public game assets (js, css) as a fallback (this makes the game the root /)

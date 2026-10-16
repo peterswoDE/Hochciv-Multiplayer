@@ -37,6 +37,7 @@ const MP = {
         MP.syncTurnBlocker();
         MP.updateHudDelayed();
         MP.updatePersistentLog();
+        MP.updatePlayerList();
         // round + player: also correct when the same player moves again (everyone else bots)
         const key = S.round + ':' + S.cur;
         if (S.cur === MP.playerIndex && MP.lastTurnKey !== key && !S.over) {
@@ -138,6 +139,64 @@ const MP = {
         if (hn) updateHudName(hn);
     },
 
+    /** Lobby player (name, account) of a state player – `slot` is the lobby / seat index. */
+    lobbyPlayerOf: function (sp) {
+        const list = this.players || [];
+        return list.find(p => p.index === sp.slot) || list.find(p => p.civ === sp.civ) || null;
+    },
+
+    /** HTML for a player's name: opens the player profile (client/profile.js) if it has an account. */
+    nameLink: function (name, userId) {
+        return window.PROFILE ? PROFILE.link(name, userId) : esc(name);
+    },
+
+    /** In-game player list (collapsible like the game log): turn, nation, connection, profile. */
+    updatePlayerList: function () {
+        const box = document.getElementById('mp-players-container');
+        const list = document.getElementById('mp-players-content');
+        if (!box || !list) return;
+        if (!this.active || typeof S === 'undefined' || !S || !S.players) { box.style.display = 'none'; return; }
+        box.style.display = '';
+        list.innerHTML = S.players.map((sp, i) => {
+            const lp = this.lobbyPlayerOf(sp) || {};
+            const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ, color: '#999' };
+            const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
+            const name = lp.name || civ.n;
+            const status = bot ? '<span class="mp-pl-tag">Bot</span>'
+                : lp.connected === false ? '<span class="mp-pl-tag off" title="Nicht verbunden">offline</span>' : '';
+            return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
+                <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
+                <span class="mp-pl-name">${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ' <small>(du)</small>' : ''}</span>
+                ${status}
+                <span class="mp-pl-civ">${esc(civ.n)}</span>
+              </div>`;
+        }).join('');
+    },
+
+    /** End of game: the engine lists nations – add the players behind them, with profile links. */
+    addGameOverPlayers: function () {
+        const body = document.getElementById('ov-body');
+        if (!body || !S || !S.over || !S.players || document.getElementById('mp-go-players')) return;
+        const o = S.over;
+        const winners = o.winners || [o.winner];
+        const score = pi => (o.score || []).find(x => x.pi === pi);
+        const rows = S.players.map((sp, i) => {
+            const lp = this.lobbyPlayerOf(sp) || {};
+            const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ };
+            const sc = score(i);
+            return { i, name: lp.name || civ.n, userId: lp.userId, bot: lp.isBot, civ: civ.n, points: sc ? sc.total : null };
+        }).sort((a, b) => (b.points || 0) - (a.points || 0));
+        const html = `<div id="mp-go-players"><table class="tbl" style="margin:10px 0">
+            <tr><th>Spieler</th><th>Reich</th>${o.score ? '<th>Punkte</th>' : ''}</tr>
+            ${rows.map(r => `<tr${winners.includes(r.i) ? ' style="font-weight:700"' : ''}>
+                <td>${this.nameLink(r.name, r.userId)}${r.bot ? ' <small>(Bot)</small>' : ''}</td>
+                <td>${esc(r.civ)}</td>${o.score ? `<td>${r.points != null ? r.points : '–'}</td>` : ''}</tr>`).join('')}
+            </table></div>`;
+        const tip = body.querySelector('.tip');
+        if (tip) tip.insertAdjacentHTML('beforebegin', html);
+        else body.insertAdjacentHTML('beforeend', html);
+    },
+
     updatePersistentLog: function () {
         if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
         const plc = document.getElementById('mp-persistent-log-container');
@@ -151,7 +210,13 @@ const MP = {
     },
 
     connect: function () {
-        if (this.socket) return Promise.resolve();
+        // The server reads the login only when the socket opens. A socket from before a login or
+        // logout would seat the player under the wrong account (or none: game missing from the
+        // history), so outside a running game it is replaced.
+        const userId = this.user ? this.user.id : null;
+        if (this.socket && (this.socketUserId === userId || this.active)) return Promise.resolve();
+        if (this.socket) { this.socket.disconnect(); this.socket = null; }
+        this.socketUserId = userId;
         return new Promise((resolve) => {
             this.socket = io(this.serverUrl);
 
@@ -176,16 +241,19 @@ const MP = {
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
                 toast(`${data.name} ist beigetreten.`);
                 if (MP.renderLobby) MP.renderLobby();
+                MP.updatePlayerList();
             });
             this.socket.on('player:left', data => {
                 MP.players = data.players;
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
                 toast(`${data.name} hat das Spiel verlassen.`);
                 if (MP.renderLobby) MP.renderLobby();
+                MP.updatePlayerList();
             });
             this.socket.on('lobby:player:updated', players => {
                 MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
+                MP.updatePlayerList();
             });
             this.socket.on('session:kicked', (data) => {
                 MP.active = false;
@@ -752,7 +820,8 @@ window.addEventListener('DOMContentLoaded', () => {
             footer.style.marginTop = '20px';
             footer.innerHTML = `
               &copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten. | 
-              <a href="/datenschutzerklaerung.html" target="_blank" style="color:inherit">Datenschutzerklärung</a> | 
+              <a href="/datenschutzerklaerung.html" target="_blank" style="color:inherit">Datenschutzerklärung</a> |
+              <a href="/nutzungsbedingungen.html" target="_blank" style="color:inherit">Nutzungsbedingungen</a> |
               <a href="/impressum.html" target="_blank" style="color:inherit">Impressum</a>
             `;
             mVersion.parentNode.appendChild(footer);
@@ -814,6 +883,33 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         #mp-persistent-log-content .logline { margin-bottom: 4px; }
         #mp-persistent-log-content .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
+        #mp-players-container {
+            position: fixed; left: 10px; top: 60px; width: 240px;
+            background: rgba(255,255,240,0.95); pointer-events: auto;
+            border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; color: #333; overflow: hidden;
+            transition: width 0.2s, height 0.2s, border-radius 0.2s;
+        }
+        #mp-players-container.mp-log-minimized {
+            width: 44px !important; height: 44px !important; border-radius: 50% !important;
+            border: none !important; background: #a89f91 !important; cursor: pointer !important;
+            display: flex !important; justify-content: center !important; align-items: center !important; padding: 0 !important;
+        }
+        #mp-players-container.mp-log-minimized > * { display: none !important; }
+        #mp-players-container.mp-log-minimized::before { content: "👥"; font-size: 20px; }
+        #mp-players-container[style*="display: none"] { display: none !important; }
+        #mp-players-header {
+            background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
+        }
+        #mp-players-content { max-height: 40vh; overflow-y: auto; padding: 6px 8px; }
+        .mp-pl-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 0 8px; align-items: center; padding: 4px 4px; border-radius: 4px; }
+        .mp-pl-row.cur { background: rgba(157,59,47,0.12); }
+        .mp-pl-row.cur .mp-pl-name::after { content: " ◂ am Zug"; font-size: 11px; color: #9d3b2f; font-weight: normal; }
+        .mp-pl-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); }
+        .mp-pl-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+        .mp-pl-civ { grid-column: 2 / -1; font-size: 11px; color: #6f6551; }
+        .mp-pl-tag { font-size: 10px; padding: 1px 5px; border-radius: 8px; background: #e4dbbe; color: #6f6551; }
+        .mp-pl-tag.off { background: #f1d6cf; color: #9d3b2f; }
     `;
     document.head.appendChild(style);
 
@@ -841,6 +937,33 @@ window.addEventListener('DOMContentLoaded', () => {
             const pl = document.getElementById('mp-persistent-log-content');
             if (pl) pl.scrollTop = pl.scrollHeight;
         }
+    });
+
+    // Player list: collapsible like the game log, names open the player profile
+    const pList = document.createElement('div');
+    pList.id = 'mp-players-container';
+    pList.style.display = 'none';
+    pList.innerHTML = `
+        <div id="mp-players-header">
+            <span>Spieler</span>
+            <span style="font-size: 16px;">✖</span>
+        </div>
+        <div id="mp-players-content"></div>
+    `;
+    document.body.appendChild(pList);
+    const setPlayersOpen = open => {
+        pList.classList.toggle('mp-log-minimized', !open);
+        try { localStorage.setItem('mp-players-open', open ? '1' : '0'); } catch (_) { }
+    };
+    let playersOpen = true;
+    try { playersOpen = localStorage.getItem('mp-players-open') !== '0'; } catch (_) { }
+    setPlayersOpen(playersOpen);
+    document.getElementById('mp-players-header').addEventListener('click', e => {
+        setPlayersOpen(false);
+        e.stopPropagation();
+    });
+    pList.addEventListener('click', () => {
+        if (pList.classList.contains('mp-log-minimized')) setPlayersOpen(true);
     });
 
     // Inject Turn Blocker active toast
@@ -878,6 +1001,19 @@ if (originalRedraw) {
             if (freshArmy) ui.army = freshArmy;
         }
         return originalRedraw.apply(this, arguments);
+    };
+}
+
+// ── Monkey Patch gameOver(): player names (with profile links) under the engine's result ──
+const originalGameOver = window.gameOver;
+if (originalGameOver) {
+    window.gameOver = function () {
+        const r = originalGameOver.apply(this, arguments);
+        if (MP.active) {
+            MP.addGameOverPlayers();
+            MP.updatePlayerList();
+        }
+        return r;
     };
 }
 
@@ -1099,7 +1235,7 @@ const ASYNC = {
         const active = d.mine.filter(g => ['setup', 'placement', 'draft', 'playing'].includes(g.status) && !g.replaced);
         const turn = active.filter(g => g.yourTurn);
         const waiting = active.filter(g => !g.yourTurn);
-        const done = d.mine.filter(g => !active.includes(g));
+        const takenOver = d.mine.filter(g => !active.includes(g));
         const section = (title, list, empty) => `<h4 class="mpa-h">${title}</h4>` +
             (list.length ? list.map(g => this.row(g)).join('') : `<p class="sub">${empty}</p>`);
         modal('Rundenspiele', `
@@ -1113,7 +1249,8 @@ const ASYNC = {
             ${section('Warten auf andere', waiting, 'Keine.')}
             ${section('Einladungen', d.invites, 'Keine offenen Einladungen.')}
             ${section('Offene Spiele', d.open, 'Keine öffentlichen Spiele mit freiem Platz.')}
-            ${done.length ? section('Beendet', done.slice(0, 15), '') : ''}
+            ${takenOver.length ? section('Von der KI übernommen', takenOver.slice(0, 15), '') : ''}
+            <p class="sub">Beendete Rundenspiele findest du in deiner <a href="#" onclick="MP.showAccountModal(); return false;">Spielhistorie</a>.</p>
             <label class="row mpa-notify"><span>E-Mail, wenn ich am Zug bin</span>
               <input type="checkbox" ${d.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>`);
         $('overlay').classList.add('wide');
@@ -1371,7 +1508,7 @@ const ASYNC = {
     apply: function (view) {
         const prev = this.view;
         this.view = view;
-        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ }));
+        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' }));
         const toastEl = document.querySelector('.mp-waiting-toast');
         if (toastEl) toastEl.textContent = view.waitingFor ? `Warte auf ${view.waitingFor} …` : 'Warte auf deinen Zug...';
 
@@ -1409,6 +1546,7 @@ const ASYNC = {
             startGameScreen();
             MP.updateHudDelayed();
             MP.updatePersistentLog();
+            MP.updatePlayerList();
             if (S.cur === MP.playerIndex && !S.over) MP.animDeinZug();
         } else {
             MP.applyState(view.state);
@@ -1503,7 +1641,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 failed: 'Anmeldung abgebrochen oder abgelehnt.',
                 taken: 'Dieses Google-/Discord-Konto ist bereits mit einem anderen Hochciv-Konto verknüpft.',
                 banned: 'Dieses Konto ist gesperrt.',
+                merge_async: 'Dein Discord-Konto hat noch laufende Rundenspiele. Beende sie zuerst und verknüpfe danach erneut.',
                 state: 'Die Anmeldung ist abgelaufen. Bitte starte sie erneut.',
+                reauth: 'Bitte bestätige zuerst auf der Kontoseite deine Identität und verknüpfe danach erneut.',
                 error: 'Bei der Anmeldung ist ein Fehler aufgetreten. Bitte versuche es erneut.',
             };
             toast(OAUTH_MESSAGES[oauth] || OAUTH_MESSAGES.error);

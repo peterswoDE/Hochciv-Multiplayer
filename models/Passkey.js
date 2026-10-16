@@ -10,7 +10,6 @@ module.exports = (sequelize) => {
         credentialID: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
         },
         credentialPublicKey: {
             type: DataTypes.BLOB,
@@ -27,6 +26,11 @@ module.exports = (sequelize) => {
         }
     }, {
         tableName: 'passkeys',
+        // Unique as a named index, not `unique: true`: sync({ alter: true }) re-added that as a new
+        // constraint on every start (scripts/dedupe-constraints.js cleans up old copies)
+        indexes: [
+            { name: 'passkeys_credentialID_key', unique: true, fields: ['credentialID'] },
+        ],
         timestamps: true,
     });
 

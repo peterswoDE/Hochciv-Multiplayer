@@ -3,7 +3,7 @@ const router = express.Router();
 const passport = require('passport');
 const { OAuthProvider } = require('../models');
 const bcrypt = require('bcryptjs');
-const { sequelize, User, Passkey, TotpToken } = require('../models');
+const { sequelize, User, Passkey } = require('../models');
 const { sendMail } = require('../utils/mailer');
 const { Op } = require('sequelize');
 const totp = require('../utils/totp');
@@ -12,7 +12,7 @@ const serverState = require('../utils/serverState');
 const { rp } = require('../utils/webauthn');
 const {
     USERNAME_RE, EMAIL_RE, MIN_PASSWORD_LENGTH,
-    userJson, str, validPassword, generateCode, consumeCode, destroyOtherSessions,
+    markAuthenticated, userJson, str, validPassword, issueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
@@ -31,6 +31,7 @@ const rateLimit = rateLimitLib({
 function finishLogin(req, res, user) {
     req.login(user, (err) => {
         if (err) return res.status(500).json({ error: 'Login failed' });
+        markAuthenticated(req);
         return res.json(userJson(user));
     });
 }
@@ -69,16 +70,9 @@ router.post('/register', rateLimit, async (req, res) => {
             return res.status(400).json({ error: 'Username or Email already exists.' });
         }
         const password_hash = await bcrypt.hash(password, 10);
-        const activationCode = generateCode();
-
-        await User.create({
-            username,
-            email,
-            password_hash,
-            isActive: false,
-            activationCode,
-            activationCodeExpiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-        });
+        const user = User.build({ username, email, password_hash, isActive: false });
+        const activationCode = issueCode(user, 'activationCode', 'activationCodeExpiresAt', 60 * 60 * 1000); // 1 hour
+        await user.save();
 
         const text = `Dein Hochciv Aktivierungscode lautet: ${activationCode}`;
         await sendMail(email, 'Hochciv Account aktivieren', text, text);
@@ -150,10 +144,7 @@ router.post('/login/email-otp/request', rateLimit, async (req, res) => {
         if (!user) return res.status(400).json({ error: 'Sitzung abgelaufen' });
         if (!user.emailOtpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
 
-        const code = generateCode();
-        user.emailOtpCode = code;
-        user.emailOtpExpiry = new Date(Date.now() + 10 * 60000); // 10 minutes
-        user.codeAttempts = 0;
+        const code = issueCode(user, 'emailOtpCode', 'emailOtpExpiry', 10 * 60000); // 10 minutes
         await user.save();
 
         await sendMail(
@@ -195,20 +186,7 @@ router.post('/login/totp', rateLimit, async (req, res) => {
         if (!user || !token) return res.status(400).json({ error: 'Sitzung abgelaufen oder Token fehlt' });
         if (!user.totpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
 
-        let isValid = false;
-        if (user.totpSecret && totp.checkToken(token, user.totpSecret)) {
-            isValid = true;
-        } else {
-            const totpTokens = await TotpToken.findAll({ where: { UserId: user.id } });
-            for (let t of totpTokens) {
-                if (totp.checkToken(token, t.secret)) {
-                    isValid = true;
-                    break;
-                }
-            }
-        }
-
-        if (!isValid) return res.status(400).json({ error: 'Ungültiger Code' });
+        if (!(await totp.checkUserToken(user, token))) return res.status(400).json({ error: 'Ungültiger Code' });
 
         req.session.mfaPendingUserId = null;
         finishLogin(req, res, user);
@@ -346,10 +324,7 @@ router.post('/reset-password/request', rateLimit, async (req, res) => {
             return res.json({ ok: true });
         }
 
-        const resetCode = generateCode();
-        user.resetCode = resetCode;
-        user.resetCodeExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-        user.codeAttempts = 0;
+        const resetCode = issueCode(user, 'resetCode', 'resetCodeExpiresAt', 60 * 60 * 1000); // 1 hour
         await user.save();
 
         const text = `Dein Code zum Zurücksetzen deines Hochciv Passworts lautet: ${resetCode}`;
@@ -451,7 +426,9 @@ for (const provider of ['google', 'discord']) {
                 console.error(`[OAuth] ${label} Auth failed. Info:`, info);
                 const msg = String((info && info.message) || '');
                 const reason = msg === 'banned' ? 'banned'
+                    : msg === 'reauth' ? 'reauth'
                     : msg.includes('bereits mit einem anderen') ? 'taken'
+                        : msg.includes('laufende Rundenspiele') ? 'merge_async'
                         : /state/i.test(msg) ? 'state'
                             : 'failed';
                 return res.redirect(`/?oauth=${reason}`);
@@ -461,6 +438,7 @@ for (const provider of ['google', 'discord']) {
                     console.error(`[OAuth] ${label} Login Error:`, loginErr);
                     return res.redirect('/?oauth=error');
                 }
+                markAuthenticated(req);     // also how OAuth-only accounts re-confirm (account page)
                 res.redirect(linking ? '/?oauth=linked' : '/?oauth=ok');
             });
         })(req, res, next);

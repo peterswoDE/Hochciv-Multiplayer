@@ -1,3 +1,11 @@
+# Discord Activity bridge: bundle activity/bridge.js with the Embedded App SDK (dev dependencies)
+FROM node:20-slim AS activity
+WORKDIR /build
+COPY package*.json ./
+RUN npm ci
+COPY activity ./activity
+RUN node activity/build.js
+
 FROM node:20-slim
 
 # Install git, bash, curl, tar, ca-certificates, and ping utility
@@ -8,6 +16,7 @@ WORKDIR /app
 # Copy dependency files first
 COPY package*.json ./
 RUN npm ci --omit=dev
+COPY --from=activity /build/node_modules/.cache/hochciv-activity ./node_modules/.cache/hochciv-activity
 
 # Copy application files
 COPY . .
@@ -33,8 +42,7 @@ RUN mkdir -p public && \
     if [ -f public/index.html ]; then \
       mkdir -p public/js && \
       cp mp.js public/js/mp.js && \
-      node -e 'const fs = require("fs"); let h = fs.readFileSync("public/index.html","utf8"); if(!h.includes("js/mp.js")){ h = h.replace("</body>","<script src=\"https://cdn.socket.io/4.8.0/socket.io.min.js\"></script>\n<script src=\"js/mp.js\"></script>\n</body>"); fs.writeFileSync("public/index.html",h); }' && \
-      node -e 'const fs = require("fs"); let j = fs.readFileSync("public/js/mp.js","utf8"); j = j.replace(/serverUrl:\s*["\x27]http:\/\/localhost:3000["\x27]/g, "serverUrl: \"\""); fs.writeFileSync("public/js/mp.js", j);' && \
+      node inject.js public && \
       mkdir -p /app/public_bundled && \
       cp -r public/* /app/public_bundled/ && \
       (git -C public rev-parse HEAD > /app/public_bundled/.commit 2>/dev/null || true); \

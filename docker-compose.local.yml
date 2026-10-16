@@ -28,7 +28,8 @@ services:
     environment:
       - PORT=3000
       # No NODE_ENV=production: mails are printed to the log, cookies work over http
-      - BASE_URL=http://localhost:3000
+      # BASE_URL comes from secrets.env (e.g. a tunnel URL for the Discord Activity); without it
+      # the server uses http://localhost:3000. Values set here would override secrets.env.
       - DATABASE_URL=postgres://hochciv:password123@hochciv-db:5432/hochciv
       - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
       - CORE_REPO_BRANCH=main
@@ -47,9 +48,13 @@ services:
       - ./models:/app/models
       - ./utils:/app/utils
       - ./async:/app/async
+      - ./scripts:/app/scripts
       - ./config.js:/app/config.js
       - ./engine-adapter.js:/app/engine-adapter.js
       - ./elevate.js:/app/elevate.js
+      - ./inject.js:/app/inject.js
+      # The Discord Activity bundle is built into the image – changes to activity/bridge.js need --build
+      - ./activity:/app/activity
 
 volumes:
   pgdata:

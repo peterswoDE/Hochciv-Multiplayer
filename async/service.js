@@ -350,7 +350,8 @@ async function list(user) {
         return s;
     };
     const mine = await AsyncGame.findAll({
-        where: { participantIds: { [Op.contains]: [user.id] }, status: { [Op.ne]: 'cancelled' } },
+        // Finished games are listed in the account's game history, not here
+        where: { participantIds: { [Op.contains]: [user.id] }, status: { [Op.notIn]: ['cancelled', 'finished'] } },
         attributes: attrs, order: [['updatedAt', 'DESC']], limit: 100,
     });
     const invites = await AsyncGame.findAll({

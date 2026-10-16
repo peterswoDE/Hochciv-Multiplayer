@@ -10,12 +10,17 @@ module.exports = (sequelize) => {
         username: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
         },
+        // null for accounts created automatically by the Discord Activity
         email: {
             type: DataTypes.STRING,
-            allowNull: false,
-            unique: true,
+            allowNull: true,
+        },
+        // 'activity': created automatically for a Discord Activity player (merged into a real
+        // account when that one links the same Discord account)
+        origin: {
+            type: DataTypes.STRING,
+            allowNull: true,
         },
         password_hash: {
             type: DataTypes.STRING,
@@ -52,12 +57,25 @@ module.exports = (sequelize) => {
             type: DataTypes.DATE,
             allowNull: true,
         },
-        // Wrong guesses on the current activation / reset / e-mail login code
-        codeAttempts: {
-            type: DataTypes.INTEGER,
-            defaultValue: 0,
-            allowNull: false,
+        // E-mail change: the new address is only stored as `email` once the code sent there is entered
+        pendingEmail: {
+            type: DataTypes.STRING,
+            allowNull: true,
         },
+        emailChangeCode: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        emailChangeCodeExpiresAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+        // Wrong guesses per code type (utils/auth.js consumeCode) – separate, so requesting one
+        // kind of code cannot reset the attempt limit of another
+        activationCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
+        resetCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
+        emailOtpCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
+        emailChangeCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
         role: {
             type: DataTypes.STRING,
             defaultValue: 'user',
@@ -114,6 +132,12 @@ module.exports = (sequelize) => {
         }
     }, {
         tableName: 'users',
+        // Unique as a named index, not `unique: true`: sync({ alter: true }) re-added that as a new
+        // constraint on every start (scripts/dedupe-constraints.js cleans up old copies)
+        indexes: [
+            { name: 'users_username_key', unique: true, fields: ['username'] },
+            { name: 'users_email_key', unique: true, fields: ['email'] },
+        ],
         timestamps: true,
     });
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { sequelize, User, Passkey, TotpToken, OAuthProvider } = require('../models');
+const { Op } = require('sequelize');
+const { sequelize, User, Passkey, TotpToken, OAuthProvider, Game, AsyncGame } = require('../models');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const { refreshOAuthStrategies } = require('../utils/oauth');
@@ -182,6 +183,38 @@ router.get('/lobbies', (req, res) => {
     res.json(list);
 });
 
+// --- Game overview: running Rundenspiele + every finished game (newest first, paged) ---
+const GAMES_PAGE = 50;
+router.get('/games', async (req, res) => {
+    try {
+        const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+        const q = String(req.query.q || '').trim().slice(0, 50);
+        // Player search: matches names and usernames inside the participants JSON
+        const where = q ? sequelize.where(sequelize.cast(sequelize.col('participants'), 'text'),
+            { [Op.iLike]: `%${q.replace(/[\\%_]/g, c => '\\' + c)}%` }) : undefined;
+        const { count, rows } = await Game.findAndCountAll({
+            where, order: [['matchDate', 'DESC']], offset, limit: GAMES_PAGE,
+        });
+        const running = offset || q ? null : (await AsyncGame.findAll({
+            where: { status: { [Op.notIn]: ['finished', 'cancelled'] } },
+            attributes: ['id', 'joinCode', 'status', 'round', 'isPublic', 'waitSince', 'createdAt', 'updatedAt', 'data'],
+            order: [['updatedAt', 'DESC']], limit: 200,
+        })).map(g => ({
+            id: g.id, joinCode: g.joinCode, status: g.status, round: g.round, isPublic: g.isPublic,
+            waitSince: g.waitSince, createdAt: g.createdAt, updatedAt: g.updatedAt,
+            ranked: !!(g.data.config && g.data.config.ranked),
+            players: (g.data.seats || []).map(seat => ({
+                name: seat.name || seat.civ, isBot: seat.kind === 'bot', replaced: !!seat.replaced,
+                userId: seat.replaced ? null : seat.userId || null,
+            })),
+        }));
+        res.json({ total: count, offset, pageSize: GAMES_PAGE, finished: rows, running });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 router.post('/lobbies/:id/action', (req, res) => {
     const { id } = req.params;
     const { action, message } = req.body;
@@ -211,7 +244,7 @@ router.post('/lobbies/:id/action', (req, res) => {
 router.get('/oauth', isSuperAdmin, async (req, res) => {
     try {
         const providers = await OAuthProvider.findAll({
-            attributes: ['id', 'provider', 'clientId', 'clientSecret', 'enabled']
+            attributes: ['id', 'provider', 'clientId', 'clientSecret', 'botToken', 'enabled']
         });
         // Return a map with all known providers, filling in defaults for missing ones
         // callbackBase: what the server really uses in redirect_uri (from BASE_URL)
@@ -221,6 +254,7 @@ router.get('/oauth', isSuperAdmin, async (req, res) => {
                 id: p.id,
                 clientId: p.clientId,
                 clientSecret: p.clientSecret,
+                botToken: p.botToken,
                 enabled: p.enabled
             };
         }
@@ -237,7 +271,7 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
         if (!['google', 'discord'].includes(provider)) {
             return res.status(400).json({ error: 'Ungültiger Provider' });
         }
-        const { clientId, clientSecret, enabled } = req.body;
+        const { clientId, clientSecret, botToken, enabled } = req.body;
 
         const [oauthProvider] = await OAuthProvider.findOrCreate({
             where: { provider },
@@ -247,6 +281,8 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
         // Update fields
         if (clientId !== undefined) oauthProvider.clientId = clientId;
         if (clientSecret !== undefined) oauthProvider.clientSecret = clientSecret;
+        // Bot token: Discord Activity only
+        if (provider === 'discord' && typeof botToken === 'string') oauthProvider.botToken = botToken.trim();
         if (enabled !== undefined) oauthProvider.enabled = enabled;
         await oauthProvider.save();
 
