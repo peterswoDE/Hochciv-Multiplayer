@@ -7,6 +7,8 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const DiscordStrategy = require('./discordStrategy').Strategy;
 const { User, OAuthProvider } = require('../models');
 const config = require('../config');
+const { isMergeable, mergeInto } = require('./mergeAccounts');
+const { recentlyAuthenticated } = require('./auth');
 
 const PROVIDERS = ['google', 'discord'];
 const strategies = new Set();       // providers with a registered strategy
@@ -32,17 +34,37 @@ async function handleOAuthProfile(req, provider, idField, profile, done) {
 
         // 0. Linking from the account page: the user is already logged in
         if (req.user) {
-            if (owner && owner.id !== req.user.id) {
-                return done(null, false, { message: 'Dieses Konto ist bereits mit einem anderen Benutzer verknüpft.' });
-            }
             const user = await User.findByPk(req.user.id);
+            // Linking a new provider account is a new way to log in – a stolen session cookie must not
+            // be enough. Coming back with the account that is already linked is a re-confirmation.
+            if (user[idField] !== providerIdValue && !recentlyAuthenticated(req)) {
+                return done(null, false, { message: 'reauth' });
+            }
+            if (owner && owner.id !== user.id) {
+                // The automatic account of the Discord Activity is merged into this one
+                if (!(await isMergeable(owner))) {
+                    return done(null, false, { message: 'Dieses Konto ist bereits mit einem anderen Benutzer verknüpft.' });
+                }
+                const error = await mergeInto(user, owner);
+                if (error) return done(null, false, { message: error });
+            }
             user[idField] = providerIdValue;
             if (avatar && !user.avatarUrl) user.avatarUrl = avatar;
             await user.save();
             return done(null, user);
         }
 
-        // 1. Find by provider ID
+        // 1. Find by provider ID. An automatic Activity account whose verified Discord e-mail
+        //    belongs to a real account is merged into that account first.
+        if (owner && email && await isMergeable(owner)) {
+            const user = await User.findOne({ where: { email } });
+            if (user && user.id !== owner.id && !user.isBanned && !(await mergeInto(user, owner))) {
+                if (avatar && !user.avatarUrl) user.avatarUrl = avatar;
+                if (!user.isActive) Object.assign(user, { password_hash: null, activationCode: null, isActive: true });
+                await user.save();
+                return done(null, user);
+            }
+        }
         if (owner) {
             if (owner.isBanned) return done(null, false, { message: 'banned' });
             if (avatar && !owner.avatarUrl) {

@@ -10,7 +10,6 @@ module.exports = (sequelize) => {
         provider: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
             validate: {
                 isIn: [['google', 'discord']],
             },
@@ -39,6 +38,11 @@ module.exports = (sequelize) => {
         },
     }, {
         tableName: 'oauth_providers',
+        // Unique as a named index, not `unique: true`: sync({ alter: true }) re-added that as a new
+        // constraint on every start (scripts/dedupe-constraints.js cleans up old copies)
+        indexes: [
+            { name: 'oauth_providers_provider_key', unique: true, fields: ['provider'] },
+        ],
         timestamps: true,
     });
 

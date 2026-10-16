@@ -1,7 +1,7 @@
 /**
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
- *   • adds mp.js and the Discord Activity bridge to index.html,
+ *   • adds the player profile (client/profile.js), mp.js and the Discord Activity bridge to index.html,
  *   • points mp.js at this server.
  * Each step checks on its own, so an already patched public/ is brought up to date.
  *
@@ -15,13 +15,14 @@ const htmlPath = path.join(dir, 'index.html');
 const jsPath = path.join(dir, 'js', 'mp.js');
 
 const SOCKET_IO = '<script src="/socket.io/socket.io.min.js"></script>';
+const PROFILE = '<script src="/client/profile.js"></script>';
 const MP = '<script src="js/mp.js"></script>';
 const ACTIVITY = '<script src="js/activity.js"></script>';
 
 if (fs.existsSync(htmlPath)) {
     let html = fs.readFileSync(htmlPath, 'utf8');
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
-    const missing = [SOCKET_IO, MP, ACTIVITY].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, PROFILE, MP, ACTIVITY].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     fs.writeFileSync(htmlPath, html, 'utf8');
 }

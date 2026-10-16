@@ -494,7 +494,9 @@ function publicPlayers(session) {
         ability: p.ability,
         drafted: p.drafted || null,     // Marathon: the two drafted abilities
         connected: p.connected,
-        mmr: p.mmr || 1000
+        mmr: p.mmr || 1000,
+        userId: p.dbUserId || null,     // account for the player profile (client/profile.js)
+        isBot: p.kind === 'bot',
     }));
 }
 

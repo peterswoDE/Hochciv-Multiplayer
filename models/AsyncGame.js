@@ -18,7 +18,6 @@ module.exports = (sequelize) => {
         joinCode: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
         },
         hostUserId: {
             type: DataTypes.UUID,
@@ -80,7 +79,10 @@ module.exports = (sequelize) => {
     }, {
         tableName: 'async_games',
         timestamps: true,
+        // Unique as a named index, not `unique: true`: sync({ alter: true }) re-added that as a new
+        // constraint on every start (scripts/dedupe-constraints.js cleans up old copies)
         indexes: [
+            { name: 'async_games_joinCode_key', unique: true, fields: ['joinCode'] },
             { fields: ['status'] },
             { fields: ['participantIds'], using: 'GIN' },
             { fields: ['invitedIds'], using: 'GIN' },

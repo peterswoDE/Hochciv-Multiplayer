@@ -4,10 +4,12 @@ const { User, Passkey, TotpToken } = require('../models');
 const totp = require('../utils/totp');
 const qrcode = require('qrcode');
 const { generateRegistrationOptions, verifyRegistrationResponse } = require('@simplewebauthn/server');
-const { isAuthenticated, str } = require('../utils/auth');
+const { isAuthenticated, requireRecentAuth, str } = require('../utils/auth');
 const { rp } = require('../utils/webauthn');
 
 router.use(isAuthenticated);
+// Adding or removing a factor changes how the account logs in: needs a recent login/re-confirmation
+router.use((req, res, next) => (req.method === 'GET' ? next() : requireRecentAuth(req, res, next)));
 
 // --- TOTP (Authenticator App) ---
 
@@ -15,7 +17,7 @@ router.post('/setup-totp', async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
         const secret = totp.newSecret();
-        const uri = totp.keyUri(user.email, 'Hochciv', secret);
+        const uri = totp.keyUri(user.email || user.username, 'Hochciv', secret);
         const qrCodeUrl = await qrcode.toDataURL(uri);
 
         // Temporarily store the secret until they verify it
@@ -88,6 +90,9 @@ router.delete('/totp/:id?', async (req, res) => {
 router.post('/toggle-email-otp', async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
+        if (req.body.enabled && (!user.email || user.email.endsWith('@oauth.local'))) {
+            return res.status(400).json({ error: 'Hinterlege zuerst eine E-Mail-Adresse.' });
+        }
         user.emailOtpEnabled = !!req.body.enabled;
         await user.save();
         res.json({ ok: true });
@@ -131,7 +136,7 @@ router.post('/passkey/generate-registration', async (req, res) => {
             rpID: rp(req).rpID,
             // v9 used the UTF-8 bytes of the id string as user handle – keep it that way
             userID: new Uint8Array(Buffer.from(user.id, 'utf8')),
-            userName: user.email,
+            userName: user.email || user.username,
             timeout: 60000,
             attestationType: 'none',
             excludeCredentials: passkeys.map(pk => ({

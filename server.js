@@ -147,6 +147,8 @@ const mfaRoutes = require('./routes/mfa');
 app.use('/api/account', accountRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/mfa', mfaRoutes);
+// Public player profiles (client/profile.js)
+app.use('/api/profile', require('./routes/profile'));
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
 // Discord Activity (Embedded App SDK)

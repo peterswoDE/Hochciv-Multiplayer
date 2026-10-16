@@ -48,6 +48,7 @@ services:
       - ./models:/app/models
       - ./utils:/app/utils
       - ./async:/app/async
+      - ./scripts:/app/scripts
       - ./config.js:/app/config.js
       - ./engine-adapter.js:/app/engine-adapter.js
       - ./elevate.js:/app/elevate.js

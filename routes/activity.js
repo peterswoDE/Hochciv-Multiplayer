@@ -23,7 +23,7 @@ const crypto = require('crypto');
 const rateLimitLib = require('express-rate-limit');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
-const { OAuthProvider } = require('../models');
+const { OAuthProvider, User } = require('../models');
 const config = require('../config');
 
 const router = express.Router();
@@ -129,6 +129,58 @@ function seat(instanceId, user) {
     });
 }
 
+/** A free username from the Discord name, same rules as registration (3–30 of A–Z a–z 0–9 _ -). */
+async function freeUsername(discordUser) {
+    let base = String(discordUser.username || discordUser.global_name || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 24);
+    if (base.replace(/_/g, '').length < 3) base = `discord_${String(discordUser.id).slice(-6)}`;
+    for (let i = 0; ; i++) {
+        const name = i === 0 ? base : `${base}_${i + 1}`;
+        if (!(await User.findOne({ where: { username: name } }))) return name;
+    }
+}
+
+const creating = new Map();     // discordId → Promise<User>, so parallel requests create only one account
+
+/**
+ * The Hochciv account of a Discord user: the linked one, or a new account without e-mail and
+ * password (origin 'activity'). Linking Discord on the website later merges it into that account.
+ */
+function activityAccount(discordUser) {
+    const discordId = String(discordUser.id);
+    if (creating.has(discordId)) return creating.get(discordId);
+    const p = (async () => {
+        const user = await User.findOne({ where: { discordId } });
+        if (user) return user;
+        const created = await User.create({
+            username: await freeUsername(discordUser),
+            email: null,
+            password_hash: null,
+            isActive: true,
+            origin: 'activity',
+            discordId,
+            avatarUrl: discordUser.avatar
+                ? `https://cdn.discordapp.com/avatars/${discordId}/${discordUser.avatar}.png` : null,
+        });
+        console.log(`[Activity] Created account ${created.username} for Discord user ${discordId}.`);
+        return created;
+    })().finally(() => creating.delete(discordId));
+    creating.set(discordId, p);
+    return p;
+}
+
+/**
+ * The Activity iframe sends no site cookie, so the socket has no logged-in user. Tie the seat
+ * to the player's account instead – for game history and MMR.
+ */
+function linkAccount(result, user) {
+    const s = sessions.getSession(result.sessionId);
+    const player = s && s.players.find(p => p.clientId === result.clientId);
+    if (!player) return;
+    player.dbUserId = user.id;
+    player.dbUsername = user.username;
+    player.mmr = user.mmr;
+}
+
 const cleanupTimer = setInterval(() => {
     const cutoff = Date.now() - INSTANCE_TTL_MS;
     for (const [id, rec] of instances) {
@@ -187,8 +239,12 @@ router.post('/lobby', limit, wrap(async (req, res) => {
         return res.status(403).json({ error: 'Du bist nicht Teil dieser Activity.' });
     }
 
+    const account = await activityAccount(me.data);
+    if (account.isBanned) return res.status(403).json({ error: 'Dein Hochciv-Konto ist gesperrt.' });
+
     const result = await seat(instanceId, me.data);
     if (typeof result === 'string') return res.status(409).json({ error: result });
+    linkAccount(result, account);
     res.json(result);
 }));
 

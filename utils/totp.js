@@ -17,4 +17,12 @@ const checkToken = (token, secret) => {
     }
 };
 
-module.exports = { newSecret, keyUri, checkToken };
+/** Does `token` match one of the user's authenticator apps (legacy secret or TotpToken)? */
+async function checkUserToken(user, token) {
+    if (user.totpSecret && checkToken(token, user.totpSecret)) return true;
+    const { TotpToken } = require('../models');
+    const tokens = await TotpToken.findAll({ where: { UserId: user.id } });
+    return tokens.some(t => checkToken(token, t.secret));
+}
+
+module.exports = { newSecret, keyUri, checkToken, checkUserToken };

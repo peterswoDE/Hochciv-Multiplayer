@@ -1,9 +1,13 @@
 /** Escape text for use inside HTML (usernames, e-mails, player names, …). */
 const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+/** Player name that opens the player profile (client/profile.js) when it belongs to an account. */
+const nameLink = (name, userId) => window.PROFILE ? PROFILE.link(name, userId) : esc(name);
 
 document.addEventListener('DOMContentLoaded', async () => {
     let currentUser = null;
+    // Declared before the first await: loadHistory() can resolve while init is still running
+    let historyGames = [];
 
     // --- Tab Logic ---
     const tabs = document.querySelectorAll('.nav-tab');
@@ -73,14 +77,70 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // --- Re-confirmation for sensitive changes ---
+    // The server answers 403 { reauthRequired, methods } when the last login is too long ago
+    // (utils/auth.js requireRecentAuth): ask for password / authenticator code, then retry once.
+    function askReauth(methods) {
+        const modal = document.getElementById('reauth-modal');
+        const form = document.getElementById('reauth-form');
+        const msg = document.getElementById('reauth-msg');
+        const pw = document.getElementById('reauth-password');
+        const code = document.getElementById('reauth-totp');
+        const viaOAuth = !methods.password && !methods.totp;
+        document.getElementById('reauth-password-group').style.display = methods.password ? 'block' : 'none';
+        document.getElementById('reauth-totp-group').style.display = methods.totp ? 'block' : 'none';
+        document.getElementById('reauth-oauth-group').style.display = viaOAuth ? 'block' : 'none';
+        document.getElementById('reauth-google').style.display = currentUser.googleLinked ? 'inline-block' : 'none';
+        document.getElementById('reauth-discord').style.display = currentUser.discordLinked ? 'inline-block' : 'none';
+        document.getElementById('reauth-submit').style.display = viaOAuth ? 'none' : 'inline-block';
+        document.getElementById('reauth-google').onclick = () => window.top.location.href = '/api/auth/google';
+        document.getElementById('reauth-discord').onclick = () => window.top.location.href = '/api/auth/discord';
+        pw.value = '';
+        code.value = '';
+        msg.textContent = '';
+        modal.style.display = 'flex';
+        (methods.password ? pw : code).focus();
+
+        return new Promise(resolve => {
+            const close = ok => {
+                modal.style.display = 'none';
+                form.onsubmit = null;
+                resolve(ok);
+            };
+            document.getElementById('reauth-cancel').onclick = () => close(false);
+            form.onsubmit = async e => {
+                e.preventDefault();
+                const body = pw.value ? { password: pw.value } : { token: code.value.trim() };
+                const res = await fetch('/api/account/reauth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) return close(true);
+                msg.textContent = (await res.json().catch(() => ({}))).error || 'Bestätigung fehlgeschlagen.';
+            };
+        });
+    }
+
+    /** fetch() that handles the re-confirmation prompt; resolves with the final Response. */
+    async function authFetch(url, options) {
+        const res = await fetch(url, options);
+        if (res.status !== 403) return res;
+        const data = await res.clone().json().catch(() => ({}));
+        if (!data.reauthRequired || !(await askReauth(data.methods || {}))) return res;
+        return fetch(url, options);
+    }
+
     // --- Profile Forms ---
+    const formEmailConfirm = document.getElementById('form-email-confirm');
+
     document.getElementById('form-email').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg-email');
         msg.textContent = 'Speichert...';
         msg.style.color = 'black';
 
-        const res = await fetch('/api/account/update-email', {
+        const res = await authFetch('/api/account/update-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -90,11 +150,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const json = await res.json();
         if (res.ok) {
-            msg.textContent = 'E-Mail erfolgreich aktualisiert!';
+            msg.textContent = 'Wir haben dir einen Code an die neue Adresse geschickt. Gib ihn unten ein.';
             msg.style.color = 'green';
             document.getElementById('input-email-pw').value = '';
+            document.getElementById('input-email-code').value = '';
+            document.getElementById('msg-email-confirm').textContent = '';
+            formEmailConfirm.style.display = 'block';
         } else {
             msg.textContent = json.error || 'Fehler beim Speichern.';
+            msg.style.color = 'red';
+        }
+    });
+
+    formEmailConfirm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('msg-email-confirm');
+        const res = await fetch('/api/account/confirm-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: document.getElementById('input-email-code').value.trim() })
+        });
+        const json = await res.json();
+        if (res.ok) {
+            currentUser.email = json.email;
+            document.getElementById('input-email').value = json.email;
+            formEmailConfirm.style.display = 'none';
+            const m = document.getElementById('msg-email');
+            m.textContent = 'E-Mail erfolgreich aktualisiert!';
+            m.style.color = 'green';
+        } else {
+            msg.textContent = json.error || 'Fehler beim Bestätigen.';
             msg.style.color = 'red';
         }
     });
@@ -105,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg.textContent = 'Speichert...';
         msg.style.color = 'black';
 
-        const res = await fetch('/api/account/update-password', {
+        const res = await authFetch('/api/account/update-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -124,8 +209,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    let historyGames = [];
-
     // --- History ---
     async function loadHistory() {
         const tbody = document.querySelector('#table-history tbody');
@@ -140,13 +223,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             tbody.innerHTML = historyGames.map((g, idx) => {
                 const date = new Date(g.matchDate).toLocaleString('de-DE');
-                const players = g.participants.map(p => esc(p.name)).join(', ');
-                const isWinner = g.winnerUsername && g.winnerUsername === currentUser.username;
+                const players = g.participants.map(p => nameLink(p.name, p.dbUserId)).join(', ');
+                const winners = g.participants.filter(p => p.isWinner);
+                const isWinner = winners.some(p => p.dbUserId === currentUser.id);
                 return `
                     <tr style="background: ${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}; cursor:pointer;" onclick="showGameDetails(${idx})" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='${isWinner ? 'rgba(0,255,0,0.05)' : 'transparent'}'">
                         <td>${esc(date)}</td>
                         <td>${esc(g.durationRounds)}</td>
-                        <td>${g.winnerUsername ? (isWinner ? '<b>Du!</b>' : esc(g.winnerUsername)) : '-'}</td>
+                        <td>${isWinner ? '<b>Du!</b>' : esc(winners.map(p => p.name).join(', ') || '-')}</td>
                         <td style="font-size:13px">${players}</td>
                     </tr>
                 `;
@@ -156,8 +240,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    window.showGameDetails = function (idx) {
-        const g = historyGames[idx];
+    window.showGameDetails = idx => openGameDetails(historyGames[idx]);
+
+    function openGameDetails(g) {
         if (!g) return;
 
         const sorted = [...g.participants].sort((a, b) => (b.points || 0) - (a.points || 0));
@@ -174,7 +259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </tr>`;
 
         tafel += sorted.map(x => {
-            const isWinner = g.winnerUsername && (x.name === g.winnerUsername || x.dbUsername === g.winnerUsername);
+            const isWinner = x.isWinner || (g.winnerUsername && (x.name === g.winnerUsername || x.dbUsername === g.winnerUsername));
             const pop = x.scoreDetails ? x.scoreDetails.pop : '-';
             const won = x.scoreDetails ? x.scoreDetails.wonders : '-';
             const tech = x.scoreDetails ? x.scoreDetails.techs : '-';
@@ -183,7 +268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const mmrColor = x.mmrShift > 0 ? 'green' : (x.mmrShift < 0 ? 'red' : 'inherit');
 
             return `<tr style="border-bottom:1px solid #eee; ${isWinner ? 'font-weight:bold; background:rgba(0,255,0,0.05);' : ''}">
-                <td style="padding:8px;">${esc(x.name)} ${x.isBot ? '(Bot)' : ''}</td>
+                <td style="padding:8px;">${nameLink(x.name, x.dbUserId)} ${x.isBot ? '(Bot)' : ''}</td>
                 <td style="padding:8px;">${esc(x.civ || '-')}</td>
                 <td style="padding:8px;">${esc(pop)}</td>
                 <td style="padding:8px;">${esc(won)}</td>
@@ -200,7 +285,75 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('hm-body').innerHTML = tafel;
 
         document.getElementById('history-modal').style.display = 'flex';
-    };
+    }
+
+    // --- Admin: game overview ---
+    let adminGames = [];
+    let adminGamesQuery = '';
+    const ASYNC_STATUS = { setup: 'Spielersuche', placement: 'Startplättchen', draft: 'Draft', playing: 'Läuft' };
+    const winnerNames = g => g.participants.filter(p => p.isWinner).map(p => p.name);
+
+    async function loadAdminGames(append) {
+        const tbody = document.querySelector('#table-admin-games tbody');
+        const moreBtn = document.getElementById('btn-admin-games-more');
+        if (!append) {
+            adminGames = [];
+            tbody.innerHTML = '<tr><td colspan="6">Lade Spiele …</td></tr>';
+        }
+        try {
+            const params = new URLSearchParams({ offset: adminGames.length });
+            if (adminGamesQuery) params.set('q', adminGamesQuery);
+            const res = await fetch('/api/admin/games?' + params);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            if (data.running) {
+                const rBody = document.querySelector('#table-admin-running tbody');
+                rBody.innerHTML = data.running.length === 0 ? '<tr><td colspan="5">Keine laufenden Rundenspiele.</td></tr>'
+                    : data.running.map(g => `
+                    <tr>
+                        <td><b>${esc(g.joinCode)}</b>${g.ranked ? ' <small>(gewertet)</small>' : ''}${g.isPublic ? ' <small>(öffentlich)</small>' : ''}</td>
+                        <td>${esc(ASYNC_STATUS[g.status] || g.status)}</td>
+                        <td>${esc(g.round || '-')}</td>
+                        <td style="font-size:13px">${g.players.map(p => nameLink(p.name, p.userId) + (p.isBot ? ' (Bot)' : p.replaced ? ' (KI)' : '')).join(', ')}</td>
+                        <td>${esc(new Date(g.updatedAt).toLocaleString('de-DE'))}</td>
+                    </tr>`).join('');
+            }
+
+            const start = adminGames.length;
+            adminGames = adminGames.concat(data.finished);
+            document.getElementById('admin-games-total').textContent = `(${data.total})`;
+            const rows = data.finished.map((g, i) => {
+                const ranked = g.participants.some(p => p.mmrShift != null);
+                const type = (g.participants.some(p => p.async) ? 'Runden' : 'Live') + (ranked ? ', gewertet' : '');
+                return `
+                <tr style="cursor:pointer;" onclick="showAdminGameDetails(${start + i})" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">
+                    <td>${esc(new Date(g.matchDate).toLocaleString('de-DE'))}</td>
+                    <td>${esc(type)}</td>
+                    <td>${esc(g.durationRounds)}</td>
+                    <td>${esc(winnerNames(g).join(', ') || '-')}</td>
+                    <td style="font-size:13px">${g.participants.map(p => nameLink(p.name, p.dbUserId) + (p.isBot ? ' (Bot)' : '')).join(', ')}</td>
+                    <td>${esc(g.version || '-')}</td>
+                </tr>`;
+            }).join('');
+            if (append) tbody.insertAdjacentHTML('beforeend', rows);
+            else tbody.innerHTML = rows || `<tr><td colspan="6">${adminGamesQuery ? 'Keine Spiele gefunden.' : 'Noch keine Spiele.'}</td></tr>`;
+            moreBtn.style.display = adminGames.length < data.total ? 'inline-block' : 'none';
+        } catch (e) {
+            if (!append) tbody.innerHTML = '<tr><td colspan="6">Fehler beim Laden.</td></tr>';
+        }
+    }
+
+    window.showAdminGameDetails = idx => openGameDetails(adminGames[idx]);
+
+    const adminGamesTab = document.querySelector('[data-target="tab-admin-games"]');
+    adminGamesTab.addEventListener('click', () => loadAdminGames(false));
+    document.getElementById('btn-admin-games-more').addEventListener('click', () => loadAdminGames(true));
+    document.getElementById('form-admin-games-search').addEventListener('submit', e => {
+        e.preventDefault();
+        adminGamesQuery = document.getElementById('admin-games-q').value.trim();
+        loadAdminGames(false);
+    });
 
     // --- 2FA / MFA Setup ---
     const btnSetupTotp = document.getElementById('btn-setup-totp');
@@ -210,7 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnSetupTotp) btnSetupTotp.addEventListener('click', async () => {
         try {
-            const res = await fetch('/api/mfa/setup-totp', { method: 'POST' });
+            const res = await authFetch('/api/mfa/setup-totp', { method: 'POST' });
             const data = await res.json();
             if (data.qrCodeUrl) {
                 document.getElementById('totp-qr').src = data.qrCodeUrl;
@@ -225,7 +378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnVerifyTotp = document.getElementById('btn-verify-totp');
     if (btnVerifyTotp) btnVerifyTotp.addEventListener('click', async () => {
         const token = document.getElementById('totp-verify-input').value;
-        const res = await fetch('/api/mfa/verify-totp', {
+        const res = await authFetch('/api/mfa/verify-totp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
@@ -242,7 +395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     if (btnEnableEmailOtp) btnEnableEmailOtp.addEventListener('click', async () => {
-        const res = await fetch('/api/mfa/toggle-email-otp', {
+        const res = await authFetch('/api/mfa/toggle-email-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled: true })
@@ -287,11 +440,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!confirm(type === 'totp' ? 'Authenticator App wirklich entfernen?' : (type === 'email' ? 'E-Mail OTP deaktivieren?' : 'Passkey löschen?'))) return;
 
         if (type === 'passkey') {
-            await fetch('/api/mfa/passkey/' + encodeURIComponent(id), { method: 'DELETE' });
+            await authFetch('/api/mfa/passkey/' + encodeURIComponent(id), { method: 'DELETE' });
         } else if (type === 'totp') {
-            await fetch('/api/mfa/totp/' + encodeURIComponent(id || 'null'), { method: 'DELETE' });
+            await authFetch('/api/mfa/totp/' + encodeURIComponent(id || 'null'), { method: 'DELETE' });
         } else if (type === 'email') {
-            await fetch('/api/mfa/toggle-email-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) });
+            await authFetch('/api/mfa/toggle-email-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) });
         }
         loadTokens();
     };
@@ -299,7 +452,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnSetupPasskey) btnSetupPasskey.addEventListener('click', async () => {
         try {
             const { startRegistration } = window.SimpleWebAuthnBrowser;
-            const res = await fetch('/api/mfa/passkey/generate-registration', { method: 'POST' });
+            const res = await authFetch('/api/mfa/passkey/generate-registration', { method: 'POST' });
             const options = await res.json();
 
             let attResp;
@@ -314,7 +467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const verifyRes = await fetch('/api/mfa/passkey/verify-registration', {
+            const verifyRes = await authFetch('/api/mfa/passkey/verify-registration', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(attResp),
