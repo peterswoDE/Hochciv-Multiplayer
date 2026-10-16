@@ -4,10 +4,13 @@ const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g,
 /** Player name that opens the player profile (client/profile.js) when it belongs to an account. */
 const nameLink = (name, userId) => window.PROFILE ? PROFILE.link(name, userId) : esc(name);
 
+const PROVIDER_LABEL = { google: 'Google', discord: 'Discord' };
+
 document.addEventListener('DOMContentLoaded', async () => {
     let currentUser = null;
     // Declared before the first await: loadHistory() can resolve while init is still running
     let historyGames = [];
+    let adminUsers = [];           // last loaded admin user list (adminDeleteUser)
 
     // --- Tab Logic ---
     const tabs = document.querySelectorAll('.nav-tab');
@@ -54,19 +57,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const oauthRes = await fetch('/api/auth/oauth-status');
             if (oauthRes.ok) {
                 const oauthStatus = await oauthRes.json();
-                const btnGoogle = document.getElementById('btn-link-google');
-                const btnDiscord = document.getElementById('btn-link-discord');
-                if (btnGoogle && oauthStatus.google) {
-                    btnGoogle.removeAttribute('disabled');
-                    btnGoogle.textContent = data.googleLinked ? '✓ Google verknüpft – erneut verknüpfen' : 'Google verknüpfen';
-                    // Top-level navigation: Google refuses to show its login inside the account iframe
-                    btnGoogle.onclick = () => window.top.location.href = '/api/auth/google';
+                for (const provider of ['google', 'discord']) {
+                    const btn = document.getElementById(`btn-link-${provider}`);
+                    if (!btn || !oauthStatus[provider]) continue;
+                    btn.removeAttribute('disabled');
+                    btn.onclick = () => currentUser[`${provider}Linked`] ? unlinkProvider(provider) : linkProvider(provider);
                 }
-                if (btnDiscord && oauthStatus.discord) {
-                    btnDiscord.removeAttribute('disabled');
-                    btnDiscord.textContent = data.discordLinked ? '✓ Discord verknüpft – erneut verknüpfen' : 'Discord verknüpfen';
-                    btnDiscord.onclick = () => window.top.location.href = '/api/auth/discord';
-                }
+                renderLinkButtons();
             }
         } catch (e) {
             console.error('Failed to load OAuth status for link buttons', e);
@@ -129,6 +126,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await res.clone().json().catch(() => ({}));
         if (!data.reauthRequired || !(await askReauth(data.methods || {}))) return res;
         return fetch(url, options);
+    }
+
+    /**
+     * Linking a new Google/Discord account needs a recent login (utils/oauth.js). Confirm first –
+     * after the redirect the server could only reject the link.
+     */
+    async function linkProvider(provider) {
+        const res = await authFetch('/api/account/recent-auth');
+        if (!res.ok) return;
+        // Top-level navigation: Google refuses to show its login inside the account iframe
+        window.top.location.href = `/api/auth/${provider}`;
+    }
+
+
+    /** A linked provider's button unlinks it, an unlinked one links it. */
+    function renderLinkButtons() {
+        for (const provider of ['google', 'discord']) {
+            const btn = document.getElementById(`btn-link-${provider}`);
+            if (!btn || btn.disabled) continue;
+            const label = PROVIDER_LABEL[provider];
+            btn.textContent = currentUser[`${provider}Linked`] ? `✓ ${label} verknüpft – Verknüpfung lösen` : `${label} verknüpfen`;
+        }
+    }
+
+    async function unlinkProvider(provider) {
+        const label = PROVIDER_LABEL[provider];
+        const extra = provider === 'discord'
+            ? '\nIn der Discord-Activity spielst du danach mit einem eigenen, neuen Konto.' : '';
+        if (!confirm(`Verknüpfung mit ${label} lösen? Du kannst dich dann nicht mehr mit ${label} anmelden.${extra}`)) return;
+        const res = await fetch(`/api/account/unlink/${provider}`, { method: 'POST' });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) return alert(json.error || 'Fehler beim Lösen der Verknüpfung.');
+        currentUser.googleLinked = json.googleLinked;
+        currentUser.discordLinked = json.discordLinked;
+        renderLinkButtons();
     }
 
     // --- Profile Forms ---
@@ -205,6 +237,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.target.reset();
         } else {
             msg.textContent = json.error || 'Fehler beim Speichern.';
+            msg.style.color = 'red';
+        }
+    });
+
+    document.getElementById('form-delete-account').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('msg-delete');
+        const confirmName = document.getElementById('input-delete-confirm').value.trim();
+        if (confirmName !== currentUser.username) {
+            msg.textContent = 'Der Benutzername stimmt nicht.';
+            msg.style.color = 'red';
+            return;
+        }
+        if (!confirm('Konto wirklich endgültig löschen?')) return;
+        msg.textContent = 'Löscht...';
+        msg.style.color = 'black';
+
+        const res = await authFetch('/api/account/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: confirmName })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) {
+            window.top.location.href = '/';
+        } else {
+            msg.textContent = json.error || 'Fehler beim Löschen.';
             msg.style.color = 'red';
         }
     });
@@ -526,6 +585,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Users
             const uRes = await fetch('/api/admin/users');
             const users = await uRes.json();
+            adminUsers = users;
             const uBody = document.querySelector('#table-admin-users tbody');
             uBody.innerHTML = users.map(u => {
                 const id = esc(u.id);
@@ -548,6 +608,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <button onclick="adminAction('user', '${id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? 'Entbannen' : 'Bannen'}</button>
                         <button onclick="adminAction('user', '${id}', 'force_password')" class="btn small">PW Reset</button>
                         <button onclick="toggleAdminUserMfa('${id}')" class="btn small" style="margin-top: 4px;">MFA Verwalten</button>
+                        ${u.id === currentUser.id ? '' : `<button onclick="adminDeleteUser('${id}')" class="btn small btn-primary" style="margin-top: 4px;">Konto löschen</button>`}
                         <div id="admin-user-mfa-${id}" style="display:none; margin-top: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; font-size: 13px;"></div>
                     </td>
                 </tr>
@@ -608,6 +669,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.toggleAdminUserMfa(userId);
         } else {
             alert('Fehler beim Löschen');
+        }
+    };
+
+    // The name is looked up in adminUsers, not put into the onclick attribute
+    window.adminDeleteUser = async (id) => {
+        const u = adminUsers.find(x => x.id === id);
+        if (!u) return;
+        const typed = prompt(`Konto „${u.username}“ endgültig löschen? Das lässt sich nicht rückgängig machen.\n` +
+            'Gib zur Bestätigung den Benutzernamen ein:');
+        if (typed === null) return;
+        if (typed.trim() !== u.username) return alert('Der Benutzername stimmt nicht – nichts gelöscht.');
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (res.ok) {
+            loadAdminData();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            alert('Fehler: ' + (err.error || 'Unbekannt'));
         }
     };
 

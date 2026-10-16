@@ -8,6 +8,7 @@ const { refreshOAuthStrategies } = require('../utils/oauth');
 const config = require('../config');
 const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
+const { deleteAccount } = require('../utils/deleteAccount');
 
 const ROLES = ['user', 'admin', 'superadmin'];
 const isPrivileged = role => role === 'admin' || role === 'superadmin';
@@ -167,6 +168,23 @@ router.post('/users/:id/action', async (req, res) => {
         if (logoutEverywhere) await destroyOtherSessions(sequelize, targetUser.id);
         res.json({ ok: true });
     } catch (err) {
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.delete('/users/:id', async (req, res) => {
+    try {
+        const targetUser = await User.findByPk(req.params.id);
+        if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+        if (!mayManage(req.user, targetUser)) return res.status(403).json({ error: 'Nur für Super-Administratoren' });
+        if (targetUser.id === req.user.id) {
+            return res.status(400).json({ error: 'Dein eigenes Konto löschst du auf der Profil-Seite.' });
+        }
+        const error = await deleteAccount(targetUser, { io: req.app.locals.io, byAdmin: req.user.username });
+        if (error) return res.status(400).json({ error });
+        res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
     }
 });

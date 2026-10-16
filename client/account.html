@@ -263,6 +263,21 @@
                     <button class="btn btn-oauth discord" id="btn-link-discord" disabled
                         style="margin-top: 10px;">Discord verknüpfen (Demnächst)</button>
                 </div>
+
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h3 style="color: var(--red);">Konto löschen</h3>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Dein Konto wird endgültig gelöscht,
+                        das lässt sich nicht rückgängig machen. In bisherigen Spielen erscheinst du als „Gelöschter
+                        Spieler“. In laufenden Rundenspielen spielt die KI deinen Platz zu Ende.</p>
+                    <form id="form-delete-account">
+                        <div class="form-group">
+                            <label>Gib zur Bestätigung deinen Benutzernamen ein</label>
+                            <input type="text" id="input-delete-confirm" autocomplete="off" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Konto endgültig löschen</button>
+                        <p id="msg-delete" style="margin-top:10px; font-size:14px;"></p>
+                    </form>
+                </div>
             </div>
 
             <!-- History Tab -->

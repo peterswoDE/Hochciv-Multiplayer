@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const rateLimitLib = require('express-rate-limit');
-const { sequelize, User, Game } = require('../models');
+const { sequelize, User, Game, Passkey } = require('../models');
 const totp = require('../utils/totp');
 const { sendMail } = require('../utils/mailer');
+const { deleteAccount } = require('../utils/deleteAccount');
 const {
     EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, consumeCode, destroyOtherSessions,
@@ -45,6 +46,32 @@ router.post('/reauth', rateLimit, async (req, res) => {
         if (!ok) return res.status(400).json({ error: password ? 'Das Passwort ist falsch.' : 'Ungültiger Code.' });
         markAuthenticated(req);
         res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Asked before linking Google/Discord: utils/oauth.js refuses a new link without a recent login,
+// and the client can only show the re-confirmation dialog for a request, not after the redirect.
+router.get('/recent-auth', requireRecentAuth, (req, res) => res.json({ ok: true }));
+
+// Unlink Google / Discord. The account must keep a way to log in: a password, a passkey or the
+// other provider.
+router.post('/unlink/:provider', rateLimit, async (req, res) => {
+    try {
+        const idField = { google: 'googleId', discord: 'discordId' }[req.params.provider];
+        if (!idField) return res.status(400).json({ error: 'Unbekannter Anbieter.' });
+        const user = await User.findByPk(req.user.id);
+        if (!user[idField]) return res.status(400).json({ error: 'Dieses Konto ist nicht verknüpft.' });
+        const otherId = idField === 'googleId' ? user.discordId : user.googleId;
+        const passkeys = await Passkey.count({ where: { UserId: user.id } });
+        if (!user.password_hash && !otherId && !passkeys) {
+            return res.status(400).json({ error: 'Das ist deine einzige Anmeldemöglichkeit. Lege zuerst ein Passwort fest.' });
+        }
+        user[idField] = null;
+        await user.save();
+        res.json({ ok: true, googleLinked: !!user.googleId, discordLinked: !!user.discordId });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
@@ -165,6 +192,25 @@ router.get('/history', async (req, res) => {
             limit: 50
         });
         res.json(games);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Delete the own account: needs a recent login (re-confirmation dialog) and the username typed
+// as confirmation. utils/deleteAccount.js does the work.
+router.post('/delete', rateLimit, requireRecentAuth, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.user.id);
+        if (str(req.body.confirm, 30) !== user.username) {
+            return res.status(400).json({ error: 'Bitte gib zur Bestätigung deinen Benutzernamen ein.' });
+        }
+        const error = await deleteAccount(user, { io: req.app.locals.io });
+        if (error) return res.status(400).json({ error });
+        req.logout(() => {
+            req.session.destroy(() => res.json({ ok: true }));
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });

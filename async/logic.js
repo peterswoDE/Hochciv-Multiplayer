@@ -489,6 +489,48 @@ function timeout(g) {
     return { replaced, penalized };
 }
 
+// ── Account deletion ─────────────────────────────────────────────────────────
+
+const DELETED_NAME = 'Gelöschter Spieler';
+const IN_PREPHASE = 'Ein Rundenspiel ist gerade in der Startphase (Plättchen legen / Draft). Bitte warte, bis sie abgeschlossen ist.';
+
+/**
+ * The player's account is deleted. A running game goes on without them: a seat that has not
+ * played yet is free again (the host's game in setup is cancelled), otherwise the KI plays it
+ * to the end. Placement and draft cannot be left – returns an error message then. Afterwards no
+ * seat, invitation or name points to the account any more (also in finished games).
+ */
+function removeUser(g, userId) {
+    const seats = g.seats.filter(s => s.userId === userId);
+    if (seats.length && (g.status === 'placement' || g.status === 'draft')) {
+        return IN_PREPHASE;
+    }
+    g.invites = g.invites.filter(i => i.userId !== userId);
+    const seat = seatOf(g, userId);
+    if (seat && g.status === 'setup' && userId === g.hostUserId) {
+        g.status = 'cancelled';
+    } else if (seat && userId !== g.hostUserId && (g.status === 'setup' || (g.status === 'playing' && !seat.started))) {
+        leave(g, userId);
+    } else if (seat && g.status === 'playing') {
+        replaceSeat(g, seat);
+        seat.penalty = 0;
+        const p = g.state.players[stateIndex(g, seat.slot)];
+        p.kind = 'ki';
+        p.kiLevel = seat.kiLevel;
+    }
+    for (const s of g.seats.filter(x => x.userId === userId)) {
+        const old = s.name;
+        Object.assign(s, { userId: null, name: DELETED_NAME });
+        const i = stateIndex(g, s.slot);
+        if (i >= 0 && g.state.players[i].name) g.state.players[i].name = DELETED_NAME;
+        if (old && g.result) {
+            for (const r of g.result.players || []) if (r.name === old) r.name = DELETED_NAME;
+            if (g.result.winners) g.result.winners = g.result.winners.map(n => n === old ? DELETED_NAME : n);
+        }
+    }
+    return null;
+}
+
 // ── Views ─────────────────────────────────────────────────────────────────────
 
 /** Short info for the game list. */
@@ -559,7 +601,7 @@ function view(g, userId) {
 }
 
 module.exports = {
-    create, join, leave, cancel, place, draftPick, action, drive, timeout,
+    create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, DELETED_NAME, IN_PREPHASE,
     waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree,
     MMR_PENALTY,
 };

@@ -478,6 +478,29 @@ async function setNotifyEmail(user, on) {
     return { ok: true, notifyEmail: !!on };
 }
 
+/**
+ * Account deletion: take the player out of every Rundenspiel, invitations included
+ * (logic.removeUser). Nothing changes if one of them can't be left right now – returns { error }.
+ */
+async function removeUser(userId) {
+    const invited = `"data"->'invites' @> ${sequelize.escape(JSON.stringify([{ userId }]))}::jsonb`;
+    const rows = await AsyncGame.findAll({
+        where: { [Op.or]: [{ participantIds: { [Op.contains]: [userId] } }, sequelize.literal(invited)] },
+        attributes: ['id', 'status', 'participantIds'],
+    });
+    if (rows.some(r => ['placement', 'draft'].includes(r.status) && r.participantIds.includes(userId))) {
+        return { error: L.IN_PREPHASE };
+    }
+    for (const row of rows) {
+        const res = await withGame(row.id, g => {
+            const err = L.removeUser(g, userId);
+            return err ? { error: err } : { ok: true };
+        });
+        if (res && res.error) return res;
+    }
+    return { ok: true };
+}
+
 /** Drop a game from memory (it is reloaded from the database on next use). */
 function evict(id) {
     const e = cache.get(id);
@@ -486,5 +509,5 @@ function evict(id) {
 
 module.exports = {
     init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick,
-    setNotifyEmail, sweep, room,
+    setNotifyEmail, sweep, room, removeUser,
 };
