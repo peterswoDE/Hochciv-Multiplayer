@@ -4,26 +4,30 @@ Authoritative multiplayer backend for **Hochciv**, built with Node.js, Express, 
 
 ## Features
 
-* **Live multiplayer:** Lobbies with a 6-character join code and a 6-digit password, public lobby list, up to 4 players (empty seats are filled with bots). The host configures map, difficulty, events, wonders and ranked mode.
+* **Live multiplayer:** Lobbies with a 6-character join code and a 6-digit password, public lobby list, 2 to 8 empires – as many as the map allows (fixed maps and the standard Marathon 4, the tile map 8, custom maps as many as they have start points). The host sets the number of empires and how many of them the KI plays; free human seats are filled with the KI at the start. Further settings: map (including custom maps and their codes), random nations for everyone, KI level, events, wonders and ranked mode.
 * **Server-side rules:** Every move is checked and applied by the real Hochciv engine on the server; clients only display the state.
 * **Discord Activity:** Play inside Discord voice channels and DMs. Everyone in the call lands in the same lobby automatically.
-* **Rundenspiele (asynchronous games):** Play turn by turn over days, with e-mail notifications when it is your turn.
+* **Rundenspiele (asynchronous games):** Play turn by turn over days, with e-mail notifications when it is your turn. Same choices as live games: 2–8 empires, how many of them KI (none: the game waits for everybody), random nations for everyone, custom maps.
+* **Custom maps:** Maps from the game's map editor ("Meine Karten") are kept in the player's account and synced to every device they log in on. A map can be published with a 6-character code; anybody can load it by that code (also without an account) and use it locally or as the map of a lobby.
 * **Accounts:** Registration with e-mail activation, password reset, Google and Discord login, two-factor authentication (authenticator app, passkeys, e-mail code), MMR ranking and match history.
 * **Admin panel:** Server status, maintenance mode, registration switch, lobby and user management, OAuth configuration.
 * **Reconnects:** Players who lose their connection or reload the page are put back into their seat.
 
 ## How it works
 
-The game itself lives in a separate repository ([timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv)). This server adds multiplayer on top of it:
+The game ships with this repository – nothing is downloaded, neither when the image is built nor at container start:
 
-1. **Fetch** – at container start, `entrypoint.sh` fetches the game into `public/` (exactly the pinned commit if `CORE_REPO_COMMIT` is set, otherwise the head of `CORE_REPO_BRANCH`). There are **no automatic updates while running**; restart the container to pick up a newer game version.
-2. **Inject** – it copies `mp.js` into the game and, via `inject.js`, adds three scripts to the game's `index.html`: the Socket.IO client (served by this server), `mp.js` and the Discord Activity bridge.
+* `HochCiv/` – the current game (based on [timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv), with the multiplayer changes). Served at `/`; its engine runs live games and new Rundenspiele.
+* `HochCiv-v83/` – the version that was deployed before (v83), unchanged. Rundenspiele started on it keep playing with its rules until they end: the server runs its engine for them, and `mp.js` opens them in this version at `/v83/`. Once no such game is running any more, the folder can be removed.
+
+This server adds multiplayer on top of the game:
+
+1. **Build** – `scripts/build-public.js` (run by the Dockerfile and again at container start) copies both versions into `public/` and `public/v83/`, leaving out development files (tests, tools, notes).
+2. **Inject** – it copies `mp.js` into each copy and, via `inject.js`, adds three scripts to its `index.html`: the Socket.IO client (served by this server), `mp.js` and the Discord Activity bridge.
 3. **Hook** – in the browser, `mp.js` replaces the game's action functions so that moves are sent to the server, and adds the lobby, login and account UI.
-4. **Rules on the server** – `engine-adapter.js` loads the same game files into the server and applies every move there.
+4. **Rules on the server** – `engine-adapter.js` loads the same game files into the server (one sandbox per version) and applies every move there. Each Rundenspiel records the version it was started with (`engine`); games from before that have none and are v83.
 
-Because the engine code runs inside the server, pinning it with `CORE_REPO_COMMIT` to a commit you have reviewed is recommended. With a pin, nothing else is ever executed: if that commit cannot be fetched, the container refuses to start.
-
-Docker images built by GitHub Actions already contain a bundled copy of the game, so the server can start without internet access.
+**Updating the game:** bring the new game version into `HochCiv/` (for example by merging a new Hochciv release into the multiplayer branch of the game repository and copying the result over), run its tests (`node test.js`, `node smoke.js` in `HochCiv/`) and commit. Running Rundenspiele are not affected by later versions only if their version is kept – to keep one, add it next to `HochCiv-v83/` (see `GAME_DIRS` in `engine-adapter.js`).
 
 ## Deployment (production)
 
@@ -53,8 +57,6 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 |---|---|---|
 | `SESSION_SECRET` | **yes** | Long random string that signs login cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. The server refuses to start with a missing or publicly known value. Changing it logs everyone out. |
 | `BASE_URL` | **yes** for OAuth/passkeys | Public URL, scheme and host only, e.g. `https://hochciv.example` – no path, no trailing characters. Used for OAuth callbacks, links in e-mails and as the passkey origin. A malformed value stops the server at startup. Without it, OAuth redirects to `http://localhost:3000` and fails. |
-| `CORE_REPO_COMMIT` | recommended | Full 40-character commit SHA of the game repository to run. Empty = latest head of `CORE_REPO_BRANCH` at each start. |
-| `CORE_REPO_URL` / `CORE_REPO_BRANCH` | no | Game repository and branch (default: `timooom-hash/Hochciv`, `main`). |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
@@ -97,17 +99,17 @@ For local testing, Discord needs a public HTTPS URL. Use a tunnel, e.g. `cloudfl
 ### Updating
 
 * **Server:** pull the new image and recreate: `docker compose pull && docker compose up -d`.
-* **Game version:** restart the container (`docker compose up -d --force-recreate`). With `CORE_REPO_COMMIT` set, change it to the new reviewed commit first.
+* **Game version:** comes with the server image (`HochCiv/` in this repository) – updating the server updates the game.
 
 ### Startup troubleshooting
 
-`entrypoint.sh` logs a network check at startup and tries, in this order: Git clone → GitHub tarball (unpinned only) → the copy bundled in the image (when pinned: only if built from that commit) → the existing `public/` folder. If DNS does not work inside the container it tries some automatic fixes.
+`entrypoint.sh` builds `public/` from the game in the image and starts the server – it needs no network access.
 
 Common startup errors:
 
 * `SESSION_SECRET is a publicly known default` – set your own value in `.env`.
 * `Invalid BASE_URL "..."` – the value contains a path or stray characters (e.g. a trailing comma).
-* `Pinned frontend ... is not available` – the pinned commit could not be fetched; check `CORE_REPO_COMMIT` and network access.
+* `HochCiv/index.html fehlt` – the image was built without the game folder (check `.dockerignore`).
 
 ## Local development
 
@@ -118,7 +120,7 @@ docker compose -f docker-compose.local.yml up -d --build
 ```
 
 * Game: <http://localhost:3000>, database: `localhost:5432` (only from this machine; user/password `hochciv` / `password123`).
-* The server code is mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local`. Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
+* The server code and the game (`HochCiv/`, `HochCiv-v83/`) are mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local` (`public/` is rebuilt at start). Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
 * Runs without `NODE_ENV=production`: e-mails (activation codes, reset codes) are printed to the log (`docker logs hochciv-multiplayer-local`).
 * Optional SMTP settings can go into `secrets.env` (gitignored).
 * Make yourself admin: `docker exec hochciv-multiplayer-local node elevate.js <username> superadmin`.
@@ -130,20 +132,22 @@ npm install
 npm start
 ```
 
-You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`). Without a `public/` folder the server loads the engine from a sibling `../Hochciv` checkout of the game repository, but does not serve the game page – use Docker to get the full setup.
+You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`). Run `node scripts/build-public.js` once (and after changes to the game or `mp.js`) so the server can serve the game page; the engine is always loaded from `HochCiv/` (and `HochCiv-v83/`).
 
 ## Architecture
 
 * `server.js` – Express entry point: sessions, login (Passport), routes, static files, Socket.IO.
 * `config.js` – Central settings (port, `BASE_URL`, limits).
-* `routes/` – REST API: `auth.js` (login, registration, 2FA login, OAuth), `account.js`, `mfa.js`, `admin.js`, `api.js` (lobbies, leaderboard), `async.js` (Rundenspiele).
+* `routes/` – REST API: `auth.js` (login, registration, 2FA login, OAuth), `account.js`, `mfa.js`, `admin.js`, `api.js` (lobbies, leaderboard), `async.js` (Rundenspiele), `maps.js` (custom maps).
+* `maps/service.js` – Custom maps in the account: save (checked with the engine's `checkCustomMap`), publish with a code, load by code. Deleting an account deletes its maps; merging accounts moves them.
 * `routes/activity.js` – Discord Activity: OAuth code exchange and one lobby per activity instance.
 * `activity/` – Discord Activity bridge for the browser (`bridge.js`). `build.js` bundles it with the Embedded App SDK (`npm run build:activity`; the Dockerfile does this in a build stage). The bundle is served as `/js/activity.js`.
-* `inject.js` – Patches the fetched game's `index.html` (Socket.IO client, `mp.js`, Activity bridge).
+* `HochCiv/`, `HochCiv-v83/` – the game (current version, and v83 for Rundenspiele started on it).
+* `scripts/build-public.js` – builds `public/` from the game; `inject.js` patches each copy's `index.html` (Socket.IO client, `mp.js`, Activity bridge).
 * `sockets/game.js` – Live games: lobby, start, moves, placement, draft, reconnects.
 * `sockets/async.js`, `async/` – Rundenspiele: rules, storage, notifications, timeouts.
 * `sessions.js` – In-memory store for live lobbies and games.
-* `engine-adapter.js` – Loads the game engine into the server and checks/applies moves.
+* `engine-adapter.js` – Loads the game engine into the server (one sandbox per version) and checks/applies moves.
 * `utils/` – Auth helpers, OAuth strategies, WebAuthn settings, mailer, MMR, notifications.
 * `models/` – Database models (Sequelize).
 * `mp.js` – Multiplayer client injected into the game.
@@ -154,5 +158,5 @@ You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`
 
 * Never commit `.env` or `secrets.env`; they are excluded from Git and from the Docker build.
 * Use a unique `SESSION_SECRET` and database password per installation.
-* Pin `CORE_REPO_COMMIT` to a commit you have reviewed – that code runs on your server and in your players' browsers.
+* The game code in `HochCiv/` runs on your server and in your players' browsers – review changes to it like server code.
 * Only superadmins can grant admin rights or change OAuth settings; admins manage normal users only.

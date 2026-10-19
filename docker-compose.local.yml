@@ -31,16 +31,12 @@ services:
       # BASE_URL comes from secrets.env (e.g. a tunnel URL for the Discord Activity); without it
       # the server uses http://localhost:3000. Values set here would override secrets.env.
       - DATABASE_URL=postgres://hochciv:password123@hochciv-db:5432/hochciv
-      - CORE_REPO_URL=https://github.com/timooom-hash/Hochciv.git
-      - CORE_REPO_BRANCH=main
-      # - CORE_REPO_COMMIT=<full commit SHA>   # test a pinned engine version
     env_file:
       - path: secrets.env
         required: false
     volumes:
       - ./client:/app/client
       - ./mp.js:/app/mp.js
-      - ./mp.js:/app/public/js/mp.js
       - ./server.js:/app/server.js
       - ./sessions.js:/app/sessions.js
       - ./sockets:/app/sockets
@@ -48,6 +44,10 @@ services:
       - ./models:/app/models
       - ./utils:/app/utils
       - ./async:/app/async
+      - ./maps:/app/maps
+      # the game itself (rebuilt into public/ at every start)
+      - ./HochCiv:/app/HochCiv
+      - ./HochCiv-v83:/app/HochCiv-v83
       - ./scripts:/app/scripts
       - ./config.js:/app/config.js
       - ./engine-adapter.js:/app/engine-adapter.js

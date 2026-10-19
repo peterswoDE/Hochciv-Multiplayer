@@ -32,6 +32,7 @@ function fromRow(row) {
     const d = row.data || {};
     return {
         id: row.id, joinCode: row.joinCode, hostUserId: row.hostUserId, status: row.status,
+        engine: d.engine || null,          // null: started before versions were recorded = v83
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
         hold: !!d.hold, result: d.result || null, meta: d.meta || {},
         state: row.state || null,
@@ -57,7 +58,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta },
         state: S,
     };
 }
@@ -146,7 +147,7 @@ async function settle(g, before) {
             subject: g.status === 'finished' ? 'Rundenspiel beendet' : 'Rundenspiel abgebrochen',
             text: g.status === 'finished'
                 ? `Das Rundenspiel ist vorbei. Gewonnen: ${(g.meta.winners || []).join(', ') || '—'}.`
-                : 'Der Host hat das Rundenspiel abgebrochen.',
+                : g.cancelReason || 'Der Host hat das Rundenspiel abgebrochen.',
         });
     }
 }
@@ -174,7 +175,7 @@ async function broadcast(g) {
 
 async function processResult(g) {
     const S = g.state;
-    const E = engine.getEngine();
+    const E = L.ENG(g).getEngine();      // score with the rules the game was played with
     const over = S.over || {};
     const ranked = !!g.config.ranked;
     try {
@@ -187,7 +188,7 @@ async function processResult(g) {
                 dbUserId: active ? seat.userId : null,
                 dbUsername: active ? seat.name : null,
                 name: seat.name || seat.civ, civ: seat.civ, ability: seat.ability, drafted: seat.drafted || null,
-                isBot: seat.kind === 'bot', replaced: !!seat.replaced, replacedUserId: seat.replaced ? seat.userId : null,
+                isBot: seat.kind === 'bot' || (seat.kind === 'ki' && !seat.replaced), replaced: !!seat.replaced, replacedUserId: seat.replaced ? seat.userId : null,
                 penalty: seat.penalty || 0, points, scoreDetails,
                 isWinner: Array.isArray(over.winners) && over.winners.includes(i),
                 async: true,
@@ -430,7 +431,9 @@ async function sweep() {
                         text: w.userIds.length
                             ? `Dein Rundenspiel wartet seit ${Math.round(age / DAY)} Tagen auf dich. Spielst du nicht innerhalb von ${days} Tag(en), übernimmt die KI deinen Platz` +
                             (g.config.ranked ? ` und du verlierst ${L.MMR_PENALTY} MMR.` : '.')
-                            : `Dein Rundenspiel wartet auf ${w.label}. In ${days} Tag(en) wird der Platz mit einem Bot besetzt.`,
+                            : g.config.noKi
+                                ? `Dein Rundenspiel wartet auf ${w.label}. In ${days} Tag(en) beginnt es mit den Spielern, die da sind – oder wird abgebrochen, wenn es zu wenige sind.`
+                                : `Dein Rundenspiel wartet auf ${w.label}. In ${days} Tag(en) wird der Platz mit der KI besetzt.`,
                     });
                 }
             });

@@ -28,7 +28,7 @@ module.exports = {
     CORS_ORIGINS: '*',
     JOIN_CODE_LENGTH: 6,
     PASSWORD_LENGTH: 6,        // 6-digit numeric password
-    MAX_PLAYERS: 4,
+    MAX_PLAYERS: 8,              // empires per game (the tile map and custom maps go up to 8)
     MAX_SESSIONS: 500,         // in-memory lobbies/games at once
     MAX_NAME_LENGTH: 30,
     SESSION_TIMEOUT_MS: 2 * 60 * 60 * 1000,  // 2 hours

@@ -104,7 +104,7 @@ function joinSession(joinCode, password, playerInfo) {
     }
 
     if (session.status !== 'lobby') return 'Spiel hat bereits begonnen. Wenn du dich wiederverbinden willst, musst du deinen exakten, ursprünglichen Spielernamen verwenden.';
-    if (session.players.length >= config.MAX_PLAYERS) return 'Sitzung ist voll.';
+    if (session.players.length >= humanSeats(session)) return 'Sitzung ist voll.';
 
     const playerIndex = session.players.length;
     let fallbackName = cleanName(playerInfo.name, `Spieler ${playerIndex + 1}`);
@@ -126,6 +126,17 @@ function joinSession(joinCode, password, playerInfo) {
     });
 
     return { sessionId, playerIndex };
+}
+
+/**
+ * How many humans a lobby takes: the empires in all minus the seats the host gave the KI
+ * (gameConfig.playerCount / kiCount); without that setting the server maximum.
+ */
+function humanSeats(session) {
+    const cfg = session.gameConfig || {};
+    const total = Number.isInteger(cfg.playerCount) ? cfg.playerCount : config.MAX_PLAYERS;
+    const ki = Number.isInteger(cfg.kiCount) ? cfg.kiCount : 0;
+    return Math.max(1, Math.min(config.MAX_PLAYERS, total - ki));
 }
 
 function getSession(sessionId) {
@@ -237,7 +248,7 @@ function getPublicSessions() {
                 password: s.password,
                 hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
                 playersCount: s.players.length,
-                maxPlayers: config.MAX_PLAYERS,
+                maxPlayers: humanSeats(s),
                 mapKey: s.gameConfig.mapKey || '0',
             });
         }

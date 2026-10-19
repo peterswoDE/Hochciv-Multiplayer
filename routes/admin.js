@@ -222,7 +222,7 @@ router.get('/games', async (req, res) => {
             waitSince: g.waitSince, createdAt: g.createdAt, updatedAt: g.updatedAt,
             ranked: !!(g.data.config && g.data.config.ranked),
             players: (g.data.seats || []).map(seat => ({
-                name: seat.name || seat.civ, isBot: seat.kind === 'bot', replaced: !!seat.replaced,
+                name: seat.name || seat.civ, isBot: seat.kind === 'bot' || (seat.kind === 'ki' && !seat.replaced), replaced: !!seat.replaced,
                 userId: seat.replaced ? null : seat.userId || null,
             })),
         }));

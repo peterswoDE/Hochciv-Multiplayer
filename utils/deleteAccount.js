@@ -6,6 +6,7 @@
 const { sequelize, User, Game, Passkey, TotpToken } = require('../models');
 const sessions = require('../sessions');
 const asyncService = require('../async/service');
+const mapService = require('../maps/service');
 const { DELETED_NAME } = require('../async/logic');
 const { destroyOtherSessions } = require('./auth');
 const { sendMail } = require('./mailer');
@@ -38,6 +39,7 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
             await g.save({ transaction });
         }
         await Passkey.destroy({ where: { UserId: user.id }, transaction });
+        await mapService.removeOwner(user.id, transaction);      // own maps, published ones too
         await TotpToken.destroy({ where: { UserId: user.id }, transaction });
         await user.destroy({ transaction });
     });

@@ -151,6 +151,8 @@ app.use('/api/mfa', mfaRoutes);
 app.use('/api/profile', require('./routes/profile'));
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
+// Custom maps in the account, published with a code (maps/service.js)
+app.use('/api/maps', require('./routes/maps'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
 
@@ -165,7 +167,8 @@ app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__di
 app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
-app.get('/sw.js', (req, res) => {
+// /v83/ (Rundenspiele started on v83) gets the same no-op service worker and Activity bridge
+app.get(['/sw.js', '/v83/sw.js'], (req, res) => {
     res.type('application/javascript');
     res.send(`
         self.addEventListener('install', e => { self.skipWaiting(); });
@@ -187,7 +190,7 @@ const fs = require('fs');
 if (!fs.existsSync(ACTIVITY_BUNDLE)) {
     console.warn('[Activity] Bridge bundle missing – run "npm run build:activity". The Discord Activity is unavailable.');
 }
-app.get('/js/activity.js', (req, res) => {
+app.get(['/js/activity.js', '/v83/js/activity.js'], (req, res) => {
     res.set('Cache-Control', 'no-cache');
     res.sendFile(ACTIVITY_BUNDLE, err => {
         if (err && !res.headersSent) res.type('application/javascript').send('/* Discord Activity bundle not built */');

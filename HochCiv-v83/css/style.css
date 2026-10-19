@@ -1,0 +1,496 @@
+/* Hochzeivilization – Optik des gedruckten Spielbogens:
+   Pergament, Salbeigrün, Kartenblau, dunkelrote Reichsgrenzen, Bleistiftstriche. */
+:root{
+  --parchment:#e4dbbe; --paper:#f5efdf; --paper-2:#efe6ce;
+  --ink:#2a2721; --ink-soft:#6f6551; --rule:#c9bb98;
+  --red:#9d3b2f; --red-soft:#c2735f;
+  --sea:#8fbcd8; --land:#a9bd7c;
+  --shadow:0 2px 0 rgba(0,0,0,.08), 0 8px 24px rgba(60,48,20,.12);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--parchment);color:var(--ink);
+  font-family:var(--sans);font-size:16px;-webkit-text-size-adjust:100%}
+
+/* ------------------------------------------------ Querformat erzwingen
+   iOS kennt keine Orientierungssperre (weder screen.orientation.lock noch das
+   Manifest-Feld wirken dort). Auf dem iPad hilft nur: die App selbst drehen.
+   Wo eine echte Sperre existiert (Android/Chrome, installiert), greift sie zuerst
+   und dieser Zweig kommt gar nicht zum Tragen.
+   Der 90°-Dreh macht den <body> zum umschließenden Block aller position:fixed-
+   Elemente – Karte, Blatt, Fenster und Toast drehen deshalb geschlossen mit. */
+@media (orientation:portrait){
+  html.turn,html.turn body{overflow:hidden}
+  html.turn body{position:fixed;top:0;left:0;width:100vh;height:100vw;
+    transform-origin:top left;transform:rotate(90deg) translateY(-100vw)}
+  /* Gedreht zeigen die Systemeinfassungen in die falsche Richtung – lieber keine. */
+  html.turn{--safe-t:0px;--safe-b:0px;--fall:105vw}   /* gedreht ist „unten" die kurze Seite */
+}
+button,select,input{font:inherit;color:inherit}
+/* Das hidden-Attribut muss auch bei Zeilen wirken. Der Browser setzt dafür nur
+   `[hidden]{display:none}` in seinem eigenen Stilbogen – und der verliegt gegen JEDE
+   Regel von hier, egal wie unspezifisch. `.row{display:flex}` hat deshalb bisher jede
+   versteckte Zeile trotzdem gezeigt (aufgefallen an „Ereignisstärke", die ohne
+   Ereignisse sichtbar blieb, während `.hidden` im Code längst true war). */
+[hidden]{display:none !important}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;padding-top:var(--safe-t)}
+.screen.show{display:flex}
+
+/* ------------------------------------------------------------------ Menü */
+/* Versionsnummer am Fuß des Hauptmenüs – hilft beim Melden von Fehlern und zeigt,
+   ob das iPad den neuen Stand geladen hat. */
+.menu-version{margin:26px 0 0;font-size:11px;color:var(--ink-soft);opacity:.7;
+  font-family:var(--mono);letter-spacing:.05em}
+.menu-wrap{margin:auto;padding:24px;max-width:520px;text-align:center}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-soft);margin:0 0 10px}
+.title{font-family:var(--serif);font-size:clamp(38px,9vw,64px);line-height:1;margin:0;
+  letter-spacing:-.02em;font-weight:600}
+.title::after{content:"";display:block;width:64px;height:3px;background:var(--red);margin:18px auto 0}
+.lede{color:var(--ink-soft);margin:18px 0 30px;font-size:15px}
+.menu-actions{display:grid;gap:10px}
+
+/* ------------------------------------------------------------------ Bausteine */
+.btn{border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:13px 16px;
+  font-size:15px;font-weight:500;box-shadow:var(--shadow);cursor:pointer;transition:transform .08s}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--red);border-color:var(--red);color:#fdf7e8}
+.btn.ghost{background:transparent;box-shadow:none}
+.btn.small{padding:9px 11px;font-size:13px;border-radius:8px;flex:1;min-width:0}
+/* Umschalter in der Leiste (v75): „Stadt gründen" im Gründungsmodus, „Erträge" an */
+.actionbar .btn.small.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.wide{width:100%;margin-top:18px}
+.btn[disabled]{opacity:.42}
+.icon-btn{background:none;border:0;font-size:22px;padding:6px 12px;line-height:1;cursor:pointer}
+.bar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--rule);
+  background:var(--paper)}
+.bar h2{font-family:var(--serif);font-size:19px;margin:0;font-weight:600;flex:1}
+.pad{padding:16px;overflow:auto}
+.hint{font-size:13px;color:var(--ink-soft);margin:0 0 14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--rule)}
+select{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:8px}
+
+/* ------------------------------------------------------------------ Aufbau */
+.slot{background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:12px;
+  margin-bottom:10px;box-shadow:var(--shadow)}
+.slot h3{margin:0 0 2px;font-family:var(--serif);font-size:17px;font-weight:600}
+.slot p{margin:0 0 10px;font-size:12px;color:var(--ink-soft);line-height:1.4}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;padding:8px;border:1px solid var(--rule);background:transparent;border-radius:8px;
+  font-size:13px;cursor:pointer}
+.seg button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+/* ------------------------------------------------------------------ Spiel */
+.hud{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--paper);
+  border-bottom:1px solid var(--rule);flex:0 0 auto}
+.hud-civ{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
+.hud-civ>div{min-width:0}
+.hud-civ strong{font-family:var(--serif);font-size:16px;display:block;line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hud-civ small{font-size:11px;color:var(--ink-soft);display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.civ-chip{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink);display:grid;
+  place-items:center;font-size:13px;flex:0 0 auto;background:var(--paper-2)}
+/* Vier Werte, klar getrennt: jeder Wert steht in einem eigenen Kästchen mit Symbol,
+   großer Zahl und Beschriftung. Auf sehr schmalen Geräten fällt die Beschriftung weg. */
+.hud-res{display:flex;gap:6px;flex:0 0 auto}
+.hud-res .res{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;min-width:62px;padding:3px 8px 2px;background:var(--paper-2);
+  border:1px solid var(--rule);border-radius:9px;line-height:1.05;font-family:var(--mono)}
+.hud-res .res i{font-style:normal;font-size:13px;opacity:.85}
+.hud-res .res b{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.hud-res .res u{text-decoration:none;font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-soft);font-family:var(--sans)}
+.res.pow b{color:var(--red)}
+.res.food{cursor:pointer}
+.res.food:active{background:var(--paper)}
+html.w-narrow .hud-res{gap:4px}
+html.w-narrow .hud-res .res{min-width:0;padding:3px 6px 2px}
+html.w-narrow .hud-res .res u{display:none}
+html.w-narrow .hud-res .res b{font-size:18px}
+
+/* Karte und Tutorialpanel teilen sich die Fläche zwischen Kopf- und Aktionsleiste.
+   Hochkant/schmal untereinander, quer nebeneinander (siehe unten). */
+#stage{flex:1;display:flex;flex-direction:column;min-height:0;position:relative}
+/* Die Karte ist fest: kein Schieben, kein Zoomen. Die viewBox umfasst immer das ganze
+   Spielfeld, der Browser passt sie ein – also ist stets alles sichtbar.
+   touch-action:manipulation statt none, sonst schluckt der Host das Tippen nicht,
+   aber das Doppeltipp-Zoom des Systems bliebe erlaubt. */
+#map-host{flex:1;position:relative;overflow:hidden;background:#e4dbbe;
+  touch-action:manipulation;min-height:0;min-width:0}
+#map{position:absolute;inset:0;width:100%;height:100%}
+#map [data-r]{cursor:pointer}
+.actionbar{display:flex;gap:6px;padding:8px 8px calc(8px + var(--safe-b));background:var(--paper);
+  border-top:1px solid var(--rule);flex:0 0 auto;position:relative;z-index:26;transition:opacity .15s}
+/* Nur das Bot-Fenster sperrt die Leiste (dort führt allein „Weiter" weiter).
+   Ein normales Aktionsblatt sperrt sie NICHT mehr – es liegt jetzt über der Leiste,
+   nicht darauf, also ist kein Fehlgriff auf „Zug beenden" mehr möglich. */
+body.blocked .actionbar{pointer-events:none;opacity:.4}
+
+/* Das Blatt endet oberhalb der Aktionsleiste. --bar-h wird aus der echten Höhe der
+   Leiste gesetzt (setBarHeight), damit die Menüpunkte unten immer frei bleiben. */
+.sheet{position:absolute;left:0;right:0;bottom:var(--bar-h,58px);background:var(--paper);
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  border-radius:14px 14px 0 0;box-shadow:0 -6px 24px rgba(60,48,20,.16);padding:6px 14px 14px;
+  max-height:calc(100% - var(--bar-h,58px) - var(--hud-h,54px));
+  overflow:auto;transform:translateY(130%);z-index:25;
+  /* geschlossen wirklich weg: sonst lugt ein leerer Kasten über der Aktionsleiste hervor */
+  visibility:hidden;transition:transform .18s ease, visibility 0s linear .18s}
+.sheet.open{transform:none;visibility:visible;transition:transform .18s ease}
+.sheet-grip{width:44px;height:5px;background:var(--rule);border-radius:3px;margin:4px auto 10px;cursor:pointer}
+.sheet-grip::before{content:"";position:absolute;left:0;right:0;top:0;height:26px}
+.sheet-close{position:absolute;top:6px;right:8px;width:32px;height:32px;border:0;background:none;
+  font-size:18px;line-height:1;color:var(--ink-soft);cursor:pointer;border-radius:8px;z-index:2}
+.sheet-close:active{background:var(--paper-2)}
+.sheet.locked .sheet-close,.sheet.locked .sheet-grip{display:none}
+.sheet h3{font-family:var(--serif);margin:0 0 2px;font-size:17px}
+.sheet .sub{font-size:12px;color:var(--ink-soft);margin:0 0 10px}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  padding:11px 12px;margin-bottom:7px;background:var(--paper-2);border:1px solid var(--rule);
+  border-radius:9px;text-align:left;cursor:pointer}
+.opt small{display:block;color:var(--ink-soft);font-size:11px;margin-top:2px}
+/* Nahrungsrechnung zu Zugbeginn: eine kleine Aufstellung statt einer Zahlenwüste. */
+.foodcalc{background:var(--paper-2);border:1px solid var(--rule);border-radius:9px;
+  padding:7px 10px;margin:2px 0 4px}
+.fl{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  font-size:12px;line-height:1.7}
+.fl b{font-family:var(--mono);font-size:13px;white-space:nowrap}
+.fl.plus b{color:#3f6b3a}
+.fl.sum{border-top:1px solid var(--rule);margin-top:3px;padding-top:4px;font-weight:600}
+.fl.sum b{font-size:15px}
+.warn-t{color:#8a5a12}
+.opt.ghost{background:none;border-style:dashed}
+/* Ein einzelnes Kästchen im Feldblatt: was das Reich an einer Stadt auf diesem Feld
+   verdiente. Erscheint nur, wenn hier auch gegründet werden kann. */
+.tile-facts{display:flex;margin:0 0 9px}
+.fact{flex:1 1 auto;background:var(--paper-2);border:1px solid var(--rule);
+  border-radius:9px;padding:5px 9px}
+.fact-k{display:block;font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-soft)}
+.fact-v{font-family:var(--mono);font-size:14px;font-weight:600}
+.opt .cost{font-family:var(--mono);font-size:12px;white-space:nowrap;color:var(--ink-soft)}
+.opt[disabled]{opacity:.45}
+
+/* ------------------------------------------------------------------ Protokoll & Modal */
+.overlay{position:fixed;inset:0;background:rgba(40,34,20,.42);display:none;z-index:30;
+  align-items:flex-end;justify-content:center;padding-top:var(--safe-t)}
+.overlay.show{display:flex}
+.modal{background:var(--paper);width:min(680px,100%);max-height:88%;display:flex;flex-direction:column;
+  border-radius:14px 14px 0 0;overflow:hidden}
+.overlay.wide .modal{width:min(920px,100%)}
+.modal header{display:flex;align-items:center;padding:8px 8px 8px 16px;border-bottom:1px solid var(--rule)}
+.modal h3{flex:1;margin:0;font-family:var(--serif);font-size:19px}
+#ov-body{overflow:auto;padding:14px 16px calc(20px + var(--safe-b))}
+
+.logline{font-family:var(--mono);font-size:12px;line-height:1.5;padding:2px 0;
+  border-bottom:1px dotted var(--rule);color:var(--ink-soft)}
+.logline.head{color:var(--ink);font-family:var(--serif);font-size:14px;margin-top:10px;border:0}
+.logline.act{color:var(--ink)}
+.logline.fight{color:var(--red)}
+.logline.roll{color:#6a5d3a}
+.logline.warn{color:#8a5a12}
+
+/* Würfe hängen an der Aktionszeile, zu der sie geführt haben: eingeklappt steht nur
+   die Aktion da, ein kleines 🎲 n zeigt, dass Würfe dahinterstecken. */
+.rolls{margin:0}
+.rolls>summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;list-style:none;
+  padding:2px 0 2px 15px;position:relative;border-bottom:1px dotted var(--rule);
+  font-family:var(--mono);font-size:12px;line-height:1.5}
+.rolls>summary::-webkit-details-marker{display:none}
+.rolls>summary::before{content:"▸";position:absolute;left:2px;top:2px;font-size:10px;
+  color:var(--ink-soft)}
+.rolls[open]>summary::before{content:"▾"}
+.lsum{flex:1;min-width:0;color:var(--ink-soft)}
+.lsum.act{color:var(--ink)}
+.lsum.fight{color:var(--red)}
+.lsum.warn{color:#8a5a12}
+.rtag{flex:0 0 auto;font-style:normal;font-size:10px;color:var(--ink-soft);
+  border:1px solid var(--rule);border-radius:10px;padding:0 6px;background:var(--paper-2)}
+.rolls .logline.roll{padding-left:15px;border-bottom:0;font-size:11px}
+.rolls[open]{border-bottom:1px dotted var(--rule);margin-bottom:1px}
+
+/* Technologiebogen */
+.techgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.techcol h4{margin:0 0 6px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft);position:sticky;top:0;background:var(--paper);padding:4px 0}
+.tech{border:1px solid var(--rule);border-radius:7px;padding:6px 7px;margin-bottom:6px;
+  background:var(--paper-2);font-size:11px;line-height:1.3;cursor:pointer;width:100%;text-align:left}
+.tech b{display:block;font-size:12px}
+.tech .eff{color:var(--ink-soft)}
+.tech .c{font-family:var(--mono);float:right}
+.tech.owned{background:#dfe7cf;border-color:#9fb37a}
+.tech.avail{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red-soft)}
+/* Drei sichtbare Stufen, bewusst ohne zusätzlichen Text – die Kosten stehen ohnehin
+   in der Kachel.
+   Bezahlbar: heller Grund, roter Rand doppelt gezogen – springt aus dem Raster heraus.
+   Zu teuer: derselbe rote Rand, nur gestrichelt und ohne die innere Linie. Die Deckkraft
+   bleibt VOLL. Sie zu senken war der Fehler in v31: damit verblasste auch der rote Rand
+   so weit, dass die Kachel einer nicht verfügbaren ähnelte. Gedämpft wird stattdessen
+   nur der Text, und die Kostenzahl steht rot da – sie ist ja der Grund.
+   Nicht verfügbar: grauer Rand, deutlich zurückgenommen. */
+.tech.avail.afford{background:#fbf3e6}
+.tech.avail.costly{border-style:dashed;box-shadow:none;background:var(--paper)}
+.tech.avail.costly b{color:var(--ink-soft)}
+.tech.avail.costly .eff{opacity:.75}
+.tech.avail.costly .c{color:var(--red);font-weight:700}
+.tech.locked{opacity:.32;cursor:default}
+.owner-marks{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;align-items:center}
+/* „Hat sie erforscht" gegen „könnte sie erforschen": voll gegen leer. Farbe und Symbol
+   sind bei gleicher Zivilisation identisch, also muss der Unterschied in der Füllung
+   liegen – die trägt auch bei 17 px und in Graustufen. Eine Möglichkeit soll nicht
+   aussehen wie eine Tatsache. */
+.owner-mark{display:inline-flex;align-items:center;justify-content:center;position:relative;
+  width:17px;height:17px;font-size:11px;line-height:1;border-radius:50%;
+  border:1.5px solid currentColor;font-weight:700}
+.owner-mark.has{box-shadow:0 1px 0 rgba(0,0,0,.18)}
+.owner-mark.can{background:var(--paper);border-style:dashed;font-weight:400;opacity:.85}
+/* kleines Fragezeichen an der Möglichkeit – zweiter Unterschied neben der Füllung */
+.owner-mark.can i{position:absolute;right:-3px;bottom:-4px;font-style:normal;font-size:8px;
+  font-weight:700;line-height:1;background:var(--paper);border-radius:50%;padding:0 1px}
+.owner-mark.self{outline:2px solid var(--ink);outline-offset:1.5px}
+.owner-legend{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.owner-legend span{margin-right:8px}
+.age-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-soft);margin:10px 0 4px;grid-column:1/-1;border-top:1px solid var(--rule);padding-top:6px}
+
+/* Technologiebogen mit Ertragsübersicht: nebeneinander ab breitem Schirm, sonst gestapelt */
+.tech-layout{display:flex;gap:14px;align-items:flex-start}
+.tech-main{flex:1;min-width:0}
+.tech-aside{flex:0 0 190px;position:sticky;top:0}
+@media (max-width:719px){
+  .tech-layout{flex-direction:column;gap:10px}
+  .tech-aside{flex:none;width:100%;position:static}
+}
+.yield-panel{background:var(--paper-2);border:1px solid var(--rule);border-radius:10px;padding:8px 10px}
+.yhead{margin:0 0 6px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.yrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;font-size:12px}
+.yrow+.yrow{border-top:1px solid rgba(201,187,152,.4)}
+.yl{display:flex;align-items:center;gap:6px;min-width:0}
+.ydot{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:10px;flex:0 0 auto;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.yname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ycount{color:var(--ink-soft);font-family:var(--mono);font-size:11px}
+.yvals{display:flex;gap:7px;flex:0 0 auto;font-family:var(--mono)}
+.yv{display:inline-flex;align-items:center;gap:1px;min-width:20px;justify-content:flex-end}
+.yv .yi{font-size:9px;opacity:.7}
+.yv.zero{color:var(--rule);min-width:20px;justify-content:center}
+.yrow.pop{margin-top:2px}
+.yrow.sum{border-top:1.5px solid var(--rule);margin-top:3px;font-weight:700}
+.yrow.sum .yname{font-weight:700}
+/* auf schmalem Schirm die Übersicht als horizontale Leiste */
+@media (max-width:719px){
+  .yield-panel{display:flex;gap:8px;overflow-x:auto;padding:8px;-webkit-overflow-scrolling:touch}
+  .yhead{display:none}
+  .yrow{flex-direction:column;align-items:flex-start;gap:2px;padding:0 4px;border:0;min-width:74px}
+  .yrow+.yrow{border-top:0;border-left:1px solid rgba(201,187,152,.5);padding-left:8px}
+  .yvals{gap:5px}
+}
+
+/* Editor */
+#ed-host,#pl-host{flex:1;position:relative;overflow:hidden;background:#e4dbbe;touch-action:manipulation;
+  min-height:0}
+#ed-map,#pl-map{position:absolute;inset:0;width:100%;height:100%}
+#ed-map [data-r],#pl-map [data-r]{cursor:pointer}
+/* Marathon-Draft (v83): links die Karte, rechts Vorrat und Reiche; schmal untereinander */
+.draft-layout{flex:1;display:flex;min-height:0}
+#dr-host{flex:1.4;position:relative;overflow:hidden;background:#e4dbbe;min-height:0}
+#dr-map{position:absolute;inset:0;width:100%;height:100%}
+.draft-side{flex:1;min-width:280px;max-width:460px;overflow:auto;padding:10px 12px calc(12px + var(--safe-b));
+  background:var(--paper);border-left:1px solid var(--rule);-webkit-overflow-scrolling:touch}
+.draft-side .hint{margin:0 0 8px}
+.dr-ab{display:block;width:100%;text-align:left;margin:0 0 6px;padding:8px 10px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--paper-2);font:inherit;color:inherit;cursor:pointer}
+.dr-ab b{font-size:14px}
+.dr-ab small{display:block;font-size:11px;color:var(--ink-soft);line-height:1.35}
+.dr-ab .dr-civ{float:right;font-size:11px;color:var(--ink-soft)}
+.dr-ab:disabled{opacity:.45;cursor:default}
+.dr-pl{border-top:1px solid var(--rule);padding:8px 0}
+.dr-pl.now{background:rgba(255,214,102,.22);border-radius:8px;padding:8px 6px}
+.dr-pl h4{margin:0 0 3px;font-size:14px;display:flex;align-items:center;gap:6px}
+.dr-pl h4 small{font-weight:400;color:var(--ink-soft)}
+.dr-pl h4 .btn{margin-left:auto;flex:0 0 auto;width:auto;padding:4px 10px;font-size:12px}
+.dr-pl p{margin:2px 0;font-size:11px;color:var(--ink-soft);line-height:1.35}
+.dr-pl .dr-picks{color:var(--ink);font-size:12px}
+@media (max-width:719px){
+  .draft-layout{flex-direction:column}
+  #dr-host{flex:0 0 42%}
+  .draft-side{max-width:none;border-left:0;border-top:1px solid var(--rule)}
+}
+/* Legephase: Hinweis links, Knöpfe rechts */
+.place-tools{align-items:center}
+.place-tools .hint{flex:1;margin:0;font-size:12px}
+.palette{display:flex;gap:6px;padding:8px;background:var(--paper);border-top:1px solid var(--rule);
+  overflow-x:auto}
+.swatch{flex:0 0 auto;padding:8px 10px;border-radius:8px;border:2px solid transparent;font-size:12px;
+  cursor:pointer;display:flex;align-items:center;gap:6px}
+.swatch.on{border-color:var(--ink)}
+.swatch i{width:14px;height:14px;border-radius:3px;display:block}
+.ed-tools{display:flex;gap:6px;padding:8px 8px calc(8px + var(--safe-b));background:var(--paper);
+  border-top:1px solid var(--rule)}
+
+/* Hinweise erscheinen oben unter der Kopfzeile. Unten würden sie die Aktionsleiste
+   überlagern – man trifft dann versehentlich „Zug beenden". */
+/* Spieltipp am Spielende. Abgesetzt wie eine Randnotiz im Regelheft: eigene Fläche,
+   Linie an der Seite, ruhiger als das Ergebnis darüber – er soll auffallen, aber nicht
+   mit der Siegmeldung um Aufmerksamkeit streiten. */
+.tip{background:var(--paper-2);border:1px solid var(--rule);border-left:3px solid var(--red);
+  border-radius:0 9px 9px 0;padding:9px 11px;margin:14px 0 0;font-size:13px;line-height:1.5}
+.tip b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px;font-weight:600}
+
+/* Sieggruß: Papierschnipsel fallen einmal durchs Bild. Liegt über allem, fängt aber
+   keine Berührungen ab, damit „Zurück zum Menü" sofort erreichbar bleibt.
+   Im gedrehten Hochformat fällt es mit der App, nicht mit dem Gerät – der Kasten hängt
+   im <body> und dreht deshalb mit. */
+#confetti{position:fixed;inset:0;z-index:70;pointer-events:none;overflow:hidden}
+#confetti i{position:absolute;top:-16px;border-radius:1px;opacity:0;
+  animation-name:schnipsel;animation-timing-function:cubic-bezier(.3,.5,.6,1);
+  animation-fill-mode:forwards}
+@keyframes schnipsel{
+  0%{transform:translateY(0) rotate(0);opacity:0}
+  8%{opacity:.95}
+  100%{transform:translateY(var(--fall,105vh)) rotate(var(--dreh,180deg));opacity:0}
+}
+@media (prefers-reduced-motion: reduce){ #confetti{display:none} }
+
+.toast{position:fixed;left:50%;top:calc(62px + var(--safe-t));transform:translateX(-50%) translateY(-18px);
+  background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:20px;font-size:13px;
+  opacity:0;transition:.2s;pointer-events:none;z-index:40;max-width:86%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%)}
+/* Im Seitenlayout säße der Toast sonst über dem Tutorialkopf und verdeckte
+   „Tutorial beenden" – dort gehört er über die Karte. */
+html.w-side body.tut .toast{left:auto;right:16px;transform:translateY(-18px);max-width:58%}
+html.w-side body.tut .toast.show{transform:none}
+
+/* Die folgenden Klassen setzt syncLayout() auf <html>. Bewusst keine Media Queries:
+   im gedrehten Hochformat (html.turn) misst eine Media Query den ungedrehten Viewport
+   und läge damit um 90° daneben. syncLayout rechnet mit der EFFEKTIVEN Layoutgröße. */
+/* Breit: das Blatt schwebt rechts – und endet 12 px über der Aktionsleiste,
+   damit die Menüpunkte unten frei bleiben. */
+html.w-wide .sheet{left:auto;right:12px;bottom:calc(var(--bar-h,58px) + 12px);width:360px;
+  border-radius:14px;border:1px solid var(--rule);max-height:70%;transform:translateY(130%)}
+html.w-wide .sheet.open{transform:none}
+html.w-wide .overlay{align-items:center}
+html.w-wide .modal{border-radius:14px}
+/* Quer mit Platz: das Tutorialpanel steht links neben der Karte statt darunter.
+   Die Karte behält ihr Seitenverhältnis und wird eingepasst – auf 16:9 bleibt links
+   ohnehin Rand frei, den nutzt jetzt der Text. row-reverse, weil im Quelltext erst die
+   Karte kommt. */
+html.w-side body.tut #stage{flex-direction:row-reverse}
+html.w-side body.tut #tut-panel{flex:0 0 clamp(280px,32%,430px);max-height:none;height:100%;
+  border-top:0;border-right:1px solid var(--rule);
+  box-shadow:6px 0 18px rgba(60,48,20,.10)}
+html.w-side body.tut .sheet{left:auto;right:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Aufbau: Fähigkeitswahl je Zivilisation */
+.slot .row{padding:6px 0;border-top:1px solid var(--rule);font-size:12px}
+.slot select{padding:6px;font-size:12px;max-width:62%}
+.slot .abil{margin:6px 0 0;font-size:11px;color:var(--ink-soft);line-height:1.35}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--red)}
+/* Ereignis- und Wunderhinweise */
+.evbox{background:#f2e5cf;border:1px solid var(--rule);border-radius:10px;padding:9px 11px;margin:0 0 10px}
+.evbox b{font-family:var(--serif);font-size:15px}
+.evbox p{margin:3px 0 0;font-size:12px;color:var(--ink-soft);line-height:1.4}
+.wlist{margin-top:8px}
+.wtag{display:inline-block;font-size:11px;padding:2px 6px;border:1px solid var(--rule);
+  border-radius:20px;margin:0 4px 4px 0;background:var(--paper)}
+.tech.obsolete{opacity:.55;text-decoration:line-through}
+.tech.obsolete .eff{text-decoration:none;font-style:italic}
+
+.yrow.prev{color:var(--ink-soft);font-style:italic;border-top:1px dashed var(--rule)}
+
+.seg.wide{display:flex;margin:0 0 12px}
+.seg.wide button{flex:1;padding:10px}
+
+/* ------------------------------------------------------------------ Tutorial */
+/* Gestapelt (hochkant/schmal) sitzt das Panel unter der Karte und nimmt höchstens 46 %
+   der Höhe ein, damit die Karte sichtbar bleibt. Quer steht es links daneben – siehe
+   die Regel weiter oben bei den Breitbild-Anpassungen. */
+#tut-panel{flex:none;display:flex;flex-direction:column;max-height:52%;min-height:0;
+  background:var(--paper);border-top:1px solid var(--rule);box-shadow:0 -6px 18px rgba(60,48,20,.10)}
+#tut-panel[hidden]{display:none}
+.tut-bar{height:3px;background:var(--rule);flex:none}
+.tut-bar-fill{height:100%;background:var(--red);width:0;transition:width .25s}
+.tut-head{display:flex;align-items:center;gap:8px;padding:7px 12px 0}
+.tut-sub{flex:1;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-soft)}
+.tut-head .btn.small{flex:none;padding:5px 9px;font-size:11px}
+/* min-height muss > 0 sein: sonst quetschen Aufgabenzeile und Navigation den Text
+   auf flachen Schirmen vollständig weg (flex-shrink trifft zuerst den Scrollbereich). */
+.tut-scroll{padding:2px 12px 8px;overflow:auto;-webkit-overflow-scrolling:touch;
+  flex:1 1 auto;min-height:4.5em}
+html.w-side .tut-scroll{min-height:0}
+.tut-h{font-family:var(--serif);font-size:19px;line-height:1.2;margin:2px 0 8px;font-weight:600}
+#tut-body p{font-size:14px;line-height:1.5;margin:0 0 9px}
+#tut-body b{font-weight:600}
+.tut-task{flex:none;margin:0 12px 8px;font-size:14px;line-height:1.4;background:#f2e5cf;
+  border:1px solid var(--rule);border-left:3px solid var(--red);border-radius:0 8px 8px 0;padding:8px 10px}
+.tut-task b{color:var(--red)}
+/* Kleine Rechentabelle im Tutorial: Posten links, Wert rechts, Summe abgesetzt. */
+.tut-calc{background:var(--paper-2);border:1px solid var(--rule);border-radius:9px;
+  padding:6px 10px;margin:8px 0}
+.tut-calc>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  font-size:13px;line-height:1.8}
+.tut-calc>div>b{font-family:var(--mono);white-space:nowrap}
+.tut-calc>div.sum{border-top:1px solid var(--rule);margin-top:3px;padding-top:4px;
+  font-weight:600}
+/* Aufzählung im Tutorial (die möglichen Aktionen). Enger als eine Standardliste, damit
+   sechs Punkte auf dem Telefon nicht das halbe Panel füllen. */
+.tut-list{margin:6px 0 8px;padding-left:20px;font-size:13px;line-height:1.55}
+.tut-list li{margin:1px 0}
+.tut-key{background:#f2e5cf;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;
+  margin:10px 0 2px;font-size:13px;line-height:1.45}
+.tut-key>b:first-child{font-family:var(--serif);display:block;font-size:12px;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--red);margin-bottom:3px}
+.tut-tab{width:100%;border-collapse:collapse;font-size:13px;margin:0 0 10px}
+.tut-tab th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);
+  font-weight:600;padding:0 4px 3px}
+.tut-tab td{border-top:1px solid var(--rule);padding:4px;text-align:center}
+.tut-tab td:first-child{text-align:left}
+.tut-tab tr.sum td{border-top:2px solid var(--ink-soft);font-weight:600}
+.tut-nav{display:flex;align-items:center;gap:8px;padding:0 12px 10px}
+.tut-nav .btn.small{flex:none;padding:8px 12px}
+.tut-nav .btn.primary{flex:1}
+.tut-count{font-size:12px;color:var(--ink-soft);min-width:34px;text-align:center}
+
+/* Technologieliste in den Kurzregeln */
+.rule-field{font-family:var(--serif);font-size:15px;font-weight:600;margin:16px 0 2px}
+.rule-age{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:8px 0 2px}
+.rule-tech{display:grid;grid-template-columns:26px 1fr;gap:2px 8px;padding:5px 0;
+  border-top:1px solid var(--rule);font-size:13px}
+.rule-tech .c{grid-row:span 2;color:var(--ink-soft);font-size:12px;text-align:right;padding-top:1px}
+.rule-tech i{font-style:normal;color:var(--ink-soft);font-size:12px;line-height:1.35}
+
+/* Sprachwahl im Menü: zwei Flaggen, die gewählte ist hervorgehoben */
+.lang-row{display:flex;gap:8px;justify-content:center;margin:16px 0 4px}
+.lang-btn{font-size:22px;line-height:1;padding:5px 10px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--paper-2);cursor:pointer;opacity:.5;
+  filter:grayscale(.6);transition:opacity .12s,filter .12s}
+.lang-btn.on{opacity:1;filter:none;border-color:var(--ink);background:var(--paper)}
+.lang-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* Fähigkeit neben dem Reichsnamen in der Kopfzeile: kleiner, ruhiger, eigene Zeile,
+   wenn der Platz knapp wird. */
+.hud-civ strong{white-space:normal}
+.hud-abil{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-soft);
+  margin-left:6px;white-space:nowrap}
+.hud-abil::before{content:'· '}
+/* „Die Reiche" im Weltblatt: wer spielt was, mit Fähigkeit und Wirkung */
+.civ-list{display:flex;flex-direction:column;gap:4px;margin:2px 0 12px}
+.civ-row{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:8px;
+  background:var(--paper-2)}
+.civ-row.self{outline:2px solid var(--ink);outline-offset:-2px}
+.civ-row .civ-n{font-family:var(--serif);font-size:14px;min-width:104px}
+.civ-row .civ-a{font-size:12px;line-height:1.3}
+.civ-row .civ-a small{display:block;color:var(--ink-soft);font-size:11px}
+.civ-row .civ-a i{color:var(--ink-soft)}
+
+/* Legephase: Fähigkeit, Legende der dominierten Felder und Ertragsvorschau in der
+   Hinweiszeile. Die Legende trägt die Farbe des rötlichen Rands (OVERLAY.dom in ui.js). */
+.pl-abil{font-weight:600}
+.pl-dom{display:block;margin-top:2px;color:#b3321f}
+.pl-yield{display:block;margin-top:2px}

@@ -92,7 +92,7 @@ function defaultGameConfig() {
         events: false,
         eventMode: 'hard',
         wonders: false,
-        difficulty: 'prinz',
+        difficulty: 'mittel',      // KI level of the computer seats
         mapKey: '0',
     };
 }

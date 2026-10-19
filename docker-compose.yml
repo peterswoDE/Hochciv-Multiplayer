@@ -33,11 +33,6 @@ services:
       # callbacks, e-mail links and passkeys. A malformed value stops the server at startup.
       - BASE_URL=${BASE_URL:-}
       - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:-password123}@hochciv-db:5432/${POSTGRES_DB:-hochciv}
-      # Game frontend/engine – fetched once at container start
-      - CORE_REPO_URL=${CORE_REPO_URL:-https://github.com/timooom-hash/Hochciv.git}
-      - CORE_REPO_BRANCH=${CORE_REPO_BRANCH:-main}
-      # Recommended: pin the engine to a reviewed commit (full 40-char SHA). Empty = latest branch head.
-      - CORE_REPO_COMMIT=${CORE_REPO_COMMIT:-}
       # E-mail (activation, password reset, 2FA codes, turn notifications)
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}

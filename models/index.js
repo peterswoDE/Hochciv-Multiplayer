@@ -13,6 +13,7 @@ const Passkey = require('./Passkey')(sequelize);
 const TotpToken = require('./TotpToken')(sequelize);
 const OAuthProvider = require('./OAuthProvider')(sequelize);
 const AsyncGame = require('./AsyncGame')(sequelize);
+const CustomMap = require('./CustomMap')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
@@ -31,5 +32,6 @@ module.exports = {
     Passkey,
     TotpToken,
     OAuthProvider,
-    AsyncGame
+    AsyncGame,
+    CustomMap
 };

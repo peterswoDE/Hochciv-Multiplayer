@@ -1,0 +1,68 @@
+{
+  "_hinweis": [
+    "Quelle für alle Zivilisationen. Wer ein Reich hinzufügt oder ändert, ändert nur",
+    "diese Datei und lässt danach `node tools_civs.js` laufen – das schreibt js/civs.js,",
+    "das die App lädt. `node test.js` prüft, dass beide zusammenpassen.",
+    "",
+    "Pflichtfelder je Reich: k (Schlüssel, nur Kleinbuchstaben), n (Name), sym (Zeichen",
+    "aus SYM in js/ui.js: star, cross, square, triangle, skull), color (#rrggbb) und drei",
+    "Fähigkeiten. Die erste Fähigkeit ist immer die Grundfähigkeit und heißt 'basis';",
+    "die beiden anderen tragen eigene Schlüssel, die im Code über isAbil(p, '…') geprüft",
+    "werden. Ein neues Reich mit neuen Fähigkeitsschlüsseln braucht also zusätzlich Code",
+    "in js/engine.js – die Regeln stehen nicht in dieser Datei.",
+    "",
+    "order = Zugreihenfolge (kleinste Zahl zuerht). Englische Namen und Wirkungstexte",
+    "stehen in js/i18n.js unter DATA_EN.civ und DATA_EN.abil."
+  ],
+  "civs": [
+    {
+      "k": "griechenland",
+      "n": "Griechenland",
+      "sym": "star",
+      "color": "#2f6f8f",
+      "order": 2,
+      "abilities": [
+        { "k": "basis", "n": "Günstige Forschung", "e": "Techs 1/2/3/4/5 günstiger (je Zeitalter)" },
+        { "k": "gratistech", "n": "Freie Forschung", "e": "1× pro Runde eine verfügbare Technologie der Industrialisierung oder früher umsonst erforschen" },
+        { "k": "rueckschau", "n": "Rückschau", "e": "Bei jeder erforschten Technologie zusätzlich eine beliebige (auch nicht freigeschaltete) eines früheren Zeitalters umsonst" }
+      ]
+    },
+    {
+      "k": "england",
+      "n": "England",
+      "sym": "cross",
+      "color": "#8f2f3f",
+      "order": 3,
+      "abilities": [
+        { "k": "basis", "n": "Handelsreich", "e": "Münzen = Nahrung für alle Belange (1:1 in beide Richtungen)" },
+        { "k": "gruenden", "n": "Kolonisten", "e": "Städte gründen kostet keine Basiskosten (nur Distanzkosten; mit Kartografie die günstigere der beiden). Bevölkerungswachstum kostet doppelt" },
+        { "k": "kuestenstaedte", "n": "Seemacht", "e": "Jede Stadt, die an Meer angrenzt, bringt +1 Wissenschaft, Nahrung und Münzen" }
+      ]
+    },
+    {
+      "k": "russland",
+      "n": "Russland",
+      "sym": "square",
+      "color": "#3f6f3f",
+      "order": 1,
+      "abilities": [
+        { "k": "basis", "n": "Taiga", "e": "+1 Nahrung in Wald" },
+        { "k": "wachstum", "n": "Fruchtbarkeit", "e": "Bevölkerungswachstum kostet keine Nahrung" },
+        { "k": "siedler", "n": "Siedlertrecks", "e": "Städte werden mit 2 Bevölkerung gegründet" }
+      ]
+    },
+    {
+      "k": "wikinger",
+      "n": "Wikingerreich",
+      "sym": "triangle",
+      "color": "#6f4f8f",
+      "order": 4,
+      "abilities": [
+        { "k": "basis", "n": "Seefahrer", "e": "Kostenlose Armee am Start; eine Armee zählt nicht für Baukosten von Armeen" },
+        { "k": "kampfertrag", "n": "Beutezüge", "e": "Steht eine Armee neben einer gegnerischen Armee oder Stadt, bringt sie je Punkt Überlegenheit 1 Wissenschaft, Nahrung und Münze" },
+        { "k": "armeemacht", "n": "Kriegerkultur", "e": "Jede eigene Armee gibt +2 Macht – mit Burgenbau auch jede eigene Stadt" }
+      ]
+    }
+  ],
+  "barbaren": { "k": "barbaren", "n": "Barbaren", "sym": "skull", "color": "#7a6a55" }
+}

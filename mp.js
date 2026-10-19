@@ -64,6 +64,7 @@ const MP = {
         } catch (e) {
             this.user = null;
         }
+        MAPACCOUNT.onUser(this.user);
     },
 
     getClientId: function () {
@@ -108,7 +109,7 @@ const MP = {
 
                 let displayName = nationName;
                 if (sPlayer.kind === 'bot' || sPlayer.kind === 'ki') {
-                    displayName += ' <span style="opacity:0.75;font-weight:normal;">(· Bot)</span>';
+                    displayName += ` <span style="opacity:0.75;font-weight:normal;">(· ${sPlayer.kind === 'ki' ? 'KI' : 'Bot'})</span>`;
                 } else if (p && p.name) {
                     displayName += ` <span style="opacity:0.75;font-weight:normal;">(${escHtml(p.name)})</span>`;
                     if (p.mmr) {
@@ -145,6 +146,74 @@ const MP = {
         return list.find(p => p.index === sp.slot) || list.find(p => p.civ === sp.civ) || null;
     },
 
+    /** KI level for the lobby setting; older lobbies still hold a bot difficulty (see kiLevelFor in engine-adapter.js). */
+    kiLevel: function (k) {
+        if (KI_LEVELS.some(l => l.k === k)) return k;
+        return { siedler: 'leicht', haeuptling: 'leicht', prinz: 'leicht', koenig: 'mittel', david: 'schwer' }[k] || KI_DEFAULT_LEVEL;
+    },
+
+    /** How many empires the lobby's map allows (mapLimits in the game's engine.js). */
+    lobbyLimits: function () {
+        const c = this.gameConfig || {};
+        const key = c.mapKey === 'random' ? 'plaettchen' : c.mapKey;
+        return typeof mapLimits === 'function' ? mapLimits(key, c.customMap) : { min: 2, max: 4, marathon: key === 'marathon' };
+    },
+    /**
+     * Empires in all (T) and KI seats (K) of the lobby. Lobbies from before the extension: 4, or –
+     * "Nur Menschen" – exactly the humans. The server checks the same at the start.
+     */
+    lobbyCounts: function () {
+        const c = this.gameConfig || {}, lim = this.lobbyLimits();
+        const humans = (this.players || []).length;
+        let total = Number.isInteger(c.playerCount) ? c.playerCount : (c.noKi ? humans : Math.max(4, humans));
+        total = Math.max(lim.min, Math.min(lim.max, total));
+        const ki = Math.max(0, Math.min(total - 1, Number.isInteger(c.kiCount) ? c.kiCount : 0));
+        return { total, ki, humans, lim };
+    },
+
+    /**
+     * Lobby row for the custom map: the host picks one of "Meine Karten" (map editor) or a
+     * file; everyone sees its name and size. The server checks the map again (checkCustomMap).
+     */
+    customMapRow: function (isHost) {
+        const cur = this.gameConfig.customMap;
+        const info = cur ? `<b>${esc(cur.name)}</b> (${cur.rows.length} × ${cur.rows[0].length})` : '<i>noch keine gewählt</i>';
+        if (!isHost) return `<p class="hint" style="margin:4px 0 8px">Eigene Karte: ${info}</p>`;
+        const list = typeof myMaps !== 'undefined' ? myMaps : [];
+        const opts = list.map(m => `<option value="${esc(m.name)}" ${cur && cur.name === m.name ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+        return `<label class="row"><span>Meine Karten</span>
+              <select id="mp-set-custom" onchange="MP.pickCustomMap(this.value)">
+                ${cur && !list.some(m => m.name === cur.name) ? `<option selected>${esc(cur.name)}</option>` : ''}
+                ${opts || (cur ? '' : '<option value="">– keine gespeichert –</option>')}
+              </select></label>
+            <p class="hint" style="margin:4px 0 8px">Eigene Karte: ${info} ·
+              <a href="#" onclick="MP.customMapByCode(); return false">Code eingeben</a> ·
+              <a href="#" onclick="MP.importCustomMap(); return false">aus Datei laden</a>
+              – Karten baust du im Karteneditor (Hauptmenü).</p>`;
+    },
+    /** A published map (6-character code) becomes the lobby's map. */
+    customMapByCode: function () {
+        const code = prompt('Kartencode (6 Zeichen):');
+        if (!code) return;
+        MAPACCOUNT.account.load(code).then(r => {
+            this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: r.map }, res => {
+                if (res && res.error) return toast(res.error);
+                toast(`Karte „${r.map.name}"${r.author ? ' von ' + r.author : ''} gewählt.`);
+            });
+        }).catch(e => toast(e.message));
+    },
+    pickCustomMap: function (name) {
+        const m = typeof myMap === 'function' ? myMap(name) : null;
+        if (m) this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: m }, res => { if (res && res.error) toast(res.error); });
+    },
+    importCustomMap: function () {
+        importMapFile(m => {
+            const r = checkCustomMap(m);
+            if (r.error) return;                      // importMapFile already says why
+            this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: r.map }, res => { if (res && res.error) toast(res.error); });
+        });
+    },
+
     /** HTML for a player's name: opens the player profile (client/profile.js) if it has an account. */
     nameLink: function (name, userId) {
         return window.PROFILE ? PROFILE.link(name, userId) : esc(name);
@@ -162,7 +231,7 @@ const MP = {
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ, color: '#999' };
             const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
             const name = lp.name || civ.n;
-            const status = bot ? '<span class="mp-pl-tag">Bot</span>'
+            const status = bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? 'Bot' : 'KI'}</span>`
                 : lp.connected === false ? '<span class="mp-pl-tag off" title="Nicht verbunden">offline</span>' : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
                 <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
@@ -276,8 +345,9 @@ const MP = {
                 // Clever trick: Tell the native random map generator that EVERY other player across the network is a Bot!
                 // This tricks the native UI to instantly autocomplete them and ONLY present the single local player queue 
                 // for placement! This enables seamless simultaneous decentralized drafting!
+                // KI seats stay KI: the server places them with kiPlaceSeat, so the preview matches.
                 data.cfg.players = MP.players.map(p => {
-                    return p.index === MP.lobbyIndex ? p : { ...p, kind: 'bot' };
+                    return p.index === MP.lobbyIndex ? p : { ...p, kind: p.kind === 'ki' ? 'ki' : 'bot' };
                 });
 
                 window.placeReveal = function () {
@@ -483,12 +553,15 @@ const MP = {
                 this._publicListTimer = setInterval(fetchList, 5000);
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
+                const cnt = this.lobbyCounts();
+                const randomAll = !!this.gameConfig.randomCivs;   // the host deals every nation
                 // Marathon (v83): abilities are drafted before the first turn – no choice here
-                const isMarathon = this.gameConfig.mapKey === 'marathon';
+                const isMarathon = this.lobbyLimits().marathon;
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
-                    const civOpts = '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>Zufall</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civOpts = randomAll ? '<option value="random" selected>Zufall (für alle)</option>'
+                        : '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>Zufall</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
                     const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
                     let abOpts = '';
                     if (p.civ === 'random') {
@@ -501,9 +574,9 @@ const MP = {
                     <tr>
                         <td><b>${escHtml(p.name)}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${escHtml(p.mmr)} MMR]</span>` : ''}</td>
                         <td style="padding: 4px;">
-                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
-                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
+                            <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                             ${isMarathon ? '<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">Fähigkeiten: Draft vor dem ersten Zug</small>' : ''}
                         </td>
                         <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
@@ -524,10 +597,12 @@ const MP = {
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
                   <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>Originalkarte (12 × 18)</option>
                   <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>Große Karte (15 × 24)</option>
-                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>Zufall</option>
+                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>Plättchenkarte (2–8 Reiche)</option>
                   ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>Marathon (24 × 36)</option>` : ''}
+                  ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>Eigene Karte</option>` : ''}
                 </select>
               </label>
+              ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost) : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.</p>` : ''}
               <label class="row"><span>Mit Ereignissen</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
@@ -542,13 +617,29 @@ const MP = {
               <label class="row"><span>Mit Weltwundern</span>
                 <input type="checkbox" id="mp-set-wonders" onchange="MP.updateLobbyConfig()" ${this.gameConfig.wonders ? 'checked' : ''}>
               </label>
-              <label class="row"><span>Schwierigkeit (Bots)</span>
+              <label class="row"><span>Reiche insgesamt</span>
+                <select id="mp-set-total" onchange="MP.updateLobbyConfig()">
+                  ${Array.from({ length: cnt.lim.max - cnt.lim.min + 1 }, (_, i) => cnt.lim.min + i).map(k => `<option value="${k}" ${k === cnt.total ? 'selected' : ''}>${k}${k === 2 ? ' (1 gegen 1)' : ''}</option>`).join('')}
+                </select>
+              </label>
+              <label class="row"><span>davon KI (feste Plätze)</span>
+                <select id="mp-set-ki" onchange="MP.updateLobbyConfig()">
+                  ${Array.from({ length: cnt.total }, (_, k) => `<option value="${k}" ${k === cnt.ki ? 'selected' : ''}>${k}</option>`).join('')}
+                </select>
+              </label>
+              <p class="hint" style="margin:4px 0 8px">${cnt.humans > cnt.total - cnt.ki
+                ? `⚠ ${cnt.humans} Spieler in der Lobby – Platz ist für ${cnt.total - cnt.ki} Menschen.`
+                : `Bis zu ${cnt.total - cnt.ki} Menschen. ${cnt.total - cnt.humans > 0 ? `Beim Start spielt die KI ${cnt.total - cnt.humans} ${cnt.total - cnt.humans === 1 ? 'Reich' : 'Reiche'}.` : 'Ohne KI.'}`}</p>
+              <label class="row"><span>Zufällige Nationen für alle</span>
+                <input type="checkbox" id="mp-set-random" onchange="MP.updateLobbyConfig()" ${this.gameConfig.randomCivs ? 'checked' : ''}>
+              </label>
+              <label class="row"${cnt.total - cnt.humans > 0 ? '' : ' hidden'}><span>KI-Stufe</span>
                 <select id="mp-set-diff" onchange="MP.updateLobbyConfig()">
-                  ${DIFFICULTIES.map(d => `<option value="${d.k}" ${this.gameConfig.difficulty === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
+                  ${KI_LEVELS.map(d => `<option value="${d.k}" ${this.kiLevel(this.gameConfig.difficulty) === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
                 </select>
               </label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
-                <span><b>🔥 Gewertetes Spiel</b> <br><small style="font-size:10px;color:#777">(min 2 H-Spieler, Bots auf schwer)</small></span>
+                <span><b>🔥 Gewertetes Spiel</b> <br><small style="font-size:10px;color:#777">(min 2 H-Spieler, KI auf schwer)</small></span>
                 <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
               </label>
           </div>
@@ -566,24 +657,40 @@ const MP = {
     updateLobbyConfig: function () {
         if (this.lobbyIndex !== this.hostIndex) return;
         const evModeEl = $('mp-set-evmode');
-        // Force the hardest difficulty if Ranked is checked
+        // Force the hardest KI level if Ranked is checked
         let diff = $('mp-set-diff').value;
         const isRanked = $('mp-set-ranked') && $('mp-set-ranked').checked;
         if (isRanked) {
-            diff = DIFFICULTIES[DIFFICULTIES.length - 1].k;
+            diff = KI_LEVELS[KI_LEVELS.length - 1].k;
             // Temporarily force UI visual to match
             if ($('mp-set-diff')) $('mp-set-diff').value = diff;
         }
 
+        const mapKey = $('mp-set-map').value;
         const newConfig = {
-            mapKey: $('mp-set-map').value,
+            mapKey,
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
             difficulty: diff,
-            ranked: isRanked
+            ranked: isRanked,
+            // empires in all and KI seats; "noKi" of older lobbies is replaced by them
+            playerCount: $('mp-set-total') ? +$('mp-set-total').value : undefined,
+            kiCount: $('mp-set-ki') ? +$('mp-set-ki').value : undefined,
+            randomCivs: !!($('mp-set-random') && $('mp-set-random').checked),
+            noKi: false,
         };
-        this.socket.emit('lobby:config', newConfig);
+        // a map with fewer empires: keep the numbers within what it allows
+        const old = this.gameConfig;
+        this.gameConfig = Object.assign({}, old, newConfig, { customMap: newConfig.customMap || old.customMap });
+        const cnt = this.lobbyCounts();
+        this.gameConfig = old;
+        newConfig.playerCount = cnt.total;
+        newConfig.kiCount = cnt.ki;
+        // Switching to "Eigene Karte" without a map yet: take the newest one from the library
+        if (mapKey === 'eigene' && !this.gameConfig.customMap && typeof myMaps !== 'undefined' && myMaps[0])
+            newConfig.customMap = myMaps[0];
+        this.socket.emit('lobby:config', newConfig, res => { if (res && res.error) toast(res.error); });
     },
 
 
@@ -726,7 +833,7 @@ const MP = {
             events: false,
             eventMode: 'hard',
             wonders: false,
-            difficulty: 'prinz',
+            difficulty: KI_DEFAULT_LEVEL,   // KI level of the computer seats
             mapKey: '0'
         };
 
@@ -1178,6 +1285,104 @@ const patchTurnButton = setInterval(() => {
 // Opening a game joins its Socket.IO room: every change arrives as 'async:update' with
 // the full view { status, seats, state | placement | draft, … }.
 // ════════════════════════════════════════════════════════════════════════════
+// ── Custom maps in the player account (routes/maps.js, maps/service.js) ────────
+/**
+ * Connects the game's map library ("Meine Karten", Hochciv's ui.js) with the account. The game
+ * works without a server; it only calls the `mapAccount` hooks this module sets.
+ *
+ * Logged in, the account is the source of truth and the browser list its copy:
+ *  · after login (sync) the account's maps replace local ones with the same name, local maps the
+ *    account doesn't know go up – unless they were in the account at the last sync on this
+ *    device (then they were deleted on another device and go here too);
+ *  · saving / deleting in the editor goes to the account right away;
+ *  · publishing gives a map its 6-character code; anybody (also logged out) loads it by code.
+ * `hochciv.maps.synced.<userId>` remembers which names the account had at the last sync.
+ */
+const MAPACCOUNT = {
+    userId: null,
+    rows: {},              // name → { id, code } of the maps in the account
+
+    api: async function (path, method, body) {
+        const opts = { method: method || 'GET', cache: 'no-cache', credentials: 'include' };
+        if (body !== undefined) Object.assign(opts, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const res = await fetch(`${MP.serverUrl}/api/maps${path}`, opts);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Fehler');
+        return data;
+    },
+    syncedKey: function () { return 'hochciv.maps.synced.' + this.userId; },
+    markSynced: function (name, on) {
+        const set = new Set(load(this.syncedKey()) || []);
+        if (on) set.add(name); else set.delete(name);
+        store(this.syncedKey(), [...set]);
+    },
+
+    onUser: function (user) {
+        if (typeof replaceMyMaps !== 'function') return;     // a game version without the map library
+        mapAccount = this.account;                           // loading by code works logged out, too
+        const id = user ? user.id : null;
+        if (id === this.userId) return;
+        this.userId = id;
+        this.rows = {};
+        if (id) this.sync().catch(e => console.warn('[Maps] Abgleich fehlgeschlagen:', e.message));
+    },
+
+    sync: async function () {
+        const uid = this.userId;
+        const { maps } = await this.api('');
+        if (uid !== this.userId) return;                     // logged out / switched meanwhile
+        const synced = new Set(load(this.syncedKey()) || []);
+        const server = new Map(maps.map(m => [m.name, m]));
+        const onlyHere = myMaps.filter(m => !server.has(m.name) && !synced.has(m.name));
+        for (const m of onlyHere) {
+            try { const r = await this.api('', 'POST', { map: m }); server.set(r.map.name, r.map); }
+            catch (e) { console.warn(`[Maps] „${m.name}" bleibt nur auf diesem Gerät:`, e.message); }
+        }
+        if (uid !== this.userId) return;
+        const fromAccount = [...server.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).map(r => r.map);
+        replaceMyMaps(fromAccount.concat(onlyHere.filter(m => !server.has(m.name))));
+        this.rows = {};
+        for (const r of server.values()) this.rows[r.name] = { id: r.id, code: r.code };
+        store(this.syncedKey(), [...server.keys()]);
+    },
+
+    upload: async function (map) {
+        const r = await this.api('', 'POST', { map });
+        this.rows[r.map.name] = { id: r.map.id, code: r.map.code };
+        this.markSynced(r.map.name, true);
+        return this.rows[r.map.name];
+    },
+
+    account: {
+        loggedIn: () => !!MAPACCOUNT.userId,
+        codeOf: name => (MAPACCOUNT.rows[name] || {}).code || null,
+        saved: map => {
+            if (MAPACCOUNT.userId) MAPACCOUNT.upload(map).catch(e => toast('Konto: ' + e.message));
+        },
+        deleted: name => {
+            const row = MAPACCOUNT.rows[name];
+            if (!MAPACCOUNT.userId || !row) return;
+            delete MAPACCOUNT.rows[name];
+            MAPACCOUNT.markSynced(name, false);
+            MAPACCOUNT.api('/' + row.id, 'DELETE').catch(e => toast('Konto: ' + e.message));
+        },
+        publish: async name => {
+            if (!MAPACCOUNT.userId) throw new Error('Zum Veröffentlichen musst du angemeldet sein.');
+            const row = MAPACCOUNT.rows[name] || await MAPACCOUNT.upload(myMap(name));
+            const r = await MAPACCOUNT.api(`/${row.id}/publish`, 'POST', {});
+            row.code = r.map.code;
+            return r.map.code;
+        },
+        unpublish: async name => {
+            const row = MAPACCOUNT.rows[name];
+            if (!row) return;
+            await MAPACCOUNT.api(`/${row.id}/unpublish`, 'POST', {});
+            row.code = null;
+        },
+        load: code => MAPACCOUNT.api('/code/' + encodeURIComponent(String(code).trim())),
+    },
+};
+
 const ASYNC = {
     view: null,
     data: null,
@@ -1190,7 +1395,10 @@ const ASYNC = {
         const c = this.civ(k);
         return c ? `${typeof SYM !== 'undefined' ? SYM[c.sym] + ' ' : ''}${this.esc(c.n)}` : '?';
     },
-    mapName: k => ({ '0': 'Originalkarte', gross: 'Große Karte', plaettchen: 'Plättchenkarte', marathon: 'Marathon' })[k] || k,
+    mapName: function (k, c) {
+        if (k === 'eigene') return 'Eigene Karte „' + this.esc((c && c.customMapName) || '?') + '"';
+        return ({ '0': 'Originalkarte', gross: 'Große Karte', plaettchen: 'Plättchenkarte', marathon: 'Marathon' })[k] || k;
+    },
     seatsHtml: function (seats, mySlot) {
         return `<div class="mpa-seats">${seats.map(s => {
             const who = s.kind === 'bot' ? 'Bot' : s.replaced ? `KI (für ${this.esc(s.name)})` : s.kind === 'ki' ? 'KI'
@@ -1277,7 +1485,7 @@ const ASYNC = {
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">Ablehnen</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">Einladen</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><b>${this.mapName(c.mapKey)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'}${c.ranked ? ' · 🔥 Gewertet' : ''}${c.isPublic ? ' · öffentlich' : ''} · ${statusText}
+            <div class="mpa-title"><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'}${c.ranked ? ' · 🔥 Gewertet' : ''}${c.isPublic ? ' · öffentlich' : ''} · ${statusText}
               ${member ? `<small class="mpa-c">Code ${g.joinCode}</small>` : ''}</div>
             ${this.seatsHtml(g.seats, g.mySlot)}
             <div class="mpa-foot"><span>${info}</span><span>${btns.join(' ')}</span></div></div>`;
@@ -1290,28 +1498,47 @@ const ASYNC = {
     // ── Create ───────────────────────────────────────────────────────────────
     showCreate: function () {
         const f = this.form = this.form || {
-            mapKey: '0', civMode: 'fixed', humanCount: 2, civ: 'russland', ability: 'basis',
-            events: false, eventMode: 'hard', wonders: false, difficulty: 'prinz', ranked: false, isPublic: false, invite: '',
+            mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
+            events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '',
         };
         const civ = this.civ(f.civ) || CIVS[0];
-        const marathon = f.mapKey === 'marathon', random = f.civMode === 'random';
+        // how many empires the chosen map allows (mapLimits in the game's engine.js)
+        const custom = f.mapKey === 'eigene' && typeof myMap === 'function' ? myMap(f.customName) : null;
+        const lim = typeof mapLimits === 'function' ? mapLimits(f.mapKey, custom) : { min: 2, max: 4, marathon: f.mapKey === 'marathon' };
+        f.playerCount = Math.max(lim.min, Math.min(lim.max, f.playerCount || 4));
+        f.kiCount = Math.max(0, Math.min(f.playerCount - 2, f.kiCount || 0));
+        const marathon = lim.marathon, random = f.civMode === 'random';
         const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
         let hint;
+        // mirrors async/logic.js create(): when the host can play turn 1 right away
+        const humans = f.playerCount - f.kiCount, noKi = f.kiCount === 0;
+        const freeCivMap = f.mapKey === 'plaettchen' || f.mapKey === 'eigene';
+        const seatsFinal = random || (!freeCivMap && f.playerCount === 4);
+        const atOnce = !(f.mapKey === 'plaettchen' || marathon) && !noKi && seatsFinal;
         if (f.mapKey === 'plaettchen' || marathon)
             hint = 'Erst wenn alle beigetreten sind, ' + (marathon ? 'wird gedraftet' : 'legt jeder sein Startplättchen') + ' – dann beginnt die Partie mit deinem Zug.';
-        else hint = random ? 'Du spielst sofort deinen ersten Zug. Wer beitritt, bekommt den nächsten Platz in der Zugfolge.'
+        else if (atOnce) hint = random ? 'Du spielst sofort deinen ersten Zug. Wer beitritt, bekommt den nächsten Platz in der Zugfolge.'
             : 'Du spielst sofort deinen ersten Zug. Kommt eine Nation an die Reihe, die noch niemand gewählt hat, wartet das Spiel auf sie.';
-        const hardest = DIFFICULTIES[DIFFICULTIES.length - 1].k;
+        else hint = 'Die Partie beginnt mit deinem Zug, sobald alle Mitspieler beigetreten sind.';
+        hint = `${f.playerCount} Reiche: ${humans} Menschen${f.kiCount ? `, ${f.kiCount} KI` : ', keine KI'}${f.playerCount === 2 ? ' – 1 gegen 1 (höhere Siegschwellen)' : ''}. ` + hint;
+        const hardest = KI_LEVELS[KI_LEVELS.length - 1].k;
         modal('Neues Rundenspiel', `
           <div class="mpa-form" onchange="ASYNC.readForm(true)">
             <label class="row"><span>Karte</span><select id="mpa-map">
               ${opt('0', f.mapKey, 'Originalkarte (12 × 18)')}${opt('gross', f.mapKey, 'Große Karte (15 × 24)')}
-              ${opt('plaettchen', f.mapKey, 'Plättchenkarte')}
-              ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, 'Marathon (24 × 36)') : ''}</select></label>
+              ${opt('plaettchen', f.mapKey, 'Plättchenkarte (2–8 Reiche)')}
+              ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, 'Marathon (24 × 36, 4 Reiche)') : ''}
+              ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, 'Eigene Karte') : ''}</select></label>
+            ${f.mapKey === 'eigene' ? `<label class="row"><span>Meine Karten</span><select id="mpa-custom">
+              ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (bis ${m.maxPlayers || 4} Reiche${m.marathon ? ', Marathon' : ''})</option>`).join('') || '<option value="">– keine gespeichert –</option>'}</select></label>
+              <p class="sub"><a href="#" onclick="ASYNC.customMapByCode(); return false">Karte mit Code laden</a> ·
+                <a href="#" onclick="ASYNC.importCustomMap(); return false">aus Datei laden</a> – eigene Karten baust du im Karteneditor (Hauptmenü).</p>` : ''}
             <label class="row"><span>Nationen</span><select id="mpa-mode">
-              ${opt('fixed', f.civMode, 'Fest – jeder wählt seine Nation')}${opt('random', f.civMode, 'Zufall – Zugfolge nach Beitritt')}</select></label>
-            <label class="row"><span>Menschliche Spieler</span><select id="mpa-count">
-              ${[2, 3, 4].map(n => opt(n, f.humanCount, n + (n < 4 ? ` (+${4 - n} Bot)` : ''))).join('')}</select></label>
+              ${opt('fixed', f.civMode, 'Fest – jeder wählt seine Nation')}${opt('random', f.civMode, 'Zufällige Nationen für alle – Zugfolge nach Beitritt')}</select></label>
+            <label class="row"><span>Reiche insgesamt</span><select id="mpa-total" ${lim.min === lim.max ? 'disabled' : ''}>
+              ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ' (1 gegen 1)' : ''))).join('')}</select></label>
+            <label class="row"><span>davon KI</span><select id="mpa-ki">
+              ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ' (nur Menschen)' : ''))).join('')}</select></label>
             ${random ? '' : `<label class="row"><span>Deine Nation</span><select id="mpa-civ">
               ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
             ${random || marathon ? '' : `<label class="row"><span>Fähigkeit</span><select id="mpa-ab">
@@ -1320,9 +1547,9 @@ const ASYNC = {
             ${f.events ? `<label class="row"><span>Ereignisstärke</span><select id="mpa-evmode">
               ${opt('hard', f.eventMode, 'Hart (jede Runde)')}${opt('easy', f.eventMode, 'Leicht (selten)')}</select></label>` : ''}
             <label class="row"><span>Mit Weltwundern</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
-            <label class="row"><span>Schwierigkeit (Bots)</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
-              ${DIFFICULTIES.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
-            <label class="row"><span>🔥 Gewertet <small>(Bots auf schwerster Stufe)</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
+            <label class="row"${noKi ? ' hidden' : ''}><span>KI-Stufe</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
+              ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
+            <label class="row"><span>🔥 Gewertet <small>(KI auf schwerster Stufe)</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
             <label class="row"><span>Öffentlich auffindbar</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
             <label class="row"><span>Einladen <small>(Benutzernamen, mit Komma)</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
           </div>
@@ -1335,25 +1562,56 @@ const ASYNC = {
         const f = this.form, v = id => $(id) ? $(id).value : null, c = id => $(id) ? $(id).checked : false;
         const civBefore = f.civ;
         Object.assign(f, {
-            mapKey: v('mpa-map'), civMode: v('mpa-mode'), humanCount: +v('mpa-count'),
+            mapKey: v('mpa-map'), civMode: v('mpa-mode'),
+            playerCount: +v('mpa-total') || f.playerCount, kiCount: v('mpa-ki') != null ? +v('mpa-ki') : f.kiCount,
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
             events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
+            customName: v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
             invite: v('mpa-invite') || '',
         });
         if (f.civ !== civBefore) f.ability = 'basis';
         if (rerender) this.showCreate();
     },
 
+    /** "6 Reiche · 3 Menschen · 3 KI" (older games: 4, or the humans without KI). */
+    countText: function (c) {
+        const total = c.playerCount || (c.noKi ? c.humanCount : 4), ki = total - c.humanCount;
+        return `${total} Reiche · ${c.humanCount} Menschen · ${ki ? ki + ' KI' : 'ohne KI'}`;
+    },
+
+    /** A published map (code) goes into "Meine Karten" first, then it is the form's custom map. */
+    customMapByCode: function () {
+        loadMapByCodeAsk(name => {
+            Object.assign(this.form, { mapKey: 'eigene', customName: name });
+            this.showCreate();
+        });
+    },
+
+    /** A map file goes into "Meine Karten" first, then it is the form's custom map. */
+    importCustomMap: function () {
+        importMapFile(m => {
+            const r = checkCustomMap(m);
+            if (r.error) return;                      // importMapFile already says why
+            const err = saveMyMap(r.map);
+            if (err) return toast(err);
+            Object.assign(this.form, { mapKey: 'eigene', customName: r.map.name });
+            this.showCreate();
+        });
+    },
+
     create: async function () {
         this.readForm(false);
         const f = this.form;
+        const customMap = f.mapKey === 'eigene' ? myMap(f.customName) : undefined;
+        if (f.mapKey === 'eigene' && !customMap) return toast('Wähle eine eigene Karte oder lade eine aus einer Datei.');
         try {
             toast('Erstelle Rundenspiel…');
             const r = await this.api('', {
                 config: {
-                    mapKey: f.mapKey, civMode: f.civMode, humanCount: f.humanCount, events: f.events, eventMode: f.eventMode,
+                    mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
                     wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic,
+                    customMap,
                 },
                 civ: f.civ, ability: f.ability,
                 invite: f.invite.split(',').map(x => x.trim()).filter(Boolean),
@@ -1393,7 +1651,7 @@ const ASYNC = {
                 : '<label class="row"><span>Fähigkeit</span><select id="mpa-jab"></select></label>'}`;
         }
         modal('Rundenspiel beitreten', `
-            <p><b>${this.mapName(c.mapKey)}</b> · ${c.humanCount} Spieler${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
             ${this.seatsHtml(g.seats, null)}
             ${pickHtml}
             <p class="sub">Du kannst sofort beitreten – ziehen kannst du, sobald du an der Reihe bist. Bis zu deinem ersten Zug kannst du ohne Folgen wieder aussteigen.</p>
@@ -1470,8 +1728,22 @@ const ASYNC = {
             }
             this._retried = false;
             if (!res || res.error) return toast((res && res.error) || 'Fehler');
+            if (ASYNC.switchVersion(id, res.view.engine)) return;
             this.enter(res.view);
         });
+    },
+
+    /**
+     * Rundenspiele are played with the version they were started on. The server runs that
+     * engine; the page has to match: games from v83 open in the v83 game at /v83/, all others
+     * in the current game at /. Returns true when the page is being switched.
+     */
+    switchVersion: function (id, engineVersion) {
+        const here = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
+        const old = engineVersion === 'v83';
+        if (old && here !== 'v83') { location.href = '/v83/?async=' + encodeURIComponent(id); return true; }
+        if (!old && here === 'v83') { location.href = '/?async=' + encodeURIComponent(id); return true; }
+        return false;
     },
 
     reload: function () {
@@ -1503,12 +1775,14 @@ const ASYNC = {
         document.body.classList.remove('mp-waiting');
         const credBox = $('mp-cred-box');
         if (credBox) credBox.textContent = '';
+        // the v83 game is only there for Rundenspiele started on it – afterwards back to the current game
+        if (typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v83') { location.href = '/'; return; }
     },
 
     apply: function (view) {
         const prev = this.view;
         this.view = view;
-        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' }));
+        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
         const toastEl = document.querySelector('.mp-waiting-toast');
         if (toastEl) toastEl.textContent = view.waitingFor ? `Warte auf ${view.waitingFor} …` : 'Warte auf deinen Zug...';
 
@@ -1558,7 +1832,7 @@ const ASYNC = {
         const me = view.seats.find(s => s.slot === view.mySlot);
         const host = view.isHost;
         modal('Rundenspiel', `
-            <p><b>${this.mapName(c.mapKey)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'} · ${c.humanCount} Spieler${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
             ${this.seatsHtml(view.seats, view.mySlot)}
             <p>${text}</p>
             ${view.waitingFor ? `<p class="sub">Wartet auf: ${this.esc(view.waitingFor)}</p>` : ''}
@@ -1653,6 +1927,8 @@ window.addEventListener('DOMContentLoaded', () => {
         if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
+        } else if (typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v83') {
+            location.replace('/');           // /v83/ only opens running Rundenspiele from v83
         }
     });
 

@@ -8,6 +8,7 @@ const { Op } = require('sequelize');
 const { sequelize, User, Game, AsyncGame, Passkey } = require('../models');
 const sessions = require('../sessions');
 const { destroyOtherSessions } = require('./auth');
+const mapService = require('../maps/service');
 
 const ACTIVE_ASYNC = ['setup', 'placement', 'draft', 'playing'];
 
@@ -51,6 +52,9 @@ async function mergeInto(into, from) {
                 { replacements: { from: from.id, into: into.id }, transaction });
         }
         await AsyncGame.update({ hostUserId: into.id }, { where: { hostUserId: from.id }, transaction });
+
+        // Custom maps (with their codes) move over; equal names get a number
+        await mapService.moveOwner(from.id, into.id, transaction);
 
         // Games played add up; the MMR the Activity account won or lost carries over
         into.gamesPlayed += from.gamesPlayed;
