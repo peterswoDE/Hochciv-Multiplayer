@@ -3892,6 +3892,37 @@ step('Zufällige Nationen für alle: jeder Platz ausgelost, auch auf der Origina
   G('show')('screen-menu');
 });
 
+/* Technologiebogen im Mehrspielermodus (Mehrspieler-Erweiterung): er zeigt das eigene Reich
+   (viewerHook, gesetzt von mp.js) – auch im fremden Zug, dann nur zum Ansehen. */
+step('Technologiebogen: im fremden Zug das eigene Reich, nur zum Ansehen', () => {
+  $('m-new').onclick();
+  $('setup-map').value = '0'; $('setup-map').onchange();
+  $('setup-count').value = '2'; $('setup-count').onchange();
+  [...$('setup-list').children].forEach(x => x.querySelector('[data-kind="human"]').onclick());
+  $('setup-start').value = '0'; $('setup-start').onchange();
+  $('setup-go').onclick();
+  const S = G('S');
+  const ich = 1 - S.cur;                                   // „mein" Reich ist gerade nicht dran
+  S.players[ich].res.sci = 99;
+  G('__set')('viewerHook', () => ich);
+  try {
+    G('redraw')();
+    if ($('a-tech').disabled) throw new Error('Forschen im fremden Zug gesperrt');
+    G('techModal')();
+    if (!/nicht am Zug/.test($('ov-title').textContent)) throw new Error('Titel: ' + $('ov-title').textContent);
+    if ($('ov-body').querySelector('[data-tech]')) throw new Error('im fremden Zug lässt sich forschen');
+    if (!$('ov-body').querySelector('.tech.avail.afford')) throw new Error('eigene Wissenschaft (99) nicht zugrunde gelegt');
+    const ownTechs = Object.keys(S.players[ich].techs).length;
+    if ($('ov-body').querySelectorAll('.tech.owned').length < ownTechs) throw new Error('nicht der eigene Bogen');
+    G('closeModal')();
+    // im eigenen Zug: wie immer, mit Knöpfen
+    G('__set')('viewerHook', () => S.cur);
+    G('techModal')();
+    if (/nicht am Zug/.test($('ov-title').textContent)) throw new Error('eigener Zug als fremd markiert');
+    G('closeModal')();
+  } finally { G('__set')('viewerHook', null); G('show')('screen-menu'); }
+});
+
 step('kein abgefangener Fehler im Zugablauf', () => {
   const f = G('UI_ERRORS');
   if (f.length) throw new Error(f.join(' | '));

@@ -513,16 +513,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const { startRegistration } = window.SimpleWebAuthnBrowser;
             const res = await authFetch('/api/mfa/passkey/generate-registration', { method: 'POST' });
             const options = await res.json();
+            if (!res.ok) return alert(options.error || 'Fehler beim Vorbereiten des Passkeys.');
+            // passkeys belong to one address (BASE_URL) – say so instead of letting the browser fail
+            const rpId = options.rp && options.rp.id;
+            const problem = PASSKEY.problem(rpId);
+            if (problem) return alert(problem);
 
             let attResp;
             try {
                 attResp = await startRegistration({ optionsJSON: options });
             } catch (error) {
-                if (error.name === 'InvalidStateError') {
-                    alert('Dieser Passkey ist bereits registriert.');
-                } else {
-                    alert('Registrierung abgebrochen oder fehlgeschlagen.');
-                }
+                console.error(error);
+                alert(PASSKEY.errorText(error, rpId, 'Registrierung abgebrochen oder fehlgeschlagen.'));
                 return;
             }
 

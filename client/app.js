@@ -205,12 +205,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/auth/login/passkey/options', { method: 'POST' });
             if (!res.ok) throw new Error('Options failed');
             const options = await res.json();
+            const problem = PASSKEY.problem(options.rpId);
+            if (problem) return showError('mfa-error', problem);
 
             let asseResp;
             try {
                 asseResp = await startAuthentication({ optionsJSON: options });
             } catch (error) {
-                showError('mfa-error', 'Authentifizierung abgebrochen.');
+                showError('mfa-error', PASSKEY.errorText(error, options.rpId, 'Authentifizierung abgebrochen.'));
                 return;
             }
 
@@ -287,12 +289,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/auth/login/passkey/options-passwordless', { method: 'POST' });
                 if (!res.ok) throw new Error('Options failed');
                 const options = await res.json();
+                const problem = PASSKEY.problem(options.rpId);
+                if (problem) return showError('login-error', problem);
 
                 let asseResp;
                 try {
                     asseResp = await startAuthentication({ optionsJSON: options });
                 } catch (error) {
-                    showError('login-error', 'Authentifizierung abgebrochen.');
+                    showError('login-error', PASSKEY.errorText(error, options.rpId, 'Authentifizierung abgebrochen.'));
                     return;
                 }
 

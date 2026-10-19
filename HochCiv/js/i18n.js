@@ -861,6 +861,8 @@ const UI_EN = {
     'Unpublished',
   'bis %s Reiche':
     'up to %s empires',
+  'nicht am Zug':
+    'not your turn',
   'Meine Karten':
     'My maps',
   'Noch keine eigene Karte gespeichert.':

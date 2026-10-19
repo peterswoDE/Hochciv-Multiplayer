@@ -555,6 +555,8 @@ function redraw() {
   $('hud-food').textContent = p.res.food + (p.foodDeficit ? ` (−${p.foodDeficit})` : '');
   $('hud-coins').textContent = p.res.coins; $('hud-power').textContent = powerOf(S, S.cur);
   ['a-tech', 'a-found', 'a-power', 'a-abil', 'a-end'].forEach(id => $(id).disabled = !human);
+  // der eigene Technologiebogen (viewer) ist auch fremden Zügen eine Ansicht wert
+  if (viewer() !== S.cur && !S.over) $('a-tech').disabled = false;
   if (ui.tut) {
     const bar = tutAllow().bar;
     TUT_BAR.forEach(id => $(id).disabled = !human || (bar ? !bar.includes(id) : true));
@@ -896,7 +898,7 @@ function yieldOverview(S, pi) {
    es noch nichts zu kaufen, und eine Kachel, die sich drücken ließe, aber nichts tut,
    wäre schlimmer als gar keine. */
 function techBoardHTML(S, pi, opts) {
-  const plain = !!(opts || {}).plain, p = S.players[pi];
+  const plain = !!(opts || {}).plain, readonly = !!(opts || {}).readonly, p = S.players[pi];
   let grid = '<div class="techgrid">';
   for (let a = 0; a < 4; a++) {
     grid += `<div class="age-label">${AGES[a]}</div>`;
@@ -905,14 +907,15 @@ function techBoardHTML(S, pi, opts) {
       for (const t of techsIn(f, a, S)) {
         const owned = has(p, t.k), avail = p.avail[t.k] && !owned;
         const cost = techCost(S, pi, t);
-        const can = !plain && avail && available(S, pi, 'sci') >= cost;
+        const affordable = !plain && avail && available(S, pi, 'sci') >= cost;
+        const can = affordable && !readonly;
         // Sklaverei wird mit der ersten Technologie der Moderne obsolet – im Bogen sichtbar.
         const dead = t.k === 'sklaverei' && owned && !slaveryUsable(p);
         const eff = dead ? T('obsolet – seit der Moderne nicht mehr nutzbar') : techEffect(t, S);
         // Verfügbar zerfällt in zwei Zustände: bezahlbar (afford) und zu teuer (costly).
         // Rein grafisch – der Kostenwert steht ohnehin schon in der Kachel.
         const state = owned ? 'owned'
-          : avail ? (plain ? 'avail' : can ? 'avail afford' : 'avail costly') : 'locked';
+          : avail ? (plain ? 'avail' : affordable ? 'avail afford' : 'avail costly') : 'locked';
         grid += `<button class="tech ${state}${dead ? ' obsolete' : ''}"
           ${can ? `data-tech="${t.k}"` : 'disabled'}><span class="c">${owned ? '✓' : avail && !plain ? costText({ sci: cost }, String(cost)) : cost}</span>
           <b>${t.n}</b><span class="eff">${eff}</span>${ownerMarks(S, t.k, pi)}</button>`;
@@ -922,17 +925,28 @@ function techBoardHTML(S, pi, opts) {
   }
   grid += '</div>';
   const sing = singularityReady(p), sc = techCost(S, pi, SINGULARITY);
-  const singCan = !plain && sing && available(S, pi, 'sci') >= sc && !p.techs.singularitaet;
+  const singAfford = !plain && sing && available(S, pi, 'sci') >= sc && !p.techs.singularitaet;
+  const singCan = singAfford && !readonly;
   const singState = p.techs.singularitaet ? 'owned'
-    : sing ? (plain ? 'avail' : singCan ? 'avail afford' : 'avail costly') : 'locked';
+    : sing ? (plain ? 'avail' : singAfford ? 'avail afford' : 'avail costly') : 'locked';
   grid += `<button class="tech ${singState}" style="margin-top:10px"
       ${singCan ? 'data-tech="singularitaet"' : 'disabled'}>
       <span class="c">${sing && !plain && !p.techs.singularitaet ? costText({ sci: sc }, String(sc)) : sc}</span><b>${SINGULARITY.n}</b><span class="eff">${SINGULARITY.e}</span></button>`;
   return grid;
 }
+/* Wer schaut auf den Bildschirm? Am selben Gerät, wer am Zug ist. Im Mehrspielermodus setzt
+   mp.js `viewerHook`: dort ist es immer das eigene Reich – auch wenn ein anderes am Zug ist
+   (Mehrspieler-Erweiterung; bis dahin zeigte der Bogen das Reich am Zug). */
+let viewerHook = null;
+const viewer = () => {
+  const v = viewerHook ? viewerHook() : null;
+  return Number.isInteger(v) && S.players[v] ? v : S.cur;
+};
 function techModal() {
   endFoundMode();
-  const pi = S.cur;
+  const pi = viewer();
+  // Forschen nur im eigenen Zug – sonst ist der Bogen eine Ansicht
+  const ownTurn = pi === S.cur && !isAuto(P(S)) && !S.over;
   // Nur die kleine Legende mit zwei Beispielmarken – der erklärende Absatz darüber ist
   // raus, er stand in jeder Ansicht im Weg.
   const bsp = S.players.find((pl, i) => i !== pi && !pl.dead);
@@ -943,7 +957,7 @@ function techModal() {
         ? `${ownerMark(civOf(bsp), 'kann', false)} <span>${T('könnte sie erforschen')}</span>` : ''}
        </p>`
     : '';
-  grid += techBoardHTML(S, pi);
+  grid += techBoardHTML(S, pi, { readonly: !ownTurn });
   /* Freie Forschung, Rückschau und Kopieren (Spionage, Kundschafterei, Internet) standen bis
      v86 hier unter dem Bogen – seit v87 leben sie unter „Fähigkeiten" (abilSheet), mit der
      Zahl an der Leiste, wenn etwas davon gratis offen ist. */
@@ -951,10 +965,12 @@ function techModal() {
     <aside class="tech-aside">${yieldOverview(S, pi)}</aside>
     <div class="tech-main">${grid}</div>
   </div>`;
-  modal(T('Technologien · %s Wissenschaft verfügbar', available(S, pi, 'sci')), layout);
+  modal(T('Technologien · %s Wissenschaft verfügbar', available(S, pi, 'sci')) +
+    (ownTurn ? '' : ' · ' + T('nicht am Zug')), layout);
   $('overlay').classList.add('wide');
   if (ui.tut) tutGateTechs();
   $('ov-body').querySelectorAll('[data-tech]').forEach(b => b.onclick = () => {
+    if (viewer() !== S.cur) return;
     const e = doResearch(S, S.cur, b.dataset.tech);
     if (e) return toast(e);
     redraw(); if (S.over) { closeModal(); gameOver(); } else techModal();

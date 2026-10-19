@@ -7,7 +7,7 @@ const MP = {
     socket: null,
     sessionId: null,
     lobbyIndex: null,
-    playerIndex: null,
+    playerIndex: null,      // own index in the game state (live and Rundenspiel)
     joinCode: null,
     password: null,
     lastTurn: null,
@@ -941,7 +941,9 @@ window.addEventListener('DOMContentLoaded', () => {
     // Inject Turn Blocker CSS rules
     const style = document.createElement('style');
     style.textContent = `
-        .mp-waiting .actionbar { pointer-events: none !important; opacity: 0.5 !important; filter: grayscale(100%); }
+        /* Not your turn: the actions are blocked – looking stays possible (own tech tree, world, log) */
+        .mp-waiting .actionbar > button:not(#a-tech):not(#a-info):not(#a-log) { pointer-events: none !important; opacity: 0.5 !important; filter: grayscale(100%); }
+        .mp-no-viewer .mp-waiting #a-tech { pointer-events: none !important; opacity: 0.5 !important; filter: grayscale(100%); }
         .mp-waiting #sheet { pointer-events: none !important; }
         .mp-waiting .sheet-close { opacity: 0 !important; }
         .mp-waiting-toast {
@@ -1201,6 +1203,13 @@ if (originalDraftChoose) {
 }
 
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────
+// The game shows its screens for the player who looks at them (viewer in ui.js) – here that is
+// always the own empire, also during other players' turns (e.g. the tech tree).
+if (typeof viewerHook !== 'undefined') viewerHook = () => (MP.active && Number.isInteger(MP.playerIndex) ? MP.playerIndex : null);
+// A game without that (v83, only for Rundenspiele started on it) would show the tree of the
+// player on turn – there "Forschen" stays blocked while it is not your turn (CSS below).
+else document.documentElement.classList.add('mp-no-viewer');
+
 const ACTIONS = {
     doResearch: (state, pi, tech) => ({ type: 'research', params: { tech } }),
     useFreeTech: (state, pi, tech) => ({ type: 'freeTech', params: { tech } }),
