@@ -7,6 +7,10 @@
  *
  * Sends data-only messages: the app builds the notification itself (channel, texts, the link it
  * opens), also when it is in the background.
+ *
+ * Devices are addressed by their Firebase Installation ID (FID): the app uses Firebase Messaging's
+ * register() / onRegistered API, which replaced registration tokens, so messages go to
+ * `message.fid` (`message.token` is deprecated). DeviceToken.token holds that ID.
  */
 const { GoogleAuth } = require('google-auth-library');
 
@@ -36,7 +40,7 @@ const enabled = () => !!auth;
  * Sends one message. `data` values must be strings. Returns 'sent', 'invalid' (the token is dead –
  * the caller deletes it) or 'error' (try again next time).
  */
-async function send(token, data) {
+async function send(token, data) {     // token = the device's FID
     if (!auth) return 'error';
     try {
         const client = await auth.getClient();
@@ -45,7 +49,7 @@ async function send(token, data) {
             method: 'POST',
             data: {
                 message: {
-                    token,
+                    fid: token,
                     data,
                     // "Your turn" may arrive while the phone dozes; a day later it is stale
                     android: { priority: 'high', ttl: '86400s' },

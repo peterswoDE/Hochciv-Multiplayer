@@ -16,7 +16,7 @@ const LOG = path.join(__dirname, 'sent.jsonl');
 GoogleAuth.prototype.getClient = async function () {
     return {
         request: async ({ url, data }) => {
-            const token = data.message.token;
+            const token = data.message.fid;
             if (token.includes('dead')) {
                 const err = new Error('Requested entity was not found.');
                 err.response = { status: 404, data: { error: { message: 'Requested entity was not found.', details: [{ errorCode: 'UNREGISTERED' }] } } };

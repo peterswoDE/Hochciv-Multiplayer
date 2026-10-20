@@ -102,9 +102,10 @@ const post = (c, p, body) => c(p, { method: 'POST', body: JSON.stringify(body) }
 
     // ---- "your turn" reaches the phone
     notifyTurn(a.id, 'game-1');
-    const msgs = sent().filter(x => x.message.token === phone);
+    const msgs = sent().filter(x => x.message.fid === phone);
     const m = msgs[0] && msgs[0].message;
     ok(msgs.length === 1, 'turn notification sent to the phone', msgs.length);
+    ok(m && !m.token, 'device addressed as message.fid (Firebase Installation ID)');
     ok(m && !m.notification && m.data.type === 'turn' && m.data.gameId === 'game-1' && m.data.title === 'Hochciv: Du bist am Zug'
         && /Runde 3/.test(m.data.body) && /\/\?async=game-1$/.test(m.data.link) && m.android.priority === 'high',
         'data-only message with title, text, game link, high priority', m && JSON.stringify(m.data));
@@ -127,7 +128,7 @@ const post = (c, p, body) => c(p, { method: 'POST', body: JSON.stringify(body) }
     const dead = tokenFor('dead');
     await post(cb, '/api/push/token', { token: dead });
     notifyTurn(b.id, 'game-4');
-    ok(sent().some(x => x.message.token === phone && x.message.data.gameId === 'game-4'), 'live device still gets it');
+    ok(sent().some(x => x.message.fid === phone && x.message.data.gameId === 'game-4'), 'live device still gets it');
     ok(sql(`SELECT count(*) FROM device_tokens WHERE token = '${dead}'`) === '0', 'token rejected by FCM is deleted');
 
     // ---- logout of the app removes the device
