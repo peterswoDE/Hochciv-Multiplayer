@@ -80,6 +80,16 @@ html.w-narrow .techgrid.m-tabbed[data-tab="3"] > .techcol:not(.m-f3){display:non
 html.w-narrow .techgrid.m-tabbed .tech{font-size:13px;padding:9px 10px}
 html.w-narrow .techgrid.m-tabbed .tech b{font-size:14px}
 
+/* mp.js: login bar of the main menu. On phones it is part of the column instead of lying over
+   the menu (logged in it is two lines high), and its content wraps: name first, buttons below. */
+html.w-narrow #mp-main-auth-container{position:static !important;order:-1;flex:0 0 auto;
+  padding:8px 12px !important;justify-content:flex-start !important}
+html.w-narrow #mp-main-auth-container > div{flex-wrap:wrap;gap:6px 8px !important;width:100%;
+  font-size:13px !important;line-height:1.35}
+html.w-narrow #mp-main-auth-container > div > span{flex:1 1 auto;min-width:0}
+html.w-narrow #mp-main-auth-container .btn{flex:0 0 auto;min-height:40px;white-space:nowrap}
+html.w-narrow #screen-menu .menu-wrap{padding-top:12px}
+
 /* mp.js: "Warte auf deinen Zug…" below the Kopfzeile instead of over name and resources */
 html.w-narrow .mp-waiting-toast{top:calc(var(--hud-h,54px) + 6px) !important;font-size:13px;padding:4px 12px !important;
   white-space:nowrap}
@@ -96,4 +106,8 @@ html.w-narrow #mp-players-container:not(.mp-log-minimized){left:8px;right:8px;wi
   .modal header{padding:4px 6px 4px 14px}
   /* Anmelden: the login page in an iframe asks for 550 px – let it scroll instead */
   #ov-body iframe{height:calc(100vh - 64px) !important;min-height:0 !important}
+  /* login bar of the main menu: in the column, not over the first lines of the menu */
+  #mp-main-auth-container{position:static !important;order:-1;flex:0 0 auto;padding:6px 16px !important}
+  #mp-main-auth-container .btn{white-space:nowrap}
+  #screen-menu .menu-wrap{padding-top:10px}
 }
