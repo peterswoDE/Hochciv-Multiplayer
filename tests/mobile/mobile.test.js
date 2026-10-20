@@ -150,6 +150,29 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   ok(await page.evaluate(() => document.documentElement.classList.contains('w-side') && !document.documentElement.classList.contains('w-narrow')), 'landscape: side layout');
   ok(await page.evaluate(() => getComputedStyle(document.getElementById('a-more')).display === 'none' && getComputedStyle(document.getElementById('a-log')).display !== 'none'), 'landscape: all 7 actions, no "Mehr"');
 
+  // tutorial: newly highlighted fields come into view even if the map was moved away
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(URL, { waitUntil: 'networkidle' });
+  await page.click('#m-tutorial');
+  await page.waitForTimeout(400);
+  await page.click('#tut-nein');
+  await page.waitForTimeout(1500);
+  const tutVisible = () => page.evaluate(() => {
+    const svg = document.getElementById('map'), r = svg.getBoundingClientRect(), b = svg.viewBox.baseVal, k = r.width / b.width;
+    return (tutHighlight() || []).every(([row, col]) => {
+      const [mx, my] = hexCenter(row, col, 30), x = r.left + (mx - b.x) * k, y = r.top + (my - b.y) * k;
+      return x > r.left && x < r.right && y > r.top && y < r.bottom;
+    });
+  });
+  ok(await tutVisible(), 'tutorial: highlighted field visible at the start');
+  await page.evaluate(() => {
+    const svg = document.getElementById('map'), v = HochcivMobile.views.get(svg);
+    v.k *= 2; v.cx = v.W; v.cy = v.H; v.auto = false; HochcivMobile.applyView(svg);
+  });
+  await page.click('#tut-next');
+  await page.waitForTimeout(500);
+  ok(await tutVisible(), 'tutorial: new highlights are brought into view');
+
   ok(errors.length === 0, 'no page errors', errors.join(' | '));
   await browser.close();
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');

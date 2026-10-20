@@ -9,12 +9,13 @@
  *     – tech tree with one tab per column (Forschung / Produktion / Militär / Spezial)
  *  3. A field selected under a sheet is moved into view next to it.
  *  4. Short screens: the editor starts with its settings folded.
+ *  5. Tutorial: fields it highlights are brought into view.
  *
  * Hooks into the game – check these when the game is updated:
  *   drawMap(svg, map, opts)   wrapped: re-applies the zoom after every redraw
  *   openTile(r, c)            wrapped: keeps the selected field (ui.sel) visible next to its sheet
  *   editorScreen()            wrapped: folds the settings on short screens
- *   used: HEX, hexCenter, capitalOf, viewer, ui.sel, S, LANG, #a-abil/#a-info/#a-log/#a-end,
+ *   used: HEX, hexCenter, capitalOf, tutHighlight, ui.sel, ui.tut, S, MP, LANG, #a-abil/#a-info/#a-log/#a-end,
  *         #a-abil-n, #ov-body, .techgrid > .techcol (4 per era, h4 = field name in era 1)
  */
 (function () {
@@ -115,10 +116,33 @@
     applyView(svg);
   }
 
+  /** Tutorial: when it highlights new fields (gold frame) that are out of view, bring them in –
+   *  centred on them, zoomed out as far as needed to show all of them. */
+  let lastTutHl = '';
+  function showTutorialFields(svg) {
+    if (svg.id !== 'map' || typeof ui === 'undefined' || !ui || !ui.tut || typeof tutHighlight !== 'function') return;
+    const hl = tutHighlight() || [];
+    const key = JSON.stringify(hl);
+    if (key === lastTutHl) return;
+    lastTutHl = key;
+    const v = views.get(svg), r = hostRect(svg);
+    if (!v || !hl.length || !r.width) return;
+    const pts = hl.map(([row, col]) => hexCenter(row, col, HEX));
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const x0 = Math.min(...xs) - HEX, x1 = Math.max(...xs) + HEX, y0 = Math.min(...ys) - HEX, y1 = Math.max(...ys) + HEX;
+    const vw = r.width / v.k, vh = r.height / v.k;
+    const inView = x0 >= v.cx - vw / 2 && x1 <= v.cx + vw / 2 && y0 >= v.cy - vh / 2 && y1 <= v.cy + vh / 2;
+    if (inView) return;
+    v.k = Math.min(v.k, r.width / (x1 - x0), r.height / (y1 - y0));
+    v.cx = (x0 + x1) / 2; v.cy = (y0 + y1) / 2;
+    v.auto = false;
+    applyView(svg);
+  }
+
   const origDrawMap = window.drawMap;
   window.drawMap = function (svg) {
     const out = origDrawMap.apply(this, arguments);
-    try { afterDraw(svg); } catch (e) { /* never break drawing */ }
+    try { afterDraw(svg); showTutorialFields(svg); } catch (e) { /* never break drawing */ }
     return out;
   };
 
