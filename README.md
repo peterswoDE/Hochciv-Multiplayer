@@ -27,6 +27,21 @@ This server adds multiplayer on top of the game:
 3. **Hook** – in the browser, `mp.js` replaces the game's action functions so that moves are sent to the server, and adds the lobby, login and account UI.
 4. **Rules on the server** – `engine-adapter.js` loads the same game files into the server (one sandbox per version) and applies every move there. Each Rundenspiel records the version it was started with (`engine`); games from before that have none and are v83.
 
+### Mobile layer
+
+`client/mobile/` (`mobile.css` and `mobile.js`, added to `index.html` by `inject.js` after `mp.js`) makes the game usable on phones without changing the game files. It is used by the website on phones and by the Android app.
+
+* **Zoomable maps on every screen size:** pinch, drag, mouse wheel, and buttons + / − / ⌖ (whole map ↔ own capital). Maps start zoomed in far enough that a hex is a touch target (44 px), unless the whole map already gives ≥ 36 px hexes (tablets).
+* **Narrow screens** (`html.w-narrow` from the game, < 600 px):
+  * **Aktionsleiste:** "4 + Mehr" – *Fähigkeiten*, *Welt* and *Protokoll* move into a small menu, which still works while `mp.js` waits for other players.
+  * **Technologiebogen:** one tab per column.
+  * **Kopfzeile:** compact; readable log.
+  * **`mp.js` widgets:** fitted to the screen.
+* **Selected field:** stays visible next to its sheet.
+* **Short screens:** dialogs use the full height, and the editor starts with its settings folded.
+
+The layer wraps a few game functions (`drawMap`, `openTile`, `editorScreen`) and relies on some ids and classes of the game. The list is at the top of `mobile.js`. **After every game update**, run the interaction tests in `tests/mobile/mobile.test.js` (instructions in the file).
+
 **Updating the game:** bring the new game version into `HochCiv/` (for example by merging a new Hochciv release into the multiplayer branch of the game repository and copying the result over), run its tests (`node test.js`, `node smoke.js` in `HochCiv/`) and commit. Running Rundenspiele are not affected by later versions only if their version is kept – to keep one, add it next to `HochCiv-v83/` (see `GAME_DIRS` in `engine-adapter.js`).
 
 ## Deployment (production)

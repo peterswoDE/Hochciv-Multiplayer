@@ -1,0 +1,99 @@
+/* HochCiv mobile layer – styles for client/mobile/mobile.js. Loaded after the game's style.css.
+   Uses the game's palette and its layout classes on <html>, set by ui.js:
+   w-narrow (< 600 px wide), w-side (landscape, ≥ 600), w-wide (≥ 820). */
+
+/* ------------------------------------------------------------------ zoom (all sizes) */
+#map-host,#pl-host,#dr-host,#ed-host{touch-action:none}
+.m-zoom{position:absolute;right:10px;top:10px;z-index:5;display:flex;flex-direction:column;gap:6px}
+.m-zoom[hidden]{display:none}
+.m-zoom button{width:40px;height:40px;border-radius:10px;border:1px solid var(--rule);
+  background:var(--paper);color:var(--ink);font:600 20px/1 var(--sans);box-shadow:var(--shadow);
+  cursor:pointer;padding:0}
+.m-zoom button:active{background:var(--paper-2)}
+.m-zoom button[disabled]{opacity:.4}
+/* the zoom buttons stay clickable while mp.js blocks the map for other players' turns */
+.mp-waiting .m-zoom{pointer-events:auto}
+
+/* ------------------------------------------------------------------ narrow (phone portrait) */
+
+/* Kopfzeile: name and round on one line each; the ability is in "Fähigkeiten" */
+html.w-narrow .hud{gap:6px;padding:4px 6px}
+html.w-narrow .hud-civ{gap:6px}
+html.w-narrow .hud-civ strong{white-space:nowrap;font-size:15px}
+html.w-narrow .hud-abil{display:none}
+html.w-narrow .hud-civ small{font-size:11px}
+html.w-narrow #g-menu{padding:6px 6px;font-size:20px}
+/* mp.js: lobby code and password in the Kopfzeile – compact, and gone when there is none
+   (single player) instead of a lone 🌐 */
+html.w-narrow #mp-cred-wrapper{flex:0 1 auto !important;min-width:0}
+html.w-narrow #mp-cred-wrapper:has(#mp-cred-box:empty){display:none !important}
+html.w-narrow #mp-cred-wrapper .res{padding:2px 6px !important;min-width:0}
+html.w-narrow #mp-cred-wrapper .res i{display:none}
+html.w-narrow #mp-cred-box{font-size:11px !important;line-height:1.25;white-space:normal;max-width:84px;
+  text-align:center;font-weight:600}
+
+/* Aktionsleiste "4 + Mehr" */
+#a-more{display:none}
+html.w-narrow #screen-game .actionbar #a-abil,
+html.w-narrow #screen-game .actionbar #a-info,
+html.w-narrow #screen-game .actionbar #a-log{display:none}
+html.w-narrow #screen-game .actionbar #a-more{display:block}
+html.w-narrow .actionbar{gap:5px;padding:6px 6px calc(6px + var(--safe-b))}
+html.w-narrow .actionbar .btn.small{font-size:13px;line-height:1.15;padding:7px 4px;min-height:48px;
+  white-space:normal;overflow-wrap:anywhere}
+html.w-narrow .actionbar #a-end{flex:1.25}
+#a-more.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+/* mp.js greys out every action except Forschen/Welt/Protokoll while you wait – "Mehr" holds two of them */
+/* (the :not()s only raise the specificity above mp.js's rule, which has three ids in :not()) */
+.mp-waiting .actionbar > button#a-more:not(#a-tech):not(#a-info):not(#a-log){pointer-events:auto !important;
+  opacity:1 !important;filter:none !important}
+#m-more-menu{position:fixed;z-index:40;display:flex;flex-direction:column;gap:6px;min-width:200px;
+  padding:8px;background:var(--paper);border:1px solid var(--rule);border-radius:14px;
+  box-shadow:0 8px 28px rgba(60,48,20,.22)}
+#m-more-menu[hidden]{display:none}
+#m-more-menu .btn{text-align:left;min-height:48px;box-shadow:none}
+
+/* Blätter: höchstens gut die Hälfte des Schirms, die Karte bleibt sichtbar */
+html.w-narrow .sheet{max-height:min(calc(100% - var(--bar-h,58px) - var(--hud-h,54px)), 56%)}
+html.w-narrow .sheet .opt,html.w-narrow .sheet .btn{min-height:44px}
+
+/* Protokoll und KI-Zug: lesbar statt Schreibmaschine */
+html.w-narrow .logline,html.w-narrow .rolls>summary{font-family:var(--sans);font-size:13.5px;line-height:1.45}
+html.w-narrow .logline{padding:4px 0}
+
+/* Technologiebogen: eine Spalte je Reiter */
+.m-tabs{display:none}
+html.w-narrow .m-tabs{display:flex;gap:4px;position:sticky;top:0;z-index:2;margin:0 -16px 8px;
+  padding:8px 12px;background:var(--paper);border-bottom:1px solid var(--rule)}
+html.w-narrow .m-tabs button{flex:1;min-width:0;min-height:44px;padding:6px 2px;border:1px solid var(--rule);
+  border-radius:9px;background:var(--paper-2);color:var(--ink-soft);font:600 12px/1.2 var(--sans);
+  position:relative;cursor:pointer;overflow:hidden;text-overflow:ellipsis}
+html.w-narrow .m-tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+html.w-narrow .m-tabs .m-dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 0 1.5px var(--paper)}
+html.w-narrow .techgrid.m-tabbed{grid-template-columns:1fr}
+html.w-narrow .techgrid.m-tabbed .techcol h4{display:none}
+html.w-narrow .techgrid.m-tabbed[data-tab="0"] > .techcol:not(.m-f0),
+html.w-narrow .techgrid.m-tabbed[data-tab="1"] > .techcol:not(.m-f1),
+html.w-narrow .techgrid.m-tabbed[data-tab="2"] > .techcol:not(.m-f2),
+html.w-narrow .techgrid.m-tabbed[data-tab="3"] > .techcol:not(.m-f3){display:none}
+html.w-narrow .techgrid.m-tabbed .tech{font-size:13px;padding:9px 10px}
+html.w-narrow .techgrid.m-tabbed .tech b{font-size:14px}
+
+/* mp.js: "Warte auf deinen Zug…" below the Kopfzeile instead of over name and resources */
+html.w-narrow .mp-waiting-toast{top:calc(var(--hud-h,54px) + 6px) !important;font-size:13px;padding:4px 12px !important;
+  white-space:nowrap}
+
+/* mp.js: Protokoll und Spielerliste unter der Kopfzeile, ausgeklappt fast volle Breite */
+html.w-narrow #mp-persistent-log-container,html.w-narrow #mp-players-container{top:calc(var(--hud-h,54px) + 8px)}
+html.w-narrow #mp-persistent-log-container:not(.mp-log-minimized),
+html.w-narrow #mp-players-container:not(.mp-log-minimized){left:8px;right:8px;width:auto}
+
+/* ------------------------------------------------------------------ short screens (phone landscape) */
+@media (max-height:520px){
+  .overlay{padding:0}
+  .modal{max-height:100%;border-radius:0}
+  .modal header{padding:4px 6px 4px 14px}
+  /* Anmelden: the login page in an iframe asks for 550 px – let it scroll instead */
+  #ov-body iframe{height:calc(100vh - 64px) !important;min-height:0 !important}
+}
