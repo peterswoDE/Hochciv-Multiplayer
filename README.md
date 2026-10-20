@@ -86,6 +86,8 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 
 After logging in or linking an account, players return to the game with a short confirmation message.
 
+**Android app:** Google refuses its login page inside the app's WebView, so the app signs in natively (Credential Manager) and sends the Google ID token to `POST /api/auth/google/idtoken`. Beforehand it gets the client ID and a one-time nonce from `GET /api/auth/google/app-config`. It uses the same Google configuration as above (client ID, *Aktiviert*) and the same account logic as the web login. In the Google Cloud Console, the app also needs an **Android** OAuth client (package `de.hochciv.app`, the SHA-1 of the app's signing keys); its ID isn't entered here. Tests: `tests/auth/google-app-login.test.js` (instructions in the file).
+
 ### Discord Activity
 
 The game runs as a [Discord Activity](https://discord.com/developers/docs/activities/overview). Players start it from the Activity launcher of a voice channel or DM. They are signed in with Discord and everyone in the call lands in the same lobby, with no join codes. The first player is host.

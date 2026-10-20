@@ -15,6 +15,8 @@ const {
     markAuthenticated, userJson, str, validPassword, issueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
+const { OAuth2Client } = require('google-auth-library');
+const crypto = require('crypto');
 
 const rateLimitLib = require('express-rate-limit');
 
@@ -385,6 +387,98 @@ router.post('/logout', (req, res) => {
         res.json({ ok: true });
     });
 });
+/** Why a Google/Discord login failed, as the ?oauth=<reason> mp.js shows a message for. */
+function oauthFailureReason(info) {
+    const msg = String((info && info.message) || '');
+    return msg === 'banned' ? 'banned'
+        : msg === 'reauth' ? 'reauth'
+        : msg.includes('bereits mit einem anderen') ? 'taken'
+            : msg.includes('laufende Rundenspiele') ? 'merge_async'
+            : /state/i.test(msg) ? 'state'
+                : 'failed';
+}
+
+// --- Google sign-in of the Android app ---
+// Google refuses its login page inside WebViews, so the app signs in natively (Android
+// Credential Manager) and sends the ID token here. Same account logic as the web login
+// (utils/oauth.js); afterwards the app opens /?oauth=<result>, like the web callback.
+const googleVerifier = new OAuth2Client();
+const NONCE_TTL_MS = 10 * 60 * 1000;
+
+async function googleClientId() {
+    const p = await OAuthProvider.findOne({ where: { provider: 'google' } });
+    return p && p.enabled && p.clientId ? p.clientId : null;
+}
+
+// The web client ID (the app's serverClientId – public anyway) and a one-time nonce, which
+// Google writes into the ID token: a token can't be used twice or in another session.
+router.get('/google/app-config', rateLimit, async (req, res) => {
+    try {
+        const clientId = await googleClientId();
+        if (!clientId) return res.status(404).json({ error: 'Google Login ist nicht konfiguriert.' });
+        const nonce = crypto.randomBytes(18).toString('base64url');
+        req.session.googleNonce = { value: nonce, at: Date.now() };
+        res.set('Cache-Control', 'no-store');
+        res.json({ clientId, nonce });
+    } catch (err) {
+        console.error('[OAuth] Google app config error:', err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// { idToken } → { ok: true, linked } or { ok: false, reason } (reasons as in ?oauth=<reason>)
+router.post('/google/idtoken', rateLimit, async (req, res) => {
+    // JSON only: a form on another site can't send it without a CORS preflight (login CSRF)
+    if (!req.is('application/json')) return res.status(415).json({ ok: false, reason: 'failed' });
+    const expected = req.session.googleNonce;
+    req.session.googleNonce = null;                     // one attempt per nonce
+    const idToken = req.body && req.body.idToken;
+    if (typeof idToken !== 'string' || idToken.length > 4096) return res.status(400).json({ ok: false, reason: 'failed' });
+    if (!expected || Date.now() - expected.at > NONCE_TTL_MS) return res.status(400).json({ ok: false, reason: 'state' });
+    try {
+        const clientId = await googleClientId();
+        if (!clientId) return res.status(404).json({ ok: false, reason: 'error' });
+        let payload;
+        try {
+            // signature (Google's keys), audience, issuer and expiry
+            payload = (await googleVerifier.verifyIdToken({ idToken, audience: clientId })).getPayload();
+        } catch (err) {
+            // only the start of the reason – the library quotes the token, which isn't for logs
+            console.warn('[OAuth] Google ID token rejected:', String(err.message).split(':')[0].slice(0, 80));
+            return res.status(401).json({ ok: false, reason: 'failed' });
+        }
+        if (!payload || !payload.sub || payload.nonce !== expected.value) {
+            return res.status(401).json({ ok: false, reason: 'state' });
+        }
+        // the profile passport-google-oauth20 would deliver
+        const profile = {
+            id: payload.sub,
+            displayName: payload.name || '',
+            emails: payload.email ? [{ value: payload.email, verified: payload.email_verified === true }] : [],
+            photos: payload.picture ? [{ value: payload.picture }] : [],
+        };
+        const linking = req.isAuthenticated();
+        oauth.handleOAuthProfile(req, 'google', 'googleId', profile, (err, user, info) => {
+            if (err) {
+                console.error('[OAuth] Google app login error:', err);
+                return res.status(500).json({ ok: false, reason: 'error' });
+            }
+            if (!user) return res.status(403).json({ ok: false, reason: oauthFailureReason(info) });
+            req.login(user, (loginErr) => {
+                if (loginErr) {
+                    console.error('[OAuth] Google app login error:', loginErr);
+                    return res.status(500).json({ ok: false, reason: 'error' });
+                }
+                markAuthenticated(req);
+                res.json({ ok: true, linked: linking });
+            });
+        });
+    } catch (err) {
+        console.error('[OAuth] Google app login error:', err);
+        res.status(500).json({ ok: false, reason: 'error' });
+    }
+});
+
 // --- OAuth Social Login Routes ---
 
 // Public endpoint: which OAuth providers are enabled?
@@ -424,14 +518,7 @@ for (const provider of ['google', 'discord']) {
             }
             if (!user) {
                 console.error(`[OAuth] ${label} Auth failed. Info:`, info);
-                const msg = String((info && info.message) || '');
-                const reason = msg === 'banned' ? 'banned'
-                    : msg === 'reauth' ? 'reauth'
-                    : msg.includes('bereits mit einem anderen') ? 'taken'
-                        : msg.includes('laufende Rundenspiele') ? 'merge_async'
-                        : /state/i.test(msg) ? 'state'
-                            : 'failed';
-                return res.redirect(`/?oauth=${reason}`);
+                return res.redirect(`/?oauth=${oauthFailureReason(info)}`);
             }
             req.login(user, (loginErr) => {
                 if (loginErr) {

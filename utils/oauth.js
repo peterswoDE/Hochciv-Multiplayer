@@ -150,4 +150,4 @@ async function refreshOAuthStrategies() {
 
 const isEnabled = provider => strategies.has(provider);
 
-module.exports = { refreshOAuthStrategies, isEnabled };
+module.exports = { refreshOAuthStrategies, isEnabled, handleOAuthProfile };
