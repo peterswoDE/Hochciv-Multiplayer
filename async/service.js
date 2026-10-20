@@ -366,6 +366,7 @@ async function list(user) {
     const u = await User.findByPk(user.id);
     return {
         notifyEmail: u ? u.notifyEmail : true,
+        notifyPush: u ? u.notifyPush : true,
         timeoutDays: TIMEOUT_MS / DAY,
         mine: mine.map(summarize),
         invites: invites.map(summarize).filter(s => s.freeSeats.length && s.mySlot == null),

@@ -151,6 +151,8 @@ app.use('/api/mfa', mfaRoutes);
 app.use('/api/profile', require('./routes/profile'));
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
+// Push notifications of the Android app
+app.use('/api/push', require('./routes/push'));
 // Custom maps in the account, published with a code (maps/service.js)
 app.use('/api/maps', require('./routes/maps'));
 // Discord Activity (Embedded App SDK)

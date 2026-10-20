@@ -3,7 +3,7 @@
  * other players, but no game points to the account any more: its seats are anonymized, running
  * Rundenspiele go on without it (async/logic.js removeUser), live games drop the account link.
  */
-const { sequelize, User, Game, Passkey, TotpToken } = require('../models');
+const { sequelize, User, Game, Passkey, TotpToken, DeviceToken } = require('../models');
 const sessions = require('../sessions');
 const asyncService = require('../async/service');
 const mapService = require('../maps/service');
@@ -41,6 +41,7 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
         await Passkey.destroy({ where: { UserId: user.id }, transaction });
         await mapService.removeOwner(user.id, transaction);      // own maps, published ones too
         await TotpToken.destroy({ where: { UserId: user.id }, transaction });
+        await DeviceToken.destroy({ where: { UserId: user.id }, transaction });
         await user.destroy({ transaction });
     });
     await destroyOtherSessions(sequelize, user.id);

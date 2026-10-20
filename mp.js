@@ -1469,7 +1469,9 @@ const ASYNC = {
             ${takenOver.length ? section('Von der KI übernommen', takenOver.slice(0, 15), '') : ''}
             <p class="sub">Beendete Rundenspiele findest du in deiner <a href="#" onclick="MP.showAccountModal(); return false;">Spielhistorie</a>.</p>
             <label class="row mpa-notify"><span>E-Mail, wenn ich am Zug bin</span>
-              <input type="checkbox" ${d.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>`);
+              <input type="checkbox" ${d.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>
+            ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>Push-Nachricht, wenn ich am Zug bin</span>
+              <input type="checkbox" ${d.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}`);
         $('overlay').classList.add('wide');
         this.refreshBadge();
     },
@@ -1502,6 +1504,15 @@ const ASYNC = {
 
     setNotify: function (on) {
         this.api('/notify', { email: on }).then(() => toast(on ? 'E-Mails an.' : 'E-Mails aus.')).catch(e => toast(e.message));
+    },
+
+    /** Push notifications of the Android app (the switch is only shown there). */
+    setPush: function (on) {
+        fetch(`${MP.serverUrl}/api/push/notify`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }),
+        }).then(r => r.ok ? toast(on ? 'Push-Nachrichten an.' : 'Push-Nachrichten aus.') : Promise.reject(new Error('Speichern fehlgeschlagen')))
+            .catch(e => toast(e.message));
     },
 
     // ── Create ───────────────────────────────────────────────────────────────
