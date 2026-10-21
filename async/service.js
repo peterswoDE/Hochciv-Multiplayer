@@ -13,6 +13,7 @@ const L = require('./logic');
 const engine = require('../engine-adapter');
 const { notify } = require('../utils/notify');
 const { calculateMMR } = require('../utils/mmr');
+const { finalPoints } = require('../utils/score');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
@@ -181,8 +182,10 @@ async function processResult(g) {
     try {
         const players = g.seats.map(seat => {
             const i = L.stateIndex(g, seat.slot);
-            let points = 0, scoreDetails = null;
-            try { scoreDetails = E.victoryScore(S, i); points = scoreDetails ? scoreDetails.total : 0; } catch (_) { }
+            const isWinner = Array.isArray(over.winners) && over.winners.includes(i);
+            let scoreDetails = null;
+            try { scoreDetails = E.victoryScore(S, i) || null; } catch (_) { }
+            const points = finalPoints(scoreDetails, isWinner);   // + WIN_BONUS for the winner
             const active = seat.userId && !seat.replaced;
             return {
                 dbUserId: active ? seat.userId : null,
@@ -190,7 +193,7 @@ async function processResult(g) {
                 name: seat.name || seat.civ, civ: seat.civ, ability: seat.ability, drafted: seat.drafted || null,
                 isBot: seat.kind === 'bot' || (seat.kind === 'ki' && !seat.replaced), replaced: !!seat.replaced, replacedUserId: seat.replaced ? seat.userId : null,
                 penalty: seat.penalty || 0, points, scoreDetails,
-                isWinner: Array.isArray(over.winners) && over.winners.includes(i),
+                isWinner,
                 async: true,
             };
         });
@@ -514,4 +517,5 @@ function evict(id) {
 module.exports = {
     init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick,
     setNotifyEmail, sweep, room, removeUser,
+    processResult,      // for tests/score
 };

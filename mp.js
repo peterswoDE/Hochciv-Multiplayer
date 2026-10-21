@@ -18,6 +18,7 @@ const MP = {
     user: null,
     asyncId: null,          // id of the open asynchronous game ("Rundenspiel"), else null
     lastTurnKey: null,
+    WIN_BONUS: 10,          // points for the winner on top of victoryScore – same as utils/score.js
 
     /** Send a game action to the server – live lobby or asynchronous game. */
     sendAction: function (payload, cb) {
@@ -248,18 +249,28 @@ const MP = {
         if (!body || !S || !S.over || !S.players || document.getElementById('mp-go-players')) return;
         const o = S.over;
         const winners = o.winners || [o.winner];
-        const score = pi => (o.score || []).find(x => x.pi === pi);
+        // The same points the server stores (utils/score.js): victoryScore for every empire, the
+        // winner gets WIN_BONUS on top. Engines without victoryScore: only the claims are scored.
+        const score = pi => {
+            if (typeof victoryScore === 'function') { try { return victoryScore(S, pi); } catch (e) { /* below */ } }
+            return (o.score || []).find(x => x.pi === pi);
+        };
         const rows = S.players.map((sp, i) => {
             const lp = this.lobbyPlayerOf(sp) || {};
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ };
-            const sc = score(i);
-            return { i, name: lp.name || civ.n, userId: lp.userId, bot: lp.isBot, civ: civ.n, points: sc ? sc.total : null };
-        }).sort((a, b) => (b.points || 0) - (a.points || 0));
+            const sc = score(i), won = winners.includes(i);
+            return { i, won, name: lp.name || civ.n, userId: lp.userId, bot: lp.isBot, civ: civ.n,
+                points: sc ? sc.total + (won ? this.WIN_BONUS : 0) : null };
+        }).filter(r => S.players[r.i].kind !== 'barbar')
+            .sort((a, b) => (b.points || 0) - (a.points || 0));
+        const scored = rows.some(r => r.points != null);
+        const pts = r => r.points == null ? '–'
+            : r.won ? `${r.points} <small>(inkl. +${this.WIN_BONUS} Sieg)</small>` : r.points;
         const html = `<div id="mp-go-players"><table class="tbl" style="margin:10px 0">
-            <tr><th>Spieler</th><th>Reich</th>${o.score ? '<th>Punkte</th>' : ''}</tr>
-            ${rows.map(r => `<tr${winners.includes(r.i) ? ' style="font-weight:700"' : ''}>
+            <tr><th>Spieler</th><th>Reich</th>${scored ? '<th>Punkte</th>' : ''}</tr>
+            ${rows.map(r => `<tr${r.won ? ' style="font-weight:700"' : ''}>
                 <td>${this.nameLink(r.name, r.userId)}${r.bot ? ' <small>(Bot)</small>' : ''}</td>
-                <td>${esc(r.civ)}</td>${o.score ? `<td>${r.points != null ? r.points : '–'}</td>` : ''}</tr>`).join('')}
+                <td>${esc(r.civ)}</td>${scored ? `<td>${pts(r)}</td>` : ''}</tr>`).join('')}
             </table></div>`;
         const tip = body.querySelector('.tip');
         if (tip) tip.insertAdjacentHTML('beforebegin', html);
