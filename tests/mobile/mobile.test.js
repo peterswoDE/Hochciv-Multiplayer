@@ -150,6 +150,24 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   ok(await page.evaluate(() => document.documentElement.classList.contains('w-side') && !document.documentElement.classList.contains('w-narrow')), 'landscape: side layout');
   ok(await page.evaluate(() => getComputedStyle(document.getElementById('a-more')).display === 'none' && getComputedStyle(document.getElementById('a-log')).display !== 'none'), 'landscape: all 7 actions, no "Mehr"');
 
+  // login bar of the main menu, logged in with a long name: nothing sticks out, nothing is covered
+  for (const vp of [{ width: 360, height: 780 }, { width: 915, height: 412 }]) {
+    await page.setViewportSize(vp);
+    await page.goto(URL, { waitUntil: 'networkidle' });
+    const bar = await page.evaluate(async () => {
+      MP.fetchUser = async function () { this.user = { username: 'Hochzeitsplaner_Wolfram2026', mmr: 1234, gamesPlayed: 187 }; };
+      await MP.renderMainMenuAuth();
+      const el = document.getElementById('mp-main-auth-container'), r = el.getBoundingClientRect();
+      const w = document.documentElement.clientWidth, eb = document.querySelector('#screen-menu .eyebrow').getBoundingClientRect();
+      return {
+        overflow: [...el.querySelectorAll('*')].some(e => e.getBoundingClientRect().right > w + 1),
+        covers: eb.top < r.bottom - 1 && eb.bottom > r.top,
+        buttons: [...el.querySelectorAll('.btn')].every(b => b.getBoundingClientRect().height < 48),
+      };
+    });
+    ok(!bar.overflow && !bar.covers && bar.buttons, `login bar fits at ${vp.width}x${vp.height}`, JSON.stringify(bar));
+  }
+
   // tutorial: newly highlighted fields come into view even if the map was moved away
   await page.setViewportSize({ width: 412, height: 915 });
   await page.goto(URL, { waitUntil: 'networkidle' });
