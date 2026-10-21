@@ -1,17 +1,18 @@
 /**
  * Notifications for asynchronous games.
  *
- * Every message goes through notify(), which hands it to all registered channels. Today
- * there is one channel (e-mail). Webhooks or a Discord integration are added later with
+ * Every message goes through notify(), which hands it to all registered channels: e-mail and
+ * push (Android app). Webhooks or a Discord integration are added later with
  * registerChannel() – the game code does not change.
  *
  * A channel is `async (users, event) => {}` where `users` are User rows and `event` is
  *   { type: 'invite' | 'turn' | 'reminder' | 'takeover' | 'finished',
  *     gameId, subject, text, link }
  */
-const { User } = require('../models');
+const { User, DeviceToken } = require('../models');
 const { Op } = require('sequelize');
 const { sendMail } = require('./mailer');
+const push = require('./push');
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const channels = [];
@@ -47,6 +48,26 @@ registerChannel('email', async (users, event) => {
         const text = `Hallo ${u.username},\n\n${event.text}\n\nZum Spiel: ${event.link}\n\n` +
             `(E-Mail-Benachrichtigungen lassen sich in der Rundenspiel-Liste abschalten.)`;
         await sendMail(u.email, `Hochciv: ${event.subject}`, text);
+    }
+});
+
+// ── Push channel (Android app, Firebase Cloud Messaging) ─────────────────────
+// Data-only message; the app shows it and opens `link` when tapped.
+registerChannel('push', async (users, event) => {
+    if (!push.enabled()) return;
+    for (const u of users) {
+        if (!u.notifyPush || u.isBanned) continue;
+        const devices = await DeviceToken.findAll({ where: { UserId: u.id } });
+        for (const d of devices) {
+            const result = await push.send(d.token, {
+                type: String(event.type || ''),
+                gameId: String(event.gameId || ''),
+                title: `Hochciv: ${event.subject}`,
+                body: String(event.text || ''),
+                link: String(event.link || ''),
+            });
+            if (result === 'invalid') await d.destroy();
+        }
     }
 });
 

@@ -39,6 +39,8 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      # Push notifications of the Android app (Firebase service account key, base64) – optional
+      - FCM_SERVICE_ACCOUNT=${FCM_SERVICE_ACCOUNT:-}
     networks:
       - nginx
       - internal

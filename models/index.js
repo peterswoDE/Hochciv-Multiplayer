@@ -14,6 +14,7 @@ const TotpToken = require('./TotpToken')(sequelize);
 const OAuthProvider = require('./OAuthProvider')(sequelize);
 const AsyncGame = require('./AsyncGame')(sequelize);
 const CustomMap = require('./CustomMap')(sequelize);
+const DeviceToken = require('./DeviceToken')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
@@ -25,6 +26,10 @@ Passkey.belongsTo(User);
 User.hasMany(TotpToken);
 TotpToken.belongsTo(User);
 
+// Push notifications (Android app); a deleted or merged account takes its devices along
+User.hasMany(DeviceToken, { onDelete: 'CASCADE' });
+DeviceToken.belongsTo(User, { onDelete: 'CASCADE' });
+
 module.exports = {
     sequelize,
     User,
@@ -33,5 +38,6 @@ module.exports = {
     TotpToken,
     OAuthProvider,
     AsyncGame,
-    CustomMap
+    CustomMap,
+    DeviceToken
 };

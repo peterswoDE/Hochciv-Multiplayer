@@ -126,6 +126,12 @@ module.exports = (sequelize) => {
             defaultValue: true,
             allowNull: false,
         },
+        // ... and as a push notification in the Android app (opt-out, utils/push.js)
+        notifyPush: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: true,
+            allowNull: false,
+        },
         currentChallenge: {
             type: DataTypes.STRING,
             allowNull: true,

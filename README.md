@@ -27,6 +27,15 @@ This server adds multiplayer on top of the game:
 3. **Hook** – in the browser, `mp.js` replaces the game's action functions so that moves are sent to the server, and adds the lobby, login and account UI.
 4. **Rules on the server** – `engine-adapter.js` loads the same game files into the server (one sandbox per version) and applies every move there. Each Rundenspiel records the version it was started with (`engine`); games from before that have none and are v83.
 
+### Push notifications (Android app)
+
+Rundenspiele notifications (invitation, your turn, reminder, takeover, finished) also go to the Android app as push messages, next to the e-mail. It's a second channel in `utils/notify.js`; the game code doesn't change.
+
+* **Setup:** a Firebase project (it can be the Google Cloud project of the Google login). Firebase console → *Project settings → Service accounts → Generate new private key*. Put the key base64-encoded in `.env` as `FCM_SERVICE_ACCOUNT` (see `.env.template`) and run `docker compose up -d`. Without it, push is off and nothing else changes. The log shows `[Push] FCM enabled (project …)`.
+* **Devices:** the app registers its FCM token with `POST /api/push/token` after login and removes it on logout (`DELETE`). A phone belongs to the account that logged in on it last. Tokens Firebase rejects (app uninstalled) are deleted, as are those of deleted accounts.
+* **Players** switch push on or off in the Rundenspiele list (*Push-Nachricht, wenn ich am Zug bin*, shown only in the app). Android's own notification settings work as well.
+* **Tests:** `tests/push/push.test.js` (instructions in the file).
+
 ### Mobile layer
 
 `client/mobile/` (`mobile.css` and `mobile.js`, added to `index.html` by `inject.js` after `mp.js`) makes the game usable on phones without changing the game files. It is used by the website on phones and by the Android app.
