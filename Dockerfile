@@ -15,8 +15,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=activity /build/node_modules/.cache/hochciv-activity ./node_modules/.cache/hochciv-activity
 
-# Copy application files – including the game itself (HochCiv/, and HochCiv-v83/ for
-# Rundenspiele started on v83). Nothing is downloaded, neither at build time nor at start.
+# Copy application files – including the game itself (HochCiv/, and HochCiv-v87/, HochCiv-v83/
+# for Rundenspiele started on those versions). Nothing is downloaded, neither at build time nor at start.
 COPY . .
 
 # Ensure entrypoint is executable

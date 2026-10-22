@@ -1363,24 +1363,32 @@ step('Handelsrouten erscheinen in der Ertragsübersicht (neue Regel)', () => {
   if (!/Handelsrouten/.test($('ov-body').textContent))
     throw new Error('Handelsrouten fehlen in der Ertragsübersicht');
   G('closeModal')();
-  // Bürokratie verdoppelt sie (v86) – und die Zeile sagt es, auch auf Englisch
+  /* Bürokratie verdoppelt sie (v86). Seit v88 (Anweisung des Autors) sagt die Übersicht das
+     nicht mehr dazu: die Zeile heißt einfach „Handelsrouten", auch auf Englisch. */
   p.techs.buerokratie = true;
   if (JSON.stringify(zeile().y) !== '[4,4,4]') throw new Error('Bürokratie verdoppelt die Handelsroute nicht: ' + JSON.stringify(zeile().y));
-  $('a-tech').onclick();
-  if (!/Handelsrouten \(Bürokratie ×2\)/.test($('ov-body').textContent)) throw new Error('Zeile nennt die Bürokratie nicht');
-  G('closeModal')();
+  const uebersicht = () => {
+    $('a-tech').onclick();
+    const reihen = [...$('ov-body').querySelectorAll('.yield-panel .yrow')]
+      .map(r => [r.querySelector('.yname').textContent.trim(), r.querySelector('.yvals').textContent.replace(/\s+/g, ' ').trim()]);
+    G('closeModal')();
+    return reihen;
+  };
+  const de = uebersicht(), tr = de.find(([n]) => /Handelsrouten/.test(n));
+  if (!tr || tr[0] !== 'Handelsrouten') throw new Error('Zeile heißt nicht schlicht „Handelsrouten": ' + de.map(r => r[0]).join(' | '));
+  if ((tr[1].match(/4/g) || []).length !== 3) throw new Error('Zeile zeigt nicht dreimal +4: ' + tr[1]);
+  if (de.some(([n]) => /Bürokratie/.test(n))) throw new Error('eine Zeile nennt die Bürokratie: ' + de.map(r => r[0]).join(' | '));
   G('switchLang')('en');
   try {
     G('clearMissing')();
-    $('a-tech').onclick();
-    const en = $('ov-body').textContent;
-    G('closeModal')();
-    if (!/Trade routes \(Bureaucracy ×2\)/.test(en)) throw new Error('englisch: ' + (en.match(/.{0,20}routes.{0,30}/) || [''])[0]);
+    const en = uebersicht();
+    if (!en.some(([n]) => n === 'Trade routes')) throw new Error('englisch: ' + en.map(r => r[0]).join(' | '));
+    if (en.some(([n]) => /Bureaucracy/.test(n))) throw new Error('englisch nennt die Bürokratie: ' + en.map(r => r[0]).join(' | '));
     const fehlt = G('missingStrings')();
     if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
   } finally { G('switchLang')('de'); }
   delete p.techs.buerokratie;
-  console.log('       Straße +1, Eisenbahn +2, mit Bürokratie +4, Zeile im Forschungsbogen sichtbar (DE/EN)');
+  console.log('       Straße +1, Eisenbahn +2, mit Bürokratie +4 ohne Zusatz am Namen, Zeile im Forschungsbogen sichtbar (DE/EN)');
 });
 step('Zurückblättern springt nicht sofort wieder vor', () => {
   G('tutorialStart')();
@@ -3628,6 +3636,67 @@ step('Fähigkeiten: auf Englisch vollständig, kostenlose Technologie aus Wunder
   while (AUTO(G('P')(G('S'))) && !G('S').over && $('bot-next')) $('bot-next').onclick();
   G('switchLang')('de');
   console.log('       „' + knopfEn + '" · Blatt ohne fehlende Übersetzung, Wunder-Technologie gewählt, Bot-Blatt „Continue"');
+});
+
+/* ======================================================= v88 (Anweisung des Autors) */
+step('v88: Hauptmenü „Ne Runde Civ?", Ertragstechnologien in Bogen, Übersicht und Regelbogen', () => {
+  // Hauptmenü: der Satz unter dem Titel, deutsch und englisch, ohne „Civilization"
+  const lede = () => window.document.querySelector('#screen-menu .lede').textContent.trim();
+  if (lede() !== 'Ne Runde Civ? Auf dem Tablet, ohne Bleistift und Radiergummi.') throw new Error('Menü: ' + lede());
+  G('switchLang')('en');
+  try {
+    if (lede() !== 'A round of Civ? On the tablet, without pencil and eraser.') throw new Error('Menü englisch: ' + lede());
+  } finally { G('switchLang')('de'); }
+  if (/Civilization/.test(lede())) throw new Error('Menü nennt Civilization');
+  // Im Spiel (ohne Ereignisse – eine Dürre o. Ä. legte sonst Gelände still): nur KI aus der
+  // Waldkette, nur Containerlogistik aus der Meereskette
+  griechenSpiel('basis');
+  const S = G('S'), pi = S.cur, p = G('P')(S);
+  p.techs = { ki: true, containerlogistik: true, belagerung: true };
+  const b = G('incomeBreakdown')(S, pi);
+  const zeile = k => b.rows.find(r => r.key === k);
+  const wald = zeile('W'), meer = zeile('M');
+  if (!wald && !meer) throw new Error('weder Wald noch Meer im Umland');
+  const tile = t => G('tileYield')(S, pi, t);
+  if (JSON.stringify([tile('W'), tile('M')]) !== '[[3,0,1],[0,2,2]]')
+    throw new Error('Wald/Meer: ' + JSON.stringify([tile('W'), tile('M')]));
+  $('a-tech').onclick();
+  const body = () => $('ov-body').textContent.replace(/\s+/g, ' ');
+  const reihen = [...$('ov-body').querySelectorAll('.yield-panel .yrow')].map(r => r.textContent.replace(/\s+/g, ' '));
+  if (wald && !reihen.some(r => r.includes('Wald') && r.includes('🔬' + wald.y[0]) && wald.y[0] === 3 * wald.count))
+    throw new Error('Waldzeile nicht +3 je Feld: ' + reihen.join(' | '));
+  // Meer: 2 Nahrung und 2 Münzen je Feld (1 Münze Grundertrag)
+  if (meer && !reihen.some(r => r.includes('Meer') && r.includes('🌾' + meer.y[1]) && r.includes('🪙' + meer.y[2]) &&
+    meer.y[1] === 2 * meer.count && meer.y[2] === 2 * meer.count))
+    throw new Error('Meereszeile nicht 🌾2 🪙2 je Feld: ' + reihen.join(' | '));
+  for (const t of ['Wald: +3 Wissenschaft (inkl. Mathematik, Elektrizität)', 'Meer: +2 Nahrung, +1 Münze (inkl. Fischerei, Segeln)',
+    'Je Bevölkerung: +2 Münzen (inkl. Fließband)', '+3 Angriff gegen Städte'])
+    if (!body().includes(t)) throw new Error('Bogen: fehlt „' + t + '"');
+  G('closeModal')();
+  // Regelbogen: der erklärende Satz, die Texte, Singularität 120 – deutsch und englisch
+  const regeln = () => {
+    G('rulesModal')();
+    const t = body(), z = [...$('ov-body').querySelectorAll('.rule-tech')].pop();
+    G('closeModal')();
+    return [t, [z.querySelector('.c').textContent.trim(), z.querySelector('b').textContent.trim()]];
+  };
+  const [de, singDe] = regeln();
+  if (!de.includes('Ertragstechnologien schließen die billigeren ihres Feldes')) throw new Error('Regelbogen: Satz fehlt');
+  if (JSON.stringify(singDe) !== '["120","Singularität"]') throw new Error('Singularität: ' + singDe.join(' '));
+  G('switchLang')('en');
+  try {
+    G('clearMissing')();
+    const [en, singEn] = regeln();
+    $('a-tech').onclick(); const bogenEn = body(); G('closeModal')();
+    for (const t of ['Yield technologies include the cheaper ones of their field', 'Forest: +3 science (incl. Mathematics, Electricity)', '+3 attack against cities'])
+      if (!en.includes(t)) throw new Error('Regelbogen englisch: fehlt „' + t + '"');
+    if (!bogenEn.includes('Sea: +2 food, +1 coin (incl. Fishing, Sailing)')) throw new Error('Bogen englisch ohne Containerlogistik-Text');
+    if (JSON.stringify(singEn) !== '["120","Singularity"]') throw new Error('Singularity englisch: ' + singEn.join(' '));
+    const fehlt = G('missingStrings')();
+    if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
+  } finally { G('switchLang')('de'); }
+  console.log('       Menü DE/EN · Wald ' + (wald ? `×${wald.count} → 🔬${wald.y[0]}` : '–') +
+    ' · Meer ' + (meer ? `×${meer.count} → 🌾${meer.y[1]} 🪙${meer.y[2]}` : '–') + ' · Texte in Bogen und Regelbogen DE/EN · Singularität 120');
 });
 
 step('Duell auf den festen Karten: zwei Hauptstädte auf ihren Sternen, Duellschwellen', () => {

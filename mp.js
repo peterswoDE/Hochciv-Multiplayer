@@ -2,6 +2,11 @@
 const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
+   engine-adapter.js), and the version of this page. */
+const OLD_VERSIONS = ['v87', 'v83'];
+const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
+
 const MP = {
     active: false,
     socket: null,
@@ -1755,15 +1760,16 @@ const ASYNC = {
 
     /**
      * Rundenspiele are played with the version they were started on. The server runs that
-     * engine; the page has to match: games from v83 open in the v83 game at /v83/, all others
-     * in the current game at /. Returns true when the page is being switched.
+     * engine; the page has to match: games from an older version open in that game at
+     * /<version>/ (OLD_VERSIONS), all others in the current game at /. Returns true when the
+     * page is being switched.
      */
     switchVersion: function (id, engineVersion) {
-        const here = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
-        const old = engineVersion === 'v83';
-        if (old && here !== 'v83') { location.href = '/v83/?async=' + encodeURIComponent(id); return true; }
-        if (!old && here === 'v83') { location.href = '/?async=' + encodeURIComponent(id); return true; }
-        return false;
+        const here = OLD_VERSIONS.includes(APP_VERSION_HERE) ? APP_VERSION_HERE : null;
+        const want = OLD_VERSIONS.includes(engineVersion) ? engineVersion : null;
+        if (here === want) return false;
+        location.href = (want ? '/' + want + '/' : '/') + '?async=' + encodeURIComponent(id);
+        return true;
     },
 
     reload: function () {
@@ -1795,8 +1801,8 @@ const ASYNC = {
         document.body.classList.remove('mp-waiting');
         const credBox = $('mp-cred-box');
         if (credBox) credBox.textContent = '';
-        // the v83 game is only there for Rundenspiele started on it – afterwards back to the current game
-        if (typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v83') { location.href = '/'; return; }
+        // older versions are only there for Rundenspiele started on them – afterwards back to the current game
+        if (OLD_VERSIONS.includes(APP_VERSION_HERE)) { location.href = '/'; return; }
     },
 
     apply: function (view) {
@@ -1947,8 +1953,8 @@ window.addEventListener('DOMContentLoaded', () => {
         if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
-        } else if (typeof APP_VERSION !== 'undefined' && APP_VERSION === 'v83') {
-            location.replace('/');           // /v83/ only opens running Rundenspiele from v83
+        } else if (OLD_VERSIONS.includes(APP_VERSION_HERE)) {
+            location.replace('/');           // /v87/, /v83/ only open running Rundenspiele of that version
         }
     });
 

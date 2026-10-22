@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v87';
+const APP_VERSION = 'v88';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -55,22 +55,22 @@ const TECHS = [
   { k: 'papier', n: 'Papier', f: 0, c: 6, e: 'Grasland: +1 Wissenschaft' },
   { k: 'alchemie', n: 'Alchemie', f: 0, c: 8, e: '1:1 Wissenschaft → Münzen' },
   { k: 'buchdruck', n: 'Buchdruck', f: 0, c: 9, e: 'Fluss: +1 Wissenschaft' },
-  { k: 'universitaet', n: 'Universitätswesen', f: 0, c: 10, e: 'Je Bevölkerung: +1 Wissenschaft' },
+  { k: 'universitaet', n: 'Universitätswesen', f: 0, c: 10, e: 'Je Bevölkerung: +2 Wissenschaft (inkl. Schrift)' },
   { k: 'wiss_methode', n: 'Wissenschaftliche Methode', f: 0, c: 15, e: 'Techkosten −2/−4/−6/−8/−10 (je Zeitalter)' },
   { k: 'chemie', n: 'Chemie', f: 0, c: 11, e: 'Gebirge: +1 Wissenschaft' },
-  { k: 'elektrizitaet', n: 'Elektrizität', f: 0, c: 13, e: 'Wald: +1 Wissenschaft' },
-  { k: 'biologie', n: 'Biologie', f: 0, c: 12, e: 'Grasland: +1 Wissenschaft' },
+  { k: 'elektrizitaet', n: 'Elektrizität', f: 0, c: 13, e: 'Wald: +2 Wissenschaft (inkl. Mathematik)' },
+  { k: 'biologie', n: 'Biologie', f: 0, c: 12, e: 'Grasland: +2 Wissenschaft (inkl. Papier)' },
   { k: 'computertechnik', n: 'Computertechnik', f: 0, c: 17, e: '1:1 Münzen → Wissenschaft' },
   { k: 'gentechnik', n: 'Gentechnik', f: 0, c: 18, e: 'Je vier Wissenschaft eine Nahrung; füttert auch 1:1' },
   { k: 'raumfahrt', n: 'Raumfahrt', f: 0, c: 19, wo: true, e: 'Bei jedem Wunderbau eine Technologie gratis' },
-  { k: 'ki', n: 'Künstliche Intelligenz', f: 0, c: 20, e: 'Wald: +1 Wissenschaft' },
+  { k: 'ki', n: 'Künstliche Intelligenz', f: 0, c: 20, e: 'Wald: +3 Wissenschaft (inkl. Mathematik, Elektrizität)' },
   // Produktion
   { k: 'landwirtschaft', n: 'Landwirtschaft', f: 1, c: 5, e: 'Grasland: +1 Nahrung' },
   { k: 'fischerei', n: 'Fischerei', f: 1, c: 2, e: 'Meer: +1 Nahrung' },
   { k: 'rad', n: 'Rad', f: 1, c: 3, e: 'Straßen' },
   { k: 'keramik', n: 'Keramik', f: 1, c: 4, e: 'Bevölkerung 2× pro Runde wachsen lassen' },
   { k: 'bewaesserung', n: 'Bewässerung', f: 1, c: 1, e: 'Gebirge: +1 Nahrung' },
-  { k: 'segeln', n: 'Segeln', f: 1, c: 7, e: 'Meer: +1 Nahrung' },
+  { k: 'segeln', n: 'Segeln', f: 1, c: 7, e: 'Meer: +2 Nahrung (inkl. Fischerei)' },
   { k: 'muehlentechnik', n: 'Mühlentechnik', f: 1, c: 8, e: 'Fluss: +1 Münze' },
   { k: 'baukraene', n: 'Baukräne', f: 1, c: 9, wo: true, e: 'Weltwunder kosten 2/4/6/8/… weniger' },
   { k: 'gilden', n: 'Gilden', f: 1, c: 10, e: '1:1 Münzen → Nahrung' },
@@ -79,13 +79,13 @@ const TECHS = [
   { k: 'kunstduenger', n: 'Kunstdünger', f: 1, c: 14, e: 'Wald: +1 Nahrung' },
   { k: 'fliessband', n: 'Fließband', f: 1, c: 15, e: 'Je Bevölkerung: +1 Münze' },
   { k: 'verbundwerkstoffe', n: 'Verbundwerkstoffe', f: 1, c: 16, e: '1× zusätzliches, kostenloses Wachstum pro Stadt' },
-  { k: 'gruene_revolution', n: 'Grüne Revolution', f: 1, c: 17, e: 'Grasland: +1 Münze' },
-  { k: 'containerlogistik', n: 'Containerlogistik', f: 1, c: 18, e: 'Meer: +1 Münze' },
-  { k: 'robotik', n: 'Robotik', f: 1, c: 19, e: 'Je Bevölkerung: +1 Münze' },
+  { k: 'gruene_revolution', n: 'Grüne Revolution', f: 1, c: 17, e: 'Grasland: +1 Nahrung, +1 Münze (inkl. Landwirtschaft)' },
+  { k: 'containerlogistik', n: 'Containerlogistik', f: 1, c: 18, e: 'Meer: +2 Nahrung, +1 Münze (inkl. Fischerei, Segeln)' },
+  { k: 'robotik', n: 'Robotik', f: 1, c: 19, e: 'Je Bevölkerung: +2 Münzen (inkl. Fließband)' },
   // Militär
   { k: 'taktik', n: 'Taktik', f: 2, c: 1, e: 'Flankieren von zwei beliebigen Positionen' },
   { k: 'eisenverarbeitung', n: 'Eisenverarbeitung', f: 2, c: 4, e: '4 Münzen = 1 Macht' },
-  { k: 'belagerung', n: 'Belagerungsmaschinen', f: 2, c: 5, e: '+5 Angriff gegen Städte' },
+  { k: 'belagerung', n: 'Belagerungsmaschinen', f: 2, c: 5, e: '+3 Angriff gegen Städte' },
   { k: 'stadtmauern', n: 'Stadtmauern', f: 2, c: 2, e: 'Städte haben +5 Verteidigung' },
   { k: 'burgenbau', n: 'Burgenbau', f: 2, c: 7, e: 'Städte enthalten unbewegliche Armee' },
   { k: 'stahl', n: 'Stahl', f: 2, c: 8, e: 'Machtverlust = 1/3' },
@@ -125,8 +125,12 @@ TECHS.forEach(t => { t.age = ageOfCost(t.c); });
    sind jetzt die Hauptvariante (Singularität 100, Keramik + Theologie in der
    Techliste, Verbundwerkstoffe = kostenloses Wachstum, Sklaverei ab Moderne
    obsolet, Siegschwellen stapeln nicht, Bots forschen zweimal).
-   Griechenland hat KEINEN Würfelbonus auf die Techverfügbarkeit (nur den Rabatt). */
-const SINGULARITY_BASE = 100;
+   Griechenland hat KEINEN Würfelbonus auf die Techverfügbarkeit (nur den Rabatt).
+   Seit v88 (Anweisung des Autors) kostet die Singularität 120; der Marathon behält seine
+   300 (MARATHON_SINGULARITY). */
+const SINGULARITY_BASE = 120;
+// Belagerungsmaschinen: Angriff je Armee gegen Städte (bis v87: 5). Der Techtext nennt die Zahl.
+const SIEGE_BONUS = 3;
 const KREML_SURCHARGE = 50;        // Weltwunder "Der Kreml": Singularität teurer, für alle
 // Englands „Seemacht": Zuschlag je Stadt am Meer auf jeden der drei Erträge (v53: 1)
 const SEA_CITY_BONUS = 1;
@@ -145,6 +149,61 @@ const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (b
 
 const TECH_BY_KEY = {};
 TECHS.forEach(t => { TECH_BY_KEY[t.k] = t; });
+/* Ertragstechnologien (v88, Anweisung des Autors). Je Technologie das Ziel – eine Geländeart
+   oder 'pop' (je Bevölkerungspunkt) – und ihr eigener Zuwachs [Wissenschaft, Nahrung, Münzen].
+   Innerhalb eines Feldes schließt eine teurere Technologie die billigeren auf demselben Ziel
+   ein: sie SETZT den Bonus auf die Summe bis zu ihr, statt ihn zu erhöhen. Mathematik gibt
+   Wald +1 Wissenschaft, Elektrizität +2, Künstliche Intelligenz +3 – wer alle drei hat,
+   bekommt weiter +3. Ertragsarten derselben Kette stecken mit darin (Containerlogistik: Meer
+   +2 Nahrung, +1 Münze), Ketten verschiedener Felder addieren sich (Grasland: Papier aus
+   der Forschung und Landwirtschaft aus der Produktion). Wer eine Kette ganz hat, steht genau
+   wie bis v87, als jede Technologie nur ihren eigenen Zuwachs addierte.
+   YIELD_CHAINS[Ziel] = je Feld eine Kette, nach den Grundkosten sortiert, jedes Glied mit
+   der Summe bis zu sich; yieldBonus (engine.js) nimmt das höchste erforschte Glied.
+   Sortiert wird nach t.c: im alten Techtree (Tutorial) und im Marathon ist die Reihenfolge
+   innerhalb jeder Kette dieselbe – ein Test hält das fest. Die Techtexte (TECHS und DATA_EN)
+   nennen die Summe und die eingeschlossenen Technologien; ein Test rechnet sie nach. */
+const YIELD_TECHS = {
+  schrift: { on: 'pop', y: [1, 0, 0] },
+  universitaet: { on: 'pop', y: [1, 0, 0] },
+  mathematik: { on: 'W', y: [1, 0, 0] },
+  elektrizitaet: { on: 'W', y: [1, 0, 0] },
+  ki: { on: 'W', y: [1, 0, 0] },
+  papier: { on: 'G', y: [1, 0, 0] },
+  biologie: { on: 'G', y: [1, 0, 0] },
+  astronomie: { on: 'M', y: [1, 0, 0] },
+  buchdruck: { on: 'F', y: [1, 0, 0] },
+  chemie: { on: 'B', y: [1, 0, 0] },
+  landwirtschaft: { on: 'G', y: [0, 1, 0] },
+  gruene_revolution: { on: 'G', y: [0, 0, 1] },
+  fischerei: { on: 'M', y: [0, 1, 0] },
+  segeln: { on: 'M', y: [0, 1, 0] },
+  containerlogistik: { on: 'M', y: [0, 0, 1] },
+  bewaesserung: { on: 'B', y: [0, 1, 0] },
+  muehlentechnik: { on: 'F', y: [0, 0, 1] },
+  kunstduenger: { on: 'W', y: [0, 1, 0] },
+  fliessband: { on: 'pop', y: [0, 0, 1] },
+  robotik: { on: 'pop', y: [0, 0, 1] },
+};
+const YIELD_CHAINS = {};
+{
+  const ketten = {};
+  for (const t of TECHS) {
+    const d = YIELD_TECHS[t.k];
+    if (!d) continue;
+    const id = d.on + '|' + t.f;
+    (ketten[id] || (ketten[id] = { on: d.on, f: t.f, techs: [] })).techs.push(t);
+  }
+  for (const { on, f, techs } of Object.values(ketten)) {
+    const sum = [0, 0, 0];
+    const chain = techs.sort((a, b) => a.c - b.c).map(t => {
+      YIELD_TECHS[t.k].y.forEach((n, i) => { sum[i] += n; });
+      return { k: t.k, y: sum.slice() };
+    });
+    chain.f = f;
+    (YIELD_CHAINS[on] || (YIELD_CHAINS[on] = [])).push(chain);
+  }
+}
 /* Technologien mit `wo: true` gehören zur Weltwunder-Erweiterung und existieren nur in
    einer Partie mit Weltwundern. Ohne Spielstand (z. B. in Tabellen) zählt die Grundliste. */
 function techActive(S, t) { return !t.wo || !!(S && S.wo); }

@@ -6,9 +6,9 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v83/ the version deployed before it. Every version gets its own sandbox
+ * HochCiv-v87/ and HochCiv-v83/ versions deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
- * started on v83 keep playing with the v83 rules (forVersion, async/logic.js).
+ * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
  */
 
@@ -23,10 +23,15 @@ const vm = require('vm');
 const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js', 'ki.js', 'marathon.js'];
 const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js']);
 
+/* Older versions stay as long as Rundenspiele started on them are running – remove an entry
+   (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
+    v87: path.resolve(__dirname, 'HochCiv-v87', 'js'),
     v83: path.resolve(__dirname, 'HochCiv-v83', 'js'),
 };
+const OLD_VERSIONS = Object.keys(GAME_DIRS).filter(v => v !== 'current');
+// Rundenspiele from before the version was recorded were started on v83
 const LEGACY_VERSION = 'v83';
 
 function makeAdapter(engineDir, label) {
@@ -622,12 +627,12 @@ function makeAdapter(engineDir, label) {
 }
 
 const current = makeAdapter(GAME_DIRS.current, 'current');
-let legacy = null;
+const older = {};
 
-/** The adapter for a game's engine version: v83 for games started on it, otherwise the current one. */
+/** The adapter for a game's engine version: an older one for games started on it, otherwise the current one. */
 function forVersion(v) {
-    if (v === LEGACY_VERSION) return legacy || (legacy = makeAdapter(GAME_DIRS.v83, LEGACY_VERSION));
-    return current;
+    if (!OLD_VERSIONS.includes(v)) return current;
+    return older[v] || (older[v] = makeAdapter(GAME_DIRS[v], v));
 }
 
-module.exports = Object.assign({}, current, { forVersion, LEGACY_VERSION, GAME_DIRS });
+module.exports = Object.assign({}, current, { forVersion, LEGACY_VERSION, OLD_VERSIONS, GAME_DIRS });

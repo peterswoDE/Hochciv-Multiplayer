@@ -2,8 +2,8 @@
  * Builds public/ from the game that ships with this repository – nothing is downloaded:
  *
  *   HochCiv/      → public/       the current game, served at /
- *   HochCiv-v83/  → public/v83/   the version deployed before (v83): only for Rundenspiele that
- *                                 were started on it (mp.js sends their players there)
+ *   HochCiv-v87/  → public/v87/   versions deployed before (v87, v83): only for Rundenspiele that
+ *   HochCiv-v83/  → public/v83/   were started on them (mp.js sends their players there)
  *
  * Each copy gets mp.js and the script tags of inject.js. Development files of the game (tests,
  * tools, notes) are not copied. Run by the Dockerfile and at container start (entrypoint.sh),
@@ -19,6 +19,7 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'public');
 const GAMES = [
     { from: 'HochCiv', to: '' },
+    { from: 'HochCiv-v87', to: 'v87' },
     { from: 'HochCiv-v83', to: 'v83' },
 ];
 // what the browser needs – everything else in the game folder is development material

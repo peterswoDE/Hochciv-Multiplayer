@@ -881,7 +881,7 @@ function yieldOverview(S, pi) {
   for (const r of b.rows)
     h += yieldRow(r.name, TERRAIN_GLYPH[r.key] || '▪', TERRAIN[r.key].color, r.count, r.y);
   for (const e of (b.extra || []))
-    h += yieldRow(e.note ? `${e.name} (${e.note})` : e.name, e.glyph || '✦', '#c8a86a', e.count, e.y);
+    h += yieldRow(e.name, e.glyph || '✦', '#c8a86a', e.count, e.y);
   h += yieldRow(T('Bevölkerung'), '👥', '#c8b98a', b.pop.count, b.pop.y, { cls: 'pop' });
   h += yieldRow(T('Summe'), '∑', '#6b5d47', null, b.total, { cls: 'sum' });
   // Vorschau: kein Einkommen, sondern was die Armeen zu Zugende erbeuten (Wikinger)
@@ -2834,6 +2834,7 @@ function rulesModal() {
       <tr style="border-top:1px solid var(--rule)"><td>${T('Stadt (je Bevölkerung)')}</td>
         <td align="center">1</td><td align="center">−1</td><td align="center">1</td></tr>
     </table>
+    <p style="font-size:13px;margin:6px 0 4px">${T('Ertragstechnologien schließen die billigeren ihres Feldes auf demselben Gelände (bzw. je Bevölkerung) ein – sie setzen den Bonus, statt ihn zu erhöhen: Mathematik gibt Wald +1 Wissenschaft, Elektrizität +2, Künstliche Intelligenz +3, und mit allen dreien bleibt es bei +3. Technologien verschiedener Felder addieren sich, etwa Papier und Landwirtschaft auf Grasland.')}</p>
     <p class="sub">${T('Zivilisationen — je drei wählbare Fähigkeiten (Bots haben keine)')}</p>
     ${CIVS.map(c => `<p style="font-size:13px;margin:6px 0"><b>${SYM[c.sym]} ${c.n}</b><br>` +
       c.abilities.map((a, j) => `<span style="color:var(--ink-soft)">${j === 0 ? T('Grund') : T('Alt. %s', j + 1)}:</span> ${abilEffect(Object.assign({ civ: c.k }, a), S)}`).join('<br>') +

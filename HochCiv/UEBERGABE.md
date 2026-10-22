@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 19.10., `sw.js` v87)
+# Hochzeivilization — Projekt-Übergabe (Stand 22.10., `sw.js` v88)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v87)
+## Letzte Sitzungen auf einen Blick (v61 → v88)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -42,6 +42,13 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v85 | **Wirtschaftssieg am Rundenende:** einmal je Runde geprüft, wenn alle gleich oft gezogen haben, mit dem Stand von dort – gewinnt jemand, endet das Spiel sofort (Punktvergleich nur, wenn in derselben Runde ein anderer Sieg angemeldet war); auch schon in Runde 1. **Startausgleich:** im ersten Zug +1/+2/+3 Münzen für den Zweiten/Dritten/Vierten in der Zugfolge (Bots nicht). **Marathon:** Günstige Forschung und Wissenschaftliche Methode ziehen doppelt ab, Freie Forschung nur bis ins Mittelalter. Die KI sieht als Letzte der Runde ihren Wirtschaftssieg; ihre Draftwerte im Marathon sind neu gemessen (200 Partien) | Regel + Modus + KI |
 | v86 | **Ökologie übers ganze Reich:** je 2 Bevölkerung des Reichs +1 auf alle drei Erträge, einmal abgerundet (vorher je Stadt). **Bürokratie** verdoppelt auch Handelsrouten, Ökologie und den Nahrungsposten der Gentechnik; die Ertragsübersicht sagt es („Bürokratie ×2"). Späte KI-Züge mit vielen Kolonien schneller (gleiche Ergebnisse) | Regel + KI-Tempo |
 | v87 | **„Weiter" oben und unten** im Blatt eines Bot- oder KI-Zugs. **„Fähigkeiten" statt „Erträge"** (zeigte dasselbe wie der Gründungsmodus): eigene Fähigkeit mit Wirkung, Freie Forschung und Rückschau, Wunder-Technologien, **Alle Städte (kostenlos) wachsen**, **In allen Städten opfern**, Kopieren – Freie Forschung, Rückschau und Kopieren sind aus dem Technologiebogen ausgezogen; an der Leiste die **Zahl der Arten kostenloser Aktionen**. Fehler: ein Rückschau-Anspruch ohne Wahl blockierte die übrigen; **hochkant (gedreht) lag jedes Blatt außerhalb des Bildschirms** – auch das eines KI-Zugs samt „Weiter" (`setBarHeight` maß die gedrehte Leiste). Ein vom Zufall abhängiger Smoke-Schritt (Hungersnot) läuft jetzt ohne Ereignisse | Oberfläche + Fehler |
+| v88 | **Ertragstechnologien schließen die billigeren ihres Feldes ein** – sie setzen den Bonus, statt ihn zu erhöhen: Mathematik/Elektrizität/KI geben dem Wald +1/+2/+3 Wissenschaft, auch alle drei zusammen +3; Containerlogistik dem Meer +2 Nahrung, +1 Münze; Universitätswesen und Robotik je Bevölkerung +2; verschiedene Felder addieren sich, wer eine Kette ganz hat, steht wie vorher. **Belagerungsmaschinen +3** (vorher +5). **Singularität 120** (vorher 100; Marathon bleibt 300). Die Ertragsübersicht sagt nicht mehr „(Bürokratie ×2)". Hauptmenü: „Ne Runde Civ? …" | Regel + Oberfläche |
+
+Neu in v88: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Ertragstechnologien schließen die billigeren ein · Belagerungsmaschinen +3 ·
+Singularität 120 · Übersicht ohne Bürokratie-Zusatz · „Ne Runde Civ?" (v88)"), zwei
+Fragilitäten neu, eine geändert („Wer eine neue Einkommenszeile baut …": kein `note` mehr), die
+offenen Punkte 40 und 41.
 
 Neu in v87: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Fähigkeiten statt Erträge · „Weiter" oben und unten · Rückschau ohne Wahl · Blätter
@@ -85,7 +92,8 @@ Punkt 12 (dominiert über alle Lagen oder nur je Lage?), seit v75 Punkt 13 (Bot-
 verlässt die Flanke), seit v77 Punkt 14 (Wirtschaftssieg in Runde 2 im Duell), seit v85 Punkt 33
 (Auslegungen zu Wirtschaftssieg, Startausgleich und Rabatten) und 34 (der Startausgleich
 gleicht wenig aus), seit v86 Punkt 36 (Auslegungen zu Bürokratie und Ökologie), seit v87
-Punkt 38 (Auslegungen zu „Fähigkeiten") und 39 (keine Erinnerung vor dem Zugende).
+Punkt 38 (Auslegungen zu „Fähigkeiten") und 39 (keine Erinnerung vor dem Zugende), seit v88
+Punkt 40 (Auslegungen zu den Ertragstechnologien) und 41 (Balance nur grob gemessen).
 
 ## Wo alles liegt
 
@@ -113,21 +121,21 @@ Punkt 38 (Auslegungen zu „Fähigkeiten") und 39 (keine Erinnerung vor dem Zuge
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1299 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1300 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 452 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/data.js` | 511 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 157 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
 | `js/tiles.js` | 334 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4), Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2136 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/engine.js` | 2129 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 489 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
 | `js/ki.js` | 1881 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/marathon.js` | 302 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
-| `js/ui.js` | 2562 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
+| `js/ui.js` | 2563 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
 | `js/tutorial.js` | 682 | Geführtes Übungsspiel: **29 Schritte** (19 mit Aufgabe), feste Würfelfolge, Schienen, feste Texte |
-| `test.js` | 6621 | **1693 Assertions**, `node test.js` |
-| `smoke.js` | 3619 | **151 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `test.js` | 6742 | **1722 Assertions**, `node test.js` |
+| `smoke.js` | 3688 | **152 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 21 / 64 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 69 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 72 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
@@ -155,6 +163,18 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v88 auf einen Blick.** Ertragstechnologien: `YIELD_TECHS` (data.js) nennt je Technologie
+  ihr Ziel (Geländeart oder `'pop'`) und ihren eigenen Zuwachs; daraus `YIELD_CHAINS` – je Ziel
+  und Feld eine Kette nach `t.c`, jedes Glied mit der Summe bis zu sich. `yieldBonus(p, on, y)`
+  (engine.js) nimmt je Kette das höchste erforschte Glied; `tileYield` und `cityPopYield`
+  lesen nur noch das (der `switch` je Gelände ist weg), Taiga und Großer Leuchtturm addieren
+  sich weiter. Die Techtexte nennen die Summe und „inkl. …" (deutsch und englisch), der
+  Regelbogen erklärt es unter der Geländetabelle. `SIEGE_BONUS = 3` (data.js) für `attackValue`
+  und `kiAttackPer`; `SINGULARITY_BASE = 120`. `incomeBreakdown` hängt kein `note` mehr an
+  (Handelsrouten, Gentechnik), `yieldOverview` zeigt nur den Namen; der Schlüssel
+  „Bürokratie ×2" ist aus `UI_EN` entfernt. Tutorialtexte: „+3 Angriff", „6 statt 3",
+  „120 Wissenschaft, mit der wissenschaftlichen Methode 110". Hauptmenü `.lede` (index.html
+  und `UI_EN`): „Ne Runde Civ? …".
 - **v87 auf einen Blick.** Blatt eines Bot-/KI-Zugs: „Weiter" auch oben (`#bot-next-top` neben
   dem Titel, `.bot-head`), das Blatt beginnt oben. „Erträge" ist weg (Knopf, `showYields`,
   `toggleYields`, `hochciv.yields`, `viewerOf`) – die Chips gibt es im Gründungsmodus. An der
@@ -177,7 +197,8 @@ Gedächtnis rekonstruieren.
   zählt die Hauptstadt nicht. Bürokratie: Faktor `buro` in `incomeBreakdown` für Felder und
   Bevölkerung der Hauptstadt (wie bisher) und ganz für Handelsrouten, Ökologie und den
   Gentechnik-Posten; Wallfahrt und Seemacht nicht. Zeilen tragen dann `note: 'Bürokratie ×2'`,
-  die Übersicht hängt es an den Namen. Zeilennamen „Handelsrouten"/„Wallfahrt" jetzt über `T()`.
+  die Übersicht hängt es an den Namen (seit v88 nicht mehr, Anweisung des Autors). Zeilennamen
+  „Handelsrouten"/„Wallfahrt" jetzt über `T()`.
   Tempo (gleiche Ergebnisse): `kiSitesAll` prüft Kolonien erst mit `kiSiteOk` und holt ihre
   Entfernungen aus einer Wegtabelle, `controlledTiles` kennt die Stadtfelder als Menge,
   `tileYieldAt(…, pre)` rechnet Hauptstadt und Geländeertrag je Einkommensrechnung einmal.
@@ -243,7 +264,7 @@ Gedächtnis rekonstruieren.
   Die Sperre für Runde 1 ist seit v85 weg (geprüft wird am Rundenende, wenn alle gezogen
   haben).
 - **Eine Regelvariante.** Die früher „experimentell v2" genannten Regeln sind der Standard:
-  Singularität 100, Keramik und Theologie in der Techliste, Verbundwerkstoffe = kostenloses
+  Singularität 100 (seit v88 120), Keramik und Theologie in der Techliste, Verbundwerkstoffe = kostenloses
   Wachstum, Sklaverei ab Moderne obsolet (im Bogen durchgestrichen), Siegschwellen stapeln
   nicht, Bots forschen zweimal. Griechenland hat **keinen** Würfelbonus.
 - **Tutorial in zwei Fassungen:** die kurze filtert `kurz: false` weg und ersetzt Texte
@@ -752,10 +773,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 1693 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 1722 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (151 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (152 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -993,8 +1014,23 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   verschiebt, prüft den Ausgleich mit. Barbaren hängen hinten an und zählen nicht.
 - **Wer eine neue Einkommenszeile baut, entscheidet über die Bürokratie** (seit v86): In
   `incomeBreakdown` verdoppelt `buro` Hauptstadtfelder, Hauptstadtbevölkerung, Handelsrouten,
-  Ökologie und Gentechnik – sonst nichts. Eine neue Zeile ist ohne `buro` nicht verdoppelt;
-  ist sie es, bekommt sie `note` wie die anderen, sonst sieht man es in der Übersicht nicht.
+  Ökologie und Gentechnik – sonst nichts. Eine neue Zeile ist ohne `buro` nicht verdoppelt.
+  Die Übersicht sagt seit v88 bei keiner Zeile dazu, dass die Bürokratie mitgerechnet ist
+  (Anweisung des Autors; v86/v87 trugen Handelsrouten und Gentechnik `note: 'Bürokratie ×2'`) –
+  `note` gibt es nicht mehr, und `yieldOverview` zeigt nur `e.name`.
+- **Ertragstechnologien nur über `YIELD_TECHS`** (seit v88): `tileYield` und `cityPopYield`
+  kennen keine Technologie mehr beim Namen, sie lesen `yieldBonus` (je Kette das höchste
+  Glied). Wer eine Ertragstechnologie ergänzt oder ihren Zuwachs ändert, trägt es dort ein und
+  passt die Texte an (TECHS und `DATA_EN`; `test.js` rechnet jeden Text aus der Kette nach). Die
+  Ketten sind einmal nach `t.c` sortiert – ändert sich die Reihenfolge einer Kette in einem
+  Techtree (alter Techtree, Marathon), müssten sie je Partie gebaut werden; der Test
+  „Reihenfolge jeder Kette" schlägt dann an. Boni, die nicht aus Technologien kommen (Taiga,
+  Großer Leuchtturm), addieren sich in `tileYield` – nicht in die Ketten legen.
+- **Feste Zahlen in Tutorialtexten** (seit v88 gebunden): „+3 Angriff gegen Städte", „6 statt
+  3" (3 Macht + `SIEGE_BONUS`) und „120 Wissenschaft, mit der wissenschaftlichen Methode 110"
+  stehen fest im Text, deutsch in `tutorial.js`, englisch in `UI_EN`. `test.js` liest beide
+  Quellen und vergleicht mit `SIEGE_BONUS` bzw. `techCost` der Singularität im alten Techtree.
+  Wer eine dieser Regeln ändert, ändert beide Texte (der deutsche Satz ist der Schlüssel).
 - **Fähigkeitstexte über `abilEffect(a, S)`** (seit v85): im Marathon wirken zwei Fähigkeiten
   anders, die Texte dazu stehen dort (die Methode in `techEffect`). Wer eine Fähigkeit im
   Marathon anders wirken lässt, ergänzt dort den Text – Kopfzeile, Weltblatt, Draft und
@@ -1537,6 +1573,25 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    mehr direkt unter dem Bogen stehen, erinnert nur die Zahl an „Fähigkeiten". „Zug beenden"
    könnte wie bei der wartenden Armee einmal nachfragen (`pendingWarnings`) – vielleicht
    lästig, wenn man kostenloses Wachstum bewusst liegen lässt. Entscheidung des Autors.
+40. **Getroffene Auslegungen (v88) – zum Ändern angeboten.** (a) „Stapeln trotzdem" heißt:
+   verschiedene Ertragsarten derselben Kette stecken beide im höheren Glied (Containerlogistik
+   = +2 Nahrung von Fischerei/Segeln + eigene Münze, ebenso Grüne Revolution); Ketten
+   verschiedener Felder addieren sich (Astronomie zu Containerlogistik, Papier zu
+   Landwirtschaft). (b) „Niedriger" heißt billiger im selben Feld, in allen Techtrees dieselbe
+   Reihenfolge. (c) Taiga und Großer Leuchtturm addieren sich weiter. (d) Ein billigeres Glied,
+   das nach einem teureren kommt, bringt keinen Ertrag mehr dazu (Mathematik nach KI). (e) Gilt
+   sofort auch in gespeicherten Partien. (f) Der Bürokratie-Zusatz fehlt an beiden Zeilen
+   (Handelsrouten, Gentechnik); der Regelbogen („Mit Bürokratie zählt das doppelt.") und der
+   Techtext der Bürokratie sagen es weiter. (g) „Ne Runde Civ?" mit großem R; die Tutorialfrage
+   nennt weiter „Civilization". (h) Belagerungsmaschinen +3 und Singularität 120 gelten auch im
+   Tutorial (Texte angepasst, Ablauf unverändert).
+41. **Balance nach v88 nur grob gemessen.** Mit denselben Startwerten wie v87 (`tools_ki.js`:
+   `selbst 100`, `selbst 40 reiche=4`, `duell 60 diff=david`, `vier 40 diff=koenig`) gewinnt die
+   KI genau so oft wie vorher; im Duell gegen David gibt es weniger Forschungs- und mehr
+   Wirtschaftssiege (21 → 13 bzw. 6 → 14 von 60). Nicht getrennt nach den drei Änderungen, kleine
+   Reihen, Tabelle in `ANNAHMEN.md`. Nicht neu abgestimmt: der feste KI-Zuschlag für
+   Belagerungsmaschinen (`kiTechBonus` 4). Ob Menschen jetzt Ketten überspringen (etwa gleich
+   zur KI statt Mathematik zuerst), zeigt erst das Spielen.
 
 ## Arbeitsweise, die der Autor schätzt
 

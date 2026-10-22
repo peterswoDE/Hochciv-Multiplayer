@@ -204,7 +204,7 @@ function kiCoinBudget(S, pi, inc) {
 function kiAttackPer(S, pi, power) {
   const p = S.players[pi];
   let per = power;
-  if (has(p, 'belagerung')) per += 5;
+  if (has(p, 'belagerung')) per += SIEGE_BONUS;
   if (has(p, 'dynamit')) per *= 2;
   return per;
 }

@@ -11,7 +11,8 @@ Datei beschreibt die Standardregeln; die experimentelle Variante v2 steht in Abs
 ## 1. Kampf (aktualisiertes Regelheft)
 
 - Angriffswert **je Armee** = Machtwert der Zivilisation; mehrere Armeen an derselben Stadt
-  addieren sich. Belagerungsmaschinen geben +5 je Armee, Dynamit verdoppelt danach.
+  addieren sich. Belagerungsmaschinen geben +3 je Armee (seit v88; bis v87 +5), Dynamit
+  verdoppelt danach.
 - Verteidigung = Bevölkerung (Maschinengewehr: x3) + 5 mit Stadtmauern + Machtwert je
   verteidigender Armee + einmal Machtwert für Burgenbau.
 - **Raketentechnik** projiziert den Machtwert einer Armee auf **zwei Ringe** - fuer Angriff,
@@ -72,7 +73,7 @@ Datei beschreibt die Standardregeln; die experimentelle Variante v2 steht in Abs
 | Stahl 1/3, Panzer 1/4 | ersetzen den Nenner, gleiche Rundung | |
 | Stadtgründung | Grundkosten 1/3/6/10/15/… (n·(n+1)/2 bei n eigenen Städten) + Distanz zur **Hauptstadt** in passierbaren Feldern | |
 | Kartografie | streicht nur den Distanzanteil, Grundkosten bleiben | |
-| Singularität | Kosten 25 (v2: 100), griechischer Rabatt −5, Wissenschaftliche Methode −10 | |
+| Singularität | Kosten 120 (seit v88; bis v87 100 – aus der Variante v2 –, das Regelheft nennt 25), im Marathon 300; griechischer Rabatt −5, Wissenschaftliche Methode −10 | |
 | Armeekosten Wikinger | 5 × (Armeen inkl. neuer − 1), die erste Armee ist damit gratis | Mindestpreis 5 |
 | Sklaverei | höchstens **einmal pro Runde pro Stadt**; die Stadt darf davor wachsen | |
 | Kolonialismus | kauft nur **herrenlose** Felder (keine Stadt, keine Kontrolle), **3 Münzen** je Feld (`COLONY_COST`, bis v71: 5) | |
@@ -88,6 +89,11 @@ Datei beschreibt die Standardregeln; die experimentelle Variante v2 steht in Abs
   sind unter deiner Kontrolle"), eine Konfliktregel fehlt.
 * **Wald** bringt in der Grundtabelle 1 Münze. Die Zeile war in der Vorlage schwer zu
   lesen – bitte kurz gegen den gedruckten Bogen prüfen (`TERRAIN` in `js/data.js`).
+* **Ertragstechnologien** (seit v88, Anweisung des Autors) schließen die billigeren ihres
+  Feldes auf demselben Gelände bzw. je Bevölkerung ein: Mathematik gibt dem Wald +1
+  Wissenschaft, Elektrizität +2, Künstliche Intelligenz +3, auch alle drei zusammen +3.
+  Verschiedene Felder addieren sich. Bis v87 addierte jede ihren eigenen Zuwachs. Einzelheiten
+  im Abschnitt v88 am Ende.
 * **Nahrungsdefizit** (mehr Bevölkerung als Ertrag): wird, soweit möglich, automatisch mit
   Münzen bzw. Wissenschaft gedeckt (England, Massenmedien, Gentechnik zum Kurs 1:1).
   Bleibt ein Rest, passiert nichts weiter – eine Hungerregel gibt es nicht.
@@ -98,7 +104,8 @@ Datei beschreibt die Standardregeln; die experimentelle Variante v2 steht in Abs
 * **Ökologie** („Städte: +1 auf alle Erträge / 2 Bevölkerung (abrunden)\", seit v69 auf
   Anweisung des Autors; vorher nur +1 Nahrung) gibt je Stadt ⌊Bevölkerung / 2⌋ auf
   Wissenschaft, Nahrung **und** Münzen. Abgerundet wird **je Stadt**, nicht über das
-  ganze Reich: 5 + 3 Bevölkerung ergeben 2 + 1, nicht 4. Der Posten gehört zur
+  ganze Reich: 5 + 3 Bevölkerung ergeben 2 + 1, nicht 4. *(So bis v85 – seit v86 über das
+  ganze Reich gezählt und einmal abgerundet, siehe Abschnitt v86.)* Der Posten gehört zur
   Bevölkerungszeile von `incomeBreakdown` – daraus folgt, genau wie vorher schon für den
   Nahrungsanteil: Bürokratie verdoppelt ihn in der Hauptstadt, bei Revolution fällt er
   dort aus, und sein Nahrungsanteil senkt `popFoodCost` (Füttern mit Gentechnik/
@@ -242,6 +249,7 @@ Die früher „experimentell v2" genannten Regeln **sind** jetzt die Regeln. Das
 Übernommen wurde:
 
 - **Singularität** kostet 100 (Rabatte gelten weiter: Griechenland −5, Wiss. Methode −10).
+  Seit v88 120 (Anweisung des Autors, siehe dort).
 - **Keramik** (Produktion, Antike, 4) und **Theologie** (Spezial, Mittelalter, 10) sind
   normale Technologien.
 - **Verbundwerkstoffe**: 1× zusätzliches, **kostenloses** Wachstum pro Stadt und Runde.
@@ -4273,6 +4281,160 @@ am Knopf, Zahl auch im Bot-Zug, die alte Höhenmessung gedreht – jede schlägt
 `check_single.js` öffnet in der Einzeldatei „Fähigkeiten" (Marathon, gedraftete Fähigkeiten).
 Sichtkontrolle in Chromium: iPad quer und hochkant (gedreht), Telefon quer und hochkant,
 deutsch und englisch – Blatt, Zahl an der Leiste, beide „Weiter".
+
+## Ertragstechnologien schließen die billigeren ein · Belagerungsmaschinen +3 · Singularität 120 · Übersicht ohne Bürokratie-Zusatz · „Ne Runde Civ?" (v88)
+
+**Wunsch des Autors (21.10.):**
+1. Ertragstechnologien: Der Nutzen der niedrigeren Technologien desselben Feldes auf einem
+   Gelände steckt in den höheren. Mit Mathematik bringt Wald +1 Wissenschaft, mit Elektrizität
+   +2, mit Künstlicher Intelligenz +3 – wer alle drei hat, bekommt trotzdem nur +3, die
+   Technologie setzt den Ertrag. Ebenso die Bevölkerungstechnologien. Hat ein Feld in der
+   Produktion zwei verschiedene Boni, stapeln sie trotzdem (Containerlogistik setzt das Meer
+   auf 2 Nahrung, 1 Münze).
+2. Belagerungsmaschinen nur noch +3.
+3. Der Bürokratie-Bonus soll nicht im Text der Ertragsübersicht stehen.
+4. Hauptmenü: „Ne Runde Civ? …" statt „Civilization" (Urheberrecht).
+5. Singularität im normalen Modus 120.
+
+### Ertragstechnologien
+
+* **Die Regel:** Je Ziel – eine Geländeart oder „je Bevölkerungspunkt" – und je Feld des
+  Technologiebogens bilden die Ertragstechnologien eine Kette, nach Kosten geordnet. Jedes
+  Glied bringt die Summe aller Zuwächse bis zu sich; es zählt nur das teuerste erforschte.
+  Ketten verschiedener Felder addieren sich.
+
+  | Ziel | Feld | Kette (Bonus mit diesem Glied) |
+  |---|---|---|
+  | Wald | Forschung | Mathematik +1 🔬 → Elektrizität +2 🔬 → Künstliche Intelligenz +3 🔬 |
+  | Grasland | Forschung | Papier +1 🔬 → Biologie +2 🔬 |
+  | je Bevölkerung | Forschung | Schrift +1 🔬 → Universitätswesen +2 🔬 |
+  | Meer | Produktion | Fischerei +1 🌾 → Segeln +2 🌾 → Containerlogistik +2 🌾 +1 🪙 |
+  | Grasland | Produktion | Landwirtschaft +1 🌾 → Grüne Revolution +1 🌾 +1 🪙 |
+  | je Bevölkerung | Produktion | Fließband +1 🪙 → Robotik +2 🪙 |
+  | einzeln | | Astronomie (Meer 🔬), Buchdruck (Fluss 🔬), Chemie (Gebirge 🔬) · Bewässerung (Gebirge 🌾), Mühlentechnik (Fluss 🪙), Kunstdünger (Wald 🌾) |
+
+* **Auslegung – „stapeln trotzdem":** Gelesen als: verschiedene Ertragsarten einer Kette
+  stecken beide im höheren Glied (Containerlogistik = die Nahrung von Fischerei und Segeln
+  plus die eigene Münze; ebenso Grüne Revolution = Nahrung der Landwirtschaft plus Münze) –
+  genau das Beispiel des Autors. In der Forschung gibt es keine gemischten Ketten, dort ist
+  alles Wissenschaft. Ketten **verschiedener Felder** addieren sich: Astronomie (Forschung)
+  kommt zu Containerlogistik dazu (Meer +1 🔬 +2 🌾 +1 🪙 + Grundertrag), Papier zu
+  Landwirtschaft. Die Alternative „je Ertragsart eine Kette" (Containerlogistik allein nur
+  +1 🪙) widerspräche dem Beispiel.
+* **Auslegung – „niedriger" heißt billiger im selben Feld**, nach den Grundkosten. Im alten
+  Techtree (Tutorial) und im Marathon ist die Reihenfolge jeder Kette dieselbe – kein
+  Glied wechselt dort den Platz (Schrift 1 statt 4, Biologie 15 statt 12, Landwirtschaft 1
+  statt 5 ändern daran nichts); ein Test hält das fest.
+* **Was gleich bleibt:** Wer eine Kette ganz erforscht hat, hat genau die Erträge wie bis
+  v87, als jede Technologie +1 addierte. Anders ist es nur, wenn ein billigeres Glied fehlt:
+  Elektrizität allein bringt dem Wald jetzt +2 statt +1, Containerlogistik allein dem Meer +2
+  🌾 +1 🪙 statt +1 🪙, Robotik allein je Bevölkerung +2 🪙 statt +1. Umgekehrt bringt ein
+  billigeres Glied, das man **nach** einem teureren erforscht, keinen Ertrag mehr dazu
+  (Mathematik nach KI: +0) – zählt aber weiter als Technologie (Punkte, Zeitalter,
+  Rückschau usw.).
+* **Nicht aus Technologien:** Taiga (Russland, Wald +1 🌾) und der Große Leuchtturm (Meer
+  +1 auf alles) addieren sich wie bisher.
+* **Laufende Partien:** Die Regel gilt ab dem Laden auch für gespeicherte Spielstände (kein
+  Schalter im Spielstand) – wie schon die Änderungen an Ökologie und Bürokratie in v86.
+* **Umsetzung:** `YIELD_TECHS` (data.js) nennt je Technologie Ziel und eigenen Zuwachs,
+  `YIELD_CHAINS` die Ketten mit den Summen, `yieldBonus` (engine.js) nimmt je Kette das
+  höchste erforschte Glied. `tileYield` und `cityPopYield` lesen nur noch das; der `switch` mit
+  den Technologien je Gelände ist weg. Die KI bewertet Technologien über das Einkommen
+  (`kiValue`), sie sieht die neue Regel ohne eigene Änderung – auch, dass Mathematik nach KI
+  nichts mehr bringt.
+* **Texte:** Die Techtexte nennen die Summe und die eingeschlossenen Technologien („Wald: +3
+  Wissenschaft (inkl. Mathematik, Elektrizität)", englisch „Forest: +3 science (incl.
+  Mathematics, Electricity)"); die ersten Glieder und die einzelnen bleiben, wie sie waren.
+  Der Regelbogen erklärt die Regel in einem Absatz unter der Geländetabelle.
+
+### Belagerungsmaschinen +3
+
+* `SIEGE_BONUS` = 3 (data.js; bis v87 stand die 5 fest in `attackValue` und in der
+  KI-Rechnung `kiAttackPer`). Dynamit verdoppelt danach: (Macht + 3) × 2 je Armee.
+* **Tutorial:** Der Schritt „Der Gegenangriff als Verteidigung" rechnet es vor – jetzt „+3
+  Angriff gegen Städte" und „mit 6 statt 3" (3 Macht + 3) gegen die Verteidigung 3. Der Ablauf
+  bleibt gleich: Der erste Treffer sitzt weiterhin, und der Bot zieht seine Armeen zur
+  Hauptstadt zurück; die beiden festgepinnten Tutorialläufe in `test.js` sind unverändert.
+* Die KI gewichtet die Technologie selbst weiter mit einem festen Zuschlag (`kiTechBonus`
+  4) – nicht neu abgestimmt; ihre Angriffe rechnet sie mit dem neuen Wert.
+
+### Singularität 120
+
+* `SINGULARITY_BASE` = 120 (bis v87 100). Griechenland −5, Wissenschaftliche Methode −10 und
+  der Kreml (+50 für alle) wirken wie bisher; im Marathon bleibt es bei 300.
+* Gilt auch im Tutorial (alter Techtree – für die Singularität gab es dort nie eigene
+  Kosten); die Texte dort nennen 120 bzw. 110 mit der Methode.
+
+### Ertragsübersicht ohne „(Bürokratie ×2)"
+
+* Die Zahlen bleiben verdoppelt (Hauptstadt, Handelsrouten, Ökologie, Gentechnik), nur der
+  Zusatz am Zeilennamen entfällt – an beiden Zeilen, die ihn trugen (Handelsrouten,
+  Gentechnik). `incomeBreakdown` hängt kein `note` mehr an, `yieldOverview` zeigt nur den
+  Namen, der Schlüssel „Bürokratie ×2" ist aus `UI_EN` entfernt.
+* **Nicht geändert (Auslegung):** Der Regelbogen sagt bei den Handelsrouten weiter „Mit
+  Bürokratie zählt das doppelt.", und der Techtext der Bürokratie nennt Handelsrouten,
+  Ökologie und Gentechnik – beides ist nicht die Ertragsübersicht, und ohne sie stünde die
+  Regel nirgends.
+
+### Hauptmenü
+
+* „Ne Runde Civ? Auf dem Tablet, ohne Bleistift und Radiergummi." – „Runde" bleibt groß
+  (Substantiv, wie bisher), sonst wörtlich. Englisch: „A round of Civ? On the tablet, without
+  pencil and eraser."
+* **Nicht geändert:** Die Frage zu Beginn des Tutorials („Hast du schon Erfahrung mit Spielen
+  wie Civilization?") nennt den Namen weiter – nicht verlangt, eine Zeile in `ui.js`
+  (`tutorialAsk`) und `UI_EN`, falls gewünscht.
+
+### Gemessen: wie sich die Partien verschieben (alle drei Regeländerungen zusammen)
+
+`tools_ki.js`, dieselben Startwerte mit v87 und v88 (Partien je Reihe, Siege der KI bzw. Siegarten):
+
+| Reihe | v87 | v88 |
+|---|---|---|
+| `selbst 100` (KI gegen KI, Duell) | Forschung 41, Wirtschaft 31, Militär 28 · Endrunde Median 6 | Forschung 43, Wirtschaft 29, Militär 28 · Median 6 |
+| `selbst 40 reiche=4` | Militär 30, Forschung 9, Wirtschaft 1 · Median 6 | Militär 34, Forschung 6 · Median 6 |
+| `duell 60 diff=david` | KI 29, Bot 31 · Militär 33, Forschung 21, Wirtschaft 6 | KI 29, Bot 31 · Militär 33, Forschung 13, Wirtschaft 14 |
+| `vier 40 diff=koenig` | KI 14, Bots 26 · Militär 38, Forschung 2 | KI 14, Bots 26 · Militär 37, Forschung 3 |
+
+Die Siege der KI ändern sich in keiner Reihe; die Siegarten verschieben sich stellenweise (im
+Duell gegen David weniger Forschungs-, mehr Wirtschaftssiege). Welche der drei Änderungen das
+bewirkt, ist nicht getrennt gemessen, und die Reihen sind klein. KI-Zugzeit unverändert
+(Median 20–26 ms; die Läufe teilten sich die Rechenzeit mit anderen, also grob).
+
+### Abgesichert
+
+`test.js`, Block „Ertragstechnologien (v88)" (gleich nach den Beispielen aus dem Regelheft):
+die Beispiele des Autors (Wald 1/2/3 und mit allen dreien 3; Containerlogistik allein wie mit
+Fischerei und Segeln; Segeln allein +2), verschiedene Felder addieren sich (Astronomie,
+Papier/Biologie mit Grüner Revolution), je Bevölkerung (Universitätswesen und Robotik auch
+ohne Schrift bzw. Fließband), Einzelglieder, Taiga dazu; alle Ertragstechnologien = die
+Erträge bis v87; die Ketten selbst (Glieder, Summen, je Feld, jede Technologie genau einmal);
+dieselbe Reihenfolge im alten Techtree und im Marathon; Gegenprobe ohne `YIELD_CHAINS` über 400
+zufällige Techstände × 7 Ziele; jeder Techtext deutsch und englisch aus der Kette nachgerechnet.
+Belagerungsmaschinen (7 + 3) je Armee, mit Dynamit verdoppelt, die KI-Rechnung gleich, Techtext
+deutsch und englisch an `SIEGE_BONUS`, Tutorialtexte (lang und kurz, deutsch und englisch)
+„+3" und „6 statt 3". Singularität 120 (Griechenland 115, mit Methode 105; Kreml 165/170;
+Marathon 300), Tutorialtexte 120/110 an `techCost` im alten Techtree gebunden. Bürokratie:
+keine Zeile trägt mehr `note`.
+Gegenproben (je eine Stelle absichtlich falsch): Erträge wieder addiert wie bis v87 (9 Fehler),
+ein Techtext mit falscher Summe, `SIEGE_BONUS` 5, die KI mit fester 5, `note` wieder an den
+Handelsrouten, „8 statt 3" im Tutorial, Singularität 100, Ketten absteigend sortiert – jede
+schlägt an.
+
+`smoke.js`: die Handelsroutenzeile heißt mit Bürokratie schlicht „Handelsrouten" (dreimal 4)
+bzw. „Trade routes", keine Zeile nennt die Bürokratie; neuer Schritt „v88": Hauptmenü
+deutsch und englisch („Ne Runde Civ? …", „A round of Civ? …", kein „Civilization"), Meer mit
+Containerlogistik allein 🌾2 🪙2 je Feld in der Ertragsübersicht, die neuen Texte im
+Technologiebogen und im Regelbogen samt erklärendem Satz, Singularität 120 – deutsch und
+englisch ohne fehlende Übersetzung.
+Gegenproben: der Zusatz wieder an der Zeile, der alte Menüsatz, der Satz im Regelbogen
+entfernt – jede schlägt an.
+
+Sichtkontrolle in Chromium (iPad quer, deutsch und englisch; Telefon quer): Hauptmenü,
+Technologiebogen mit den längeren Texten (Kacheln brechen sauber um, wie schon bei längeren
+Texten), Ertragsübersicht mit Bürokratie ohne Zusatz, der Satz im Regelbogen unter der
+Geländetabelle.
+
 ## Bots nicht mehr wählbar · Duell auf den festen Karten (Mehrspieler-Erweiterung)
 
 **Bots.** Im Aufbau gibt es je Platz nur noch Mensch oder KI; die Zeile für die
