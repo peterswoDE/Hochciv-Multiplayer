@@ -2,6 +2,7 @@ const sessions = require('../sessions');
 const engine = require('../engine-adapter');
 const { User, Game, sequelize } = require('../models');
 const { calculateMMR } = require('../utils/mmr');
+const { finalPoints } = require('../utils/score');
 
 /**
  * Register a socket event handler that cannot take the process down: the payload is
@@ -575,24 +576,21 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
             // Map lobby player to state player (indexes can differ due to sorting/barbarians)
             const finalIndex = engine.stateIndexOf(session.state, i, lp);
 
-            let points = 0;
-            let scoreDetails = null;
-            
-            if (finalIndex !== -1) {
-                try {
-                    const scoreObj = engine.getEngine().victoryScore(session.state, finalIndex);
-                    scoreDetails = scoreObj || null;
-                    points = scoreObj ? scoreObj.total : 0;
-                } catch (e) {
-                    console.error('Error fetching score for player', finalIndex, e);
-                }
-            }
-
             // S.over = { winner, winners: [stateIndex, ...], how, ... } (current engine);
             // very old engines used { id: civ }.
             const over = session.state.over || {};
             const isWinner = Array.isArray(over.winners) ? (finalIndex !== -1 && over.winners.includes(finalIndex))
                 : over.id ? (lp.civ === over.id) : false;
+
+            let scoreDetails = null;
+            if (finalIndex !== -1) {
+                try {
+                    scoreDetails = engine.getEngine().victoryScore(session.state, finalIndex) || null;
+                } catch (e) {
+                    console.error('Error fetching score for player', finalIndex, e);
+                }
+            }
+            const points = finalPoints(scoreDetails, isWinner);   // + WIN_BONUS for the winner
 
             playersData.push({
                 dbUserId: lp.dbUserId,
@@ -669,3 +667,6 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
         console.error('[Stats] Failed to process game over logic:', err);
     }
 }
+
+// for tests/score
+module.exports.processGameOverMmr = processGameOverMmr;
