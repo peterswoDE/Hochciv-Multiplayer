@@ -537,31 +537,28 @@ function useBackPick(S, pi, tk) {
 }
 
 /* ------------------------------------------------------------ Einkommen */
+/* Bonus der Ertragstechnologien auf ein Ziel – Geländeart oder 'pop' (je Bevölkerungspunkt).
+   Seit v88 (Anweisung des Autors) zählt je Feld nur das höchste erforschte Glied der Kette,
+   das die billigeren einschließt (YIELD_CHAINS in data.js): Mathematik, Elektrizität und
+   Künstliche Intelligenz geben dem Wald zusammen +3 Wissenschaft wie KI allein. Ketten
+   verschiedener Felder addieren sich. Bis v87 addierte jede Technologie ihren Zuwachs.
+   Addiert in `y` (ohne `y`: in ein neues [0, 0, 0]) und gibt es zurück – tileYield läuft in
+   der KI sehr oft, deshalb ohne Zwischenfeld. */
+const NO_CHAINS = [];
+function yieldBonus(p, on, y = [0, 0, 0]) {
+  for (const chain of YIELD_CHAINS[on] || NO_CHAINS)
+    for (let i = chain.length - 1; i >= 0; i--)
+      if (has(p, chain[i].k)) { for (let j = 0; j < 3; j++) y[j] += chain[i].y[j]; break; }
+  return y;
+}
 function tileYield(S, pi, t) {
   const p = S.players[pi];
   if (TERRAIN[t].block) return [0, 0, 0];              // Vulkan
   if (evTerrainDead(S, pi, t)) return [0, 0, 0];       // Ereignis legt das Gelände lahm
-  const y = TERRAIN[t].yield.slice();
-  const add = (i, n) => y[i] += n;
-  switch (t) {
-    case 'G':
-      if (has(p, 'papier')) add(0, 1); if (has(p, 'biologie')) add(0, 1);
-      if (has(p, 'landwirtschaft')) add(1, 1); if (has(p, 'gruene_revolution')) add(2, 1); break;
-    case 'W':
-      if (has(p, 'mathematik')) add(0, 1); if (has(p, 'elektrizitaet')) add(0, 1); if (has(p, 'ki')) add(0, 1);
-      if (has(p, 'kunstduenger')) add(1, 1);
-      if (hasAbil(p, 'russland', 'basis')) add(1, 1); break;
-    case 'B':
-      if (has(p, 'chemie')) add(0, 1); if (has(p, 'bewaesserung')) add(1, 1); break;
-    case 'F':
-      if (has(p, 'buchdruck')) add(0, 1); if (has(p, 'muehlentechnik')) add(2, 1); break;
-    case 'M':
-      if (has(p, 'astronomie')) add(0, 1);
-      if (has(p, 'fischerei')) add(1, 1); if (has(p, 'segeln')) add(1, 1);
-      if (has(p, 'containerlogistik')) add(2, 1);
-      if (hasWonder(S, pi, 'leuchtturm')) { add(0, 1); add(1, 1); add(2, 1); }   // Großer Leuchtturm
-      break;
-  }
+  const y = yieldBonus(p, t, TERRAIN[t].yield.slice());    // Technologien: je Feld die höchste (v88)
+  // Was nicht aus Technologien kommt, addiert sich wie bisher
+  if (t === 'W' && hasAbil(p, 'russland', 'basis')) y[1] += 1;                     // Taiga
+  if (t === 'M' && hasWonder(S, pi, 'leuchtturm')) { y[0] += 1; y[1] += 1; y[2] += 1; }   // Großer Leuchtturm
   return y;
 }
 /* Ertrag eines konkreten Feldes: wie tileYield, aber mit Bürokratie –
@@ -578,14 +575,10 @@ function tileYieldAt(S, pi, r, c, pre) {
   }
   return y;
 }
+// Ertrag je Bevölkerungspunkt: CITY_YIELD plus die Ketten auf 'pop' (Schrift → Universitätswesen,
+// Fließband → Robotik; seit v88 schließt die höhere die niedrigere ein).
 function cityPopYield(S, pi) {
-  const p = S.players[pi];
-  const y = CITY_YIELD.slice();
-  if (has(p, 'schrift')) y[0]++;
-  if (has(p, 'universitaet')) y[0]++;
-  if (has(p, 'fliessband')) y[2]++;
-  if (has(p, 'robotik')) y[2]++;
-  return y;
+  return yieldBonus(S.players[pi], 'pop', CITY_YIELD.slice());
 }
 /* Kontrollierte Felder: alle an eigene Städte angrenzenden Felder (ohne Stadtfelder),
    plus per Kolonialismus gekaufte Felder. Nicht exklusiv – so steht es in den Regeln.
@@ -710,12 +703,12 @@ function incomeBreakdown(S, pi) {
   });
   // Handelsrouten: Städte, die über Straßen (+1) oder durchgehend Eisenbahn (+2) an
   // der Hauptstadt hängen. Grundregel, gilt also auch für Bots.
-  // Mit Bürokratie doppelt (v86). `note` erklärt das in der Übersicht.
+  // Mit Bürokratie doppelt (v86). Die Übersicht sagt seit v88 nicht mehr dazu, warum
+  // (Anweisung des Autors; v86/v87 hing „(Bürokratie ×2)" am Zeilennamen).
   const tr = tradeRoutes(S, pi);
   if (tr.bonus) {
     const b = tr.bonus * buro;
-    extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b],
-      note: buro > 1 ? T('Bürokratie ×2') : null });
+    extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b] });
   }
   // Wallfahrt (Erweiterung): je eigenem Weltwunder +3 auf alle drei Erträge
   if (has(p, 'wallfahrt') && p.kind !== 'bot') {
@@ -742,7 +735,7 @@ function incomeBreakdown(S, pi) {
   if (has(p, 'gentechnik') && !evActive(S, pi, 'hungersnot')) {
     const gen = Math.floor(total[0] / GENE_SCI_PER_FOOD) * buro;
     if (gen > 0) {
-      extra.push({ name: T('Gentechnik'), glyph: '🧬', y: [0, gen, 0], note: buro > 1 ? T('Bürokratie ×2') : null });
+      extra.push({ name: T('Gentechnik'), glyph: '🧬', y: [0, gen, 0] });
       total[1] += gen;
     }
   }
@@ -1905,7 +1898,7 @@ function attackValue(S, pi, count) {
   const p = S.players[pi];
   if (count <= 0) return 0;
   let per = powerOf(S, pi);
-  if (has(p, 'belagerung')) per += 5;
+  if (has(p, 'belagerung')) per += SIEGE_BONUS;      // v88: 3 (vorher 5)
   if (has(p, 'dynamit')) per *= 2;
   return per * (COMBAT.attackStacks ? count : 1);
 }

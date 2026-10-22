@@ -91,6 +91,96 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq([sum[0] + py[0] * pop, sum[1] + py[1] * pop, sum[2] + py[2] * pop], [25, 29, 13], 'Kampfbeispiel: Einkommen');
 }
 
+/* --- Ertragstechnologien (v88, Anweisung des Autors): innerhalb eines Feldes schließt die
+   teurere die billigeren auf demselben Ziel (Geländeart oder je Bevölkerung) ein – sie setzt
+   den Bonus, statt ihn zu erhöhen. Verschiedene Felder addieren sich. */
+{
+  const y = (techs, t) => tileYield(mk('griechenland', techs), 0, t);
+  const py = techs => cityPopYield(mk('griechenland', techs), 0);
+  // Die Beispiele des Autors (Wald hat 1 Münze Grundertrag, Meer auch)
+  eq([['mathematik'], ['elektrizitaet'], ['ki'], ['mathematik', 'elektrizitaet', 'ki'], ['mathematik', 'ki']]
+    .map(ts => y(ts, 'W')), [[1, 0, 1], [2, 0, 1], [3, 0, 1], [3, 0, 1], [3, 0, 1]],
+    'Wald: Mathematik +1, Elektrizität +2, KI +3 Wissenschaft – mit allen dreien weiter +3');
+  eq([y(['containerlogistik'], 'M'), y(['fischerei', 'segeln', 'containerlogistik'], 'M')], [[0, 2, 2], [0, 2, 2]],
+    'Containerlogistik setzt das Meer auf +2 Nahrung und +1 Münze, allein wie mit Fischerei und Segeln');
+  eq([y(['fischerei'], 'M'), y(['segeln'], 'M'), y(['segeln', 'fischerei'], 'M')], [[0, 1, 1], [0, 2, 1], [0, 2, 1]],
+    'Meer: Fischerei +1 Nahrung, Segeln +2 (auch mit Fischerei)');
+  eq(y(['containerlogistik', 'astronomie'], 'M'), [1, 2, 2], 'verschiedene Felder addieren sich: Astronomie (Forschung) kommt dazu');
+  eq([y(['gruene_revolution'], 'G'), y(['landwirtschaft', 'gruene_revolution'], 'G'), y(['biologie', 'gruene_revolution'], 'G'),
+    y(['papier', 'biologie', 'landwirtschaft'], 'G')], [[0, 2, 1], [0, 2, 1], [2, 2, 1], [2, 2, 0]],
+    'Grasland: Grüne Revolution +1 Nahrung +1 Münze, Biologie +2 Wissenschaft, die beiden Ketten addieren sich');
+  eq([py(['universitaet']), py(['schrift', 'universitaet']), py(['robotik']), py(['fliessband', 'robotik']),
+    py(['schrift', 'robotik'])], [[3, -1, 1], [3, -1, 1], [1, -1, 3], [1, -1, 3], [2, -1, 3]],
+    'je Bevölkerung: Universitätswesen +2 Wissenschaft, Robotik +2 Münzen, auch ohne Schrift bzw. Fließband');
+  eq([y(['chemie', 'bewaesserung'], 'B'), y(['buchdruck', 'muehlentechnik'], 'F'), y(['kunstduenger', 'ki'], 'W')],
+    [[2, 1, 1], [1, 1, 2], [3, 1, 1]], 'Einzelglieder: Gebirge, Fluss, Kunstdünger neben der Waldkette');
+  // Was nicht aus Technologien kommt, addiert sich wie bisher
+  eq(tileYield(mkA('russland', 'basis', ['ki', 'kunstduenger']), 0, 'W'), [3, 2, 1], 'Taiga (Russland) kommt zu Kunstdünger und KI dazu');
+  // Wer eine Kette ganz hat, steht wie bis v87, als jede Technologie ihren Zuwachs addierte
+  const keys = Object.keys(YIELD_TECHS);
+  const alle = mk('griechenland', keys);
+  eq(['G', 'W', 'B', 'F', 'M', 'I'].map(t => tileYield(alle, 0, t)).concat([cityPopYield(alle, 0)]),
+    [[2, 2, 1], [3, 1, 1], [2, 1, 1], [1, 1, 2], [1, 2, 2], [1, 1, 1], [3, -1, 3]],
+    'alle Ertragstechnologien: dieselben Erträge wie bis v87 (Insel ohne Technologie)');
+  eq(keys.filter(k => !TECH_BY_KEY[k]), [], 'jede Ertragstechnologie gibt es');
+  // Die Ketten: je Ziel und Feld, nach Grundkosten, jedes Glied mit der Summe bis zu sich
+  const kette = on => (YIELD_CHAINS[on] || []).map(ch => ch.map(g => g.k + ' ' + g.y.join('/')));
+  eq(kette('W'), [['mathematik 1/0/0', 'elektrizitaet 2/0/0', 'ki 3/0/0'], ['kunstduenger 0/1/0']], 'Ketten im Wald');
+  eq(kette('M'), [['astronomie 1/0/0'], ['fischerei 0/1/0', 'segeln 0/2/0', 'containerlogistik 0/2/1']], 'Ketten im Meer');
+  eq(kette('G'), [['papier 1/0/0', 'biologie 2/0/0'], ['landwirtschaft 0/1/0', 'gruene_revolution 0/1/1']], 'Ketten im Grasland');
+  eq(kette('pop'), [['schrift 1/0/0', 'universitaet 2/0/0'], ['fliessband 0/0/1', 'robotik 0/0/2']], 'Ketten je Bevölkerung');
+  eq([kette('B'), kette('F'), kette('I')], [[['chemie 1/0/0'], ['bewaesserung 0/1/0']], [['buchdruck 1/0/0'], ['muehlentechnik 0/0/1']], []],
+    'Gebirge und Fluss: ein Glied je Feld, Insel keins');
+  const glieder = Object.values(YIELD_CHAINS).flat();
+  eq(glieder.flat().map(g => g.k).sort(), keys.slice().sort(), 'jede Ertragstechnologie steht in genau einer Kette');
+  eq(glieder.filter(ch => new Set(ch.map(g => TECH_BY_KEY[g.k].f)).size !== 1).length, 0, 'eine Kette bleibt in ihrem Feld');
+  // Sortiert wird nach t.c – im alten Techtree (Tutorial) und im Marathon muss es dieselbe Reihe sein
+  const reihe = (X, ch) => ch.map(g => TECH_BY_KEY[g.k]).sort((a, b) => techBase(X, a) - techBase(X, b)).map(t => t.k).join();
+  eq([null, { oldTree: true }, { marathon: true }].map(X => glieder.filter(ch => reihe(X, ch) !== ch.map(g => g.k).join()).length),
+    [0, 0, 0], 'Reihenfolge jeder Kette: Standard, alter Techtree und Marathon gleich');
+  /* Gegenprobe ohne YIELD_CHAINS: je Ziel und Feld zählt jeder Zuwachs bis zur teuersten
+     erforschten Technologie, dazu der Grundertrag – über zufällige Techstände. */
+  const ref = (owned, on) => {
+    const out = (on === 'pop' ? CITY_YIELD : TERRAIN[on].yield).slice();
+    for (let f = 0; f < 4; f++) {
+      const feld = TECHS.filter(t => YIELD_TECHS[t.k] && YIELD_TECHS[t.k].on === on && t.f === f);
+      const top = Math.max(-1, ...feld.filter(t => owned.includes(t.k)).map(t => t.c));
+      for (const t of feld) if (t.c <= top) YIELD_TECHS[t.k].y.forEach((n, i) => { out[i] += n; });
+    }
+    return out;
+  };
+  let zufall = 4711, n = 0;
+  const rnd = () => (zufall = (zufall * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const R = mk('griechenland'), abw = [];
+  for (let k = 0; k < 400; k++) {
+    const owned = keys.filter(() => rnd() < 0.45);
+    R.players[0].techs = {}; owned.forEach(t => { R.players[0].techs[t] = true; });
+    for (const on of ['G', 'W', 'B', 'F', 'M', 'I', 'pop']) {
+      n++;
+      const got = on === 'pop' ? cityPopYield(R, 0) : tileYield(R, 0, on);
+      if (JSON.stringify(got) !== JSON.stringify(ref(owned, on))) abw.push(on + ':' + owned.join('+'));
+    }
+  }
+  eq([abw.slice(0, 2), n], [[], 2800], 'Gegenprobe: 400 zufällige Techstände × 7 Ziele wie nach der Regel gerechnet');
+  // Die Techtexte nennen die Summe ihrer Kette und was sie einschließen – deutsch und englisch
+  const ZIEL = { de: { G: 'Grasland', W: 'Wald', B: 'Gebirge', F: 'Fluss', M: 'Meer', pop: 'Je Bevölkerung' },
+    en: { G: 'Grassland', W: 'Forest', B: 'Mountains', F: 'River', M: 'Sea', pop: 'Per population' } };
+  const ART = { de: [['Wissenschaft', 'Wissenschaft'], ['Nahrung', 'Nahrung'], ['Münze', 'Münzen']],
+    en: [['science', 'science'], ['food', 'food'], ['coin', 'coins']] };
+  const de = k => DATA_DE ? DATA_DE.tech[k] : [TECH_BY_KEY[k].n, TECH_BY_KEY[k].e];
+  const tx = (lang, k) => lang === 'de' ? de(k) : DATA_EN.tech[k];
+  const soll = (lang, on, ch, i) => ZIEL[lang][on] + ': ' +
+    ch[i].y.map((v, j) => v ? `+${v} ${ART[lang][j][v > 1 ? 1 : 0]}` : '').filter(Boolean).join(', ') +
+    (i ? ` (${lang === 'de' ? 'inkl.' : 'incl.'} ${ch.slice(0, i).map(g => tx(lang, g.k)[0]).join(', ')})` : '');
+  const falsch = [];
+  for (const on of Object.keys(YIELD_CHAINS)) for (const ch of YIELD_CHAINS[on]) ch.forEach((g, i) => {
+    for (const lang of ['de', 'en']) if (tx(lang, g.k)[1] !== soll(lang, on, ch, i)) falsch.push(`${lang}:${g.k} „${tx(lang, g.k)[1]}" statt „${soll(lang, on, ch, i)}"`);
+  });
+  eq(falsch, [], 'jeder Ertragstext (deutsch und englisch) nennt die Summe seiner Kette und was er einschließt');
+  eq(de('ki')[1], 'Wald: +3 Wissenschaft (inkl. Mathematik, Elektrizität)', 'so liest sich das: Künstliche Intelligenz');
+  eq(DATA_EN.tech.containerlogistik[1], 'Sea: +2 food, +1 coin (incl. Fishing, Sailing)', '… und Containerlogistik englisch');
+}
+
 /* --- Griechische Technologiekosten aus dem Beispiel
    Das Beispiel im Regelheft rechnet mit den alten Kosten (Schrift 1, Biologie 15). Die gelten
    seit v82 nur noch im Tutorial – das Beispiel läuft deshalb im alten Techtree. Dieselben
@@ -223,7 +313,9 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 /* --- Bürokratie (v86, Anweisung des Autors): verdoppelt auch Handelsrouten, Ökologie und den
    Nahrungsposten der Gentechnik – „sie gehören eigentlich zur Hauptstadt". Wallfahrt und
    Seemacht nicht (nicht genannt). Bei einer Revolution produziert die Hauptstadt selbst
-   nichts; die drei Posten laufen weiter, verdoppelt (Auslegung, ANNAHMEN v86). */
+   nichts; die drei Posten laufen weiter, verdoppelt (Auslegung, ANNAHMEN v86).
+   Seit v88 (Anweisung des Autors) sagt die Übersicht nicht mehr dazu, dass die Bürokratie
+   mitgerechnet ist – keine Zeile trägt mehr `note`, der Name bleibt der Name. */
 {
   const zeile = (X, n) => (incomeBreakdown(X, 0).extra || []).find(e => e.name === n);
   const summeGehtAuf = X => {
@@ -240,10 +332,10 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     X.roads[key(nb[0], nb[1])] = stufe;
     return X;
   };
-  const route = (techs, stufe) => { const z = zeile(mitRoute(techs, stufe), 'Handelsrouten'); return z && [z.y, z.note]; };
-  eq(route([], 1), [[1, 1, 1], null], 'Handelsroute über Straße: +1');
-  eq(route(['buerokratie'], 1), [[2, 2, 2], 'Bürokratie ×2'], 'mit Bürokratie +2, und die Zeile sagt warum');
-  eq(route(['buerokratie'], 2), [[4, 4, 4], 'Bürokratie ×2'], 'über Eisenbahn mit Bürokratie +4');
+  const route = (techs, stufe) => { const z = zeile(mitRoute(techs, stufe), 'Handelsrouten'); return z && [z.y, 'note' in z]; };
+  eq(route([], 1), [[1, 1, 1], false], 'Handelsroute über Straße: +1');
+  eq(route(['buerokratie'], 1), [[2, 2, 2], false], 'mit Bürokratie +2 – ohne Zusatz am Namen (v88)');
+  eq(route(['buerokratie'], 2), [[4, 4, 4], false], 'über Eisenbahn mit Bürokratie +4');
   eq(summeGehtAuf(mitRoute(['buerokratie'], 2)), true, 'Zeilen und Summe gehen auf (Handelsroute, Bürokratie)');
   {
     // Revolution: Hauptstadt still, die Handelsroute bleibt – verdoppelt
@@ -261,7 +353,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     eq(b.total[0], 2 * a.total[0], 'eine Stadt: Bürokratie verdoppelt die Wissenschaft');
     eq([g(ohne).y[1], g(mit).y[1]], [Math.floor(a.total[0] / GENE_SCI_PER_FOOD), 2 * Math.floor(b.total[0] / GENE_SCI_PER_FOOD)],
       'Gentechnik: Bürokratie verdoppelt den Posten zusätzlich');
-    eq([g(ohne).note, g(mit).note], [null, 'Bürokratie ×2'], 'die Zeile sagt es');
+    eq(['note' in g(ohne), 'note' in g(mit)], [false, false], 'die Zeile sagt es nicht (v88)');
     eq(summeGehtAuf(mit), true, 'Zeilen und Summe gehen auf (Gentechnik, Bürokratie)');
   }
   // Nicht genannt, nicht verdoppelt: Wallfahrt und Seemacht
@@ -316,9 +408,23 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(attackValue(S, 0, 2), 14, 'zwei Armeen greifen mit 14 an (7 je Armee)');
   eq(attackValue(S, 0, 3), 21, 'drei Armeen mit 21');
   S.players[0].techs.belagerung = true;
-  eq(attackValue(S, 0, 2), 24, 'Belagerungsmaschinen: (7+5) je Armee');
+  eq(attackValue(S, 0, 2), 20, 'Belagerungsmaschinen: (7+3) je Armee (v88; bis v87 +5)');
   S.players[0].techs.dynamit = true;
-  eq(attackValue(S, 0, 2), 48, 'Dynamit verdoppelt danach');
+  eq(attackValue(S, 0, 2), 40, 'Dynamit verdoppelt danach');
+  // Die KI rechnet mit demselben Wert, und die Texte nennen ihn (v88)
+  eq([kiAttackPer(S, 0, 7), SIEGE_BONUS], [20, 3], 'KI: (7+3)·2 je Armee mit Dynamit');
+  const de = DATA_DE ? DATA_DE.tech.belagerung[1] : TECH_BY_KEY.belagerung.e;
+  eq([de, DATA_EN.tech.belagerung[1]], [`+${SIEGE_BONUS} Angriff gegen Städte`, `+${SIEGE_BONUS} attack against cities`],
+    'Techtext nennt den Bonus, deutsch und englisch');
+  /* Das Tutorial rechnet ihn vor: Belagerungsmaschinen und 3 Macht gegen Verteidigung 3. Die
+     Zahlen stehen fest im Text (deutsch in tutorial.js, englisch in i18n.js) – hier gebunden. */
+  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
+  const enTut = Object.entries(UI_EN).filter(([k]) => /Belagerungsmaschinen<\/b> forschen \(/.test(k)).map(([, v]) => v);
+  eq([[...tut.matchAll(/Belagerungsmaschinen<\/b> forschen \(\+(\d+) Angriff gegen Städte\)/g)].map(m => +m[1]),
+    [...tut.matchAll(/greift deine Armee mit <b>(\d+) statt 3<\/b>/g)].map(m => +m[1])],
+    [[SIEGE_BONUS, SIEGE_BONUS], [3 + SIEGE_BONUS, 3 + SIEGE_BONUS]], 'Tutorial (deutsch, lang und kurz): +3, also 6 statt 3');
+  eq([enTut.length, enTut.every(v => v.includes(`(+${SIEGE_BONUS} attack against cities)`) &&
+    v.includes(`<b>${3 + SIEGE_BONUS} instead of 3</b>`))], [2, true], 'Tutorial (englisch): dieselben Zahlen');
 }
 
 /* ==================================================== Bot-Armeeprioritäten
@@ -775,11 +881,26 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 
 /* === Regeln der Hauptvariante (vormals v2) === */
 
-/* Singularität kostet 100 */
+/* Singularität kostet 120 (seit v88, Anweisung des Autors; bis v87 100) */
 {
   const S = mk('griechenland');
-  eq(SINGULARITY.c, 100, 'Singularität-Grundkosten 100');
-  eq(techCost(S, 0, SINGULARITY), 95, 'griechischer Rabatt auch auf Singularität');
+  eq(SINGULARITY.c, 120, 'Singularität-Grundkosten 120');
+  eq(techCost(S, 0, SINGULARITY), 115, 'griechischer Rabatt auch auf Singularität');
+  /* Das Tutorial (Russland, alter Techtree) nennt die Kosten fest im Text: ohne und mit der
+     Wissenschaftlichen Methode. Hier an die Regel gebunden, deutsch und englisch. */
+  const T0 = newGame({ seed: 7, oldTree: true, players: [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }] });
+  const ohne = techCost(T0, 0, SINGULARITY);
+  T0.players[0].techs.wiss_methode = true;
+  const mit = techCost(T0, 0, SINGULARITY);
+  eq([T0.oldTree, ohne, mit], [true, 120, 110], 'Tutorial: Singularität 120, mit der Methode 110');
+  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
+  eq([[...tut.matchAll(/<b>Singularität<\/b>: (\d+) Wissenschaft/g)].map(m => +m[1]),
+    [...tut.matchAll(/mit der wissenschaftlichen Methode (\d+)\./g)].map(m => +m[1])],
+    [[ohne, ohne], [mit]], 'Tutorialtexte (lang und kurz) nennen dieselben Kosten');
+  const en = Object.values(UI_EN).join('\n');
+  eq([[...en.matchAll(/<b>Singularity<\/b>: (\d+) science/g)].map(m => +m[1]),
+    [...en.matchAll(/, (\d+) with the scientific method\./g)].map(m => +m[1])],
+    [[ohne, ohne], [mit]], '… englisch ebenso');
 }
 
 /* Griechenland hat keinen Würfelbonus mehr, der Kostenrabatt bleibt */
@@ -2951,7 +3072,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const k4 = ['mathematik', 'papier', 'chemie', 'computertechnik'].map(k => TECH_BY_KEY[k]);
   eq(k4.map(t => techCost(M, 0, t)), k4.map((t, i) => techCost(N, 0, t) * [2, 3, 4, 5][i]),
     'Marathon: Antike ×2, Mittelalter ×3, Industrialisierung ×4, Moderne ×5');
-  eq([techCost(M, 0, SINGULARITY), techCost(N, 0, SINGULARITY)], [300, 100], 'Singularität 300 (v84; v83: 250)');
+  eq([techCost(M, 0, SINGULARITY), techCost(N, 0, SINGULARITY)], [300, 120], 'Singularität 300 (v84; v83: 250), normal 120 (v88)');
   const gr = M.players.findIndex(p => p.civ === 'griechenland');
   M.players[gr].drafted = ['griechenland:basis', 'russland:basis'];
   eq(techCost(M, gr, TECH_BY_KEY.papier), 6 * 3 - 4, 'Rabatte ziehen danach ab, im Marathon doppelt (v85: Papier 18 − 2 × 2)');
@@ -3528,8 +3649,8 @@ const duellKarte = (civA, civB, seed) => {
     const n = spiel(false, 'basis'), m = spiel(true, 'basis');
     eq([techCost(n.S, n.gr, papier), techCost(m.S, m.gr, papier)], [6 - 2, 18 - 4],
       'Günstige Forschung: Papier normal 6 − 2, im Marathon 18 − 4 (doppelt)');
-    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [100 - 5, 300 - 10],
-      'Singularität: normal 100 − 5, im Marathon 300 − 10');
+    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [120 - 5, 300 - 10],
+      'Singularität: normal 120 − 5, im Marathon 300 − 10');
     eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6, 18], 'ohne die Fähigkeit kein Rabatt');
     [n, m].forEach(x => { x.S.players[x.ru].techs.wiss_methode = true; x.S.players[x.gr].techs.wiss_methode = true; });
     eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6 - 4, 18 - 8],
@@ -3538,8 +3659,8 @@ const duellKarte = (civA, civB, seed) => {
     eq([techCost(n.S, n.gr, chemie), techCost(m.S, m.gr, chemie)],
       [Math.max(0, ch(n) - 3 - 6), Math.max(0, ch(m) - 6 - 12)],
       `beides zusammen, Chemie: normal ${ch(n)} − 3 − 6, im Marathon ${ch(m)} − 6 − 12`);
-    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [100 - 5 - 10, 300 - 10 - 20],
-      'Singularität mit beidem: normal 85, im Marathon 270');
+    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [120 - 5 - 10, 300 - 10 - 20],
+      'Singularität mit beidem: normal 105, im Marathon 270');
     // Texte: Bogen, Draft und HUD lesen abilEffect, der Techbaum techEffect
     const ab = abilById('griechenland:basis'), gt = abilById('griechenland:gratistech');
     eq(abilEffect(ab, m.S), 'Techs 2/4/6/8/10 günstiger (je Zeitalter, im Marathon doppelt)', 'Fähigkeitstext im Marathon');
@@ -3964,8 +4085,8 @@ const duellKarte = (civA, civB, seed) => {
   add('himeji', 2);
   eq(powerPrice(S, 0), 4, 'Burg Himeji senkt den Machtpreis um 1');
   add('kreml', 3);
-  eq(techCost(S, 0, SINGULARITY), 145, 'Kreml: Singularität +50 (100+50−5 Rabatt)');
-  eq(techCost(S, 1, SINGULARITY), 150, 'der Kreml verteuert Singularität für alle');
+  eq(techCost(S, 0, SINGULARITY), 165, 'Kreml: Singularität +50 (120+50−5 Rabatt)');
+  eq(techCost(S, 1, SINGULARITY), 170, 'der Kreml verteuert Singularität für alle');
   add('zeus', 1);
   eq(powerOf(S, 0), 3, 'Zeusstatue: +3 Macht');
 }
