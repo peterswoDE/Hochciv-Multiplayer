@@ -14,6 +14,26 @@
 /* the zoom buttons stay clickable while mp.js blocks the map for other players' turns */
 .mp-waiting .m-zoom{pointer-events:auto}
 
+/* ------------------------------------------------------------------ main menu (all sizes) */
+/* The menu is a fixed screen without scrolling and centres its column (margin:auto) – on short
+   screens the top and the bottom (language, version, legal footer) were cut off. It scrolls
+   now; an overflowing column starts at the top (auto margins become 0). */
+#screen-menu{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+#screen-menu .menu-wrap{flex:0 0 auto;width:100%;box-sizing:border-box}
+/* mp.js: login bar of the main menu – part of the column, not lying over its first lines */
+#mp-main-auth-container{position:static !important;order:-1;flex:0 0 auto}
+#mp-main-auth-container .btn{white-space:nowrap}
+#screen-menu .menu-wrap{padding-top:16px}
+/* short screens (laptops, phones in landscape): smaller title, tighter column */
+@media (max-height:760px){
+  #screen-menu .title{font-size:clamp(32px,7vh,52px)}
+  #screen-menu .title::after{margin-top:12px}
+  #screen-menu .lede{margin:12px 0 18px}
+  #screen-menu .menu-actions{gap:8px}
+  #screen-menu .menu-actions .btn{padding:10px 16px}
+  #screen-menu .menu-version{margin-top:16px}
+}
+
 /* ------------------------------------------------------------------ narrow (phone portrait) */
 
 /* Kopfzeile: name and round on one line each; the ability is in "Fähigkeiten" */
@@ -80,10 +100,9 @@ html.w-narrow .techgrid.m-tabbed[data-tab="3"] > .techcol:not(.m-f3){display:non
 html.w-narrow .techgrid.m-tabbed .tech{font-size:13px;padding:9px 10px}
 html.w-narrow .techgrid.m-tabbed .tech b{font-size:14px}
 
-/* mp.js: login bar of the main menu. On phones it is part of the column instead of lying over
-   the menu (logged in it is two lines high), and its content wraps: name first, buttons below. */
-html.w-narrow #mp-main-auth-container{position:static !important;order:-1;flex:0 0 auto;
-  padding:8px 12px !important;justify-content:flex-start !important}
+/* mp.js: login bar of the main menu. On phones (logged in it is two lines high) its content
+   wraps: name first, buttons below. */
+html.w-narrow #mp-main-auth-container{padding:8px 12px !important;justify-content:flex-start !important}
 html.w-narrow #mp-main-auth-container > div{flex-wrap:wrap;gap:6px 8px !important;width:100%;
   font-size:13px !important;line-height:1.35}
 html.w-narrow #mp-main-auth-container > div > span{flex:1 1 auto;min-width:0}
@@ -106,8 +125,6 @@ html.w-narrow #mp-players-container:not(.mp-log-minimized){left:8px;right:8px;wi
   .modal header{padding:4px 6px 4px 14px}
   /* Anmelden: the login page in an iframe asks for 550 px – let it scroll instead */
   #ov-body iframe{height:calc(100vh - 64px) !important;min-height:0 !important}
-  /* login bar of the main menu: in the column, not over the first lines of the menu */
-  #mp-main-auth-container{position:static !important;order:-1;flex:0 0 auto;padding:6px 16px !important}
-  #mp-main-auth-container .btn{white-space:nowrap}
+  #mp-main-auth-container{padding:6px 16px !important}
   #screen-menu .menu-wrap{padding-top:10px}
 }
