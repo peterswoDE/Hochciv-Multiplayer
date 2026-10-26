@@ -113,9 +113,8 @@ html.w-narrow #screen-menu .menu-wrap{padding-top:12px}
 html.w-narrow .mp-waiting-toast{top:calc(var(--hud-h,54px) + 6px) !important;font-size:13px;padding:4px 12px !important;
   white-space:nowrap}
 
-/* mp.js: Protokoll und Spielerliste unter der Kopfzeile, ausgeklappt fast volle Breite */
-html.w-narrow #mp-persistent-log-container,html.w-narrow #mp-players-container{top:calc(var(--hud-h,54px) + 8px)}
-html.w-narrow #mp-persistent-log-container:not(.mp-log-minimized),
+/* mp.js: Spielerliste unter der Kopfzeile, ausgeklappt fast volle Breite */
+html.w-narrow #mp-players-container{top:calc(var(--hud-h,54px) + 8px)}
 html.w-narrow #mp-players-container:not(.mp-log-minimized){left:8px;right:8px;width:auto}
 
 /* ------------------------------------------------------------------ short screens (phone landscape) */

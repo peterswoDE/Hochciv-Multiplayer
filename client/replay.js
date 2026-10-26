@@ -56,7 +56,6 @@ const REPLAY = {
         if (first) { closeModal(); startGameScreen(); } else { closeModal(); if (typeof closeSheet === 'function') closeSheet(); redraw(); }
         MP.syncTurnBlocker();
         MP.updateHudDelayed();
-        MP.updatePersistentLog();
         MP.updatePlayerList();
         this.drawBar();
         // the end screen (mp.js keeps the local game safe: no saveGame, "Zurück zum Menü" only leaves)

@@ -66,7 +66,6 @@ const MP = {
         S = state;
         MP.syncTurnBlocker();
         MP.updateHudDelayed();
-        MP.updatePersistentLog();
         MP.updatePlayerList();
         // round + player: also correct when the same player moves again (everyone else bots)
         const key = S.round + ':' + S.cur;
@@ -351,7 +350,8 @@ const MP = {
         this.setTurnClock(null);
         S = null;
         document.body.classList.remove('mp-waiting');
-        ['mp-persistent-log-container', 'mp-players-container'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+        const pl = $('mp-players-container');
+        if (pl) pl.style.display = 'none';
         const confetti = $('confetti');
         if (confetti) confetti.remove();
         closeModal();
@@ -371,15 +371,15 @@ const MP = {
     },
 
     /**
-     * Chat, player list and game log are separate floating panels. On small screens two open ones
-     * can cover each other: the one that just opened (keep) stays, the others collapse. Without
-     * keep, chat comes before the player list before the log (the log opens by itself).
+     * Chat and player list are separate floating panels. On small screens the two open ones can
+     * cover each other: the one that just opened (keep) stays, the other collapses. Without keep,
+     * the chat stays.
      */
     fitPanels: function (keep) {
         if (keep) this._lastPanel = keep;
         clearTimeout(this._fitTimer);
         this._fitTimer = setTimeout(() => {            // after the 0.2 s open transition
-            const open = ['mp-chat', 'mp-players-container', 'mp-persistent-log-container'].map($)
+            const open = ['mp-chat', 'mp-players-container'].map($)
                 .filter(el => el && el.offsetWidth && !el.classList.contains('mp-log-minimized'));
             if (keep) open.sort((a, b) => (b === keep) - (a === keep));
             const kept = [];
@@ -391,20 +391,6 @@ const MP = {
                 if (el.id === 'mp-chat' && typeof CHAT !== 'undefined') CHAT.cancelPing();
             }
         }, 250);
-    },
-
-    updatePersistentLog: function () {
-        if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
-        const plc = document.getElementById('mp-persistent-log-container');
-        const pl = document.getElementById('mp-persistent-log-content');
-        if (pl && plc && typeof logHtml === 'function') {
-            const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
-            const appears = plc.style.display !== 'block';
-            plc.style.display = 'block';
-            if (appears) this.fitPanels();
-            pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
-            if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
-        }
     },
 
     connect: function () {
@@ -1315,39 +1301,8 @@ window.addEventListener('DOMContentLoaded', () => {
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
         }
-        #mp-persistent-log-container {
-            position: fixed; right: 60px; top: 60px; width: 320px; max-width: calc(100% - 330px);
-            background: rgba(255,255,240,0.95); pointer-events: auto;
-            border: 2px solid #a89f91; border-radius: 6px; z-index: 29;   /* above map, bar and sheet (≤ 26), below the game's dialogs (30) */
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
-            transition: width 0.2s, height 0.2s, border-radius 0.2s;
-        }
-        #mp-persistent-log-container.mp-log-minimized {
-            width: auto !important;
-            height: 34px !important;
-            border-radius: 17px !important;
-            border: none !important;
-            background: #a89f91 !important;
-            cursor: pointer !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            padding: 0 12px !important;
-        }
+        /* collapsed panels (player list, chat in client/chat.js): a labelled pill */
         .mp-log-minimized::before { color: #fff; font-weight: bold; font-size: 13px; white-space: nowrap; }
-        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-header,
-        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-content {
-            display: none !important;
-        }
-        #mp-persistent-log-container.mp-log-minimized::before { content: "📝 " var(--mp-lbl-log, "Spiel-Log"); }
-        #mp-persistent-log-header {
-            background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
-        }
-        #mp-persistent-log-content {
-            max-height: 40vh; overflow-y: auto; padding: 10px; display: block;
-        }
-        #mp-persistent-log-content .logline { margin-bottom: 4px; }
-        #mp-persistent-log-content .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
         #mp-players-container {
             position: fixed; left: 10px; top: 60px; width: 240px;
             background: rgba(255,255,240,0.95); pointer-events: auto;
@@ -1410,34 +1365,7 @@ window.addEventListener('DOMContentLoaded', () => {
     `;
     document.head.appendChild(style);
 
-    const pLog = document.createElement('div');
-    pLog.id = 'mp-persistent-log-container';
-    pLog.innerHTML = `
-        <div id="mp-persistent-log-header">
-            <span id="mp-log-title">${TX('Spiel-Log')}</span>
-            <span id="mp-log-toggle-icon" style="font-size: 16px;">✖</span>
-        </div>
-        <div id="mp-persistent-log-content"></div>
-    `;
-    document.body.appendChild(pLog);
-
-    document.getElementById('mp-persistent-log-header').addEventListener('click', (e) => {
-        const plc = document.getElementById('mp-persistent-log-container');
-        plc.classList.add('mp-log-minimized');
-        e.stopPropagation(); // prevent container click from firing immediately
-    });
-
-    document.getElementById('mp-persistent-log-container').addEventListener('click', (e) => {
-        const plc = document.getElementById('mp-persistent-log-container');
-        if (plc.classList.contains('mp-log-minimized')) {
-            plc.classList.remove('mp-log-minimized');
-            MP.fitPanels(plc);
-            const pl = document.getElementById('mp-persistent-log-content');
-            if (pl) pl.scrollTop = pl.scrollHeight;
-        }
-    });
-
-    // Player list: collapsible like the game log, names open the player profile
+    // Player list: collapsible to a pill, names open the player profile
     const pList = document.createElement('div');
     pList.id = 'mp-players-container';
     pList.style.display = 'none';
@@ -2293,8 +2221,7 @@ const ASYNC = {
             MP.syncTurnBlocker();
             startGameScreen();
             MP.updateHudDelayed();
-            MP.updatePersistentLog();
-            MP.updatePlayerList();
+                MP.updatePlayerList();
             if (S.cur === MP.playerIndex && !S.over) MP.animDeinZug();
         } else {
             MP.applyState(view.state);
@@ -2360,7 +2287,6 @@ MP.drawLegalFooter = function () {
 MP.applyLang = function () {
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
     set('mp-live-btn', TX('Multiplayer'));
-    set('mp-log-title', TX('Spiel-Log'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
     const wait = document.querySelector('.mp-waiting-toast');
@@ -2374,7 +2300,7 @@ MP.applyLang = function () {
     const sumBtn = $('mp-summary-btn');
     if (sumBtn) sumBtn.title = TX('Seit deinem letzten Zug');
     document.documentElement.style.setProperty('--mp-on-turn', JSON.stringify(' ◂ ' + TX('am Zug')));
-    [['--mp-lbl-log', 'Spiel-Log'], ['--mp-lbl-players', 'Spieler'], ['--mp-lbl-chat', 'Chat']]
+    [['--mp-lbl-players', 'Spieler'], ['--mp-lbl-chat', 'Chat']]
         .forEach(([v, t]) => document.documentElement.style.setProperty(v, JSON.stringify(TX(t))));
     if (this.joinCode) this.showCred();
     this.drawLegalFooter();

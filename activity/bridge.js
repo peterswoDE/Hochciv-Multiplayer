@@ -236,8 +236,6 @@ function backToMenu() {
     MP.sessionId = null;
     MP.asyncId = null;
     document.body.classList.remove('mp-waiting');
-    const log = $('mp-persistent-log-container');
-    if (log) log.style.display = 'none';
     const cred = $('mp-cred-box');
     if (cred) cred.textContent = '';
     const cont = $('m-continue');
