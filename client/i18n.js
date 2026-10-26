@@ -160,6 +160,20 @@
         'Ich bin zurück': "I'm back",
         'Willkommen zurück – du spielst wieder selbst.': 'Welcome back – you are playing yourself again.',
         'KI (abwesend)': 'AI (away)',
+        // ── Spectator mode ───────────────────────────────────────────────────────────────
+        'Zuschauen': 'Watch',
+        'Zuschauer': 'Spectator',
+        'Du schaust zu': 'You are watching',
+        'Du schaust nur zu.': 'You are only watching.',
+        'Zuschauen beenden': 'Stop watching',
+        'Das Spiel beginnt, sobald der Host es startet – du siehst es dann von Anfang an.': 'The game begins when the host starts it – you will see it from the start.',
+        'Die Spieler legen ihre Startplättchen. Die Karte erscheint, sobald alle gelegt haben.': 'The players are placing their start tiles. The map appears once everyone has placed theirs.',
+        'Läuft · Runde %s': 'Running · round %s',
+        'Laufende öffentliche Spiele – zuschauen': 'Public games in progress – watch',
+        'Liste': 'List',
+        'Zuschauer können nicht schreiben.': 'Spectators cannot write.',
+        'Es schauen schon zu viele zu.': 'Too many people are watching already.',
+
         // ── In-game chat (client/chat.js, utils/chat.js) ─────────────────────────────────
         'Chat': 'Chat',
         'Nachricht …': 'Message …',
@@ -754,6 +768,8 @@
         'Noch nicht verbunden: %s': 'Not connected yet: %s',
         'Lobby erstellt – deine Gruppe tritt automatisch bei.': 'Lobby created – your group joins automatically.',
         'Lobby beigetreten.': 'Joined the lobby.',
+        'Die Lobby ist voll – du schaust zu.': 'The lobby is full – you are watching.',
+        'Das Spiel läuft schon – du schaust zu.': 'The game is already running – you are watching.',
         'Spiel läuft, lade Zustand …': 'Game is running, loading …',
         'Fehler %s': 'Error %s',
     };

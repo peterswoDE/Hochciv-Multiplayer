@@ -208,22 +208,12 @@ async function joinGroupLobby() {
         }, resolve)), 20000, 'Lobby-Verbindung');
         if (!ack || ack.error) throw new Error((ack && ack.error) || 'Verbindung zur Lobby fehlgeschlagen.');
 
-        // Same as mp.js after joining by code
-        MP.lobbyIndex = ack.playerIndex;
-        MP.active = true;
-        MP.players = ack.players;
-        MP.gameConfig = ack.gameConfig || {};
-        MP.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
-        const credBox = $('mp-cred-box');
-        if (credBox) credBox.textContent = `Code: ${MP.joinCode}  PW: ${MP.password}`;
-
-        if (ack.status === 'lobby') {
-            await MP.showLobby();
-            MP.setMode('waiting');
-            notify(seat.created ? 'Lobby erstellt – deine Gruppe tritt automatisch bei.' : 'Lobby beigetreten.');
-        } else {
-            notify('Spiel läuft, lade Zustand …');        // mp.js receives 'game:start'
-        }
+        // Same as mp.js after joining by code (or to watch: the game runs or the lobby is full)
+        if (ack.status === 'lobby') await MP.showLobby();
+        MP.enterSession(ack);
+        if (ack.spectator) notify(ack.status === 'lobby' ? 'Die Lobby ist voll – du schaust zu.' : 'Das Spiel läuft schon – du schaust zu.');
+        else if (ack.status === 'lobby') notify(seat.created ? 'Lobby erstellt – deine Gruppe tritt automatisch bei.' : 'Lobby beigetreten.');
+        else notify('Spiel läuft, lade Zustand …');        // mp.js receives 'game:start'
         step(`Lobby ${MP.joinCode}`);
     } catch (err) {
         report(`Lobby fehlgeschlagen: ${err && err.message}`, 'error');
