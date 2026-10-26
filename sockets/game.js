@@ -229,6 +229,9 @@ module.exports = function registerHandlers(io) {
             gc.playerCount = total;
             gc.duel = total === 2;
 
+            // Each player's own lobby choice, for a rematch ("random" is resolved below)
+            session.players.forEach(p => { p.choice = { civ: p.civ, ability: p.ability }; });
+
             // "Random nations for everyone": the host's setting overrides every player's choice
             if (gc.randomCivs) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
 
@@ -421,6 +424,23 @@ module.exports = function registerHandlers(io) {
                     console.error('Error starting game after placement', e);
                 }
             }
+        });
+
+        // ── Rematch (host only): the finished game goes back to its lobby ─────
+        on(socket, 'session:rematch', (_data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost()) return ack({ error: 'Nur der Host kann eine Revanche starten.' });
+            const r = sessions.resetForRematch(sessionId);
+            if (typeof r === 'string') return ack({ error: r });
+            ack({ ok: true });
+            // Players who left are no longer in the lobby; everyone else gets their new seat
+            session.players.forEach((p, i) => {
+                if (!p.socketId) return;
+                io.to(p.socketId).emit('session:rematch', {
+                    playerIndex: i, hostIndex: session.hostIndex,
+                    players: publicPlayers(session), gameConfig: session.gameConfig,
+                });
+            });
         });
 
         // ── Turn timer: an absent player takes their seat back from the KI ───

@@ -9,7 +9,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | Order | # | Feature | Live games | Rundenspiele | Status |
 |---|---|---|---|---|---|
 | 1 | F2 | [Turn timer](#f2-turn-timer) | ✔ | – (7-day rule stays) | ✅ |
-| 2 | F3 | [Rematch](#f3-rematch) | ✔ | – | ⬜ |
+| 2 | F3 | [Rematch](#f3-rematch) | ✔ | – | ✅ |
 | 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ⬜ |
 | 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ⬜ |
 | 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ⬜ |
@@ -56,7 +56,15 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - At the end of a game the host gets a *Rematch* button. The session goes back to the lobby: the same code, password and settings, a new seed, the connected humans in their seats, the KI seats removed (they are refilled at the start). Everyone's screen goes back to the lobby.
 - Players who have left are not in the new lobby. The Discord Activity keeps its instance in the same lobby.
 
-**Status:** ⬜ planned
+**Implementation**
+- `sockets/game.js`: at the start every lobby player keeps their own choice (`p.choice`, before "Zufall" and "random nations for everyone" are resolved). The host's `session:rematch` (only once the game is `finished`) calls `sessions.resetForRematch()` and sends every remaining player `session:rematch` with their new seat, the players and the settings.
+- `sessions.js` `resetForRematch()`: keeps the connected humans (re-indexed, with their choice of nation and ability, and no turn-timer or draft leftovers), drops KI seats and players who left, removes `map` / `setup` from the settings, draws a new seed and sets the session back to `lobby`.
+- `mp.js`: `addRematch()` on the end screen of a live game, a button for the host and a note for the others. In all multiplayer games it removes the game's own *Nochmal spielen*, which would start a local single-player game. `enterRematch()` clears the old game (`S`, log, player list, clock) and opens the lobby. The start-tile hook keeps the game's own `placeSeat` once, so a second tile-map game on the same page doesn't wrap the wrapper and send the tile twice.
+- Discord Activity: unchanged. Its instance still points to the session, which is a lobby again after the rematch. Anyone who opens the Activity between the end and the rematch gets a fresh lobby, as before.
+
+**Tests:** `tests/rematch/rematch.test.js`: no rematch during the game, host only, the end screen, the lobby after the rematch (code, seats, the player who left is gone, the "Zufall" choice is back, a new seed), and a second game starts.
+
+**Status:** ✅ on `development`
 
 ## F1 Chat, emotes and map pings
 
