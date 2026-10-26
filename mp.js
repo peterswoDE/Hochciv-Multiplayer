@@ -1522,7 +1522,7 @@ const ASYNC = {
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
             <div class="mpa-title"><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
-              ${member ? `<small class="mpa-c">${TX('Code')} ${g.joinCode}</small>` : ''}</div>
+              <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
             ${this.seatsHtml(g.seats, g.mySlot)}
             <div class="mpa-foot"><span>${info}</span><span>${btns.join(' ')}</span></div></div>`;
     },
@@ -1699,7 +1699,7 @@ const ASYNC = {
                 : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-jab"></select></label>`}`;
         }
         modal(TX('Rundenspiel beitreten'), `
-            <p><b>${this.mapName(c.mapKey, c)}</b> · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}</p>
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${g.engine ? ' · ' + this.esc(g.engine) : ''}</p>
             ${this.seatsHtml(g.seats, null)}
             ${pickHtml}
             <p class="sub">${TX('Du kannst sofort beitreten – ziehen kannst du, sobald du an der Reihe bist. Bis zu deinem ersten Zug kannst du ohne Folgen wieder aussteigen.')}</p>
@@ -1881,7 +1881,7 @@ const ASYNC = {
         const me = view.seats.find(s => s.slot === view.mySlot);
         const host = view.isHost;
         modal(TX('Rundenspiel'), `
-            <p><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}</p>
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${view.engine ? ' · ' + this.esc(view.engine) : ''}</p>
             ${this.seatsHtml(view.seats, view.mySlot)}
             <p>${text}</p>
             ${view.waitingFor ? `<p class="sub">${TX('Wartet auf: %s', this.esc(TXS(view.waitingFor)))}</p>` : ''}
