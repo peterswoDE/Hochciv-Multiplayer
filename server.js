@@ -227,6 +227,8 @@ io.engine.use(passport.session());
 
 registerGame(io);
 registerAsync(io);
+// Ranked matchmaking (sockets/match.js)
+require('./sockets/match')(io);
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

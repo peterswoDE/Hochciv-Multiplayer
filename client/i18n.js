@@ -180,6 +180,26 @@
         '%s übernimmt die Führung.': '%s takes the lead.',
         'Größter Sprung: %s, +%s Punkte.': 'Biggest jump: %s, +%s points.',
 
+        // ── Ranked matchmaking (client/matchmaking.js, sockets/match.js) ────────────────
+        'Gewertetes Spiel suchen': 'Find a ranked game',
+        'Für gewertete Spiele musst du angemeldet sein.': 'You need to be logged in for ranked games.',
+        'Suche Mitspieler mit ähnlicher Wertung …': 'Looking for players with a similar rating …',
+        'Gespielt wird auf der Originalkarte, mit zufälligen Nationen, 3 Minuten pro Zug und der KI auf der schwersten Stufe für freie Plätze. Deine Wertung: %s MMR.': 'Played on the original map, with random nations, 3 minutes per turn and the AI on its hardest level for free seats. Your rating: %s MMR.',
+        'Suche abbrechen': 'Stop searching',
+        'MMR-Spanne ±%s · %s in der Warteschlange': 'MMR range ±%s · %s in the queue',
+        'Spiel gefunden!': 'Game found!',
+        'Mitspieler:': 'Players:',
+        '%s von %s haben bestätigt.': '%s of %s have confirmed.',
+        'Annehmen': 'Accept',
+        'Angenommen – warte auf die anderen …': 'Accepted – waiting for the others …',
+        'Alle haben bestätigt – das Spiel startet, sobald alle da sind.': 'Everyone confirmed – the game starts as soon as everyone is there.',
+        'Jemand hat nicht bestätigt – du bist wieder in der Warteschlange.': 'Someone did not confirm – you are back in the queue.',
+        'Nicht rechtzeitig bestätigt.': 'Not confirmed in time.',
+        'Du hast abgelehnt.': 'You declined.',
+        'Verbindung verloren.': 'Connection lost.',
+        'Dieses Spiel gibt es nicht mehr.': 'This game no longer exists.',
+        'Zu wenige Spieler sind gekommen. Das Spiel wurde abgesagt.': 'Too few players came. The game was called off.',
+
         // ── "Since your last turn" (mp.js, utils/summary.js) ─────────────────────────────
         'Seit deinem letzten Zug': 'Since your last turn',
         'Runde %s bis %s': 'Rounds %s to %s',

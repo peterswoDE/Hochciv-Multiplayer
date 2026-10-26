@@ -384,6 +384,7 @@ const MP = {
         return new Promise((resolve) => {
             this.socket = io(this.serverUrl);
             if (typeof CHAT !== 'undefined') CHAT.attach(this.socket);       // client/chat.js
+            if (typeof MATCH !== 'undefined') MATCH.attach(this.socket);     // client/matchmaking.js
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
@@ -753,6 +754,8 @@ const MP = {
             if (mode === 'menu') {
                 h = `
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">${TX('Neues Spiel hosten (Server)')}</button>
+          ${typeof MATCH !== 'undefined' ? `<button class="btn wide" style="margin-bottom:10px" onclick="MATCH.start()" ${this.user ? '' : 'disabled'}>🔥 ${TX('Gewertetes Spiel suchen')}</button>
+          ${this.user ? '' : `<p class="sub" style="margin:-4px 0 10px">${TX('Für gewertete Spiele musst du angemeldet sein.')}</p>`}` : ''}
           <button class="btn wide" onclick="MP.setMode('public-list')">${TX('Öffentliche Lobbys suchen')}</button>
           <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">${TX('Privatem Spiel beitreten')}</button>
         `;

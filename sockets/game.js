@@ -108,6 +108,9 @@ module.exports = function registerHandlers(io) {
                 newHostIndex: s.hostIndex
             });
 
+            // A lobby of the matchmaking starts as soon as everyone is there (sockets/match.js)
+            if (s.match && s.match.onConnect) s.match.onConnect();
+
             // Marathon draft in progress: show the reconnecting player the draft screen
             if (s.status === 'draft' && s.draft) {
                 socket.emit('draft:update', engine.draftPayload(s));
@@ -232,157 +235,8 @@ module.exports = function registerHandlers(io) {
                 return ack({ error: 'Nur der Host kann das Spiel starten.' });
             if (session.status !== 'lobby')
                 return ack({ error: 'Spiel läuft bereits.' });
-            if (session.players.filter(p => p.kind === 'human').length < 1)
-                return ack({ error: 'Mindestens ein Spieler nötig.' });
-            sessions.recordActivity(sessionId);
-
-            const gc = session.gameConfig;
-            const isPlaettchen = gc.mapKey === 'plaettchen' || gc.mapKey === 'random';
-            const isCustom = gc.mapKey === 'eigene';
-            if (isCustom && !gc.customMap) return ack({ error: 'Es ist noch keine eigene Karte gewählt.' });
-            // Marathon (v83): the standard random map 24 × 36 (four realms) or a custom map set
-            // to the marathon rules; abilities are drafted
-            const isMarathon = gc.mapKey === 'marathon' || (isCustom && !!gc.customMap.marathon);
-            // nations chosen freely, also twice: tile map and custom maps (start points, not stars)
-            const freeCivs = isPlaettchen || isCustom;
-            if (isMarathon && !engine.marathonAvailable())
-                return ack({ error: 'Diese Hochciv-Version kennt den Marathon noch nicht.' });
-
-            /* Empires: playerCount in all, kiCount of them reserved for the KI; free human
-               seats are filled with KI as well. Older lobbies: 4 (or, "Nur Menschen", exactly the
-               humans). The map decides how many are possible (mapLimits in engine.js). */
-            const humans = session.players.length;
-            const total = Number.isInteger(gc.playerCount) ? gc.playerCount : (gc.noKi ? humans : Math.max(4, humans));
-            const kiSeats = Number.isInteger(gc.kiCount) ? gc.kiCount : 0;
-            const lim = engine.getEngine().mapLimits(isPlaettchen ? 'plaettchen' : gc.mapKey, gc.customMap);
-            if (total < lim.min || total > lim.max)
-                return ack({ error: lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.` });
-            if (humans > total - kiSeats)
-                return ack({ error: `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.` });
-            gc.playerCount = total;
-            gc.duel = total === 2;
-
-            // Each player's own lobby choice, for a rematch ("random" is resolved below)
-            session.players.forEach(p => { p.choice = { civ: p.civ, ability: p.ability }; });
-
-            // "Random nations for everyone": the host's setting overrides every player's choice
-            if (gc.randomCivs) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
-
-            // Check for duplicate civilizations (fixed maps: every nation once; "random" is
-            // resolved below to a nation nobody else has)
-            if (!freeCivs) {
-                const usedCivs = new Set();
-                for (const p of session.players) {
-                    if (p.civ === 'random' || p.civ === 'zufall') continue;
-                    if (usedCivs.has(p.civ)) return ack({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Auf dieser Karte sitzt jede Nation genau einmal.` });
-                    usedCivs.add(p.civ);
-                }
-            }
-
-            // Fill the empty seats with KI players up to the number of empires
-            while (session.players.length < total) {
-                session.players.push({
-                    index: session.players.length,
-                    kind: 'ki',
-                    kiLevel: engine.kiLevelFor(session.gameConfig.difficulty),
-                    name: `KI ${session.players.length}`,
-                    civ: 'random',
-                    ability: 'random',
-                    connected: false
-                });
-            }
-
-            // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
-            const engineApi = engine.getEngine();
-            const CIVS = engineApi.CIVS || [];
-            const allCivs = CIVS.map(c => c.k).filter(k => k !== 'random' && k !== 'zufall');
-            const pick = list => list[Math.floor(Math.random() * list.length)];
-            // Random nations: fixed maps take one nobody has; free maps the least used ones, so
-            // with more than four empires every nation comes once before any comes twice
-            session.players.forEach((p, i) => {
-                if (p.civ !== 'random' && p.civ !== 'zufall') return;
-                const used = k => session.players.filter((q, j) => j !== i && q.civ === k).length;
-                const fewest = Math.min(...allCivs.map(used));
-                const pool = allCivs.filter(k => freeCivs ? used(k) === fewest : used(k) === 0);
-                p.civ = pick(pool.length > 0 ? pool : allCivs);
-            });
-            session.players.forEach(p => {
-                if (p.ability !== 'random' && p.ability !== 'zufall') return;
-                const civDef = CIVS.find(c => c.k === p.civ) || { abilities: [{ k: 'basis' }] };
-                p.ability = pick(civDef.abilities).k;
-            });
-
-            engine.assignDoubles(session.players);
-
-            // Update clients immediately with finalized synced randomly rolled names & abilities
-            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
-
-            try {
-                if (isPlaettchen) {
-                    const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
-                    const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
-                    if (!plan) return ack({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
-
-                    // v66+: starting techs and wonder pools are rolled before placement
-                    // (the clients roll the same thing locally from the same seed).
-                    session.gameConfig.seed = seed;
-                    session.gameConfig.setup = engine.rollSetup(session, seed);
-
-                    // Computer seats place right away: the KI looks at what a human in its
-                    // seat would see (needs the setup above); bot rules are the fallback.
-                    const rnd = engineApi.mapRng(seed + 12345);
-                    const humanSeats = [];
-                    plan.seats.forEach(seat => {
-                        const spl = session.players[seat.idx];
-                        if (spl && spl.kind === 'ki') {
-                            const err = typeof engineApi.kiPlaceSeat === 'function'
-                                ? engineApi.kiPlaceSeat(plan, seat, { civ: spl.civ, ability: spl.ability }, session.gameConfig.setup) : 'no ki';
-                            if (err) engineApi.botPlaceSeat(plan, seat, rnd);
-                        } else if (spl && spl.kind === 'bot') {
-                            engineApi.botPlaceSeat(plan, seat, rnd);
-                        } else {
-                            humanSeats.push(seat);
-                        }
-                    });
-
-                    session.status = 'placement';
-                    session.placementState = {
-                        plan, seed, rnd,
-                        humanSeats,
-                        placedCount: 0
-                    };
-
-                    ack({ ok: true });
-                    const { setup: _setup, ...publicCfg } = session.gameConfig;
-                    io.to(sessionId).emit('placement:start', {
-                        cfg: publicCfg,
-                        seed,
-                        queue: humanSeats,
-                        at: 0,
-                        plan
-                    });
-                    return;
-                }
-
-                if (isMarathon) {
-                    // Map + starting techs first; everyone sees them and drafts abilities
-                    engine.startDraft(session);
-                    session.status = 'draft';
-                    ack({ ok: true });
-                    if (engine.isDraftDone(session)) return finishDraft(io, session);
-                    io.to(sessionId).emit('draft:update', engine.draftPayload(session));
-                    return;
-                }
-
-                session.state = engine.createGame(session);
-                session.status = 'playing';
-            } catch (err) {
-                console.error('Error creating game:', err);
-                return ack({ error: 'Fehler beim Spielstart.' });
-            }
-
-            ack({ ok: true });
-            emitGameStart(io, session);
+            const err = startGame(io, session);
+            ack(err ? { error: err } : { ok: true });
         });
 
         // ── Marathon draft: a human picks an ability ─────────────────────────
@@ -608,6 +462,165 @@ module.exports = function registerHandlers(io) {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Start the game of a lobby: check the settings, fill the free seats with KI, deal random
+ * nations and abilities, then the tile placement, the Marathon draft or the game itself.
+ * Called by the host's 'game:start' and by the matchmaking (sockets/match.js).
+ * Returns an error message (German) or null.
+ */
+function startGame(io, session) {
+    if (session.players.filter(p => p.kind === 'human').length < 1)
+        return 'Mindestens ein Spieler nötig.';
+    sessions.recordActivity(session.id);
+
+    const gc = session.gameConfig;
+    const isPlaettchen = gc.mapKey === 'plaettchen' || gc.mapKey === 'random';
+    const isCustom = gc.mapKey === 'eigene';
+    if (isCustom && !gc.customMap) return 'Es ist noch keine eigene Karte gewählt.';
+    // Marathon (v83): the standard random map 24 × 36 (four realms) or a custom map set
+    // to the marathon rules; abilities are drafted
+    const isMarathon = gc.mapKey === 'marathon' || (isCustom && !!gc.customMap.marathon);
+    // nations chosen freely, also twice: tile map and custom maps (start points, not stars)
+    const freeCivs = isPlaettchen || isCustom;
+    if (isMarathon && !engine.marathonAvailable())
+        return 'Diese Hochciv-Version kennt den Marathon noch nicht.';
+
+    /* Empires: playerCount in all, kiCount of them reserved for the KI; free human
+       seats are filled with KI as well. Older lobbies: 4 (or, "Nur Menschen", exactly the
+       humans). The map decides how many are possible (mapLimits in engine.js). */
+    const humans = session.players.length;
+    const total = Number.isInteger(gc.playerCount) ? gc.playerCount : (gc.noKi ? humans : Math.max(4, humans));
+    const kiSeats = Number.isInteger(gc.kiCount) ? gc.kiCount : 0;
+    const lim = engine.getEngine().mapLimits(isPlaettchen ? 'plaettchen' : gc.mapKey, gc.customMap);
+    if (total < lim.min || total > lim.max)
+        return lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.`;
+    if (humans > total - kiSeats)
+        return `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.`;
+    gc.playerCount = total;
+    gc.duel = total === 2;
+
+    // Each player's own lobby choice, for a rematch ("random" is resolved below)
+    session.players.forEach(p => { p.choice = { civ: p.civ, ability: p.ability }; });
+
+    // "Random nations for everyone": the host's setting overrides every player's choice
+    if (gc.randomCivs) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
+
+    // Check for duplicate civilizations (fixed maps: every nation once; "random" is
+    // resolved below to a nation nobody else has)
+    if (!freeCivs) {
+        const usedCivs = new Set();
+        for (const p of session.players) {
+            if (p.civ === 'random' || p.civ === 'zufall') continue;
+            if (usedCivs.has(p.civ)) return `Die Nation '${p.civ}' wurde mehrfach gewählt! Auf dieser Karte sitzt jede Nation genau einmal.`;
+            usedCivs.add(p.civ);
+        }
+    }
+
+    // Fill the empty seats with KI players up to the number of empires
+    while (session.players.length < total) {
+        session.players.push({
+            index: session.players.length,
+            kind: 'ki',
+            kiLevel: engine.kiLevelFor(session.gameConfig.difficulty),
+            name: `KI ${session.players.length}`,
+            civ: 'random',
+            ability: 'random',
+            connected: false
+        });
+    }
+
+    // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
+    const engineApi = engine.getEngine();
+    const CIVS = engineApi.CIVS || [];
+    const allCivs = CIVS.map(c => c.k).filter(k => k !== 'random' && k !== 'zufall');
+    const pick = list => list[Math.floor(Math.random() * list.length)];
+    // Random nations: fixed maps take one nobody has; free maps the least used ones, so
+    // with more than four empires every nation comes once before any comes twice
+    session.players.forEach((p, i) => {
+        if (p.civ !== 'random' && p.civ !== 'zufall') return;
+        const used = k => session.players.filter((q, j) => j !== i && q.civ === k).length;
+        const fewest = Math.min(...allCivs.map(used));
+        const pool = allCivs.filter(k => freeCivs ? used(k) === fewest : used(k) === 0);
+        p.civ = pick(pool.length > 0 ? pool : allCivs);
+    });
+    session.players.forEach(p => {
+        if (p.ability !== 'random' && p.ability !== 'zufall') return;
+        const civDef = CIVS.find(c => c.k === p.civ) || { abilities: [{ k: 'basis' }] };
+        p.ability = pick(civDef.abilities).k;
+    });
+
+    engine.assignDoubles(session.players);
+
+    // Update clients immediately with finalized synced randomly rolled names & abilities
+    io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
+
+    try {
+        if (isPlaettchen) {
+            const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
+            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
+            if (!plan) return 'Für diese Spielerzahl gibt es keine Plättchenkarte.';
+
+            // v66+: starting techs and wonder pools are rolled before placement
+            // (the clients roll the same thing locally from the same seed).
+            session.gameConfig.seed = seed;
+            session.gameConfig.setup = engine.rollSetup(session, seed);
+
+            // Computer seats place right away: the KI looks at what a human in its
+            // seat would see (needs the setup above); bot rules are the fallback.
+            const rnd = engineApi.mapRng(seed + 12345);
+            const humanSeats = [];
+            plan.seats.forEach(seat => {
+                const spl = session.players[seat.idx];
+                if (spl && spl.kind === 'ki') {
+                    const err = typeof engineApi.kiPlaceSeat === 'function'
+                        ? engineApi.kiPlaceSeat(plan, seat, { civ: spl.civ, ability: spl.ability }, session.gameConfig.setup) : 'no ki';
+                    if (err) engineApi.botPlaceSeat(plan, seat, rnd);
+                } else if (spl && spl.kind === 'bot') {
+                    engineApi.botPlaceSeat(plan, seat, rnd);
+                } else {
+                    humanSeats.push(seat);
+                }
+            });
+
+            session.status = 'placement';
+            session.placementState = {
+                plan, seed, rnd,
+                humanSeats,
+                placedCount: 0
+            };
+
+            const { setup: _setup, ...publicCfg } = session.gameConfig;
+            io.to(session.id).emit('placement:start', {
+                cfg: publicCfg,
+                seed,
+                queue: humanSeats,
+                at: 0,
+                plan
+            });
+            return null;
+        }
+
+        if (isMarathon) {
+            // Map + starting techs first; everyone sees them and drafts abilities
+            engine.startDraft(session);
+            session.status = 'draft';
+            if (engine.isDraftDone(session)) { finishDraft(io, session); return null; }
+            io.to(session.id).emit('draft:update', engine.draftPayload(session));
+            return null;
+        }
+
+        session.state = engine.createGame(session);
+        session.status = 'playing';
+    } catch (err) {
+        console.error('Error creating game:', err);
+        return 'Fehler beim Spielstart.';
+    }
+
+    emitGameStart(io, session);
+    return null;
+}
+
 
 /** A lobby player was removed at `removedIndex` – keep hostIndex pointing at the same player. */
 function fixHostAfterRemoval(session, removedIndex) {
@@ -932,3 +945,6 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
 
 // for tests/score
 module.exports.processGameOverMmr = processGameOverMmr;
+// for the matchmaking (sockets/match.js)
+module.exports.startGame = startGame;
+module.exports.publicPlayers = publicPlayers;
