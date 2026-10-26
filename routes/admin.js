@@ -9,6 +9,8 @@ const config = require('../config');
 const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
 const { deleteAccount } = require('../utils/deleteAccount');
+const engine = require('../engine-adapter');
+const { engineVersionOf } = require('../async/logic');
 
 const ROLES = ['user', 'admin', 'superadmin'];
 const isPrivileged = role => role === 'admin' || role === 'superadmin';
@@ -201,7 +203,7 @@ router.get('/lobbies', (req, res) => {
     res.json(list);
 });
 
-// --- Game overview: running Rundenspiele + every finished game (newest first, paged) ---
+// --- Game overview: every finished game (newest first, paged) ---
 const GAMES_PAGE = 50;
 router.get('/games', async (req, res) => {
     try {
@@ -213,20 +215,64 @@ router.get('/games', async (req, res) => {
         const { count, rows } = await Game.findAndCountAll({
             where, order: [['matchDate', 'DESC']], offset, limit: GAMES_PAGE,
         });
-        const running = offset || q ? null : (await AsyncGame.findAll({
+        res.json({ total: count, offset, pageSize: GAMES_PAGE, finished: rows });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+/* --- Running games: live games past the lobby and Rundenspiele that are not over, each with
+   the game version it is played with. Live games always run the current version; a
+   Rundenspiel keeps the version it was started on (engineVersionOf, async/logic.js), so the
+   counts per version show when an old HochCiv-vNN/ folder is no longer needed. --- */
+const LIVE_RUNNING = ['placement', 'draft', 'playing'];
+router.get('/running', async (req, res) => {
+    try {
+        const current = engine.version();
+        const live = Array.from(sessions.getAllSessions().values())
+            .filter(s => LIVE_RUNNING.includes(s.status))
+            .map(s => {
+                const S = s.state;
+                const turn = S && S.players && S.players[S.cur];
+                const seat = turn && s.players[turn.slot];
+                return {
+                    id: s.id, joinCode: s.joinCode, status: s.status, version: current,
+                    round: S ? S.round : null,
+                    turn: seat ? seat.name : null,
+                    createdAt: s.createdAt, lastActivity: s.lastActivity,
+                    players: s.players.map(p => ({ name: p.name, kind: p.kind, connected: !!p.connected })),
+                };
+            })
+            .sort((a, b) => b.lastActivity - a.lastActivity);
+
+        const rows = await AsyncGame.findAll({
             where: { status: { [Op.notIn]: ['finished', 'cancelled'] } },
             attributes: ['id', 'joinCode', 'status', 'round', 'isPublic', 'waitSince', 'createdAt', 'updatedAt', 'data'],
-            order: [['updatedAt', 'DESC']], limit: 200,
-        })).map(g => ({
-            id: g.id, joinCode: g.joinCode, status: g.status, round: g.round, isPublic: g.isPublic,
-            waitSince: g.waitSince, createdAt: g.createdAt, updatedAt: g.updatedAt,
-            ranked: !!(g.data.config && g.data.config.ranked),
-            players: (g.data.seats || []).map(seat => ({
-                name: seat.name || seat.civ, isBot: seat.kind === 'bot' || (seat.kind === 'ki' && !seat.replaced), replaced: !!seat.replaced,
-                userId: seat.replaced ? null : seat.userId || null,
-            })),
-        }));
-        res.json({ total: count, offset, pageSize: GAMES_PAGE, finished: rows, running });
+            order: [['updatedAt', 'DESC']],
+        });
+        const rundenspiele = rows.map(g => {
+            const d = g.data || {};
+            return {
+                id: g.id, joinCode: g.joinCode, status: g.status, round: g.round, isPublic: g.isPublic,
+                version: engineVersionOf(d), ranked: !!(d.config && d.config.ranked),
+                waitingFor: (d.meta && d.meta.waitingFor) || null, waitSince: g.waitSince,
+                createdAt: g.createdAt, updatedAt: g.updatedAt,
+                players: (d.seats || []).map(seat => ({
+                    name: seat.name || seat.civ, isBot: seat.kind === 'bot' || (seat.kind === 'ki' && !seat.replaced), replaced: !!seat.replaced,
+                    userId: seat.replaced ? null : seat.userId || null,
+                })),
+            };
+        });
+
+        // Games per version, the current one first, then the older ones as in GAME_DIRS
+        const order = [current, ...engine.OLD_VERSIONS];
+        const versions = {};
+        for (const v of order) versions[v] = { live: 0, rundenspiele: 0 };
+        live.forEach(g => { (versions[g.version] = versions[g.version] || { live: 0, rundenspiele: 0 }).live++; });
+        rundenspiele.forEach(g => { (versions[g.version] = versions[g.version] || { live: 0, rundenspiele: 0 }).rundenspiele++; });
+
+        res.json({ current, versions, live, rundenspiele });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
