@@ -4,6 +4,7 @@ const { User, Game, sequelize } = require('../models');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
 const config = require('../config');
+const chat = require('../utils/chat');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -88,6 +89,7 @@ module.exports = function registerHandlers(io) {
             socket.join(sessionId);
 
             ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex });
+            socket.emit('chat:history', { list: s.chat || [] });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
@@ -424,6 +426,16 @@ module.exports = function registerHandlers(io) {
                     console.error('Error starting game after placement', e);
                 }
             }
+        });
+
+        // ── Chat: text, emotes, map pings (utils/chat.js) ────────────────────
+        on(socket, 'chat:send', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            const r = chat.build({ slot: myIndex(), name: me.name }, data, `live:${sessionId}:${me.clientId}`);
+            if (r.error) return ack({ error: r.error });
+            session.chat = chat.remember(session.chat, r.msg, chat.LIVE_HISTORY);
+            ack({ ok: true });
+            io.to(sessionId).emit('chat:msg', r.msg);
         });
 
         // ── Rematch (host only): the finished game goes back to its lobby ─────

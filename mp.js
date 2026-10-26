@@ -373,6 +373,7 @@ const MP = {
         this.socketUserId = userId;
         return new Promise((resolve) => {
             this.socket = io(this.serverUrl);
+            if (typeof CHAT !== 'undefined') CHAT.attach(this.socket);       // client/chat.js
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
@@ -2104,6 +2105,7 @@ MP.applyLang = function () {
     this.drawLegalFooter();
     if ($('mp-main-auth-container') && $('mp-main-auth-container').innerHTML) this.drawMainMenuAuth();
     ASYNC.drawBadge();
+    if (typeof CHAT !== 'undefined') CHAT.applyLang();
 };
 const originalSwitchLang = window.switchLang;
 if (originalSwitchLang) {
