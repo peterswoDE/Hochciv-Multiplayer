@@ -824,7 +824,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderBlocked(list) {
         const ul = document.getElementById('blocked-list');
         ul.innerHTML = list.length ? list.map(b => `<li><span><strong>${esc(b.name)}</strong>
-            <small style="color:#888;">${b.id ? '' : tx('(Gast)')} ${b.at ? new Date(b.at).toLocaleDateString(HC_I18N.locale()) : ''}</small></span>
+            <small style="color:#888;">${b.at ? new Date(b.at).toLocaleDateString(HC_I18N.locale()) : ''}</small></span>
             <button class="btn small" data-unblock="${esc(b.key)}">${tx('Entblocken')}</button></li>`).join('')
             : `<li style="color:#666;">${tx('Du hast niemanden blockiert.')}</li>`;
     }
@@ -899,6 +899,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div><strong>${tx('Nachricht:')}</strong> ${esc(chatText(r.message))}</div>
             ${r.reason ? `<div><strong>${tx('Grund:')}</strong> ${esc(r.reason)}</div>` : ''}
+            ${r.auto ? `<div><strong>${tx('Gefunden:')}</strong> ${esc((r.matches || []).join(', '))} · ${esc(r.penalty === 'game'
+                ? tx('Folge: keine Texte mehr in diesem Spiel (2. Verstoß)') : tx('Folge: 5 Minuten keine Texte'))}</div>` : ''}
             <div class="report-chat">${chat}</div>
             ${closed}
             <div class="report-actions">${actions}</div>
@@ -926,7 +928,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadAdminReports(false);
     };
 
-    document.querySelector('[data-target="tab-admin-reports"]').addEventListener('click', () => loadAdminReports(false));
+    document.querySelector('[data-target="tab-admin-reports"]').addEventListener('click', () => { loadAdminReports(false); loadAdminWords(); });
+
+    // --- Admin: the chat word filter (routes/admin.js /words) ---
+    function renderAdminWords(list) {
+        const tbody = document.querySelector('#table-admin-words tbody');
+        tbody.innerHTML = list.length ? list.map(w => `<tr>
+            <td><strong>${esc(w.word)}</strong></td>
+            <td>${w.kind === 'allow' ? tx('Erlauben') : tx('Sperren')}</td>
+            <td>${w.kind === 'allow' ? '–' : (w.match === 'part' ? tx('auch als Wortteil') : tx('nur als ganzes Wort'))}</td>
+            <td>${esc(w.addedBy || '')}</td>
+            <td><button class="btn small" data-word="${esc(w.id)}" title="${tx('Entfernen')}">✕</button></td>
+        </tr>`).join('') : `<tr><td colspan="5">${tx('Noch keine eigenen Wörter – es gelten die eingebauten Listen.')}</td></tr>`;
+    }
+    async function loadAdminWords() {
+        try {
+            const res = await fetch('/api/admin/words');
+            if (res.ok) renderAdminWords((await res.json()).list || []);
+        } catch (_) { }
+    }
+    const wordMsg = (text, okay) => {
+        const el = document.getElementById('msg-admin-word');
+        el.textContent = text;
+        el.style.color = okay ? 'green' : 'red';
+    };
+    document.getElementById('admin-word-kind').addEventListener('change', e => {
+        document.getElementById('admin-word-match').disabled = e.target.value === 'allow';
+    });
+    document.getElementById('form-admin-word').addEventListener('submit', async e => {
+        e.preventDefault();
+        const input = document.getElementById('admin-word');
+        const res = await fetch('/api/admin/words', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: input.value, kind: document.getElementById('admin-word-kind').value, match: document.getElementById('admin-word-match').value }),
+        }).catch(() => null);
+        const data = res ? await res.json().catch(() => ({})) : {};
+        if (!res || !res.ok) return wordMsg(data.error ? txs(data.error) : tx('Netzwerkfehler.'), false);
+        input.value = '';
+        wordMsg(tx('Gespeichert. Der Filter gilt sofort.'), true);
+        renderAdminWords(data.list || []);
+    });
+    document.querySelector('#table-admin-words tbody').addEventListener('click', async e => {
+        const btn = e.target.closest('[data-word]');
+        if (!btn) return;
+        const res = await fetch('/api/admin/words/' + encodeURIComponent(btn.dataset.word), { method: 'DELETE' }).catch(() => null);
+        if (res && res.ok) renderAdminWords((await res.json()).list || []);
+    });
+    document.getElementById('form-admin-wordcheck').addEventListener('submit', async e => {
+        e.preventDefault();
+        const out = document.getElementById('msg-admin-wordcheck');
+        const res = await fetch('/api/admin/words/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: document.getElementById('admin-wordcheck').value }),
+        }).catch(() => null);
+        const data = res && res.ok ? await res.json() : null;
+        if (!data) { out.textContent = tx('Netzwerkfehler.'); out.style.color = 'red'; return; }
+        out.textContent = data.words.length ? tx('Würde gesperrt: %s', data.words.join(', ')) : tx('Kein Treffer – der Text würde gesendet.');
+        out.style.color = data.words.length ? 'var(--red)' : 'green';
+    });
     document.getElementById('admin-reports-status').addEventListener('change', () => loadAdminReports(false));
     document.getElementById('btn-admin-reports-reload').addEventListener('click', () => loadAdminReports(false));
     document.getElementById('btn-admin-reports-more').addEventListener('click', () => loadAdminReports(true));

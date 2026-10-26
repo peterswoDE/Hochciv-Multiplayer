@@ -39,6 +39,8 @@ services:
       # Matchmaking tests (tests/match/match.test.js): groups of 2-3 form after this wait, confirm within this time
       - MATCH_GROUP_WAIT_MS=${MATCH_GROUP_WAIT_MS:-20000}
       - MATCH_CONFIRM_MS=${MATCH_CONFIRM_MS:-20000}
+      # Chat word filter tests (tests/filter/filter.test.js): the first writing timeout (default 5 minutes)
+      - CHAT_MUTE_MS=${CHAT_MUTE_MS:-300000}
     env_file:
       - path: secrets.env
         required: false

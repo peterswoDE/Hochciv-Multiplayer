@@ -5,13 +5,14 @@
  *   npm i --no-save playwright-core
  *   node tests/reports/reports.test.js [http://localhost:3000]
  *
- * Live game with two accounts (A, B) and a guest (C):
- *   · tapping another player's message opens the menu (report, block), own messages have none;
+ * Live game with two accounts (A, B) and a guest (C, emotes only):
+ *   · tapping another player's message opens the menu (report and block for an account, report
+ *     and mute for a guest), own messages have none;
  *   · a report stores the message, the reason and the server's chat history; twice, an own
  *     message or an unknown one are refused; a guest can report too;
- *   · blocking hides the messages (also new ones and pings) and is kept with A's account –
- *     accounts by id, guests by name; the list is under the chat and on the account page,
- *     where it can be undone.
+ *   · blocking B hides the messages (also new ones and pings) and is kept with A's account; the
+ *     list is under the chat and on the account page, where it can be undone. Guests can't be
+ *     blocked, only muted for this game (this tab) – also undone under the chat.
  * Admin tab "Meldungen": the open count, the history with the reported message marked, closing
  * with a note, the closed list, reopening, banning the account; non-admins get 403.
  * Rundenspiel: reporting through async:report, and no reports from outside a private game.
@@ -116,7 +117,7 @@ async function run(browser, users, sources) {
 
     await emit(a, 'chat:send', { kind: 'text', text: 'Hallo zusammen' });
     await emit(b, 'chat:send', { kind: 'text', text: 'Du bist ein Depp' });
-    await emit(c, 'chat:send', { kind: 'text', text: 'Hallo vom Gast' });
+    await emit(c, 'chat:send', { kind: 'emote', emote: '👋' });
     await a.click('#mp-chat');
     await until(async () => (await chatRows(a)).length === 3);
     const msgs = await a.evaluate(() => CHAT.list.map(m => ({ id: m.id, name: m.name, uid: m.uid || null })));
@@ -134,6 +135,10 @@ async function run(browser, users, sources) {
     ok(menu.items.join('|') === '🚩 Nachricht melden|🚫 Spieler blockieren', 'menu: report and block', menu.items.join('|'));
     await a.keyboard.press('Escape');
     ok(await a.$eval('#mp-chat-menu', el => el.hidden), 'menu: Escape closes it');
+    await a.click('#mp-chat-list .mp-chat-msg:nth-child(3)');
+    const guestItems = await a.$$eval('#mp-chat-menu [data-item]', bs => bs.map(b => b.textContent.trim()));
+    ok(guestItems.join('|') === '🚩 Nachricht melden|🔇 Für dieses Spiel stummschalten', 'menu: a guest can be muted for this game, not blocked', guestItems.join('|'));
+    await a.keyboard.press('Escape');
 
     // report through the menu, with a reason
     await a.click('#mp-chat-list .mp-chat-msg:nth-child(2)');
@@ -161,21 +166,24 @@ async function run(browser, users, sources) {
     ok(byGuest.ok && reportRows(`"sourceId" = '${cred.sessionId}' AND "reporterId" IS NULL AND "reporterName" = 'Cleo' AND length(reason) = 300`) === '1',
         'report: a guest can report (reason cut to 300)', JSON.stringify(byGuest));
 
-    // block B (an account) and C (a guest) – kept with A's account
+    // block B (an account, kept with A's account), mute C (a guest, this game only)
     await a.click('#mp-chat-list .mp-chat-msg:nth-child(2)');
     await a.click('#mp-chat-menu [data-item="block"]');
     await until(async () => (await chatRows(a)).every(r => !r.includes('Depp')));
     ok((await chatRows(a)).every(r => !r.includes('Depp')), 'block: B\'s messages are hidden');
     await a.click('#mp-chat-list .mp-chat-msg:not(.me)');
-    await a.click('#mp-chat-menu [data-item="block"]');
+    await a.click('#mp-chat-menu [data-item="mute"]');
     await until(async () => (await chatRows(a)).length === 1);
-    ok((await chatRows(a)).join() === `${ua.name} Hallo zusammen`, 'block: the guest\'s messages are hidden too', (await chatRows(a)).join(' | '));
+    ok((await chatRows(a)).join() === `${ua.name} Hallo zusammen`, 'mute: the guest\'s emote is hidden', (await chatRows(a)).join(' | '));
     const blockedDb = sql(`SELECT "blockedPlayers" FROM users WHERE id = '${ua.id}'`);
     const bl = JSON.parse(blockedDb);
-    ok(bl.length === 2 && bl[0].id === ub.id && bl[0].name === ub.name && bl[1].id === null && bl[1].name === 'Cleo', 'block: kept with A\'s account (account by id, guest by name)', blockedDb);
+    ok(bl.length === 1 && bl[0].id === ub.id && bl[0].name === ub.name, 'block: kept with A\'s account (the guest is not in it)', blockedDb);
     ok(await a.evaluate(() => localStorage.getItem('hochciv.chat.blocked') === null), 'block: nothing on the device for an account');
+    ok(await a.evaluate(() => Object.keys(sessionStorage).some(k => k.startsWith('hochciv.chat.gamemute.'))), 'mute: kept in this tab for this game');
     const foot = (await a.textContent('#mp-chat-blocked')).replace(/\s+/g, ' ');
-    ok(foot.includes(ub.name) && foot.includes('Cleo'), 'block: both listed under the chat', foot);
+    ok(foot.includes(`Blockiert: ${ub.name}`) && foot.includes('Stumm in diesem Spiel: Cleo'), 'block and mute: both listed under the chat', foot);
+    const guestBlock = await ca.request.post(BASE + '/api/account/blocks', { data: { name: 'Cleo' } });
+    ok(guestBlock.status() === 400 && (await guestBlock.json()).error === 'Gäste kannst du nicht blockieren.', 'block: the server refuses blocking a guest');
 
     // new messages and pings of a blocked player don't show
     await b.evaluate(() => { const m = document.getElementById('mp-chat'); if (m.classList.contains('mp-log-minimized')) m.click(); });
@@ -193,10 +201,10 @@ async function run(browser, users, sources) {
     await acc.goto(BASE + '/client/account.html');
     await acc.waitForSelector('#blocked-list [data-unblock]');
     const listed = await acc.$$eval('#blocked-list li', lis => lis.map(li => li.textContent.replace(/\s+/g, ' ').trim()));
-    ok(listed.length === 2 && listed[0].startsWith(ub.name) && /^Cleo \(Gast\)/.test(listed[1]), 'account page: lists the blocked players', listed.join(' | '));
-    await acc.click('#blocked-list li:nth-child(2) [data-unblock]');
-    await until(async () => (await acc.$$('#blocked-list li')).length === 1);
-    ok(JSON.parse(sql(`SELECT "blockedPlayers" FROM users WHERE id = '${ua.id}'`)).length === 1, 'account page: unblock removes it from the account');
+    ok(listed.length === 1 && listed[0].startsWith(ub.name), 'account page: lists the blocked player', listed.join(' | '));
+    await acc.click('#blocked-list li:nth-child(1) [data-unblock]');
+    await until(async () => /niemanden/.test(await acc.textContent('#blocked-list')));
+    ok(sql(`SELECT "blockedPlayers" FROM users WHERE id = '${ua.id}'`) === '[]', 'account page: unblock removes it from the account');
 
     // non-admins don't see reports
     ok((await ca.request.get(BASE + '/api/admin/reports')).status() === 403, 'admin: reports are 403 for a normal user');
@@ -242,11 +250,15 @@ async function run(browser, users, sources) {
     ok(reportRows(`"sourceId" = '${cred.sessionId}' AND status = 'open'`) === '1', 'admin: a report can be reopened');
 
     // unblock in the chat footer: B's messages are back
+    // under the chat: unmute the guest; B (unblocked on the account page) after a new load of the list
     await a.click('#mp-chat');
+    await a.click('#mp-chat-blocked [data-unmute]');
+    await until(async () => (await chatRows(a)).some(r => r === 'Cleo 👋'));
+    ok((await chatRows(a)).some(r => r === 'Cleo 👋'), 'unmute in the chat: the guest\'s emote is back');
     await a.click('#mp-chat-blocked [data-unblock]');
     await until(async () => (await chatRows(a)).some(r => r.includes('Depp')));
     ok((await chatRows(a)).some(r => r.includes('Depp')), 'unblock in the chat: B\'s earlier messages are back');
-    ok(sql(`SELECT "blockedPlayers" FROM users WHERE id = '${ua.id}'`) === '[]', 'unblock in the chat: removed from the account');
+    ok(await a.$eval('#mp-chat-blocked', el => el.hidden), 'nothing blocked or muted any more');
 
     for (const ctx of [ca, cb, cc]) await ctx.close();
     return errors;
