@@ -23,6 +23,7 @@
  * 'bot' only appears in games created before KI fill-ins.
  */
 const engine = require('../engine-adapter');
+const { renameInState } = require('../utils/rename');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and are v83. New games get the current one. */
@@ -637,11 +638,14 @@ function removeUser(g, userId) {
     }
     for (const s of g.seats.filter(x => x.userId === userId)) {
         const old = s.name;
-        // their chat messages go with the account
+        // their chat messages go with the account, the statistics lose the name
         if (g.chat) g.chat = g.chat.filter(m => !(m.slot === s.slot && m.name === old));
+        if (g.stats && g.stats.players) g.stats.players.forEach(p => { if (p.name === old) p.name = DELETED_NAME; });
         Object.assign(s, { userId: null, name: DELETED_NAME });
         const i = stateIndex(g, s.slot);
         if (i >= 0 && g.state.players[i].name) g.state.players[i].name = DELETED_NAME;
+        // and in the game's texts (log, result) – the earlier turns' replay frames follow in the service
+        if (old && g.state) renameInState(g.state, old, DELETED_NAME);
         if (old && g.result) {
             for (const r of g.result.players || []) if (r.name === old) r.name = DELETED_NAME;
             if (g.result.winners) g.result.winners = g.result.winners.map(n => n === old ? DELETED_NAME : n);
@@ -721,6 +725,8 @@ function view(g, userId) {
         void owners; void wonders;
         out.stats = stats;
     }
+    // the stored match and its replay (GET /api/games/:id[/replay])
+    if (g.status === 'finished' && g.result && g.result.gameId) out.record = { id: g.result.gameId, replay: !!g.result.replay };
     if (g.state) {
         out.state = g.state;
         out.myIndex = mine ? stateIndex(g, mine.slot) : -1;

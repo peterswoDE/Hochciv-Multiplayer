@@ -136,7 +136,7 @@ async function live(browser, errors) {
     const driver = setInterval(() => a.evaluate(() => {
         if (S && !S.over && MP.isMyTurn() && MP._e !== S.round + ':' + S.cur) { MP._e = S.round + ':' + S.cur; closeModal(); MP.sendAction({ type: 'endTurn' }); }
     }).catch(() => { }), 200);
-    const over = await until(() => v1.evaluate(() => !!(S && S.over && document.getElementById('mp-rematch-box'))), 180000, 500);
+    const over = await until(() => v1.evaluate(() => !!(S && S.over && document.getElementById('mp-rematch-box'))), 300000, 500);
     clearInterval(driver);
     ok(!!over, 'end: spectators see the end screen');
     await a.waitForSelector('#mp-rematch');

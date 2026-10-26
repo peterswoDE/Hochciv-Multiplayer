@@ -3,8 +3,9 @@
  *
  * Creates a real Rundenspiel of two accounts through async/service.js, then lets the 7-day
  * takeover (shortened to 1 ms here) hand both seats to the KI, which plays the game to its end –
- * every step goes through the service's own save path, which records the statistics. Prints the
- * stored statistics, the finished view and the match record as JSON.
+ * every step goes through the service's own save path, which records the statistics and the
+ * replay frames. Prints the stored statistics, the finished view, the match record and its
+ * replay as JSON (used by tests/stats and tests/replay).
  *
  * Env: USER_A, NAME_A, USER_B, NAME_B.
  */
@@ -12,7 +13,7 @@ process.env.ASYNC_TIMEOUT_MS = '1';
 process.env.ASYNC_REMINDER_MS = '1';
 const service = require('./async/service');
 const L = require('./async/logic');
-const { AsyncGame, Game } = require('./models');
+const { AsyncGame, Game, Replay, ReplayFrame } = require('./models');
 
 (async () => {
     const a = { id: process.env.USER_A, username: process.env.NAME_A };
@@ -39,6 +40,10 @@ const { AsyncGame, Game } = require('./models');
         lastScores: stats && stats.rounds[stats.rounds.length - 1].p.map(p => p.s),
         viewStats: !!view.stats && !view.stats.owners && view.stats.rounds.length,
         game: game && { id: game.id, rounds: game.stats && game.stats.rounds.length, owners: !!(game.stats && game.stats.owners) },
+        // the replay (utils/replay.js): stored for the match, the frame rows gone, the view links it
+        record: view.record || null,
+        replayFrames: game ? ((await Replay.findByPk(game.id)) || {}).frames || 0 : 0,
+        framesLeft: await ReplayFrame.count({ where: { gameKey: made.id } }),
     }));
     process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });
