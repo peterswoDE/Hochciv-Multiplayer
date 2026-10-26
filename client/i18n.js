@@ -840,6 +840,8 @@
         'Bitte gib zur Bestätigung deinen Benutzernamen ein.': 'Please enter your username to confirm.',
         'Ungültiger Code.': 'Invalid code.',
         'Ungültiger Code': 'Invalid code',
+        'Zu viele falsche Codes. Versuche es in 15 Minuten erneut.': 'Too many wrong codes. Try again in 15 minutes.',
+        'Anfrage von einer fremden Seite abgelehnt.': 'Request from another site refused.',
         'Ungültiger Code oder E-Mail.': 'Invalid code or e-mail.',
         'Registrierungen sind derzeit deaktiviert.': 'Registration is currently turned off.',
         'Benutzername: 3–30 Zeichen, nur Buchstaben, Ziffern, _ und -.': 'Username: 3–30 characters, only letters, digits, _ and -.',

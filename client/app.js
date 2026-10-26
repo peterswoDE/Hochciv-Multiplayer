@@ -149,22 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok && !data.error) {
                 if (data.mfaRequired) {
-                    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-                    document.getElementById('form-mfa').classList.add('active');
-                    document.getElementById('form-mfa').style.display = 'block';
-
-                    const totpSection = document.getElementById('mfa-totp-section');
-                    const passkeySection = document.getElementById('mfa-passkey-section');
-                    const emailSection = document.getElementById('mfa-email-section');
-
-                    if (data.methods.totp) totpSection.style.display = 'block';
-                    else totpSection.style.display = 'none';
-
-                    if (data.methods.passkey) passkeySection.style.display = 'block';
-                    else passkeySection.style.display = 'none';
-
-                    if (data.methods.email) emailSection.style.display = 'block';
-                    else emailSection.style.display = 'none';
+                    showMfa(data.methods);
                 } else {
                     sessionStorage.removeItem('hochciv_guest');
                     await fetchMe();
@@ -178,6 +163,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- MFA Logic ---
+    /** The second-factor form with the account's methods (after the password or Google/Discord). */
+    function showMfa(methods) {
+        document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+        document.getElementById('form-mfa').classList.add('active');
+        document.getElementById('form-mfa').style.display = 'block';
+        document.getElementById('mfa-totp-section').style.display = methods.totp ? 'block' : 'none';
+        document.getElementById('mfa-passkey-section').style.display = methods.passkey ? 'block' : 'none';
+        document.getElementById('mfa-email-section').style.display = methods.email ? 'block' : 'none';
+    }
+
+    /** Back from Google/Discord with an account that has 2FA (?mfa=1): ask for the second factor. */
+    async function resumeMfa() {
+        try {
+            const res = await fetch('/api/auth/mfa-pending', { cache: 'no-store' });
+            if (res.ok) return showMfa((await res.json()).methods);
+        } catch (_) { }
+        showError('login-error', 'Die Anmeldung ist abgelaufen. Bitte starte sie erneut.');
+    }
+
     document.getElementById('form-mfa').addEventListener('submit', async (e) => {
         e.preventDefault();
         clearErrors();
@@ -460,5 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Init
-    fetchMe();
+    fetchMe().then(() => {
+        if (!currentUser && new URLSearchParams(window.location.search).get('mfa') === '1') resumeMfa();
+    });
 });

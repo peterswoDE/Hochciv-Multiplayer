@@ -98,6 +98,7 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 | `BASE_URL` | **yes** for OAuth/passkeys | Public URL, scheme and host only, e.g. `https://hochciv.example` – no path, no trailing characters. Used for OAuth callbacks, links in e-mails and as the passkey origin. A malformed value stops the server at startup. Without it, OAuth redirects to `http://localhost:3000` and fails. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
+| `ALLOWED_ORIGINS` | no | Further web origins (comma-separated, e.g. `https://second.example`) whose pages may use a visitor's login. By default only this site (the request's host or `BASE_URL`) and the Discord Activity may connect a socket or send changing API requests – see *Security notes*. |
 | `PROXY_NETWORK` | no | Docker network of the reverse proxy (default `nginx`). |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
 
@@ -235,3 +236,7 @@ You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`
 * Use a unique `SESSION_SECRET` and database password per installation.
 * The game code in `HochCiv/` runs on your server and in your players' browsers – review changes to it like server code.
 * Only superadmins can grant admin rights or change OAuth settings; admins manage normal users only.
+* **Origin check** (`utils/origin.js`): Socket.IO connections and changing API requests (POST, PUT, PATCH, DELETE) from a web page are only accepted from this site, the Discord Activity (`*.discordsays.com`) and `ALLOWED_ORIGINS`. The login cookie is `SameSite=Lax`, which other sites never get – but a page of the same site (e.g. `staging.hochciv.de` next to `hochciv.de`) would, and CORS doesn't cover WebSockets. Requests without an `Origin` header (the Android app's native code, scripts) pass.
+* **Second factor everywhere:** an account with 2FA (authenticator app, passkey, e-mail code) is asked for it after the password and after Google/Discord too (`/?oauth=mfa` opens the dialog; the Android app forwards the same reason). The first factor counts for 10 minutes.
+* **Authenticator codes** are limited per account: after 5 wrong codes in a row, no code is accepted for 15 minutes (login and re-confirmation). E-mail codes are burnt after 5 wrong tries.
+* **A ban** logs the account out everywhere, closes its open game connections and takes it off its live seats (the seat plays on as a guest's).

@@ -741,9 +741,10 @@ const MP = {
         }
     },
 
-    showAuthModal: function () {
+    /** The login dialog; `mfa`: only the second factor is missing (after Google/Discord, ?oauth=mfa). */
+    showAuthModal: function (mfa) {
         if (typeof modal === 'function') {
-            modal(TX('Anmelden'), '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
+            modal(TX('Anmelden'), `<iframe src="/client/index.html?modal=true${mfa ? '&mfa=1' : ''}" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>`);
             document.getElementById('overlay').classList.add('wide');
         }
     },
@@ -2359,7 +2360,11 @@ window.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(location.search);
         // Back from Google/Discord: the server redirects here with ?oauth=<result>
         const oauth = params.get('oauth');
-        if (oauth) {
+        if (oauth === 'mfa') {
+            // Google/Discord proved the account; its second factor is still missing
+            history.replaceState(null, '', location.pathname);
+            MP.showAuthModal(true);
+        } else if (oauth) {
             history.replaceState(null, '', location.pathname);
             const OAUTH_MESSAGES = {
                 ok: MP.user ? TX('Angemeldet als %s.', MP.user.username) : TX('Anmeldung erfolgreich.'),

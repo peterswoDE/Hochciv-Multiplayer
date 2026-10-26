@@ -11,6 +11,7 @@ const bcrypt = require('bcryptjs');
 const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
 const profanity = require('../utils/profanity');
+const { detachUser } = require('../utils/detachUser');
 const engine = require('../engine-adapter');
 const { engineVersionOf } = require('../async/logic');
 
@@ -135,10 +136,12 @@ router.post('/users/:id/action', async (req, res) => {
         if (!mayManage(req.user, targetUser)) return res.status(403).json({ error: 'Nur für Super-Administratoren' });
 
         let logoutEverywhere = false;
+        let detach = false;
         if (action === 'ban') {
             if (targetUser.id === req.user.id) return res.status(400).json({ error: 'Du kannst dich nicht selbst bannen.' });
             targetUser.isBanned = true;
             logoutEverywhere = true;
+            detach = true;              // also out of running games and open connections
         } else if (action === 'unban') {
             targetUser.isBanned = false;
         } else if (action === 'set_mmr') {
@@ -170,6 +173,7 @@ router.post('/users/:id/action', async (req, res) => {
 
         await targetUser.save();
         if (logoutEverywhere) await destroyOtherSessions(sequelize, targetUser.id);
+        if (detach) await detachUser(req.app.locals.io, targetUser.id);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: 'Serverfehler' });

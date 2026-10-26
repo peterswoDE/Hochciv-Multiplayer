@@ -17,6 +17,7 @@ const { sequelize, User } = require('./models');
 const { Op } = require('sequelize');
 const { refreshOAuthStrategies } = require('./utils/oauth');
 const { str } = require('./utils/auth');
+const { checkOrigin, allowSocket } = require('./utils/origin');
 
 // ── Passport Configuration ──────────────────────────────────────────────────
 passport.use(new LocalStrategy(
@@ -81,6 +82,8 @@ if (process.env.NODE_ENV === 'production') {
 const pgPool = new pg.Pool({ connectionString: dbUrl });
 
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
+// Changing requests only from this site's pages (utils/origin.js): staging is the same site
+app.use(checkOrigin);
 app.use(express.json({ limit: '20kb' }));
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -221,6 +224,8 @@ const io = new Server(server, {
         methods: ['GET', 'POST'],
         credentials: true
     },
+    // CORS doesn't cover WebSockets: only this site's pages may connect (utils/origin.js)
+    allowRequest: allowSocket,
 });
 
 app.locals.io = io;
