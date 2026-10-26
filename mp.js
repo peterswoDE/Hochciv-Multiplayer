@@ -33,6 +33,8 @@ const MP = {
     turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
     spectator: false,       // watching without a seat (live game or public Rundenspiel)
     spectatorCount: 0,      // live game: how many are watching
+    replay: false,          // the page shows a replay (client/replay.js, ?replay=<id>)
+    lastRecord: null,       // the stored match of the game that just ended: { id, replay }
 
     /** Live game: the KI plays our seat because we missed our turns (turn timer). */
     isAfk: function () {
@@ -319,7 +321,7 @@ const MP = {
             if (sub && sub.classList.contains('sub')) sub.remove();
             again.remove();
         }
-        if (this.asyncId) return;
+        if (this.asyncId || this.replay) return;
         const box = document.createElement('div');
         box.id = 'mp-rematch-box';
         box.innerHTML = this.lobbyIndex === this.hostIndex
@@ -341,6 +343,7 @@ const MP = {
         this.gameConfig = data.gameConfig || {};
         this.playerIndex = this.spectator ? -1 : null;
         this.lastStats = null;
+        this.lastRecord = null;
         this.lastTurnKey = null;
         this.placementFinished = false;
         this.setTurnClock(null);
@@ -500,6 +503,7 @@ const MP = {
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastStats = null;
+                MP.lastRecord = null;
                 MP.setTurnClock(data.turn);
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
@@ -542,6 +546,13 @@ const MP = {
                 if (MP.asyncId || !data) return;
                 MP.lastStats = data.stats;
                 if (typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
+            });
+
+            // The match is stored (with its replay): the end screen offers to watch it again
+            this.socket.on('game:record', data => {
+                if (MP.asyncId || !data) return;
+                MP.lastRecord = data;
+                if (typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(data);
             });
 
             this.socket.on('game:over', winData => {
@@ -1371,15 +1382,31 @@ if (originalRedraw) {
     };
 }
 
+// ── Monkey Patch saveGame(): the local single-player save is not ours ──────────
+// The game saves S as its local game ('hochciv.save') on every redraw. A multiplayer game (live,
+// Rundenspiel, watching, replay) would overwrite the player's own local game with it – and
+// "Weiterspielen" in the menu would then open the multiplayer state as a local game.
+const originalSaveGame = window.saveGame;
+if (originalSaveGame) {
+    window.saveGame = function () {
+        if (MP.active) return;
+        return originalSaveGame.apply(this, arguments);
+    };
+}
+
 // ── Monkey Patch gameOver(): player names (with profile links) under the engine's result ──
 const originalGameOver = window.gameOver;
 if (originalGameOver) {
     window.gameOver = function () {
         const r = originalGameOver.apply(this, arguments);
         if (MP.active) {
+            // "Zurück zum Menü" deletes the local game ('hochciv.save') – here it only leaves
+            const menu = $('go-menu');
+            if (menu) menu.onclick = () => { location.href = location.pathname; };
             MP.addGameOverPlayers();
             MP.addRematch();
             if (MP.lastStats && typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
+            if (MP.lastRecord && typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(MP.lastRecord);
             MP.updatePlayerList();
             MP.setTurnClock(null);
         }
@@ -2080,6 +2107,7 @@ const ASYNC = {
         const prev = this.view;
         this.view = view;
         MP.lastStats = view.stats || null;            // a finished game: its statistics (client/stats.js)
+        MP.lastRecord = view.record || null;          // … and its stored match with the replay (client/replay.js)
         MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
         const toastEl = document.querySelector('.mp-waiting-toast');
         if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
@@ -2228,18 +2256,21 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!MP.asyncId) return;
         ASYNC.close(); show('screen-menu'); ASYNC.showList();
     });
-    // In-game menu (☰) of a Rundenspiel: "Zurück zum Hauptmenü" instead of "Spiel beenden"
-    // (which would wipe the local single-player save). Deferred so ui.js has built the modal.
+    // In-game menu (☰) of a multiplayer game: "Zurück zum Hauptmenü" instead of "Spiel beenden"
+    // (which would wipe the local single-player save). A Rundenspiel goes on without us, a live
+    // game, a watched game or a replay is left. Deferred so ui.js has built the modal.
     const gMenu = $('g-menu');
     if (gMenu) gMenu.addEventListener('click', () => setTimeout(() => {
-        if (!MP.asyncId) return;
+        if (!MP.active) return;
         const quit = $('mm-quit');
         if (!quit || $('mm-async-menu')) return;
         const btn = document.createElement('button');
         btn.className = 'btn wide primary';
         btn.id = 'mm-async-menu';
         btn.textContent = TX('Zurück zum Hauptmenü');
-        btn.onclick = () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); };
+        btn.onclick = MP.asyncId
+            ? () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); }
+            : () => { location.href = location.pathname; };
         quit.parentNode.insertBefore(btn, quit);
         quit.remove();
     }, 0));
@@ -2265,11 +2296,15 @@ window.addEventListener('DOMContentLoaded', () => {
             if (MP.renderMainMenuAuth) MP.renderMainMenuAuth();
         }
         const id = params.get('async');
-        if (id) {
+        const replay = params.get('replay');
+        if (replay && typeof REPLAY !== 'undefined') {
+            history.replaceState(null, '', location.pathname);
+            REPLAY.open(replay);
+        } else if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
         } else if (OLD_VERSIONS.includes(APP_VERSION_HERE)) {
-            location.replace('/');           // /v88/, /v87/, /v83/ only open running Rundenspiele of that version
+            location.replace('/');           // /v88/, /v87/, /v83/ only open Rundenspiele and replays of that version
         }
     });
 

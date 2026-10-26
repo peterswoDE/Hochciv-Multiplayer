@@ -13,7 +13,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ✅ |
 | 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ✅ |
 | 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ✅ |
-| 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ⬜ |
+| 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ✅ |
 | 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ⬜ |
 | 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ⬜ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
@@ -143,7 +143,22 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - *Replay* links in the match history and on the end screen. Anyone with the link can watch.
 - Retention: replays are deleted after 180 days.
 
-**Status:** ⬜ planned
+**Implementation**
+- `utils/replay.js`: a frame is the full game state when a new turn begins (`round:cur`) and once more at the end. Live games keep their frames in memory (`session.replay`, each Brotli-compressed on its own). Rundenspiele run for days and survive restarts, so their frames are rows in `replay_frames` (`g.replay = { key, seq }` in the game's data). At the end, `save()` / `saveAsync()` combine them into one document `{ v, version, names, frames }`, compressed with Brotli, as a `replays` row (about 6–15 KB per game). The frame rows are then deleted. `cleanup()` runs every 6 hours and deletes replays older than `REPLAY_KEEP_DAYS` (180) and frames of Rundenspiele that no longer run.
+- `models/Replay.js`, `models/ReplayFrame.js`: new tables `replays` (by match id) and `replay_frames`.
+- Live games (`sockets/game.js`): frames in `recordStats()` (start, every broadcast, end). After the match record is created, the replay is saved and `game:record { id, replay }` goes to the room (and again on a reconnect).
+- Rundenspiele (`async/service.js`): `recordStats()` also stores the frame of a new turn while the game is `playing`. `processResult()` saves the replay and records `gameId` / `replay` in `g.result`, which the finished view passes on as `record` (`logic.view`).
+- `routes/games.js`: `GET /api/games/:id/replay` sends the stored Brotli document as it is (`Content-Encoding: br`) to browsers that accept it, otherwise decompressed (browsers send `br` only over https). `GET /api/games/:id` says whether there is a replay, and `routes/profile.js` sends `hasReplay`.
+- `client/replay.js` (new, injected after `mp.js`): `?replay=<id>` opens the viewer, in the version the match was played with (`/v88/` etc.; `mp.js` lets the old versions open replays). It shows the frames with the game's own screens, read-only (`MP.spectator`, `MP.replay`), with a timeline: start, previous round, previous turn, play/pause, next turn, next round, end, a slider, "Link kopieren" and "Beenden". The end screen shows the statistics, without rematch. `REPLAY.addToEndScreen()` adds *▶ Wiederholung ansehen* to the end screen of live games and Rundenspiele, and `client/profile.js` links the replay of an opened match.
+- Texts in `client/i18n.js`.
+
+**Also fixes**
+- **Local game overwritten:** the game saves `S` as its local single-player game on every `redraw()`, so every multiplayer game (live, Rundenspiel, watching) overwrote the player's own local game, and *Weiterspielen* then opened the multiplayer state. `mp.js` now stops `saveGame` while `MP.active`. The end screen's *Zurück zum Menü* and the ☰ menu's *Spiel beenden* deleted the local game too. In multiplayer games they now only leave.
+- **Account deletion:** the statistics (F6) and replays name the players, so deleting an account now renames them in the stored statistics, in every state of stored replays and in the frames of running Rundenspiele. That covers player names, log lines ("Kampf um Xs Stadt") and the result text. The running Rundenspiel's own state gets the same treatment (`utils/rename.js`, whole names only).
+
+**Tests:** `tests/replay/replay.test.js`: live game (end screen, stored with one frame per turn in order, `br` and plain delivery, 404, profile link), viewer in a fresh browser (every timeline control, read-only, no chat, playing, the end screen with statistics and without rematch, the local game neither overwritten nor deleted), Rundenspiel (one replay at the end, frame rows gone, the view links it), account deletion (name gone from replay and statistics, renamed in running frames, whole names only) and the cleanup.
+
+**Status:** ✅ on `development`
 
 ## F5 "Since your last turn" summary
 

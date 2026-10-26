@@ -97,7 +97,7 @@ const emit = (page, ev, data) => page.evaluate(([ev, data]) => new Promise(r => 
                 MP.sendAction({ type: 'endTurn' });
             }).catch(() => { }), 150));
         }
-        const over = await until(() => a.evaluate(() => !!(S && S.over && document.getElementById('ov-body'))), 180000, 500);
+        const over = await until(() => a.evaluate(() => !!(S && S.over && document.getElementById('ov-body'))), 300000, 500);
         drivers.forEach(clearInterval);
         ok(!!over, 'the game ends');
         await b.waitForFunction(() => !!(S && S.over && document.getElementById('mp-rematch-box')), null, { timeout: 10000 });

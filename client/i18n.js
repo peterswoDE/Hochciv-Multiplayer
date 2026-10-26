@@ -180,6 +180,27 @@
         '%s übernimmt die Führung.': '%s takes the lead.',
         'Größter Sprung: %s, +%s Punkte.': 'Biggest jump: %s, +%s points.',
 
+        // ── Replays (client/replay.js) ───────────────────────────────────────────────────
+        'Wiederholung': 'Replay',
+        'Wiederholung ansehen': 'Watch the replay',
+        'Für dieses Spiel gibt es keine Wiederholung.': 'There is no replay of this game.',
+        'Link kopieren': 'Copy link',
+        'Link kopiert.': 'Link copied.',
+        'Link zur Wiederholung:': 'Link to the replay:',
+        'Beenden': 'Close',
+        'Anfang': 'Start',
+        'Ende': 'End',
+        'Vorige Runde': 'Previous round',
+        'Nächste Runde': 'Next round',
+        'Voriger Zug': 'Previous turn',
+        'Nächster Zug': 'Next turn',
+        'Abspielen': 'Play',
+        'Anhalten': 'Pause',
+        'Zug': 'Turn',
+        'Runde %s · %s am Zug': 'Round %s · %s on turn',
+        'Runde %s · Spielende': 'Round %s · end of the game',
+        'Zug %s von %s': 'turn %s of %s',
+
         // ── Spectator mode ───────────────────────────────────────────────────────────────
         'Zuschauen': 'Watch',
         'Zuschauer': 'Spectator',

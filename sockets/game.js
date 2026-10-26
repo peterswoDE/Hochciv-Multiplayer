@@ -6,6 +6,7 @@ const { finalPoints } = require('../utils/score');
 const config = require('../config');
 const chat = require('../utils/chat');
 const Stats = require('../utils/stats');
+const Replay = require('../utils/replay');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -112,6 +113,7 @@ module.exports = function registerHandlers(io) {
             }
 
             if (s.status === 'finished' && s.stats) socket.emit('game:stats', { stats: Stats.publicStats(s.stats) });
+            if (s.status === 'finished' && s.gameRecord) socket.emit('game:record', s.gameRecord);
 
             // If game is already playing, send current state to the reconnecting player right away
             if (s.status === 'playing' && s.state) {
@@ -632,6 +634,7 @@ function checkGameOver(io, session) {
 
 /** Send every connected player the fresh game state and their own state index (spectators: -1). */
 function emitGameStart(io, session) {
+    recordStats(session, false);            // the start is the first point / frame
     session.players.forEach((lobbyPlayer, lobbyIndex) => {
         if (lobbyPlayer.socketId) {
             const finalIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
@@ -677,17 +680,27 @@ function publicPlayers(session) {
 }
 
 /** Statistics over the rounds (utils/stats.js) – names from the lobby, KI seats show their nation. */
-function recordStats(session, final) {
-    const S = session.state;
-    if (!S) return;
-    const names = S.players.map(sp => {
+/** Display names by state index: the lobby name of humans, null for KI seats (their nation is shown). */
+function stateNames(session) {
+    return session.state.players.map(sp => {
         const lp = session.players[sp.slot];
         return lp && lp.kind === 'human' ? lp.name : null;
     });
+}
+
+/** Statistics over the rounds (utils/stats.js) and the replay frame of a new turn (utils/replay.js). */
+function recordStats(session, final) {
+    const S = session.state;
+    if (!S) return;
     try {
-        session.stats = Stats.record(session.stats, engine.getEngine(), S, names, final);
+        session.stats = Stats.record(session.stats, engine.getEngine(), S, stateNames(session), final);
     } catch (err) {
         console.error(`[Stats] Recording failed in session ${session.id}:`, err);
+    }
+    try {
+        session.replay = Replay.addLive(session.replay, S);
+    } catch (err) {
+        console.error(`[Replay] Recording failed in session ${session.id}:`, err);
     }
 }
 
@@ -862,13 +875,25 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
         }
 
         // Log the Historic Match Record
-        await Game.create({
-            version: engine.getEngine().APP_VERSION || 'Unknown',
+        const version = engine.getEngine().APP_VERSION || 'Unknown';
+        const game = await Game.create({
+            version,
             durationRounds: session.state.round,
             winnerUsername: playersData.find(p => p.isWinner)?.dbUsername || null,
             participants: playersData,
             stats: Stats.publicStats(session.stats),
         });
+
+        // The replay (utils/replay.js) – then the end screen can offer it
+        let replay = false;
+        try {
+            replay = await Replay.save(game.id, version, stateNames(session), session.replay && session.replay.frames);
+        } catch (err) {
+            console.error(`[Replay] Saving failed for ${sessionId}:`, err);
+        }
+        session.replay = null;
+        session.gameRecord = { id: game.id, replay };
+        if (io) io.to(sessionId).emit('game:record', session.gameRecord);
 
         console.log(`[Stats] Successfully processed game ${sessionId}. Ranked: ${isRanked}. History saved.`);
 

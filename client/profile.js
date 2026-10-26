@@ -177,6 +177,7 @@
               <tr><th>${tx('Spieler')}</th><th>${tx('Nation')}</th><th class="hcp-num">${tx('Bev.')}</th><th class="hcp-num">${tx('Wunder')}</th>
                   <th class="hcp-num">${tx('Techs')}</th><th class="hcp-num">${tx('Punkte')}</th><th class="hcp-num">MMR Δ</th></tr>
               ${rows}</table></div>
+            ${g.hasReplay ? `<p class="hcp-replay"><a href="/?replay=${esc(g.id)}" target="_blank" rel="noopener">▶ ${tx('Wiederholung ansehen')}</a></p>` : ''}
             ${g.hasStats && typeof STATS !== 'undefined' ? `<div class="hcp-chart" data-game="${esc(g.id)}"></div>` : ''}
           </details>`;
     }
