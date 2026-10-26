@@ -1,0 +1,26 @@
+name: Delete merged branch
+
+# Only main and development live permanently; every other branch is deleted once its PR is merged.
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  delete-branch:
+    if: >-
+      github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref != 'main' && github.head_ref != 'development'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Delete the PR's branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          # already gone (deleted by hand) is fine
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH" \
+            || echo "Branch $BRANCH was already deleted"
