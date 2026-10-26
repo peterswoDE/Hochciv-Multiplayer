@@ -7,7 +7,8 @@
  *
  * A channel is `async (users, event) => {}` where `users` are User rows and `event` is
  *   { type: 'invite' | 'turn' | 'reminder' | 'takeover' | 'finished',
- *     gameId, subject, text, link }
+ *     gameId, subject, text, link,
+ *     summary?, short? }    // "since your last turn": several lines for the e-mail, one for push
  */
 const { User, DeviceToken } = require('../models');
 const { Op } = require('sequelize');
@@ -45,7 +46,7 @@ async function notify(userIds, event) {
 registerChannel('email', async (users, event) => {
     for (const u of users) {
         if (!u.notifyEmail || !u.email || u.email.endsWith('@oauth.local') || u.isBanned) continue;
-        const text = `Hallo ${u.username},\n\n${event.text}\n\nZum Spiel: ${event.link}\n\n` +
+        const text = `Hallo ${u.username},\n\n${event.text}${event.summary ? '\n\n' + event.summary : ''}\n\nZum Spiel: ${event.link}\n\n` +
             `(E-Mail-Benachrichtigungen lassen sich in der Rundenspiel-Liste abschalten.)`;
         await sendMail(u.email, `Hochciv: ${event.subject}`, text);
     }
@@ -63,7 +64,7 @@ registerChannel('push', async (users, event) => {
                 type: String(event.type || ''),
                 gameId: String(event.gameId || ''),
                 title: `Hochciv: ${event.subject}`,
-                body: String(event.text || ''),
+                body: String(event.text || '') + (event.short ? ' ' + event.short : ''),
                 link: String(event.link || ''),
             });
             if (result === 'invalid') await d.destroy();

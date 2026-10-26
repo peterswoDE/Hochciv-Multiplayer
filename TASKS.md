@@ -14,7 +14,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ✅ |
 | 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ✅ |
 | 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ✅ |
-| 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ⬜ |
+| 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ✅ |
 | 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ⬜ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
@@ -169,7 +169,16 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - Rundenspiele: the "your turn" e-mail and push message contain a short version.
 - The server remembers, for each seat, the point of its last turn (log position and counts). The pop-up compares that point with the current state.
 
-**Status:** ⬜ planned
+**Implementation**
+- `utils/summary.js`: `track()` runs on every state change. When a human's turn has moved on, that seat gets a mark: log position, the counts of every empire (the `utils/stats.js` snapshot), city owners and the existing wonders. `summarize()` compares the state at the start of the seat's next turn with its mark and returns score, city, tech, wonder and army changes per empire, cities lost (also destroyed) and gained, new wonders, empires out, and the log since then (up to 150 entries). `text()` builds the German e-mail text (several lines) and push text (one line).
+- Live games (`sockets/game.js`): marks in `session.marks` (tracked in `recordStats`). `turnSummary()` computes the summary once when a human's turn begins and sends it with that `state:update`. It is derived from the public state, so the room may receive it, and arriving with the state avoids any ordering problem. A reconnect during the turn gets it again with `game:start`. The rematch clears it.
+- Rundenspiele: marks in `data.marks` (tracked in the service's save path). The player's view carries `summary` while it is their turn (`logic.view`). The "your turn" notification now goes out per recipient, with `summary` / `short` from `logic.summaryText()`. `utils/notify.js` adds `summary` to the e-mail and `short` to the push text.
+- `mp.js`: `takeSummary()` keeps the first summary of a turn, ours only. The `humanTurnStart` hook shows it first (`summaryBeforeTurn`), and the game's own turn-start dialogs (food, free pick …) follow when it is closed, however that happens (`closeModal` hook). The pop-up shows alerts (⚔ cities lost or taken, ☠ out, 🏛 wonders), a table of every empire with its changes, *Alle Ereignisse* (the game's `logHtml`) and *Bei jedem Zug automatisch zeigen* (`hochciv.summary.auto`). The HUD button 📋 reopens it. Spectators get none.
+- Texts in `client/i18n.js`. E-mails stay German, like all e-mails.
+
+**Tests:** `tests/summary/summary.test.js`: the summary with the engine (marks, log since, score changes, a city taken and one gone, e-mail and push texts), a live game (no summary on the first turn, pop-up before the turn-start dialogs and continuing after it, a row per empire, nothing for the other player or spectators, 📋, a reconnect, automatic display off) and a Rundenspiel (the "your turn" e-mail with the summary, the pop-up when opening the game). `tests/timer` passes with it (a timeout closes the pop-up).
+
+**Status:** ✅ on `development`
 
 ## F9 Ranked matchmaking
 

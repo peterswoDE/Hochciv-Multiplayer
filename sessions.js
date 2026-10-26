@@ -297,6 +297,7 @@ function resetForRematch(sessionId) {
     session.gameConfig = { ...gameConfig, seed: crypto.randomInt(2 ** 31) };
     Object.assign(session, {
         status: 'lobby', state: null, gameOverProcessed: false, stats: null, replay: null, gameRecord: null,
+        marks: null, summaryKey: null, lastSummary: null,
         placementState: null, draft: null, turnClock: null,
     });
     recordActivity(sessionId);
