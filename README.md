@@ -145,7 +145,7 @@ feature/… or fix/…  ──PR──▶  development  ──▶  staging serve
 4. Test on staging (web and, if needed, the Android app pointed at the staging URL).
 5. When staging is good, open a PR **`development` → `main`**. Merging builds the release (`latest` + version tag), then update production as described under *Updating*.
 
-Hotfixes that cannot wait go from a branch off `main` straight into `main`; merge `main` back into `development` afterwards so the two do not drift.
+Hotfixes that cannot wait go from a `hotfix/…` branch off `main` straight into `main`; merge `main` back into `development` afterwards (PR `main` → `development`) so the two do not drift. The *PR Source Check* workflow fails every PR into `main` that comes from another branch than `development` or `hotfix/…`.
 
 ## Staging (semi-live)
 
