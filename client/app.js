@@ -10,6 +10,9 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // The page in the player's language (client/i18n.js): its fixed texts here, messages in showError
+    HC_I18N.apply(document);
+
     // Views
     const viewLoading = document.getElementById('view-loading');
     const viewLanding = document.getElementById('view-landing');
@@ -121,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(elementId, msg) {
         const el = document.getElementById(elementId);
         if (el) {
-            el.innerText = msg;
+            el.innerText = HC_I18N.tr(msg);      // own texts and server messages alike
             el.style.display = 'block';
         }
     }
@@ -212,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 asseResp = await startAuthentication({ optionsJSON: options });
             } catch (error) {
-                showError('mfa-error', PASSKEY.errorText(error, options.rpId, 'Authentifizierung abgebrochen.'));
+                showError('mfa-error', PASSKEY.errorText(error, options.rpId, HC_I18N.t('Authentifizierung abgebrochen.')));
                 return;
             }
 
@@ -237,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnRequestEmailOtp) btnRequestEmailOtp.addEventListener('click', async () => {
         clearErrors();
         btnRequestEmailOtp.disabled = true;
-        btnRequestEmailOtp.textContent = 'Wird gesendet...';
+        btnRequestEmailOtp.textContent = HC_I18N.t('Wird gesendet...');
         try {
             const res = await fetch('/api/auth/login/email-otp/request', { method: 'POST' });
             const data = await res.json();
@@ -247,12 +250,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 showError('mfa-error', data.error || 'Fehler beim Senden.');
                 btnRequestEmailOtp.disabled = false;
-                btnRequestEmailOtp.textContent = 'Code per E-Mail anfordern';
+                btnRequestEmailOtp.textContent = HC_I18N.t('Code per E-Mail anfordern');
             }
         } catch (e) {
             showError('mfa-error', 'Netzwerkfehler');
             btnRequestEmailOtp.disabled = false;
-            btnRequestEmailOtp.textContent = 'Code per E-Mail anfordern';
+            btnRequestEmailOtp.textContent = HC_I18N.t('Code per E-Mail anfordern');
         }
     });
 
@@ -296,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     asseResp = await startAuthentication({ optionsJSON: options });
                 } catch (error) {
-                    showError('login-error', PASSKEY.errorText(error, options.rpId, 'Authentifizierung abgebrochen.'));
+                    showError('login-error', PASSKEY.errorText(error, options.rpId, HC_I18N.t('Authentifizierung abgebrochen.')));
                     return;
                 }
 
@@ -445,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
 
             if (res.ok && !data.error) {
-                alert('Dein Passwort wurde erfolgreich aktualisiert.');
+                alert(HC_I18N.t('Dein Passwort wurde erfolgreich aktualisiert.'));
                 switchAuthTab('form-login');
             } else {
                 showError('reset-conf-error', data.error || 'Fehler beim Zurücksetzen.');

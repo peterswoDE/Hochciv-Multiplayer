@@ -9,12 +9,12 @@ window.PASSKEY = {
     /** null when this page may use passkeys for `rpId`, otherwise what is wrong. */
     problem: function (rpId) {
         if (!window.PublicKeyCredential || !window.isSecureContext) {
-            return 'Passkeys gehen hier nicht: der Browser unterstützt sie nicht oder die Seite läuft ohne sichere Verbindung (https bzw. localhost).';
+            return HC_I18N.t('Passkeys gehen hier nicht: der Browser unterstützt sie nicht oder die Seite läuft ohne sichere Verbindung (https bzw. localhost).');
         }
         const host = location.hostname;
         if (rpId && host !== rpId && !host.endsWith('.' + rpId)) {
-            return `Passkeys sind für ${rpId} eingerichtet, diese Seite läuft aber unter ${host}. ` +
-                `Öffne Hochciv unter ${rpId}, um Passkeys zu nutzen.`;
+            return HC_I18N.t('Passkeys sind für %s eingerichtet, diese Seite läuft aber unter %s.', rpId, host) + ' ' +
+                HC_I18N.t('Öffne Hochciv unter %s, um Passkeys zu nutzen.', rpId);
         }
         return null;
     },
@@ -23,9 +23,9 @@ window.PASSKEY = {
         const p = this.problem(rpId);
         if (p) return p;
         const name = err && err.name;
-        if (name === 'NotAllowedError') return 'Abgebrochen – oder die Zeit zum Bestätigen ist abgelaufen.';
-        if (name === 'InvalidStateError') return 'Dieser Passkey ist bereits registriert.';
-        if (name === 'SecurityError') return 'Der Browser erlaubt Passkeys auf dieser Seite nicht.' + (err.message ? ' (' + err.message + ')' : '');
+        if (name === 'NotAllowedError') return HC_I18N.t('Abgebrochen – oder die Zeit zum Bestätigen ist abgelaufen.');
+        if (name === 'InvalidStateError') return HC_I18N.t('Dieser Passkey ist bereits registriert.');
+        if (name === 'SecurityError') return HC_I18N.t('Der Browser erlaubt Passkeys auf dieser Seite nicht.') + (err.message ? ' (' + err.message + ')' : '');
         return fallback + (err && err.message ? ' (' + err.message + ')' : '');
     },
 };

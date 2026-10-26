@@ -32,7 +32,9 @@ const domReady = new Promise(resolve => {
     else resolve();
 });
 
-const notify = msg => (typeof toast === 'function' ? toast(msg) : console.log('[Activity]', msg));
+/* What players see goes through client/i18n.js (loaded before this bundle); the log stays German. */
+const i18n = msg => (window.HC_I18N ? window.HC_I18N.tr(msg) : msg);
+const notify = msg => (typeof toast === 'function' ? toast(i18n(msg)) : console.log('[Activity]', msg));
 
 /** Progress and errors go to the console and the server log (docker logs) – Discord's own
  *  console is hard to open while testing. */
@@ -329,7 +331,7 @@ function renderBar() {
     const u = state.user;
     const name = u ? (u.global_name || u.username) : '';
     bar.querySelector('.dc-name').textContent = u ? `Discord: ${name}` : '';
-    bar.querySelector('.dc-status').textContent = state.status;
+    bar.querySelector('.dc-status').textContent = i18n(state.status);
 }
 
 function injectUi() {
@@ -361,7 +363,7 @@ function injectUi() {
         const btn = document.createElement('button');
         btn.className = 'btn primary';
         btn.id = 'dc-group-btn';
-        btn.textContent = 'Mit der Discord-Gruppe spielen';
+        btn.textContent = i18n('Mit der Discord-Gruppe spielen');
         btn.onclick = () => joinGroupLobby();
         mNew.parentNode.insertBefore(btn, mNew);
     }

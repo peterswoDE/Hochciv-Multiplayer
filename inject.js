@@ -1,7 +1,7 @@
 /**
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
- *   • adds the player profile (client/profile.js), mp.js, the Discord Activity bridge and the
+ *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the Discord Activity bridge and the
  *     mobile layer (client/mobile) to index.html,
  *   • points mp.js at this server.
  * Each step checks on its own, so an already patched public/ is brought up to date.
@@ -16,6 +16,8 @@ const htmlPath = path.join(dir, 'index.html');
 const jsPath = path.join(dir, 'js', 'mp.js');
 
 const SOCKET_IO = '<script src="/socket.io/socket.io.min.js"></script>';
+// Multiplayer texts in the player's language – before profile.js and mp.js, which use them
+const I18N = '<script src="/client/i18n.js"></script>';
 const PROFILE = '<script src="/client/profile.js"></script>';
 const MP = '<script src="js/mp.js"></script>';
 const ACTIVITY = '<script src="js/activity.js"></script>';
@@ -28,7 +30,7 @@ if (fs.existsSync(htmlPath)) {
     let html = fs.readFileSync(htmlPath, 'utf8');
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, PROFILE, MP, ACTIVITY, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, PROFILE, MP, ACTIVITY, MOBILE_JS].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     fs.writeFileSync(htmlPath, html, 'utf8');
 }
