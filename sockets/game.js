@@ -5,6 +5,7 @@ const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
 const config = require('../config');
 const chat = require('../utils/chat');
+const Stats = require('../utils/stats');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -109,6 +110,8 @@ module.exports = function registerHandlers(io) {
             if (s.status === 'draft' && s.draft) {
                 socket.emit('draft:update', engine.draftPayload(s));
             }
+
+            if (s.status === 'finished' && s.stats) socket.emit('game:stats', { stats: Stats.publicStats(s.stats) });
 
             // If game is already playing, send current state to the reconnecting player right away
             if (s.status === 'playing' && s.state) {
@@ -619,7 +622,9 @@ function checkGameOver(io, session) {
     if (!session.state.over || session.gameOverProcessed) return;
     session.gameOverProcessed = true;
     session.status = 'finished';
+    recordStats(session, true);
     io.to(session.id).emit('game:over', session.state.over);
+    io.to(session.id).emit('game:stats', { stats: Stats.publicStats(session.stats) });
     // Always record history, calculate MMR only if ranked
     const isRanked = session.gameConfig && session.gameConfig.ranked === true;
     processGameOverMmr(session, io, session.id, isRanked);
@@ -671,8 +676,24 @@ function publicPlayers(session) {
     }));
 }
 
+/** Statistics over the rounds (utils/stats.js) – names from the lobby, KI seats show their nation. */
+function recordStats(session, final) {
+    const S = session.state;
+    if (!S) return;
+    const names = S.players.map(sp => {
+        const lp = session.players[sp.slot];
+        return lp && lp.kind === 'human' ? lp.name : null;
+    });
+    try {
+        session.stats = Stats.record(session.stats, engine.getEngine(), S, names, final);
+    } catch (err) {
+        console.error(`[Stats] Recording failed in session ${session.id}:`, err);
+    }
+}
+
 function broadcastState(io, session) {
     if (!session || !session.state) return;
+    recordStats(session, false);
 
     // Instead of deep cloning per-player in a loop, clone the state exactly once.
     // The engine's stateForPlayer currently treats the state as fully visible for all players.
@@ -845,7 +866,8 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
             version: engine.getEngine().APP_VERSION || 'Unknown',
             durationRounds: session.state.round,
             winnerUsername: playersData.find(p => p.isWinner)?.dbUsername || null,
-            participants: playersData
+            participants: playersData,
+            stats: Stats.publicStats(session.stats),
         });
 
         console.log(`[Stats] Successfully processed game ${sessionId}. Ranked: ${isRanked}. History saved.`);

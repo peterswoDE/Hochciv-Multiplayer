@@ -15,6 +15,7 @@ const { notify } = require('../utils/notify');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
 const chatLib = require('../utils/chat');
+const Stats = require('../utils/stats');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
@@ -36,7 +37,7 @@ function fromRow(row) {
         id: row.id, joinCode: row.joinCode, hostUserId: row.hostUserId, status: row.status,
         engine: d.engine || null,          // null: started before versions were recorded = v83
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
-        hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [],
+        hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [], stats: d.stats || null,
         state: row.state || null,
         waitSince: row.waitSince ? new Date(row.waitSince).getTime() : Date.now(),
         reminded: !!row.reminded,
@@ -60,7 +61,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [] },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], stats: g.stats || null },
         state: S,
     };
 }
@@ -116,8 +117,24 @@ async function withGame(id, fn) {
     return run;
 }
 
+/** Statistics over the rounds (utils/stats.js): a new round adds a point, the end the final one. */
+function recordStats(g) {
+    if (!g.state || !['playing', 'finished'].includes(g.status)) return;
+    if (g.stats && g.stats.final) return;
+    const names = g.state.players.map(sp => {
+        const seat = g.seats[sp.slot];
+        return seat && (seat.kind === 'human' || seat.replaced) ? seat.name : null;
+    });
+    try {
+        g.stats = Stats.record(g.stats, L.ENG(g).getEngine(), g.state, names, g.status === 'finished');
+    } catch (err) {
+        console.error(`[Async] Statistics failed for ${g.id}:`, err);
+    }
+}
+
 /** Save + broadcast; with `before`, also restart the clock and send notifications. */
 async function settle(g, before) {
+    recordStats(g);
     if (before) {
         const key = waitKey(g);
         if (key !== before.key) { g.waitSince = Date.now(); g.reminded = false; }
@@ -218,6 +235,7 @@ async function processResult(g) {
             durationRounds: S.round,
             winnerUsername: players.find(p => p.isWinner && p.dbUsername)?.dbUsername || null,
             participants: players,
+            stats: Stats.publicStats(g.stats),
         });
         g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })) };
     } catch (err) {

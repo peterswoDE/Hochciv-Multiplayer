@@ -149,6 +149,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/mfa', mfaRoutes);
 // Public player profiles (client/profile.js)
 app.use('/api/profile', require('./routes/profile'));
+// Finished matches with their statistics (routes/games.js)
+app.use('/api/games', require('./routes/games'));
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
 // Push notifications of the Android app

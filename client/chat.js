@@ -220,7 +220,7 @@ const CHAT = {
         style.textContent = `
             #mp-chat {
                 position: fixed; left: 10px; bottom: calc(var(--bar-h, 58px) + 10px); width: 280px; max-width: calc(45% - 10px);
-                background: rgba(255,255,240,0.96); border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
+                background: rgba(255,255,240,0.96); border: 2px solid #a89f91; border-radius: 6px; z-index: 29;   /* below the game's dialogs (30), like the log */
                 box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; color: #333; overflow: hidden; pointer-events: auto;
                 display: flex; flex-direction: column;
             }
