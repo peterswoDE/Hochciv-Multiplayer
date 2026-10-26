@@ -14,9 +14,11 @@
 
     const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    // texts in the player's language (client/i18n.js)
+    const tx = (de, ...args) => HC_I18N.t(de, ...args);
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const fmtDate = d => new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const fmtDateTime = d => new Date(d).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const fmtDate = d => new Date(d).toLocaleDateString(HC_I18N.locale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fmtDateTime = d => new Date(d).toLocaleString(HC_I18N.locale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const fmtShift = n => n == null ? '–' : n > 0 ? `+${n}` : `${n}`;
 
     const CSS = `
@@ -83,9 +85,9 @@
         overlay.id = 'hcp-overlay';
         overlay.innerHTML = `<div id="hcp-box" role="dialog" aria-modal="true" aria-labelledby="hcp-title">
             <div id="hcp-head">
-              <button id="hcp-back" title="Zurück" style="display:none">← Zurück</button>
-              <span class="hcp-title" id="hcp-title">Spielerprofil</span>
-              <button id="hcp-close" title="Schließen" aria-label="Schließen">×</button>
+              <button id="hcp-back" title="${tx('Zurück')}" style="display:none">← ${tx('Zurück')}</button>
+              <span class="hcp-title" id="hcp-title">${tx('Spielerprofil')}</span>
+              <button id="hcp-close" title="${tx('Schließen')}" aria-label="${tx('Schließen')}">×</button>
             </div>
             <div id="hcp-body"></div></div>`;
         document.body.appendChild(overlay);
@@ -112,6 +114,11 @@
     function open(userId) {
         if (!userId || !UUID_RE.test(userId)) return;
         ensureOverlay();
+        // the language may have changed since the overlay was built
+        const back = overlay.querySelector('#hcp-back'), closeBtn = overlay.querySelector('#hcp-close');
+        back.title = tx('Zurück'); back.textContent = '← ' + tx('Zurück');
+        overlay.querySelector('#hcp-title').textContent = tx('Spielerprofil');
+        closeBtn.title = closeBtn.ariaLabel = tx('Schließen');
         if (!overlay.classList.contains('show')) stack = [];
         if (stack[stack.length - 1] !== userId) stack.push(userId);
         overlay.classList.add('show');
@@ -121,14 +128,14 @@
     async function api(userId, offset) {
         const res = await fetch(`/api/profile/${encodeURIComponent(userId)}${offset ? `?offset=${offset}` : ''}`, { cache: 'no-cache' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Profil konnte nicht geladen werden.');
+        if (!res.ok) throw new Error(data.error ? HC_I18N.tr(data.error) : tx('Profil konnte nicht geladen werden.'));
         return data;
     }
 
     async function load(userId) {
         const body = overlay.querySelector('#hcp-body');
         overlay.querySelector('#hcp-back').style.display = stack.length > 1 ? '' : 'none';
-        body.innerHTML = '<p class="hcp-empty">Lade Profil …</p>';
+        body.innerHTML = `<p class="hcp-empty">${tx('Lade Profil …')}</p>`;
         try {
             const data = await api(userId);
             if (stack[stack.length - 1] !== userId) return;     // another profile was opened meanwhile
@@ -140,14 +147,14 @@
     }
 
     function gameHtml(g, ownerId) {
-        const result = g.replaced ? '<span class="hcp-res loss">Von der KI übernommen</span>'
-            : g.won ? '<span class="hcp-res win">Sieg</span>' : '<span class="hcp-res loss">Niederlage</span>';
+        const result = g.replaced ? `<span class="hcp-res loss">${tx('Von der KI übernommen')}</span>`
+            : g.won ? `<span class="hcp-res win">${tx('Sieg')}</span>` : `<span class="hcp-res loss">${tx('Niederlage')}</span>`;
         const shift = g.mmrShift == null ? ''
             : ` · <span class="hcp-shift ${g.mmrShift > 0 ? 'up' : g.mmrShift < 0 ? 'down' : ''}">${esc(fmtShift(g.mmrShift))} MMR</span>`;
-        const type = (g.async ? 'Rundenspiel' : 'Live') + (g.ranked ? ', gewertet' : '');
+        const type = (g.async ? tx('Rundenspiel') : tx('Live')) + (g.ranked ? ', ' + tx('gewertet') : '');
         const players = [...g.players].sort((a, b) => b.points - a.points);
         const rows = players.map(p => `<tr class="${p.isWinner ? 'win' : ''}">
-                <td>${p.userId === ownerId ? esc(p.name) : link(p.name, p.userId)}${p.isBot ? ' <small>(Bot)</small>' : ''}</td>
+                <td>${p.userId === ownerId ? esc(p.name) : link(p.name, p.userId)}${p.isBot ? ` <small>(${tx('Bot')})</small>` : ''}</td>
                 <td>${esc(p.civ || '–')}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.pop) : '–'}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.wonders) : '–'}</td>
@@ -158,11 +165,11 @@
             <summary>
               <span>${result}${shift}</span>
               <span class="hcp-sub">${esc(fmtDateTime(g.matchDate))}</span>
-              <span class="hcp-meta">${esc(type)} · ${esc(g.civ || '–')} · ${esc(g.points)} Punkte · ${esc(g.rounds)} Runden</span>
+              <span class="hcp-meta">${esc(type)} · ${esc(g.civ || '–')} · ${tx('%s Punkte', esc(g.points))} · ${tx('%s Runden', esc(g.rounds))}</span>
             </summary>
             <div style="overflow-x:auto"><table class="hcp-table">
-              <tr><th>Spieler</th><th>Nation</th><th class="hcp-num">Bev.</th><th class="hcp-num">Wunder</th>
-                  <th class="hcp-num">Techs</th><th class="hcp-num">Punkte</th><th class="hcp-num">MMR Δ</th></tr>
+              <tr><th>${tx('Spieler')}</th><th>${tx('Nation')}</th><th class="hcp-num">${tx('Bev.')}</th><th class="hcp-num">${tx('Wunder')}</th>
+                  <th class="hcp-num">${tx('Techs')}</th><th class="hcp-num">${tx('Punkte')}</th><th class="hcp-num">MMR Δ</th></tr>
               ${rows}</table></div>
           </details>`;
     }
@@ -178,17 +185,17 @@
             <div class="hcp-top">
               <div class="hcp-avatar">${esc((data.username || '?').charAt(0).toUpperCase())}</div>
               <div><div class="hcp-name">${esc(data.username)}</div>
-                <div class="hcp-sub">Dabei seit ${esc(fmtDate(data.memberSince))}</div></div>
+                <div class="hcp-sub">${tx('Dabei seit %s', esc(fmtDate(data.memberSince)))}</div></div>
             </div>
             <div class="hcp-stats">
               <div class="hcp-stat"><b>${esc(data.mmr)}</b><span>MMR</span></div>
-              <div class="hcp-stat"><b>${esc(total)}</b><span>Spiele</span></div>
-              <div class="hcp-stat"><b>${esc(data.wins)}</b><span>Siege</span></div>
-              <div class="hcp-stat"><b>${esc(rate)}</b><span>Siegquote</span></div>
+              <div class="hcp-stat"><b>${esc(total)}</b><span>${tx('Spiele')}</span></div>
+              <div class="hcp-stat"><b>${esc(data.wins)}</b><span>${tx('Siege')}</span></div>
+              <div class="hcp-stat"><b>${esc(rate)}</b><span>${tx('Siegquote')}</span></div>
             </div>
-            <h3 class="hcp-h">Spiele</h3>
-            ${games.length ? games.map(g => gameHtml(g, data.id)).join('') : '<p class="hcp-empty">Noch keine Spiele.</p>'}
-            ${games.length < total ? '<button class="hcp-more" id="hcp-more">Weitere Spiele laden</button>' : ''}`;
+            <h3 class="hcp-h">${tx('Spiele')}</h3>
+            ${games.length ? games.map(g => gameHtml(g, data.id)).join('') : `<p class="hcp-empty">${tx('Noch keine Spiele.')}</p>`}
+            ${games.length < total ? `<button class="hcp-more" id="hcp-more">${tx('Weitere Spiele laden')}</button>` : ''}`;
         if (avatar) {
             const box = body.querySelector('.hcp-avatar');
             box.insertAdjacentHTML('beforeend', avatar);
@@ -198,7 +205,7 @@
         const more = body.querySelector('#hcp-more');
         if (more) more.onclick = async () => {
             more.disabled = true;
-            more.textContent = 'Lade …';
+            more.textContent = tx('Lade …');
             try {
                 const next = await api(data.id, games.length);
                 if (!current || current.data.id !== data.id) return;

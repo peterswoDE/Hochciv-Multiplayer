@@ -51,6 +51,10 @@ Rundenspiele notifications (invitation, your turn, reminder, takeover, finished)
 
 The layer wraps a few game functions (`drawMap`, `openTile`, `editorScreen`) and relies on some ids and classes of the game. The list is at the top of `mobile.js`. **After every game update**, run the interaction tests in `tests/mobile/mobile.test.js` (instructions in the file).
 
+### Languages
+
+Everything this server adds follows the game's language buttons (🇩🇪/🇬🇧): menus, lobby, Rundenspiele, player profile, login and account pages including the admin tabs, and the messages the server sends back. German is the key, the English is in `client/i18n.js` – the same scheme as the game's `T()`: `TX('…')` in `mp.js`, `tx('…')` on the account page, `HC_I18N.tr(msg)` for server messages (numbers and names inside them stay). A new text needs its line in the table; `tests/i18n/english.test.js` walks all screens in English and fails on German left over. The legal pages and e-mails stay German.
+
 **Updating the game:** bring the new game version into `HochCiv/` (for example by merging a new Hochciv release into the multiplayer branch of the game repository and copying the result over), run its tests (`node test.js`, `node smoke.js` in `HochCiv/`) and commit. Running Rundenspiele are not affected by later versions only if their version is kept – to keep one, copy the old `HochCiv/` to `HochCiv-<version>/` before replacing it and add it everywhere `HochCiv-v87/` appears (`GAME_DIRS` in `engine-adapter.js`, `GAMES` in `scripts/build-public.js`, `OLD_VERSIONS` in `mp.js`, `docker-compose.local.yml`).
 
 ## Deployment (production)
@@ -177,7 +181,7 @@ You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`
 * `utils/` – Auth helpers, OAuth strategies, WebAuthn settings, mailer, MMR, notifications.
 * `models/` – Database models (Sequelize).
 * `mp.js` – Multiplayer client injected into the game.
-* `client/` – Login and account pages (shown inside the game).
+* `client/` – Login and account pages (shown inside the game); `client/i18n.js` – the English texts of everything the server adds.
 * `elevate.js` – Command-line tool to assign admin roles.
 
 ## Security notes

@@ -7,6 +7,11 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 const OLD_VERSIONS = ['v88', 'v87', 'v83'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
+/* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
+   texts – German is the key, as in the game's T() –, TXS() for messages from the server. */
+const TX = (de, ...args) => HC_I18N.t(de, ...args);
+const TXS = msg => HC_I18N.tr(msg);
+
 const MP = {
     active: false,
     socket: null,
@@ -29,7 +34,7 @@ const MP = {
     sendAction: function (payload, cb) {
         if (this.asyncId) {
             this.socket.emit('async:action', { id: this.asyncId, type: payload.type, params: payload.params }, res => {
-                if (res && res.error) { toast(res.error); ASYNC.reload(); }
+                if (res && res.error) { toast(TXS(res.error)); ASYNC.reload(); }
                 if (cb) cb(res);
             });
         } else {
@@ -86,7 +91,7 @@ const MP = {
         if (!this.active || document.getElementById('mp-turn-popup')) return;
         const d = document.createElement('div');
         d.id = 'mp-turn-popup';
-        d.textContent = 'DU BIST AM ZUG!';
+        d.textContent = TX('DU BIST AM ZUG!');
         d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:8vmin;color:white;font-weight:bold;text-shadow:0 0 20px #000, 0 0 10px #702010;z-index:9999;animation: mpAnimPop 2s forwards;pointer-events:none;text-align:center;line-height:1.2;';
         document.body.appendChild(d);
         setTimeout(() => d.remove(), 2100);
@@ -115,7 +120,7 @@ const MP = {
 
                 let displayName = nationName;
                 if (sPlayer.kind === 'bot' || sPlayer.kind === 'ki') {
-                    displayName += ` <span style="opacity:0.75;font-weight:normal;">(· ${sPlayer.kind === 'ki' ? 'KI' : 'Bot'})</span>`;
+                    displayName += ` <span style="opacity:0.75;font-weight:normal;">(· ${sPlayer.kind === 'ki' ? TX('KI') : TX('Bot')})</span>`;
                 } else if (p && p.name) {
                     displayName += ` <span style="opacity:0.75;font-weight:normal;">(${escHtml(p.name)})</span>`;
                     if (p.mmr) {
@@ -183,40 +188,40 @@ const MP = {
      */
     customMapRow: function (isHost) {
         const cur = this.gameConfig.customMap;
-        const info = cur ? `<b>${esc(cur.name)}</b> (${cur.rows.length} × ${cur.rows[0].length})` : '<i>noch keine gewählt</i>';
-        if (!isHost) return `<p class="hint" style="margin:4px 0 8px">Eigene Karte: ${info}</p>`;
+        const info = cur ? `<b>${esc(cur.name)}</b> (${cur.rows.length} × ${cur.rows[0].length})` : `<i>${TX('noch keine gewählt')}</i>`;
+        if (!isHost) return `<p class="hint" style="margin:4px 0 8px">${TX('Eigene Karte: %s', info)}</p>`;
         const list = typeof myMaps !== 'undefined' ? myMaps : [];
         const opts = list.map(m => `<option value="${esc(m.name)}" ${cur && cur.name === m.name ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
-        return `<label class="row"><span>Meine Karten</span>
+        return `<label class="row"><span>${TX('Meine Karten')}</span>
               <select id="mp-set-custom" onchange="MP.pickCustomMap(this.value)">
                 ${cur && !list.some(m => m.name === cur.name) ? `<option selected>${esc(cur.name)}</option>` : ''}
-                ${opts || (cur ? '' : '<option value="">– keine gespeichert –</option>')}
+                ${opts || (cur ? '' : `<option value="">${TX('– keine gespeichert –')}</option>`)}
               </select></label>
-            <p class="hint" style="margin:4px 0 8px">Eigene Karte: ${info} ·
-              <a href="#" onclick="MP.customMapByCode(); return false">Code eingeben</a> ·
-              <a href="#" onclick="MP.importCustomMap(); return false">aus Datei laden</a>
-              – Karten baust du im Karteneditor (Hauptmenü).</p>`;
+            <p class="hint" style="margin:4px 0 8px">${TX('Eigene Karte: %s', info)} ·
+              <a href="#" onclick="MP.customMapByCode(); return false">${TX('Code eingeben')}</a> ·
+              <a href="#" onclick="MP.importCustomMap(); return false">${TX('aus Datei laden')}</a>
+              – ${TX('Karten baust du im Karteneditor (Hauptmenü).')}</p>`;
     },
     /** A published map (6-character code) becomes the lobby's map. */
     customMapByCode: function () {
-        const code = prompt('Kartencode (6 Zeichen):');
+        const code = prompt(TX('Kartencode (6 Zeichen):'));
         if (!code) return;
         MAPACCOUNT.account.load(code).then(r => {
             this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: r.map }, res => {
-                if (res && res.error) return toast(res.error);
-                toast(`Karte „${r.map.name}"${r.author ? ' von ' + r.author : ''} gewählt.`);
+                if (res && res.error) return toast(TXS(res.error));
+                toast(r.author ? TX('Karte „%s" von %s gewählt.', r.map.name, r.author) : TX('Karte „%s" gewählt.', r.map.name));
             });
-        }).catch(e => toast(e.message));
+        }).catch(e => toast(TXS(e.message)));
     },
     pickCustomMap: function (name) {
         const m = typeof myMap === 'function' ? myMap(name) : null;
-        if (m) this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: m }, res => { if (res && res.error) toast(res.error); });
+        if (m) this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: m }, res => { if (res && res.error) toast(TXS(res.error)); });
     },
     importCustomMap: function () {
         importMapFile(m => {
             const r = checkCustomMap(m);
             if (r.error) return;                      // importMapFile already says why
-            this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: r.map }, res => { if (res && res.error) toast(res.error); });
+            this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: r.map }, res => { if (res && res.error) toast(TXS(res.error)); });
         });
     },
 
@@ -237,11 +242,11 @@ const MP = {
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ, color: '#999' };
             const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
             const name = lp.name || civ.n;
-            const status = bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? 'Bot' : 'KI'}</span>`
-                : lp.connected === false ? '<span class="mp-pl-tag off" title="Nicht verbunden">offline</span>' : '';
+            const status = bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
+                : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
                 <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
-                <span class="mp-pl-name">${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ' <small>(du)</small>' : ''}</span>
+                <span class="mp-pl-name">${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ` <small>(${TX('du')})</small>` : ''}</span>
                 ${status}
                 <span class="mp-pl-civ">${esc(civ.n)}</span>
               </div>`;
@@ -270,11 +275,11 @@ const MP = {
             .sort((a, b) => (b.points || 0) - (a.points || 0));
         const scored = rows.some(r => r.points != null);
         const pts = r => r.points == null ? '–'
-            : r.won ? `${r.points} <small>(inkl. +${this.WIN_BONUS} Sieg)</small>` : r.points;
+            : r.won ? `${r.points} <small>(${TX('inkl. +%s Sieg', this.WIN_BONUS)})</small>` : r.points;
         const html = `<div id="mp-go-players"><table class="tbl" style="margin:10px 0">
-            <tr><th>Spieler</th><th>Reich</th>${scored ? '<th>Punkte</th>' : ''}</tr>
+            <tr><th>${TX('Spieler')}</th><th>${TX('Reich')}</th>${scored ? `<th>${TX('Punkte')}</th>` : ''}</tr>
             ${rows.map(r => `<tr${r.won ? ' style="font-weight:700"' : ''}>
-                <td>${this.nameLink(r.name, r.userId)}${r.bot ? ' <small>(Bot)</small>' : ''}</td>
+                <td>${this.nameLink(r.name, r.userId)}${r.bot ? ` <small>(${TX('Bot')})</small>` : ''}</td>
                 <td>${esc(r.civ)}</td>${scored ? `<td>${pts(r)}</td>` : ''}</tr>`).join('')}
             </table></div>`;
         const tip = body.querySelector('.tip');
@@ -324,14 +329,14 @@ const MP = {
             this.socket.on('player:joined', data => {
                 MP.players = data.players;
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
-                toast(`${data.name} ist beigetreten.`);
+                toast(TX('%s ist beigetreten.', data.name));
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
             });
             this.socket.on('player:left', data => {
                 MP.players = data.players;
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
-                toast(`${data.name} hat das Spiel verlassen.`);
+                toast(TX('%s hat das Spiel verlassen.', data.name));
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
             });
@@ -342,7 +347,7 @@ const MP = {
             });
             this.socket.on('session:kicked', (data) => {
                 MP.active = false;
-                toast(data && data.reason ? data.reason : 'Du wurdest vom Host gekickt.');
+                toast(data && data.reason ? TXS(data.reason) : TX('Du wurdest vom Host gekickt.'));
                 MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
             });
             this.socket.on('session:index', data => {
@@ -369,7 +374,7 @@ const MP = {
                 window.placeReveal = function () {
                     // Suppress revealing the map locally since we must wait for server resolution!
                     document.body.classList.add('mp-waiting');
-                    if (MP.placementFinished) window.toast("Warten auf andere Spieler...");
+                    if (MP.placementFinished) window.toast(TX('Warten auf andere Spieler...'));
                 }
 
                 const origPlaceSeat = window.placeSeat;
@@ -377,10 +382,10 @@ const MP = {
                     if (seat.idx === MP.lobbyIndex) {
                         MP.placementFinished = true;
                         MP.socket.emit('placement:action', { o, cell }, res => {
-                            if (res && res.error) window.toast(res.error);
+                            if (res && res.error) window.toast(TXS(res.error));
                         });
                         document.body.classList.add('mp-waiting');
-                        window.toast('Warten auf andere Spieler...');
+                        window.toast(TX('Warten auf andere Spieler...'));
                     }
                     return origPlaceSeat(plan, seat, o, cell);
                 };
@@ -453,40 +458,42 @@ const MP = {
 
     renderMainMenuAuth: async function () {
         await this.fetchUser();
+        this.drawMainMenuAuth();
+        if (this.renderLobby) this.renderLobby();
+    },
 
+    drawMainMenuAuth: function () {
         const authContainer = $('mp-main-auth-container');
         if (!authContainer) return;
 
         if (this.user) {
             authContainer.innerHTML = `
                 <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
-                    <span>Eingeloggt als <b>${escHtml(this.user.username)}</b> (${escHtml(this.user.mmr)} MMR, ${escHtml(this.user.gamesPlayed)} Spiele)</span>
-                    <button class="btn small" onclick="MP.showAccountModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Account & Admin</button>
-                    <button class="btn small" onclick="MP.logout()" style="margin:0; padding: 6px 12px; font-size: 13px; background: #c9302c; color: white; border: 1px solid #ac2925; box-shadow: none;">Abmelden</button>
+                    <span>${TX('Eingeloggt als %s (%s MMR, %s Spiele)', `<b>${escHtml(this.user.username)}</b>`, escHtml(this.user.mmr), escHtml(this.user.gamesPlayed))}</span>
+                    <button class="btn small" onclick="MP.showAccountModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">${TX('Account & Admin')}</button>
+                    <button class="btn small" onclick="MP.logout()" style="margin:0; padding: 6px 12px; font-size: 13px; background: #c9302c; color: white; border: 1px solid #ac2925; box-shadow: none;">${TX('Abmelden')}</button>
                 </div>
             `;
         } else {
             authContainer.innerHTML = `
                 <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
-                    <span>Gast <span style="opacity:0.7">(Ranked gesperrt)</span></span>
-                    <button class="btn small" onclick="MP.showAuthModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">Anmelden</button>
+                    <span>${TX('Gast')} <span style="opacity:0.7">(${TX('Ranked gesperrt')})</span></span>
+                    <button class="btn small" onclick="MP.showAuthModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">${TX('Anmelden')}</button>
                 </div>
             `;
         }
-
-        if (this.renderLobby) this.renderLobby();
     },
 
     showAuthModal: function () {
         if (typeof modal === 'function') {
-            modal('Anmelden', '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
+            modal(TX('Anmelden'), '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
             document.getElementById('overlay').classList.add('wide');
         }
     },
 
     showAccountModal: function () {
         if (typeof modal === 'function') {
-            modal('Account Übersicht', '<iframe src="/client/account.html?modal=true" style="width:100%; height:80vh; min-height:600px; border:none; background:transparent;"></iframe>');
+            modal(TX('Account Übersicht'), '<iframe src="/client/account.html?modal=true" style="width:100%; height:80vh; min-height:600px; border:none; background:transparent;"></iframe>');
             document.getElementById('overlay').classList.add('wide');
         }
     },
@@ -510,33 +517,33 @@ const MP = {
 
             if (mode === 'menu') {
                 h = `
-          <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">Neues Spiel hosten (Server)</button>
-          <button class="btn wide" onclick="MP.setMode('public-list')">Öffentliche Lobbys suchen</button>
-          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">Privatem Spiel beitreten</button>
+          <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">${TX('Neues Spiel hosten (Server)')}</button>
+          <button class="btn wide" onclick="MP.setMode('public-list')">${TX('Öffentliche Lobbys suchen')}</button>
+          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">${TX('Privatem Spiel beitreten')}</button>
         `;
             } else if (mode === 'join') {
-                const savedName = localStorage.getItem('mp-name') || 'Spieler';
+                const savedName = localStorage.getItem('mp-name') || TX('Spieler');
                 h = `
-          <label class="row"><span>Beitrittscode</span><input type="text" id="mp-c" style="width:100px;text-transform:uppercase"></label>
-          <label class="row"><span>Passwort</span><input type="number" id="mp-p" style="width:100px"></label>
-          <label class="row"><span>Dein Name</span><input type="text" id="mp-n" value="${savedName}"></label>
-          <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">Beitreten</button>
+          <label class="row"><span>${TX('Beitrittscode')}</span><input type="text" id="mp-c" style="width:100px;text-transform:uppercase"></label>
+          <label class="row"><span>${TX('Passwort')}</span><input type="number" id="mp-p" style="width:100px"></label>
+          <label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${savedName}"></label>
+          <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">${TX('Beitreten')}</button>
         `;
             } else if (mode === 'host') {
                 const savedName = localStorage.getItem('mp-name') || 'Host';
                 h = `
-          <label class="row"><span>Dein Name</span><input type="text" id="mp-hn" value="${savedName}"></label>
-          <label class="row" style="margin-top:10px"><span>Öffentlich</span><input type="checkbox" id="mp-is-public" checked></label>
-          <p class="sub">Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.</p>
-          <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">Hosten</button>
+          <label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-hn" value="${savedName}"></label>
+          <label class="row" style="margin-top:10px"><span>${TX('Öffentlich')}</span><input type="checkbox" id="mp-is-public" checked></label>
+          <p class="sub">${TX('Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.')}</p>
+          <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">${TX('Hosten')}</button>
         `;
             } else if (mode === 'public-list') {
-                const savedName = localStorage.getItem('mp-name') || 'Spieler';
+                const savedName = localStorage.getItem('mp-name') || TX('Spieler');
                 h = `
-          <label class="row" style="margin-bottom:15px"><span>Dein Name</span><input type="text" id="mp-pln" value="${savedName}"></label>
-          <h3 style="margin-bottom:10px">Öffentliche Lobbys</h3>
-          <div id="mp-pl-container">Lade...</div>
-          <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">Zurück</button>
+          <label class="row" style="margin-bottom:15px"><span>${TX('Dein Name')}</span><input type="text" id="mp-pln" value="${savedName}"></label>
+          <h3 style="margin-bottom:10px">${TX('Öffentliche Lobbys')}</h3>
+          <div id="mp-pl-container">${TX('Lade...')}</div>
+          <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">${TX('Zurück')}</button>
         `;
 
                 const fetchList = () => {
@@ -546,22 +553,22 @@ const MP = {
                             const c = $('mp-pl-container');
                             if (!c) return;
                             if (list.length === 0) {
-                                c.innerHTML = '<p class="sub">Keine öffentlichen Lobbys gefunden.</p>';
+                                c.innerHTML = `<p class="sub">${TX('Keine öffentlichen Lobbys gefunden.')}</p>`;
                                 return;
                             }
                             c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
                                 list.map(l => `
                                 <tr style="border-bottom:1px solid #ccc;">
-                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${escHtml(l.playersCount)}/${escHtml(l.maxPlayers)} Spieler</small></td>
+                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers))}</small></td>
                                     <td style="padding: 8px 4px; text-align:right;">
-                                        <button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">Beitreten</button>
+                                        <button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>
                                     </td>
                                 </tr>
                             `).join('') + '</table>';
                         })
                         .catch(() => {
                             const c = $('mp-pl-container');
-                            if (c) c.innerHTML = '<p class="sub error">Fehler beim Laden.</p>';
+                            if (c) c.innerHTML = `<p class="sub error">${TX('Fehler beim Laden.')}</p>`;
                         });
                 };
 
@@ -576,94 +583,95 @@ const MP = {
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
-                    const civOpts = randomAll ? '<option value="random" selected>Zufall (für alle)</option>'
-                        : '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>Zufall</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civOpts = randomAll ? `<option value="random" selected>${TX('Zufall (für alle)')}</option>`
+                        : '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>' + TX('Zufall') + '</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
                     const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
                     let abOpts = '';
                     if (p.civ === 'random') {
-                        abOpts = '<option value="random" selected>Zufall</option>';
+                        abOpts = `<option value="random" selected>${TX('Zufall')}</option>`;
                     } else if (civDef) {
-                        abOpts = '<option value="random" ' + (p.ability === 'random' ? 'selected' : '') + '>Zufall</option>' + civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('');
+                        abOpts = '<option value="random" ' + (p.ability === 'random' ? 'selected' : '') + '>' + TX('Zufall') + '</option>' + civDef.abilities.map(a => `<option value="${a.k}" ${p.ability === a.k ? 'selected' : ''}>${a.n}</option>`).join('');
                     }
 
                     return `
                     <tr>
-                        <td><b>${escHtml(p.name)}</b> ${isPlayerHost ? '(Host)' : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${escHtml(p.mmr)} MMR]</span>` : ''}</td>
+                        <td><b>${escHtml(p.name)}</b> ${isPlayerHost ? `(${TX('Host')})` : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${escHtml(p.mmr)} MMR]</span>` : ''}</td>
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
-                            ${isMarathon ? '<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">Fähigkeiten: Draft vor dem ersten Zug</small>' : ''}
+                            ${isMarathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
                         </td>
-                        <td>${p.connected ? 'Verbunden' : 'Wartet'}</td>
-                        <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">Kick</button>` : ''}</td>
+                        <td>${p.connected ? TX('Verbunden') : TX('Wartet')}</td>
+                        <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">${TX('Kick')}</button>` : ''}</td>
                     </tr>
                 `}).join('');
 
                 h = `
-          <h3>Lobby <span class="sub" style="float:right">Code: <b>${this.joinCode}</b> · Passwort: <b>${this.password}</b></span></h3>
+          <h3>${TX('Lobby')} <span class="sub" style="float:right">${TX('Code')}: <b>${this.joinCode}</b> · ${TX('Passwort')}: <b>${this.password}</b></span></h3>
           <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
-            <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>Spieler</th><th>Ziv</th><th>Status</th><th></th></tr>
+            <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>${TX('Spieler')}</th><th>${TX('Ziv')}</th><th>${TX('Status')}</th><th></th></tr>
             ${trs}
           </table>
 
-          <h4>Spieleinstellungen</h4>
+          <h4>${TX('Spieleinstellungen')}</h4>
           <div style="background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
-              <label class="row"><span>Karte</span>
+              <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
-                  <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>Originalkarte (12 × 18)</option>
-                  <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>Große Karte (15 × 24)</option>
-                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>Plättchenkarte (2–8 Reiche)</option>
-                  ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>Marathon (24 × 36)</option>` : ''}
-                  ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>Eigene Karte</option>` : ''}
+                  <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>${TX('Originalkarte (12 × 18)')}</option>
+                  <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>${TX('Große Karte (15 × 24)')}</option>
+                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
+                  ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>${TX('Marathon (24 × 36)')}</option>` : ''}
+                  ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>${TX('Eigene Karte')}</option>` : ''}
                 </select>
               </label>
               ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost) : ''}
-              ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.</p>` : ''}
-              <label class="row"><span>Mit Ereignissen</span>
+              ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
+              <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
               ${this.gameConfig.events ? `
-              <label class="row"><span>Ereignisstärke</span>
+              <label class="row"><span>${TX('Ereignisstärke')}</span>
                 <select id="mp-set-evmode" onchange="MP.updateLobbyConfig()">
-                  <option value="hard" ${this.gameConfig.eventMode === 'hard' ? 'selected' : ''}>Hart (jede Runde)</option>
-                  <option value="easy" ${this.gameConfig.eventMode === 'easy' ? 'selected' : ''}>Leicht (selten)</option>
+                  <option value="hard" ${this.gameConfig.eventMode === 'hard' ? 'selected' : ''}>${TX('Hart (jede Runde)')}</option>
+                  <option value="easy" ${this.gameConfig.eventMode === 'easy' ? 'selected' : ''}>${TX('Leicht (selten)')}</option>
                 </select>
               </label>` : ''}
-              <label class="row"><span>Mit Weltwundern</span>
+              <label class="row"><span>${TX('Mit Weltwundern')}</span>
                 <input type="checkbox" id="mp-set-wonders" onchange="MP.updateLobbyConfig()" ${this.gameConfig.wonders ? 'checked' : ''}>
               </label>
-              <label class="row"><span>Reiche insgesamt</span>
+              <label class="row"><span>${TX('Reiche insgesamt')}</span>
                 <select id="mp-set-total" onchange="MP.updateLobbyConfig()">
-                  ${Array.from({ length: cnt.lim.max - cnt.lim.min + 1 }, (_, i) => cnt.lim.min + i).map(k => `<option value="${k}" ${k === cnt.total ? 'selected' : ''}>${k}${k === 2 ? ' (1 gegen 1)' : ''}</option>`).join('')}
+                  ${Array.from({ length: cnt.lim.max - cnt.lim.min + 1 }, (_, i) => cnt.lim.min + i).map(k => `<option value="${k}" ${k === cnt.total ? 'selected' : ''}>${k}${k === 2 ? ` (${TX('1 gegen 1')})` : ''}</option>`).join('')}
                 </select>
               </label>
-              <label class="row"><span>davon KI (feste Plätze)</span>
+              <label class="row"><span>${TX('davon KI (feste Plätze)')}</span>
                 <select id="mp-set-ki" onchange="MP.updateLobbyConfig()">
                   ${Array.from({ length: cnt.total }, (_, k) => `<option value="${k}" ${k === cnt.ki ? 'selected' : ''}>${k}</option>`).join('')}
                 </select>
               </label>
               <p class="hint" style="margin:4px 0 8px">${cnt.humans > cnt.total - cnt.ki
-                ? `⚠ ${cnt.humans} Spieler in der Lobby – Platz ist für ${cnt.total - cnt.ki} Menschen.`
-                : `Bis zu ${cnt.total - cnt.ki} Menschen. ${cnt.total - cnt.humans > 0 ? `Beim Start spielt die KI ${cnt.total - cnt.humans} ${cnt.total - cnt.humans === 1 ? 'Reich' : 'Reiche'}.` : 'Ohne KI.'}`}</p>
-              <label class="row"><span>Zufällige Nationen für alle</span>
+                ? '⚠ ' + TX('%s Spieler in der Lobby – Platz ist für %s Menschen.', cnt.humans, cnt.total - cnt.ki)
+                : TX('Bis zu %s Menschen.', cnt.total - cnt.ki) + ' ' + (cnt.total - cnt.humans > 1 ? TX('Beim Start spielt die KI %s Reiche.', cnt.total - cnt.humans)
+                    : cnt.total - cnt.humans === 1 ? TX('Beim Start spielt die KI 1 Reich.') : TX('Ohne KI.'))}</p>
+              <label class="row"><span>${TX('Zufällige Nationen für alle')}</span>
                 <input type="checkbox" id="mp-set-random" onchange="MP.updateLobbyConfig()" ${this.gameConfig.randomCivs ? 'checked' : ''}>
               </label>
-              <label class="row"${cnt.total - cnt.humans > 0 ? '' : ' hidden'}><span>KI-Stufe</span>
+              <label class="row"${cnt.total - cnt.humans > 0 ? '' : ' hidden'}><span>${TX('KI-Stufe')}</span>
                 <select id="mp-set-diff" onchange="MP.updateLobbyConfig()">
                   ${KI_LEVELS.map(d => `<option value="${d.k}" ${this.kiLevel(this.gameConfig.difficulty) === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
                 </select>
               </label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
-                <span><b>🔥 Gewertetes Spiel</b> <br><small style="font-size:10px;color:#777">(min 2 H-Spieler, KI auf schwer)</small></span>
+                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('min 2 H-Spieler, KI auf schwer')})</small></span>
                 <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
               </label>
           </div>
 
-          ${isHost ? '<button class="btn wide primary" onclick="MP.startGame()">Spiel starten</button>' : ''}
+          ${isHost ? `<button class="btn wide primary" onclick="MP.startGame()">${TX('Spiel starten')}</button>` : ''}
         `;
             }
-            modal('Multiplayer', h);
+            modal(TX('Multiplayer'), h);
         };
         this.setMode = (m) => { mode = m; render(); };
         this.renderLobby = render; // Export render method to dynamically update when lobby state changes
@@ -706,7 +714,7 @@ const MP = {
         // Switching to "Eigene Karte" without a map yet: take the newest one from the library
         if (mapKey === 'eigene' && !this.gameConfig.customMap && typeof myMaps !== 'undefined' && myMaps[0])
             newConfig.customMap = myMaps[0];
-        this.socket.emit('lobby:config', newConfig, res => { if (res && res.error) toast(res.error); });
+        this.socket.emit('lobby:config', newConfig, res => { if (res && res.error) toast(TXS(res.error)); });
     },
 
 
@@ -722,7 +730,7 @@ const MP = {
     },
 
     kickPlayer: function (playerIndex) {
-        if (confirm('Diesen Spieler unwiderruflich kicken?')) {
+        if (confirm(TX('Diesen Spieler unwiderruflich kicken?'))) {
             this.socket.emit('session:kick', { playerIndex });
         }
     },
@@ -733,17 +741,17 @@ const MP = {
         const name = $('mp-n').value.trim();
         localStorage.setItem('mp-name', name);
 
-        if (!joinCode || !password) return toast('Bitte Code und Passwort eingeben.');
+        if (!joinCode || !password) return toast(TX('Bitte Code und Passwort eingeben.'));
 
         try {
-            toast('Verbinde...');
+            toast(TX('Verbinde...'));
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
-            if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
+            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
 
             this.sessionId = data.sessionId;
             this.lobbyIndex = data.playerIndex;
@@ -757,7 +765,7 @@ const MP = {
                 clientId: this.getClientId(),
                 password: this.password
             }, (ack) => {
-                if (ack.error) return toast(ack.error);
+                if (ack.error) return toast(TXS(ack.error));
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
@@ -769,7 +777,7 @@ const MP = {
                 if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
 
                 if (ack.status === 'playing' || ack.status === 'draft') {
-                    toast('Spiel läuft, lade Zustand...');
+                    toast(TX('Spiel läuft, lade Zustand...'));
                 }
                 else {
                     this.setMode('waiting');
@@ -777,7 +785,7 @@ const MP = {
             });
         } catch (e) {
             console.error(e);
-            toast('Server nicht erreichbar: ' + e.message);
+            toast(TX('Server nicht erreichbar: %s', e.message));
         }
     },
 
@@ -785,19 +793,19 @@ const MP = {
         const nameInput = $('mp-pln');
         if (!nameInput) return;
         const name = nameInput.value.trim();
-        if (!name) return toast('Bitte Namen eingeben.');
+        if (!name) return toast(TX('Bitte Namen eingeben.'));
 
         localStorage.setItem('mp-name', name);
 
         try {
-            toast('Verbinde...');
+            toast(TX('Verbinde...'));
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
-            if (!res.ok) return toast(data.error || 'Fehler beim Beitritt.');
+            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
 
             this.sessionId = data.sessionId;
             this.lobbyIndex = data.playerIndex;
@@ -811,7 +819,7 @@ const MP = {
                 clientId: this.getClientId(),
                 password: this.password
             }, (ack) => {
-                if (ack.error) return toast(ack.error);
+                if (ack.error) return toast(TXS(ack.error));
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
@@ -823,7 +831,7 @@ const MP = {
                 if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
 
                 if (ack.status === 'playing' || ack.status === 'draft') {
-                    toast('Spiel läuft, lade Zustand...');
+                    toast(TX('Spiel läuft, lade Zustand...'));
                 }
                 else {
                     this.setMode('waiting');
@@ -831,7 +839,7 @@ const MP = {
             });
         } catch (e) {
             console.error(e);
-            toast('Server nicht erreichbar: ' + e.message);
+            toast(TX('Server nicht erreichbar: %s', e.message));
         }
     },
 
@@ -854,14 +862,14 @@ const MP = {
         };
 
         try {
-            toast('Erstelle Sitzung...');
+            toast(TX('Erstelle Sitzung...'));
             const res = await fetch(`${this.serverUrl}/api/sessions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ config, host: { name, clientId: this.getClientId() } })
             });
             const data = await res.json();
-            if (!res.ok) return toast(data.error || 'Fehler beim Hosten.');
+            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Hosten.'));
 
             this.sessionId = data.sessionId;
             this.joinCode = data.joinCode;
@@ -876,7 +884,7 @@ const MP = {
                 clientId: this.getClientId(),
                 password: this.password
             }, (ack) => {
-                if (ack.error) return toast(ack.error);
+                if (ack.error) return toast(TXS(ack.error));
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
                 this.active = true;
                 this.players = ack.players;
@@ -890,13 +898,13 @@ const MP = {
             });
         } catch (e) {
             console.error(e);
-            toast('Server nicht erreichbar: ' + e.message);
+            toast(TX('Server nicht erreichbar: %s', e.message));
         }
     },
 
     startGame: function () {
         this.socket.emit('game:start', {}, (ack) => {
-            if (ack.error) toast(ack.error);
+            if (ack.error) toast(TXS(ack.error));
         });
     }
 };
@@ -908,7 +916,8 @@ window.addEventListener('DOMContentLoaded', () => {
         // Multiplaxer Button
         const btn = document.createElement('button');
         btn.className = 'btn primary';
-        btn.textContent = 'Multiplayer';
+        btn.id = 'mp-live-btn';
+        btn.textContent = TX('Multiplayer');
         btn.onclick = () => MP.showLobby();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
 
@@ -941,13 +950,8 @@ window.addEventListener('DOMContentLoaded', () => {
             footer.style.textAlign = 'center';
             footer.style.fontSize = '0.8rem';
             footer.style.marginTop = '20px';
-            footer.innerHTML = `
-              &copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten. | 
-              <a href="/datenschutzerklaerung.html" target="_blank" style="color:inherit">Datenschutzerklärung</a> |
-              <a href="/nutzungsbedingungen.html" target="_blank" style="color:inherit">Nutzungsbedingungen</a> |
-              <a href="/impressum.html" target="_blank" style="color:inherit">Impressum</a>
-            `;
             mVersion.parentNode.appendChild(footer);
+            MP.drawLegalFooter();
         }
 
         // Render it
@@ -1029,7 +1033,7 @@ window.addEventListener('DOMContentLoaded', () => {
         #mp-players-content { max-height: 40vh; overflow-y: auto; padding: 6px 8px; }
         .mp-pl-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 0 8px; align-items: center; padding: 4px 4px; border-radius: 4px; }
         .mp-pl-row.cur { background: rgba(157,59,47,0.12); }
-        .mp-pl-row.cur .mp-pl-name::after { content: " ◂ am Zug"; font-size: 11px; color: #9d3b2f; font-weight: normal; }
+        .mp-pl-row.cur .mp-pl-name::after { content: var(--mp-on-turn, " ◂ am Zug"); font-size: 11px; color: #9d3b2f; font-weight: normal; }
         .mp-pl-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); }
         .mp-pl-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
         .mp-pl-civ { grid-column: 2 / -1; font-size: 11px; color: #6f6551; }
@@ -1042,7 +1046,7 @@ window.addEventListener('DOMContentLoaded', () => {
     pLog.id = 'mp-persistent-log-container';
     pLog.innerHTML = `
         <div id="mp-persistent-log-header">
-            <span>Spiel-Log</span>
+            <span id="mp-log-title">${TX('Spiel-Log')}</span>
             <span id="mp-log-toggle-icon" style="font-size: 16px;">✖</span>
         </div>
         <div id="mp-persistent-log-content"></div>
@@ -1070,7 +1074,7 @@ window.addEventListener('DOMContentLoaded', () => {
     pList.style.display = 'none';
     pList.innerHTML = `
         <div id="mp-players-header">
-            <span>Spieler</span>
+            <span id="mp-players-title">${TX('Spieler')}</span>
             <span style="font-size: 16px;">✖</span>
         </div>
         <div id="mp-players-content"></div>
@@ -1094,7 +1098,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Inject Turn Blocker active toast
     const waitToast = document.createElement('div');
     waitToast.className = 'mp-waiting-toast';
-    waitToast.textContent = 'Warte auf deinen Zug...';
+    waitToast.textContent = TX('Warte auf deinen Zug...');
     document.body.appendChild(waitToast);
 
     // Inject Credentials Box into Game Screen HUD Bar
@@ -1104,7 +1108,7 @@ window.addEventListener('DOMContentLoaded', () => {
         wrap.id = 'mp-cred-wrapper';
         wrap.style.cssText = 'flex-grow: 1; display: flex; justify-content: center; align-items: center;';
         wrap.innerHTML = `
-          <span class="res" style="cursor:text; user-select:text; padding: 4px 10px;" title="Lobby Zugangsdaten">
+          <span class="res" style="cursor:text; user-select:text; padding: 4px 10px;" title="${TX('Lobby Zugangsdaten')}">
             <i style="font-style:normal; margin-right:4px;">🌐</i> 
             <b id="mp-cred-box" style="font-family:monospace; font-size:14px;"></b>
           </span>
@@ -1190,12 +1194,12 @@ if (originalDrawDraft) {
             if (!mine) $('dr-pool').querySelectorAll('[data-ab]').forEach(b => { b.disabled = true; });
             const note = $('dr-note');
             if (cur == null) {
-                note.innerHTML += ' Das Spiel startet …';
+                note.innerHTML += ' ' + TX('Das Spiel startet …');
             } else if (mine) {
-                note.innerHTML = '<b>Du bist dran!</b> ' + note.innerHTML;
+                note.innerHTML = `<b>${TX('Du bist dran!')}</b> ` + note.innerHTML;
             } else {
                 const seat = MP.players.find(x => x.index === draftState.V.players[cur].slot);
-                note.innerHTML = `Warte auf <b>${seat ? escHtml(seat.name) : 'andere Spieler'}</b> … ` + note.innerHTML;
+                note.innerHTML = TX('Warte auf %s …', `<b>${seat ? escHtml(seat.name) : TX('andere Spieler')}</b>`) + ' ' + note.innerHTML;
             }
         }
         return out;
@@ -1207,9 +1211,9 @@ if (originalDraftChoose) {
         if (MP.active) {
             const D = draftState && draftState.D;
             if (!D || D.at >= D.order.length) return;
-            if (D.order[D.at] !== MP.draftMine()) return toast('Du bist nicht am Zug!');
+            if (D.order[D.at] !== MP.draftMine()) return toast(TX('Du bist nicht am Zug!'));
             $('dr-pool').querySelectorAll('[data-ab]').forEach(b => { b.disabled = true; });
-            const done = res => { if (res && res.error) { toast(res.error); drawDraft(); } };
+            const done = res => { if (res && res.error) { toast(TXS(res.error)); drawDraft(); } };
             if (MP.asyncId) MP.socket.emit('async:draft', { id: MP.asyncId, abilityId: id }, done);
             else MP.socket.emit('draft:pick', { id }, done);
             return;
@@ -1252,7 +1256,7 @@ for (const [fnName, makePayload] of Object.entries(ACTIONS)) {
     window[fnName] = function (state, ...args) {
         if (MP.active) {
             const pi = fnName === 'moveArmy' ? args[0].owner : args[0];
-            if (pi !== MP.playerIndex) return 'Du bist nicht am Zug (oder nicht deine Armee).';
+            if (pi !== MP.playerIndex) return TX('Du bist nicht am Zug (oder nicht deine Armee).');
 
             // 1) Test local execution for validation / Optimistic UI
             const err = orig(state, ...args);
@@ -1275,7 +1279,7 @@ const patchTurnButton = setInterval(() => {
         aEnd.onclick = () => {
             if (MP.active) {
                 if (!S || S.over) return;
-                if (MP.playerIndex !== S.cur) return toast('Du bist nicht am Zug!');
+                if (MP.playerIndex !== S.cur) return toast(TX('Du bist nicht am Zug!'));
                 if (typeof ui !== 'undefined' && ui.botLock) return;
                 // Hard block from ui.js (v80+): an army still standing in a city prevents
                 // ending the turn – the server rejects it too.
@@ -1287,15 +1291,15 @@ const patchTurnButton = setInterval(() => {
                 const warn = pendingWarnings(S, S.cur);
                 if (warn.length && !ui.confirmedEnd) {
                     ui.confirmedEnd = true;
-                    return toast(warn[0] + ' Nochmal tippen zum Bestätigen.');
+                    return toast(warn[0] + ' ' + TX('Nochmal tippen zum Bestätigen.'));
                 }
                 ui.confirmedEnd = false; ui.army = null; ui.sel = null; ui.mode = null;
                 closeSheet();
 
                 MP.sendAction({ type: 'endTurn' }, res => {
-                    if (res && res.error && !MP.asyncId) toast(res.error);
+                    if (res && res.error && !MP.asyncId) toast(TXS(res.error));
                 });
-                toast('Warte auf Server...');
+                toast(TX('Warte auf Server...'));
             } else {
                 origEnd();
             }
@@ -1332,7 +1336,7 @@ const MAPACCOUNT = {
         if (body !== undefined) Object.assign(opts, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const res = await fetch(`${MP.serverUrl}/api/maps${path}`, opts);
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Fehler');
+        if (!res.ok) throw new Error(data.error ? TXS(data.error) : TX('Fehler'));
         return data;
     },
     syncedKey: function () { return 'hochciv.maps.synced.' + this.userId; },
@@ -1382,17 +1386,17 @@ const MAPACCOUNT = {
         loggedIn: () => !!MAPACCOUNT.userId,
         codeOf: name => (MAPACCOUNT.rows[name] || {}).code || null,
         saved: map => {
-            if (MAPACCOUNT.userId) MAPACCOUNT.upload(map).catch(e => toast('Konto: ' + e.message));
+            if (MAPACCOUNT.userId) MAPACCOUNT.upload(map).catch(e => toast(TX('Konto: %s', e.message)));
         },
         deleted: name => {
             const row = MAPACCOUNT.rows[name];
             if (!MAPACCOUNT.userId || !row) return;
             delete MAPACCOUNT.rows[name];
             MAPACCOUNT.markSynced(name, false);
-            MAPACCOUNT.api('/' + row.id, 'DELETE').catch(e => toast('Konto: ' + e.message));
+            MAPACCOUNT.api('/' + row.id, 'DELETE').catch(e => toast(TX('Konto: %s', e.message)));
         },
         publish: async name => {
-            if (!MAPACCOUNT.userId) throw new Error('Zum Veröffentlichen musst du angemeldet sein.');
+            if (!MAPACCOUNT.userId) throw new Error(TX('Zum Veröffentlichen musst du angemeldet sein.'));
             const row = MAPACCOUNT.rows[name] || await MAPACCOUNT.upload(myMap(name));
             const r = await MAPACCOUNT.api(`/${row.id}/publish`, 'POST', {});
             row.code = r.map.code;
@@ -1421,13 +1425,13 @@ const ASYNC = {
         return c ? `${typeof SYM !== 'undefined' ? SYM[c.sym] + ' ' : ''}${this.esc(c.n)}` : '?';
     },
     mapName: function (k, c) {
-        if (k === 'eigene') return 'Eigene Karte „' + this.esc((c && c.customMapName) || '?') + '"';
-        return ({ '0': 'Originalkarte', gross: 'Große Karte', plaettchen: 'Plättchenkarte', marathon: 'Marathon' })[k] || k;
+        if (k === 'eigene') return TX('Eigene Karte „%s"', this.esc((c && c.customMapName) || '?'));
+        return ({ '0': TX('Originalkarte'), gross: TX('Große Karte'), plaettchen: TX('Plättchenkarte'), marathon: TX('Marathon') })[k] || k;
     },
     seatsHtml: function (seats, mySlot) {
         return `<div class="mpa-seats">${seats.map(s => {
-            const who = s.kind === 'bot' ? 'Bot' : s.replaced ? `KI (für ${this.esc(s.name)})` : s.kind === 'ki' ? 'KI'
-                : s.name ? this.esc(s.name) : '<i>frei</i>';
+            const who = s.kind === 'bot' ? TX('Bot') : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
+                : s.name ? this.esc(s.name) : `<i>${TX('frei')}</i>`;
             return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
         }).join('')}</div>`;
     },
@@ -1437,14 +1441,14 @@ const ASYNC = {
             ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'include' }
             : { cache: 'no-cache', credentials: 'include' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Fehler');
+        if (!res.ok) throw new Error(data.error ? TXS(data.error) : TX('Fehler'));
         return data;
     },
 
     requireLogin: async function () {
         await MP.fetchUser();
         if (MP.user) return true;
-        toast('Rundenspiele gibt es nur mit Anmeldung.');
+        toast(TX('Rundenspiele gibt es nur mit Anmeldung.'));
         MP.showAuthModal();
         return false;
     },
@@ -1457,7 +1461,12 @@ const ASYNC = {
         if (MP.user) {
             try { n = (await this.api('')).mine.filter(g => g.yourTurn).length; } catch (_) { }
         }
-        btn.innerHTML = 'Rundenspiele' + (n ? ` <span class="mpa-badge">${n}</span>` : '');
+        this.badgeCount = n;
+        this.drawBadge();
+    },
+    drawBadge: function () {
+        const btn = $('mp-async-btn'), n = this.badgeCount || 0;
+        if (btn) btn.innerHTML = TX('Rundenspiele') + (n ? ` <span class="mpa-badge">${n}</span>` : '');
     },
 
     // ── List ─────────────────────────────────────────────────────────────────
@@ -1471,22 +1480,22 @@ const ASYNC = {
         const takenOver = d.mine.filter(g => !active.includes(g));
         const section = (title, list, empty) => `<h4 class="mpa-h">${title}</h4>` +
             (list.length ? list.map(g => this.row(g)).join('') : `<p class="sub">${empty}</p>`);
-        modal('Rundenspiele', `
+        modal(TX('Rundenspiele'), `
             <div class="mpa-top">
-              <button class="btn primary" onclick="ASYNC.showCreate()">Neues Rundenspiel</button>
-              <span class="mpa-code"><input id="mpa-code" placeholder="Code" maxlength="8">
-              <button class="btn small" onclick="ASYNC.joinByCode()">Beitreten</button></span>
+              <button class="btn primary" onclick="ASYNC.showCreate()">${TX('Neues Rundenspiel')}</button>
+              <span class="mpa-code"><input id="mpa-code" placeholder="${TX('Code')}" maxlength="8">
+              <button class="btn small" onclick="ASYNC.joinByCode()">${TX('Beitreten')}</button></span>
             </div>
-            <p class="sub">Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer ${d.timeoutDays} Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).</p>
-            ${section('Du bist am Zug', turn, 'Gerade nirgends.')}
-            ${section('Warten auf andere', waiting, 'Keine.')}
-            ${section('Einladungen', d.invites, 'Keine offenen Einladungen.')}
-            ${section('Offene Spiele', d.open, 'Keine öffentlichen Spiele mit freiem Platz.')}
-            ${takenOver.length ? section('Von der KI übernommen', takenOver.slice(0, 15), '') : ''}
-            <p class="sub">Beendete Rundenspiele findest du in deiner <a href="#" onclick="MP.showAccountModal(); return false;">Spielhistorie</a>.</p>
-            <label class="row mpa-notify"><span>E-Mail, wenn ich am Zug bin</span>
+            <p class="sub">${TX('Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer %s Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).', d.timeoutDays)}</p>
+            ${section(TX('Du bist am Zug'), turn, TX('Gerade nirgends.'))}
+            ${section(TX('Warten auf andere'), waiting, TX('Keine.'))}
+            ${section(TX('Einladungen'), d.invites, TX('Keine offenen Einladungen.'))}
+            ${section(TX('Offene Spiele'), d.open, TX('Keine öffentlichen Spiele mit freiem Platz.'))}
+            ${takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15), '') : ''}
+            <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="#" onclick="MP.showAccountModal(); return false;">${TX('Spielhistorie')}</a>`)}</p>
+            <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
               <input type="checkbox" ${d.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>
-            ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>Push-Nachricht, wenn ich am Zug bin</span>
+            ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>${TX('Push-Nachricht, wenn ich am Zug bin')}</span>
               <input type="checkbox" ${d.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}`);
         $('overlay').classList.add('wide');
         this.refreshBadge();
@@ -1495,31 +1504,31 @@ const ASYNC = {
     row: function (g) {
         const c = g.config;
         const statusText = {
-            setup: `Sucht Mitspieler (${g.seats.filter(s => s.userId).length}/${c.humanCount})`,
-            placement: 'Startplättchen legen', draft: 'Fähigkeiten draften',
-            playing: `Runde ${g.round}`, finished: 'Beendet', cancelled: 'Abgebrochen',
+            setup: TX('Sucht Mitspieler (%s/%s)', g.seats.filter(s => s.userId).length, c.humanCount),
+            placement: TX('Startplättchen legen'), draft: TX('Fähigkeiten draften'),
+            playing: TX('Runde %s', g.round), finished: TX('Beendet'), cancelled: TX('Abgebrochen'),
         }[g.status] || g.status;
         const days = g.deadline ? Math.max(0, Math.ceil((g.deadline - Date.now()) / 864e5)) : null;
         let info = '';
-        if (g.yourTurn) info = '<span class="mpa-badge">Du bist am Zug</span>' + (days != null ? ` noch ${days} Tag(e)` : '');
-        else if (g.status === 'finished') info = `Gewonnen: ${(g.winners || []).map(this.esc).join(', ') || '—'}`;
-        else if (g.replaced) info = 'Von der KI übernommen';
-        else if (g.waitingFor) info = `Wartet auf ${this.esc(g.waitingFor)}`;
+        if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (days != null ? ' ' + TX('noch %s Tag(e)', days) : '');
+        else if (g.status === 'finished') info = TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
+        else if (g.replaced) info = TX('Von der KI übernommen');
+        else if (g.waitingFor) info = TX('Wartet auf %s', this.esc(TXS(g.waitingFor)));
         const member = g.mySlot != null;
         const btns = [];
-        if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">Öffnen</button>`);
-        else btns.push(`<button class="btn small primary" onclick="ASYNC.showJoin('${g.id}')">Beitreten</button>`);
-        if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">Ablehnen</button>`);
-        if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">Einladen</button>`);
+        if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">${TX('Öffnen')}</button>`);
+        else btns.push(`<button class="btn small primary" onclick="ASYNC.showJoin('${g.id}')">${TX('Beitreten')}</button>`);
+        if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
+        if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'}${c.ranked ? ' · 🔥 Gewertet' : ''}${c.isPublic ? ' · öffentlich' : ''} · ${statusText}
-              ${member ? `<small class="mpa-c">Code ${g.joinCode}</small>` : ''}</div>
+            <div class="mpa-title"><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
+              ${member ? `<small class="mpa-c">${TX('Code')} ${g.joinCode}</small>` : ''}</div>
             ${this.seatsHtml(g.seats, g.mySlot)}
             <div class="mpa-foot"><span>${info}</span><span>${btns.join(' ')}</span></div></div>`;
     },
 
     setNotify: function (on) {
-        this.api('/notify', { email: on }).then(() => toast(on ? 'E-Mails an.' : 'E-Mails aus.')).catch(e => toast(e.message));
+        this.api('/notify', { email: on }).then(() => toast(on ? TX('E-Mails an.') : TX('E-Mails aus.'))).catch(e => toast(e.message));
     },
 
     /** Push notifications of the Android app (the switch is only shown there). */
@@ -1527,7 +1536,7 @@ const ASYNC = {
         fetch(`${MP.serverUrl}/api/push/notify`, {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }),
-        }).then(r => r.ok ? toast(on ? 'Push-Nachrichten an.' : 'Push-Nachrichten aus.') : Promise.reject(new Error('Speichern fehlgeschlagen')))
+        }).then(r => r.ok ? toast(on ? TX('Push-Nachrichten an.') : TX('Push-Nachrichten aus.')) : Promise.reject(new Error(TX('Speichern fehlgeschlagen'))))
             .catch(e => toast(e.message));
     },
 
@@ -1552,46 +1561,48 @@ const ASYNC = {
         const seatsFinal = random || (!freeCivMap && f.playerCount === 4);
         const atOnce = !(f.mapKey === 'plaettchen' || marathon) && !noKi && seatsFinal;
         if (f.mapKey === 'plaettchen' || marathon)
-            hint = 'Erst wenn alle beigetreten sind, ' + (marathon ? 'wird gedraftet' : 'legt jeder sein Startplättchen') + ' – dann beginnt die Partie mit deinem Zug.';
-        else if (atOnce) hint = random ? 'Du spielst sofort deinen ersten Zug. Wer beitritt, bekommt den nächsten Platz in der Zugfolge.'
-            : 'Du spielst sofort deinen ersten Zug. Kommt eine Nation an die Reihe, die noch niemand gewählt hat, wartet das Spiel auf sie.';
-        else hint = 'Die Partie beginnt mit deinem Zug, sobald alle Mitspieler beigetreten sind.';
-        hint = `${f.playerCount} Reiche: ${humans} Menschen${f.kiCount ? `, ${f.kiCount} KI` : ', keine KI'}${f.playerCount === 2 ? ' – 1 gegen 1 (höhere Siegschwellen)' : ''}. ` + hint;
+            hint = marathon ? TX('Erst wenn alle beigetreten sind, wird gedraftet – dann beginnt die Partie mit deinem Zug.')
+                : TX('Erst wenn alle beigetreten sind, legt jeder sein Startplättchen – dann beginnt die Partie mit deinem Zug.');
+        else if (atOnce) hint = random ? TX('Du spielst sofort deinen ersten Zug. Wer beitritt, bekommt den nächsten Platz in der Zugfolge.')
+            : TX('Du spielst sofort deinen ersten Zug. Kommt eine Nation an die Reihe, die noch niemand gewählt hat, wartet das Spiel auf sie.');
+        else hint = TX('Die Partie beginnt mit deinem Zug, sobald alle Mitspieler beigetreten sind.');
+        hint = (f.kiCount ? TX('%s Reiche: %s Menschen, %s KI', f.playerCount, humans, f.kiCount) : TX('%s Reiche: %s Menschen, keine KI', f.playerCount, humans))
+            + (f.playerCount === 2 ? ' – ' + TX('1 gegen 1 (höhere Siegschwellen)') : '') + '. ' + hint;
         const hardest = KI_LEVELS[KI_LEVELS.length - 1].k;
-        modal('Neues Rundenspiel', `
+        modal(TX('Neues Rundenspiel'), `
           <div class="mpa-form" onchange="ASYNC.readForm(true)">
-            <label class="row"><span>Karte</span><select id="mpa-map">
-              ${opt('0', f.mapKey, 'Originalkarte (12 × 18)')}${opt('gross', f.mapKey, 'Große Karte (15 × 24)')}
-              ${opt('plaettchen', f.mapKey, 'Plättchenkarte (2–8 Reiche)')}
-              ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, 'Marathon (24 × 36, 4 Reiche)') : ''}
-              ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, 'Eigene Karte') : ''}</select></label>
-            ${f.mapKey === 'eigene' ? `<label class="row"><span>Meine Karten</span><select id="mpa-custom">
-              ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (bis ${m.maxPlayers || 4} Reiche${m.marathon ? ', Marathon' : ''})</option>`).join('') || '<option value="">– keine gespeichert –</option>'}</select></label>
-              <p class="sub"><a href="#" onclick="ASYNC.customMapByCode(); return false">Karte mit Code laden</a> ·
-                <a href="#" onclick="ASYNC.importCustomMap(); return false">aus Datei laden</a> – eigene Karten baust du im Karteneditor (Hauptmenü).</p>` : ''}
-            <label class="row"><span>Nationen</span><select id="mpa-mode">
-              ${opt('fixed', f.civMode, 'Fest – jeder wählt seine Nation')}${opt('random', f.civMode, 'Zufällige Nationen für alle – Zugfolge nach Beitritt')}</select></label>
-            <label class="row"><span>Reiche insgesamt</span><select id="mpa-total" ${lim.min === lim.max ? 'disabled' : ''}>
-              ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ' (1 gegen 1)' : ''))).join('')}</select></label>
-            <label class="row"><span>davon KI</span><select id="mpa-ki">
-              ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ' (nur Menschen)' : ''))).join('')}</select></label>
-            ${random ? '' : `<label class="row"><span>Deine Nation</span><select id="mpa-civ">
+            <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
+              ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}${opt('gross', f.mapKey, TX('Große Karte (15 × 24)'))}
+              ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
+              ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36, 4 Reiche)')) : ''}
+              ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
+            ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Meine Karten')}</span><select id="mpa-custom">
+              ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (${m.marathon ? TX('bis %s Reiche, Marathon', m.maxPlayers || 4) : TX('bis %s Reiche', m.maxPlayers || 4)})</option>`).join('') || `<option value="">${TX('– keine gespeichert –')}</option>`}</select></label>
+              <p class="sub"><a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
+                <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}</p>` : ''}
+            <label class="row"><span>${TX('Nationen')}</span><select id="mpa-mode">
+              ${opt('fixed', f.civMode, TX('Fest – jeder wählt seine Nation'))}${opt('random', f.civMode, TX('Zufällige Nationen für alle – Zugfolge nach Beitritt'))}</select></label>
+            <label class="row"><span>${TX('Reiche insgesamt')}</span><select id="mpa-total" ${lim.min === lim.max ? 'disabled' : ''}>
+              ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ` (${TX('1 gegen 1')})` : ''))).join('')}</select></label>
+            <label class="row"><span>${TX('davon KI')}</span><select id="mpa-ki">
+              ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ` (${TX('nur Menschen')})` : ''))).join('')}</select></label>
+            ${random ? '' : `<label class="row"><span>${TX('Deine Nation')}</span><select id="mpa-civ">
               ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
-            ${random || marathon ? '' : `<label class="row"><span>Fähigkeit</span><select id="mpa-ab">
-              ${opt('random', f.ability, 'Zufall')}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select></label>`}
-            <label class="row"><span>Mit Ereignissen</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
-            ${f.events ? `<label class="row"><span>Ereignisstärke</span><select id="mpa-evmode">
-              ${opt('hard', f.eventMode, 'Hart (jede Runde)')}${opt('easy', f.eventMode, 'Leicht (selten)')}</select></label>` : ''}
-            <label class="row"><span>Mit Weltwundern</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
-            <label class="row"${noKi ? ' hidden' : ''}><span>KI-Stufe</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
+            ${random || marathon ? '' : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-ab">
+              ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select></label>`}
+            <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
+            ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
+              ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
+            <label class="row"><span>${TX('Mit Weltwundern')}</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
+            <label class="row"${noKi ? ' hidden' : ''}><span>${TX('KI-Stufe')}</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
               ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
-            <label class="row"><span>🔥 Gewertet <small>(KI auf schwerster Stufe)</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
-            <label class="row"><span>Öffentlich auffindbar</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
-            <label class="row"><span>Einladen <small>(Benutzernamen, mit Komma)</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
+            <label class="row"><span>🔥 ${TX('Gewertet')} <small>(${TX('KI auf schwerster Stufe')})</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
+            <label class="row"><span>${TX('Öffentlich auffindbar')}</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
+            <label class="row"><span>${TX('Einladen')} <small>(${TX('Benutzernamen, mit Komma')})</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
           </div>
           <p class="sub">${hint}</p>
-          <button class="btn wide primary" onclick="ASYNC.create()">Erstellen</button>
-          <button class="btn wide ghost" onclick="ASYNC.showList()">Zurück</button>`);
+          <button class="btn wide primary" onclick="ASYNC.create()">${TX('Erstellen')}</button>
+          <button class="btn wide ghost" onclick="ASYNC.showList()">${TX('Zurück')}</button>`);
     },
 
     readForm: function (rerender) {
@@ -1613,7 +1624,7 @@ const ASYNC = {
     /** "6 Reiche · 3 Menschen · 3 KI" (older games: 4, or the humans without KI). */
     countText: function (c) {
         const total = c.playerCount || (c.noKi ? c.humanCount : 4), ki = total - c.humanCount;
-        return `${total} Reiche · ${c.humanCount} Menschen · ${ki ? ki + ' KI' : 'ohne KI'}`;
+        return `${TX('%s Reiche', total)} · ${TX('%s Menschen', c.humanCount)} · ${ki ? TX('%s KI', ki) : TX('ohne KI')}`;
     },
 
     /** A published map (code) goes into "Meine Karten" first, then it is the form's custom map. */
@@ -1640,9 +1651,9 @@ const ASYNC = {
         this.readForm(false);
         const f = this.form;
         const customMap = f.mapKey === 'eigene' ? myMap(f.customName) : undefined;
-        if (f.mapKey === 'eigene' && !customMap) return toast('Wähle eine eigene Karte oder lade eine aus einer Datei.');
+        if (f.mapKey === 'eigene' && !customMap) return toast(TX('Wähle eine eigene Karte oder lade eine aus einer Datei.'));
         try {
-            toast('Erstelle Rundenspiel…');
+            toast(TX('Erstelle Rundenspiel…'));
             const r = await this.api('', {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
@@ -1652,7 +1663,7 @@ const ASYNC = {
                 civ: f.civ, ability: f.ability,
                 invite: f.invite.split(',').map(x => x.trim()).filter(Boolean),
             });
-            if (r.inviteErrors && r.inviteErrors.length) toast(r.inviteErrors.join(' '));
+            if (r.inviteErrors && r.inviteErrors.length) toast(r.inviteErrors.map(TXS).join(' '));
             this.open(r.id);
         } catch (e) { toast(e.message); }
     },
@@ -1660,7 +1671,7 @@ const ASYNC = {
     // ── Join / invite / decline ──────────────────────────────────────────────
     joinByCode: async function () {
         const code = ($('mpa-code') && $('mpa-code').value || '').trim().toUpperCase();
-        if (!code) return toast('Bitte einen Code eingeben.');
+        if (!code) return toast(TX('Bitte einen Code eingeben.'));
         try {
             const g = await this.api('/code/' + encodeURIComponent(code));
             if (g.mySlot != null) return this.open(g.id);
@@ -1671,35 +1682,36 @@ const ASYNC = {
     showJoin: async function (id, code, g) {
         try { g = g || await this.api('/' + id + (code ? '?code=' + encodeURIComponent(code) : '')); }
         catch (e) { return toast(e.message); }
-        if (!g.freeSeats.length) return toast('Kein Platz mehr frei.');
+        if (!g.freeSeats.length) return toast(TX('Kein Platz mehr frei.'));
         this.joining = { id, code };
         const c = g.config;
         let pickHtml;
         if (c.civMode === 'random') {
             const s = g.seats[g.freeSeats[0].slot];
             const ab = (this.civ(s.civ) || { abilities: [] }).abilities.find(a => a.k === s.ability);
-            pickHtml = `<p>Du bekommst den nächsten Platz in der Zugfolge: <b>${this.civLabel(s.civ)}</b>${ab && c.mapKey !== 'marathon' ? ` mit „${this.esc(ab.n)}"` : ''}.</p>`;
+            pickHtml = `<p>${ab && c.mapKey !== 'marathon' ? TX('Du bekommst den nächsten Platz in der Zugfolge: %s mit „%s".', `<b>${this.civLabel(s.civ)}</b>`, this.esc(ab.n))
+                : TX('Du bekommst den nächsten Platz in der Zugfolge: %s.', `<b>${this.civLabel(s.civ)}</b>`)}</p>`;
         } else {
             const civs = [...new Set(g.freeSeats.map(s => s.civ))];
-            pickHtml = `<label class="row"><span>Nation</span><select id="mpa-jciv" onchange="ASYNC.joinAbilities()">
+            pickHtml = `<label class="row"><span>${TX('Nation')}</span><select id="mpa-jciv" onchange="ASYNC.joinAbilities()">
                 ${civs.map(k => `<option value="${k}">${this.esc((this.civ(k) || {}).n || k)}</option>`).join('')}</select></label>
-              ${c.mapKey === 'marathon' ? '<p class="sub">Fähigkeiten werden vor dem ersten Zug gedraftet.</p>'
-                : '<label class="row"><span>Fähigkeit</span><select id="mpa-jab"></select></label>'}`;
+              ${c.mapKey === 'marathon' ? `<p class="sub">${TX('Fähigkeiten werden vor dem ersten Zug gedraftet.')}</p>`
+                : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-jab"></select></label>`}`;
         }
-        modal('Rundenspiel beitreten', `
-            <p><b>${this.mapName(c.mapKey, c)}</b> · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
+        modal(TX('Rundenspiel beitreten'), `
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}</p>
             ${this.seatsHtml(g.seats, null)}
             ${pickHtml}
-            <p class="sub">Du kannst sofort beitreten – ziehen kannst du, sobald du an der Reihe bist. Bis zu deinem ersten Zug kannst du ohne Folgen wieder aussteigen.</p>
-            <button class="btn wide primary" onclick="ASYNC.join()">Beitreten</button>
-            <button class="btn wide ghost" onclick="ASYNC.showList()">Zurück</button>`);
+            <p class="sub">${TX('Du kannst sofort beitreten – ziehen kannst du, sobald du an der Reihe bist. Bis zu deinem ersten Zug kannst du ohne Folgen wieder aussteigen.')}</p>
+            <button class="btn wide primary" onclick="ASYNC.join()">${TX('Beitreten')}</button>
+            <button class="btn wide ghost" onclick="ASYNC.showList()">${TX('Zurück')}</button>`);
         this.joinAbilities();
     },
 
     joinAbilities: function () {
         const sel = $('mpa-jab'), civ = $('mpa-jciv') && this.civ($('mpa-jciv').value);
         if (!sel || !civ) return;
-        sel.innerHTML = '<option value="random">Zufall</option>' +
+        sel.innerHTML = `<option value="random">${TX('Zufall')}</option>` +
             civ.abilities.map(a => `<option value="${a.k}" ${a.k === 'basis' ? 'selected' : ''}>${this.esc(a.n)}</option>`).join('');
     },
 
@@ -1721,12 +1733,12 @@ const ASYNC = {
 
     showInvite: function (id, code) {
         const back = MP.asyncId === id ? 'ASYNC.reopenModal()' : 'ASYNC.showList()';
-        modal('Mitspieler einladen', `
-            <p>Code zum Weitergeben: <b style="font-family:monospace;font-size:16px">${code}</b></p>
-            <p class="sub">Oder Link: <span style="user-select:all">${this.esc(location.origin + location.pathname + '?async=' + id)}</span></p>
-            <label class="row"><span>Benutzername</span><input type="text" id="mpa-inv-name"></label>
-            <button class="btn wide primary" onclick="ASYNC.invite('${id}')">Einladen</button>
-            <button class="btn wide ghost" onclick="${back}">Zurück</button>`);
+        modal(TX('Mitspieler einladen'), `
+            <p>${TX('Code zum Weitergeben:')} <b style="font-family:monospace;font-size:16px">${code}</b></p>
+            <p class="sub">${TX('Oder Link:')} <span style="user-select:all">${this.esc(location.origin + location.pathname + '?async=' + id)}</span></p>
+            <label class="row"><span>${TX('Benutzername')}</span><input type="text" id="mpa-inv-name"></label>
+            <button class="btn wide primary" onclick="ASYNC.invite('${id}')">${TX('Einladen')}</button>
+            <button class="btn wide ghost" onclick="${back}">${TX('Zurück')}</button>`);
     },
 
     reopenModal: function () {
@@ -1736,18 +1748,18 @@ const ASYNC = {
 
     invite: async function (id) {
         const name = ($('mpa-inv-name') && $('mpa-inv-name').value || '').trim();
-        if (!name) return toast('Bitte einen Benutzernamen eingeben.');
-        try { await this.api(`/${id}/invite`, { username: name }); toast(`${name} ist eingeladen.`); $('mpa-inv-name').value = ''; }
+        if (!name) return toast(TX('Bitte einen Benutzernamen eingeben.'));
+        try { await this.api(`/${id}/invite`, { username: name }); toast(TX('%s ist eingeladen.', name)); $('mpa-inv-name').value = ''; }
         catch (e) { toast(e.message); }
     },
 
     leave: async function (id) {
-        if (!confirm('Dieses Rundenspiel verlassen?')) return;
+        if (!confirm(TX('Dieses Rundenspiel verlassen?'))) return;
         try { await this.api(`/${id}/leave`, {}); this.close(); show('screen-menu'); this.showList(); } catch (e) { toast(e.message); }
     },
 
     cancel: async function (id) {
-        if (!confirm('Dieses Rundenspiel für alle abbrechen?')) return;
+        if (!confirm(TX('Dieses Rundenspiel für alle abbrechen?'))) return;
         try { await this.api(`/${id}/cancel`, {}); this.close(); show('screen-menu'); this.showList(); } catch (e) { toast(e.message); }
     },
 
@@ -1763,7 +1775,7 @@ const ASYNC = {
                 return this.open(id);
             }
             this._retried = false;
-            if (!res || res.error) return toast((res && res.error) || 'Fehler');
+            if (!res || res.error) return toast(res && res.error ? TXS(res.error) : TX('Fehler'));
             if (ASYNC.switchVersion(id, res.view.engine)) return;
             this.enter(res.view);
         });
@@ -1798,7 +1810,7 @@ const ASYNC = {
         this.view = null;
         this.placing = false;
         const credBox = $('mp-cred-box');
-        if (credBox) credBox.textContent = `Rundenspiel ${view.joinCode} · Liste`;
+        if (credBox) credBox.textContent = TX('Rundenspiel %s · Liste', view.joinCode);
         this.apply(view);
     },
 
@@ -1821,17 +1833,17 @@ const ASYNC = {
         this.view = view;
         MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
         const toastEl = document.querySelector('.mp-waiting-toast');
-        if (toastEl) toastEl.textContent = view.waitingFor ? `Warte auf ${view.waitingFor} …` : 'Warte auf deinen Zug...';
+        if (toastEl) toastEl.textContent = view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
 
         if (view.status === 'cancelled') {
-            toast('Das Rundenspiel wurde abgebrochen.');
+            toast(TX('Das Rundenspiel wurde abgebrochen.'));
             this.close(); show('screen-menu'); return this.showList();
         }
-        if (view.status === 'setup') return this.waitingModal(view, 'Das Spiel beginnt, sobald alle beigetreten sind.');
+        if (view.status === 'setup') return this.waitingModal(view, TX('Das Spiel beginnt, sobald alle beigetreten sind.'));
         if (view.status === 'placement') {
             if (view.placement.placed) {
                 this.placing = false;
-                return this.waitingModal(view, 'Dein Startplättchen liegt. Aufgedeckt wird, wenn alle gelegt haben.');
+                return this.waitingModal(view, TX('Dein Startplättchen liegt. Aufgedeckt wird, wenn alle gelegt haben.'));
             }
             if (!this.placing) this.startPlacement(view);
             return;
@@ -1868,22 +1880,22 @@ const ASYNC = {
         const c = view.config;
         const me = view.seats.find(s => s.slot === view.mySlot);
         const host = view.isHost;
-        modal('Rundenspiel', `
-            <p><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? 'Zufallsnationen' : 'Feste Nationen'} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 Gewertet' : ''}</p>
+        modal(TX('Rundenspiel'), `
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}</p>
             ${this.seatsHtml(view.seats, view.mySlot)}
             <p>${text}</p>
-            ${view.waitingFor ? `<p class="sub">Wartet auf: ${this.esc(view.waitingFor)}</p>` : ''}
-            ${view.freeSeats.length ? `<button class="btn wide" onclick="ASYNC.showInvite('${view.id}', '${view.joinCode}')">Mitspieler einladen (Code ${view.joinCode})</button>` : ''}
-            <button class="btn wide primary" onclick="ASYNC.close(); show('screen-menu'); ASYNC.showList()">Zur Liste</button>
-            ${view.status === 'setup' && host ? `<button class="btn wide ghost" onclick="ASYNC.cancel('${view.id}')">Spiel abbrechen</button>` : ''}
-            ${view.status === 'setup' && !host && me ? `<button class="btn wide ghost" onclick="ASYNC.leave('${view.id}')">Spiel verlassen</button>` : ''}`);
+            ${view.waitingFor ? `<p class="sub">${TX('Wartet auf: %s', this.esc(TXS(view.waitingFor)))}</p>` : ''}
+            ${view.freeSeats.length ? `<button class="btn wide" onclick="ASYNC.showInvite('${view.id}', '${view.joinCode}')">${TX('Mitspieler einladen (Code %s)', view.joinCode)}</button>` : ''}
+            <button class="btn wide primary" onclick="ASYNC.close(); show('screen-menu'); ASYNC.showList()">${TX('Zur Liste')}</button>
+            ${view.status === 'setup' && host ? `<button class="btn wide ghost" onclick="ASYNC.cancel('${view.id}')">${TX('Spiel abbrechen')}</button>` : ''}
+            ${view.status === 'setup' && !host && me ? `<button class="btn wide ghost" onclick="ASYNC.leave('${view.id}')">${TX('Spiel verlassen')}</button>` : ''}`);
     },
 
     // ── Start tile placement (tile maps) ─────────────────────────────────────
     startPlacement: function (view) {
         const pl = view.placement;
         const seat = pl.plan.seats.find(s => s.idx === view.mySlot);
-        if (!seat) return this.waitingModal(view, 'Warte auf die anderen Spieler.');
+        if (!seat) return this.waitingModal(view, TX('Warte auf die anderen Spieler.'));
         closeModal();
         this.placing = true;
         placeState = {
@@ -1899,13 +1911,50 @@ const ASYNC = {
     confirmPlacement: function () {
         const st = placeState;
         if (!st) return;
-        if (st.cell == null) return toast('Erst die Hauptstadt setzen.');
+        if (st.cell == null) return toast(TX('Erst die Hauptstadt setzen.'));
         MP.socket.emit('async:place', { id: MP.asyncId, o: st.o, cell: st.cell }, res => {
-            if (res && res.error) return toast(res.error);
-            toast('Startplättchen gelegt.');
+            if (res && res.error) return toast(TXS(res.error));
+            toast(TX('Startplättchen gelegt.'));
         });
     },
 };
+
+// ── Language ────────────────────────────────────────────────────────────────
+/* The legal texts exist in German only – in English the link texts say so (client/i18n.js). */
+MP.drawLegalFooter = function () {
+    const footer = $('mp-legal-footer');
+    if (!footer) return;
+    const link = (href, text) => `<a href="${href}" target="_blank" style="color:inherit">${text}</a>`;
+    footer.innerHTML = `&copy; 2026 Hochciv Multiplayer. ${TX('Alle Rechte vorbehalten.')} |
+        ${link('/datenschutzerklaerung.html', TX('Datenschutzerklärung'))} |
+        ${link('/nutzungsbedingungen.html', TX('Nutzungsbedingungen'))} |
+        ${link('/impressum.html', TX('Impressum'))}`;
+};
+/* The game's language buttons (switchLang in ui.js) redraw the game's own texts – this redraws
+   what mp.js has put on the page. Modals are closed by switchLang anyway. */
+MP.applyLang = function () {
+    const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+    set('mp-live-btn', TX('Multiplayer'));
+    set('mp-log-title', TX('Spiel-Log'));
+    set('mp-players-title', TX('Spieler'));
+    set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
+    const wait = document.querySelector('.mp-waiting-toast');
+    if (wait && !MP.asyncId) wait.textContent = TX('Warte auf deinen Zug...');
+    const cred = document.querySelector('#mp-cred-wrapper .res');
+    if (cred) cred.title = TX('Lobby Zugangsdaten');
+    document.documentElement.style.setProperty('--mp-on-turn', JSON.stringify(' ◂ ' + TX('am Zug')));
+    this.drawLegalFooter();
+    if ($('mp-main-auth-container') && $('mp-main-auth-container').innerHTML) this.drawMainMenuAuth();
+    ASYNC.drawBadge();
+};
+const originalSwitchLang = window.switchLang;
+if (originalSwitchLang) {
+    window.switchLang = function () {
+        const r = originalSwitchLang.apply(this, arguments);
+        MP.applyLang();
+        return r;
+    };
+}
 
 // Menu button "Rundenspiele" (after "Multiplayer"), and ?async=<id> links from e-mails
 window.addEventListener('DOMContentLoaded', () => {
@@ -1914,10 +1963,11 @@ window.addEventListener('DOMContentLoaded', () => {
         const btn = document.createElement('button');
         btn.className = 'btn primary';
         btn.id = 'mp-async-btn';
-        btn.textContent = 'Rundenspiele';
+        btn.textContent = TX('Rundenspiele');
         btn.onclick = () => ASYNC.showList();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
     }
+    MP.applyLang();
     // Tap the code box in the HUD to go back to the list (the game goes on)
     const cred = $('mp-cred-wrapper');
     if (cred) cred.addEventListener('click', () => {
@@ -1934,7 +1984,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const btn = document.createElement('button');
         btn.className = 'btn wide primary';
         btn.id = 'mm-async-menu';
-        btn.textContent = 'Zurück zum Hauptmenü';
+        btn.textContent = TX('Zurück zum Hauptmenü');
         btn.onclick = () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); };
         quit.parentNode.insertBefore(btn, quit);
         quit.remove();
@@ -1947,15 +1997,15 @@ window.addEventListener('DOMContentLoaded', () => {
         if (oauth) {
             history.replaceState(null, '', location.pathname);
             const OAUTH_MESSAGES = {
-                ok: MP.user ? `Angemeldet als ${MP.user.username}.` : 'Anmeldung erfolgreich.',
-                linked: 'Konto erfolgreich verknüpft.',
-                failed: 'Anmeldung abgebrochen oder abgelehnt.',
-                taken: 'Dieses Google-/Discord-Konto ist bereits mit einem anderen Hochciv-Konto verknüpft.',
-                banned: 'Dieses Konto ist gesperrt.',
-                merge_async: 'Dein Discord-Konto hat noch laufende Rundenspiele. Beende sie zuerst und verknüpfe danach erneut.',
-                state: 'Die Anmeldung ist abgelaufen. Bitte starte sie erneut.',
-                reauth: 'Bitte bestätige zuerst auf der Kontoseite deine Identität und verknüpfe danach erneut.',
-                error: 'Bei der Anmeldung ist ein Fehler aufgetreten. Bitte versuche es erneut.',
+                ok: MP.user ? TX('Angemeldet als %s.', MP.user.username) : TX('Anmeldung erfolgreich.'),
+                linked: TX('Konto erfolgreich verknüpft.'),
+                failed: TX('Anmeldung abgebrochen oder abgelehnt.'),
+                taken: TX('Dieses Google-/Discord-Konto ist bereits mit einem anderen Hochciv-Konto verknüpft.'),
+                banned: TX('Dieses Konto ist gesperrt.'),
+                merge_async: TX('Dein Discord-Konto hat noch laufende Rundenspiele. Beende sie zuerst und verknüpfe danach erneut.'),
+                state: TX('Die Anmeldung ist abgelaufen. Bitte starte sie erneut.'),
+                reauth: TX('Bitte bestätige zuerst auf der Kontoseite deine Identität und verknüpfe danach erneut.'),
+                error: TX('Bei der Anmeldung ist ein Fehler aufgetreten. Bitte versuche es erneut.'),
             };
             toast(OAUTH_MESSAGES[oauth] || OAUTH_MESSAGES.error);
             if (MP.renderMainMenuAuth) MP.renderMainMenuAuth();
