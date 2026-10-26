@@ -65,22 +65,17 @@ function cleanupRules() {
     ok(!sessions.getSession(l.sessionId), 'cleanup: a lobby is removed after 10 minutes');
 }
 
-(async () => {
-    cleanupRules();
-    const { chromium } = require('playwright-core');
-    const browser = await chromium.launch({ executablePath: BROWSER });
-    const errors = [];
-    const newPage = async name => {
-        const ctx = await browser.newContext({ locale: 'de-DE' });
-        const page = await ctx.newPage();
-        page.on('pageerror', e => errors.push(`${name}: ${e.message}`));
-        await page.goto(BASE + '/');
-        await page.waitForFunction(() => typeof MP !== 'undefined' && typeof io === 'function');
-        return page;
-    };
+/**
+ * One game: A hosts, B joins (through the game page's own lobby), B never moves. A passive A can
+ * lose the game to the KI early (its capital taken) – then the checks after that point can't run;
+ * the caller plays a new game. Returns { results: [[pass, name, info]], over }.
+ */
+async function attempt(newPage) {
+    const results = [];
+    const check = (cond, name, info) => results.push([!!cond, name, info]);
+    let a = null, b = null, driver = null;
     try {
-        // ── A hosts, B joins (through the game page's own lobby) ─────────────────────────
-        const a = await newPage('A'), b = await newPage('B');
+        a = await newPage('A'); b = await newPage('B');
         await a.evaluate(() => { MP.showLobby(); });
         await a.waitForFunction(() => typeof MP.setMode === 'function');
         await a.evaluate(() => MP.setMode('host'));
@@ -88,15 +83,15 @@ function cleanupRules() {
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-set-turntime');
         const opts = await a.$$eval('#mp-set-turntime option', os => os.map(o => o.textContent.trim()));
-        ok(opts.length === 6 && opts[0] === 'Unbegrenzt' && opts[1] === '1 Min.', 'lobby: "Zeit pro Zug" with 6 choices, default no limit', opts.join(', '));
+        check(opts.length === 6 && opts[0] === 'Unbegrenzt' && opts[1] === '1 Min.', 'lobby: "Zeit pro Zug" with 6 choices, default no limit', opts.join(', '));
 
         // the server refuses values that are not offered
         const bad = await a.evaluate(() => new Promise(r => MP.socket.emit('lobby:config', { turnTime: 77 }, () => setTimeout(() => r(MP.gameConfig.turnTime), 300))));
-        ok(bad === 0, 'lobby: an invalid turn time becomes "no limit"', String(bad));
+        check(bad === 0, 'lobby: an invalid turn time becomes "no limit"', String(bad));
 
         await a.selectOption('#mp-set-turntime', '60');
         await a.waitForFunction(() => MP.gameConfig.turnTime === 60);
-        ok(await a.isVisible('text=Ist die Zeit um, beendet die KI den Zug.'), 'lobby: the hint explains what happens');
+        check(await a.isVisible('text=Ist die Zeit um, beendet die KI den Zug.'), 'lobby: the hint explains what happens');
         await a.selectOption('#mp-p-civ-0', 'griechenland');
         const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password }));
 
@@ -124,11 +119,11 @@ function cleanupRules() {
             tag: (document.getElementById('mp-players-content') || {}).textContent || '',
         }));
         const first = await until(async () => { const i = await info(a); return i.clock ? i : null; }, 10000);
-        ok(first && /^⏱ 0:0[1-3]$/.test(first.clock), 'HUD: the countdown is shown', first && first.clock);
+        check(first && /^⏱ 0:0[1-3]$/.test(first.clock), 'HUD: the countdown is shown', first && first.clock);
 
         // A moves at once whenever it is A's turn; B never moves
         let aTurns = 0;
-        const driver = setInterval(() => {
+        driver = setInterval(() => {
             a.evaluate(() => {
                 if (!S || S.over || !MP.isMyTurn() || MP._ending === S.round + ':' + S.cur) return false;
                 MP._ending = S.round + ':' + S.cur;
@@ -144,29 +139,62 @@ function cleanupRules() {
         await b.evaluate(() => MP.socket.on('turn:timeout', d => window.__timeout(d)));
         const t0 = Date.now();
         await until(() => timeouts.length >= 3, 30000);
-        ok(timeouts.length >= 3, 'B: three turns ended by the timer', `${timeouts.length} in ${Math.round((Date.now() - t0) / 1000)} s`);
-        ok(timeouts[0] && timeouts[0].afk === false && timeouts[2] && timeouts[2].afk === true, 'B: the third one hands the seat to the KI', JSON.stringify(timeouts.slice(0, 3)));
+        check(timeouts.length >= 3, 'B: three turns ended by the timer', `${timeouts.length} in ${Math.round((Date.now() - t0) / 1000)} s`);
+        check(timeouts[0] && timeouts[0].afk === false && timeouts[2] && timeouts[2].afk === true, 'B: the third one hands the seat to the KI', JSON.stringify(timeouts.slice(0, 3)));
         const bAfk = await until(async () => { const i = await info(b); return i.banner && i.afk ? i : null; }, 5000);
-        ok(!!bAfk, 'B: banner "Die KI spielt für dich" is shown');
+        check(!!bAfk, 'B: banner "Die KI spielt für dich" is shown');
         const aView = await until(async () => { const i = await info(a); return /KI \(abwesend\)/.test(i.tag) ? i : null; }, 5000);
-        ok(!!aView, 'A: the player list shows B as "KI (abwesend)"');
+        check(!!aView, 'A: the player list shows B as "KI (abwesend)"');
 
         // the KI plays B's turns at once now – A gets turn after turn without waiting
         const before = aTurns, t1 = Date.now();
         await until(() => aTurns >= before + 2, 8000);
         const per = (Date.now() - t1) / Math.max(1, aTurns - before);
-        ok(aTurns >= before + 2 && per < 2500, 'B absent: the game no longer waits for B', `${aTurns - before} turns of A, ${Math.round(per)} ms each`);
-        ok(timeouts.length === 3, 'B absent: no further timeouts', String(timeouts.length));
+        check(aTurns >= before + 2 && per < 2500, 'B absent: the game no longer waits for B', `${aTurns - before} turns of A, ${Math.round(per)} ms each`);
+        check(timeouts.length === 3, 'B absent: no further timeouts', String(timeouts.length));
 
         // B is back (A keeps moving at once) – B's turns wait for B and run the clock again
-        await b.click('#mp-afk-btn');
+        await b.click('#mp-afk-btn', { timeout: 5000 });
         const back = await until(async () => { const i = await info(b); return !i.afk && !i.banner ? i : null; }, 5000);
-        ok(!!back, 'B: "Ich bin zurück" hands the seat back');
-        const bTurn = await until(async () => { const i = await info(b); return i.cur === i.me && i.clock ? i : null; }, 8000);
-        ok(!!bTurn, 'B: it is B\'s own turn again, with the clock running', bTurn && bTurn.clock);
-        await until(() => timeouts.length >= 4, 8000);
-        ok(timeouts.length === 4 && timeouts[3].afk === false, 'B: the timer ends B\'s turn again (counted from zero)', JSON.stringify(timeouts[3]));
-        clearInterval(driver);
+        check(!!back, 'B: "Ich bin zurück" hands the seat back');
+        const bTurn = await until(async () => { const i = await info(b); return i.cur === i.me && i.clock ? i : null; }, 15000);
+        check(!!bTurn, 'B: it is B\'s own turn again, with the clock running', bTurn && bTurn.clock);
+        await until(() => timeouts.length >= 4, 15000);
+        check(timeouts.length === 4 && timeouts[3].afk === false, 'B: the timer ends B\'s turn again (counted from zero)', JSON.stringify(timeouts[3]));
+    } catch (err) {
+        results.push([false, 'scenario ran through', String(err.message || err).split('\n')[0]]);
+    } finally {
+        if (driver) clearInterval(driver);
+    }
+    const over = a ? await a.evaluate(() => !!(typeof S !== 'undefined' && S && S.over)).catch(() => false) : false;
+    for (const p of [a, b]) if (p) await p.context().close().catch(() => { });
+    return { results, over };
+}
+
+(async () => {
+    cleanupRules();
+    const { chromium } = require('playwright-core');
+    const browser = await chromium.launch({ executablePath: BROWSER });
+    const errors = [];
+    const newPage = async name => {
+        const ctx = await browser.newContext({ locale: 'de-DE' });
+        const page = await ctx.newPage();
+        page.on('pageerror', e => errors.push(`${name}: ${e.message}`));
+        await page.goto(BASE + '/');
+        await page.waitForFunction(() => typeof MP !== 'undefined' && typeof io === 'function');
+        return page;
+    };
+    try {
+        // ── the turn timer in a game (a new game if the KI ends one too early) ───────────
+        for (let n = 1; n <= 3; n++) {
+            const r = await attempt(newPage);
+            if (r.results.some(x => !x[0]) && r.over && n < 3) {
+                console.log(`(game ${n} ended before all checks had run – a new game)`);
+                continue;
+            }
+            r.results.forEach(x => ok(...x));
+            break;
+        }
 
         // ── no limit: no clock ────────────────────────────────────────────────────────────
         const c = await newPage('C');

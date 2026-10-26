@@ -15,11 +15,13 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ✅ |
 | 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ✅ |
 | 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ✅ |
-| 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ⬜ |
+| 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ✅ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
 
 The numbers are those of the original proposal. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+
+All planned features are on `development` (staging). Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
 ---
 
@@ -190,7 +192,18 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - 2 to 4 humans per game. Free seats up to 4 empires are KI.
 - Anyone who doesn't confirm leaves the queue. The others stay in it.
 
-**Status:** ⬜ planned
+**Implementation**
+- `sockets/match.js` (new): the queue and pending matches live in memory. Every 2 seconds the player waiting longest is matched with the closest MMRs within the allowed gap of both (`windowOf`: ±100, +50 every 15 s, at most ±1000). Four form a game at once; two or three after `MATCH_GROUP_WAIT_MS` (20 s). `match:found` asks for confirmation within `MATCH_CONFIRM_MS` (20 s), and `match:progress` shows who has confirmed. Declining, the time running out or a disconnect removes that player from the queue, and the others go back into it with their waiting time (`match:cancelled`). When everyone has confirmed, the server creates the lobby (`matchConfig()`: original map, random nations, ranked, hardest KI, 3 minutes per turn, four empires), seats everyone and sends `match:ready` with their seat. The game starts as soon as all of them have joined the lobby, or after 30 s with those who came (at least two). Login required, nothing during maintenance.
+- `sockets/game.js`: the start logic of the host's `game:start` is now `startGame(io, session)` (exported), so the matchmaking starts its lobbies the same way. `session:connect` tells a matchmaking lobby that a player has arrived (`session.match.onConnect`).
+- `client/matchmaking.js` (new, injected after `mp.js`; `mp.js` attaches it to every socket): *🔥 Gewertetes Spiel suchen* in the multiplayer menu (disabled without login). The search dialog shows the waiting time, the MMR range and the queue size. *Spiel gefunden* lists the players with a countdown and *Annehmen* / *Ablehnen*. The client then joins the lobby with the seat it was given, like the Discord Activity does. A closed search dialog keeps searching, *Spiel gefunden* opens it again, and the menu button brings it back. After a reconnect the client rejoins the queue.
+- `docker-compose.local.yml`: `MATCH_GROUP_WAIT_MS` / `MATCH_CONFIRM_MS` for the test.
+- Texts in `client/i18n.js`.
+
+`tests/timer/turn-timer.test.js` now plays a new game if the KI ends one before all checks have run (A only passes, so the KI sometimes takes its capital early); its waits after *Ich bin zurück* are longer.
+
+**Tests:** `tests/match/match.test.js` (run with `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000`): the MMR window and the settings, the queue screen, close MMRs matched and a far one not, a decline (one back in the queue, one out), a closed dialog, both confirming and the ranked game starting by itself with the right settings, a confirmation running out, and no queue without login. All other tests pass with `startGame()`.
+
+**Status:** ✅ on `development`
 
 ---
 
