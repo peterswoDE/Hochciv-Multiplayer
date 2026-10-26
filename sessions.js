@@ -177,8 +177,11 @@ function cleanup() {
             s.emptySince = null;
         }
 
-        // 3. Inactivity termination (10 mins)
-        if (s.lastActivity && now - s.lastActivity > 10 * 60 * 1000) {
+        // 3. Inactivity termination: a running game may sit still longer (no turn timer, a
+        // player thinking) than a lobby or a finished game
+        const running = ['placement', 'draft', 'playing'].includes(s.status);
+        const idleLimit = running ? config.SESSION_TIMEOUT_MS : config.LOBBY_TIMEOUT_MS;
+        if (s.lastActivity && now - s.lastActivity > idleLimit) {
             shouldTerminate = true;
         }
 

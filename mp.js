@@ -29,6 +29,19 @@ const MP = {
     asyncId: null,          // id of the open asynchronous game ("Rundenspiel"), else null
     lastTurnKey: null,
     WIN_BONUS: 10,          // points for the winner on top of victoryScore – same as utils/score.js
+    TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
+    turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
+
+    /** Live game: the KI plays our seat because we missed our turns (turn timer). */
+    isAfk: function () {
+        if (this.asyncId) return false;
+        const me = (this.players || []).find(p => p.index === this.lobbyIndex);
+        return !!(me && me.afk);
+    },
+    /** It is our turn and we play it ourselves. */
+    isMyTurn: function () {
+        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk();
+    },
 
     /** Send a game action to the server – live lobby or asynchronous game. */
     sendAction: function (payload, cb) {
@@ -51,7 +64,7 @@ const MP = {
         MP.updatePlayerList();
         // round + player: also correct when the same player moves again (everyone else bots)
         const key = S.round + ':' + S.cur;
-        if (S.cur === MP.playerIndex && MP.lastTurnKey !== key && !S.over) {
+        if (MP.isMyTurn() && MP.lastTurnKey !== key && !S.over) {
             MP.lastTurnKey = key;
             MP.lastTurn = S.cur;
             humanTurnStart();
@@ -242,7 +255,9 @@ const MP = {
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ, color: '#999' };
             const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
             const name = lp.name || civ.n;
-            const status = bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
+            // an absent player's seat (turn timer) is played by the KI, but stays theirs
+            const status = lp.afk ? `<span class="mp-pl-tag off" title="${TX('Hat dreimal nicht gezogen – die KI spielt den Platz')}">${TX('KI (abwesend)')}</span>`
+                : bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
                 : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
                 <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
@@ -344,6 +359,8 @@ const MP = {
                 MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
+                // turn timer: a seat went to the KI or came back
+                if (typeof S !== 'undefined' && S && $('screen-game') && $('screen-game').classList.contains('show')) MP.syncTurnBlocker();
             });
             this.socket.on('session:kicked', (data) => {
                 MP.active = false;
@@ -415,6 +432,7 @@ const MP = {
                 if (MP.asyncId) return;
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
+                MP.setTurnClock(data.turn);
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
 
@@ -431,7 +449,18 @@ const MP = {
 
             this.socket.on('state:update', data => {
                 if (MP.asyncId) return;
+                MP.setTurnClock(data.turn);
                 MP.applyState(data.state);
+            });
+
+            // Turn timer: our time was up – the server (KI) has finished the turn
+            this.socket.on('turn:timeout', data => {
+                if (MP.asyncId) return;
+                if (typeof closeModal === 'function') closeModal();
+                if (typeof closeSheet === 'function') closeSheet();
+                if (typeof ui !== 'undefined' && ui) { ui.army = null; ui.sel = null; ui.mode = null; }
+                toast(data && data.afk ? TX('Die Zeit ist abgelaufen. Du hast dreimal nicht gezogen – die KI spielt jetzt für dich.')
+                    : TX('Die Zeit ist abgelaufen – die KI hat deinen Zug beendet.'));
             });
 
             // Asynchronous games: the full view (status, seats, state / placement / draft)
@@ -447,11 +476,51 @@ const MP = {
     },
 
     syncTurnBlocker: function () {
-        if (S && S.cur !== MP.playerIndex && !S.over) {
+        MP.drawAfkBanner();
+        if (S && !MP.isMyTurn() && !S.over) {
             document.body.classList.add('mp-waiting');
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    // ── Turn timer (live games, host setting "Zeit pro Zug") ──────────────────
+    /** `turn` from the server: { total, left } in ms (left null: no clock now), or null without a limit. */
+    setTurnClock: function (turn) {
+        const was = this.turnClock;
+        this.turnClock = turn && !this.asyncId ? { total: turn.total, deadline: turn.left == null ? null : Date.now() + turn.left } : null;
+        // warn once per turn, also when the deadline is corrected by a later update
+        if (this.turnClock && was && was.deadline && this.turnClock.deadline) this.turnClock.warned = was.warned;
+        if (this.turnClock && !this._clockTimer) this._clockTimer = setInterval(() => this.drawTurnClock(), 250);
+        if (!this.turnClock && this._clockTimer) { clearInterval(this._clockTimer); this._clockTimer = null; }
+        this.drawTurnClock();
+    },
+    drawTurnClock: function () {
+        const el = $('mp-turn-clock');
+        if (!el) return;
+        const tc = this.turnClock;
+        if (!this.active || !tc || !tc.deadline || typeof S === 'undefined' || !S || S.over) { el.hidden = true; return; }
+        const left = Math.max(0, tc.deadline - Date.now());
+        const sec = Math.ceil(left / 1000);
+        el.hidden = false;
+        el.classList.toggle('mp-clock-low', sec <= 30);
+        el.textContent = `⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+        if (sec <= 30 && sec > 0 && !tc.warned && this.isMyTurn() && tc.total > 30000) {
+            tc.warned = true;
+            toast(TX('Noch 30 Sekunden für deinen Zug!'));
+        }
+    },
+    /** Banner while the KI plays our seat, with the button to take it back. */
+    drawAfkBanner: function () {
+        const el = $('mp-afk-banner');
+        if (el) el.hidden = !(this.active && this.isAfk() && typeof S !== 'undefined' && S && !S.over);
+    },
+    reclaimSeat: function () {
+        this.socket.emit('turn:reclaim', {}, res => {
+            if (res && res.error) return toast(TXS(res.error));
+            MP.lastTurnKey = null;            // if it is our turn right now, it starts for us
+            toast(TX('Willkommen zurück – du spielst wieder selbst.'));
+        });
     },
 
 
@@ -662,6 +731,12 @@ const MP = {
                   ${KI_LEVELS.map(d => `<option value="${d.k}" ${this.kiLevel(this.gameConfig.difficulty) === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
                 </select>
               </label>
+              <label class="row"><span>${TX('Zeit pro Zug')}</span>
+                <select id="mp-set-turntime" onchange="MP.updateLobbyConfig()">
+                  ${this.TURN_TIMES.map(s => `<option value="${s}" ${(this.gameConfig.turnTime || 0) === s ? 'selected' : ''}>${s ? TX('%s Min.', s / 60) : TX('Unbegrenzt')}</option>`).join('')}
+                </select>
+              </label>
+              ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
                 <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('min 2 H-Spieler, KI auf schwer')})</small></span>
                 <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
@@ -702,6 +777,7 @@ const MP = {
             playerCount: $('mp-set-total') ? +$('mp-set-total').value : undefined,
             kiCount: $('mp-set-ki') ? +$('mp-set-ki').value : undefined,
             randomCivs: !!($('mp-set-random') && $('mp-set-random').checked),
+            turnTime: $('mp-set-turntime') ? +$('mp-set-turntime').value : 0,
             noKi: false,
         };
         // a map with fewer empires: keep the numbers within what it allows
@@ -1039,6 +1115,18 @@ window.addEventListener('DOMContentLoaded', () => {
         .mp-pl-civ { grid-column: 2 / -1; font-size: 11px; color: #6f6551; }
         .mp-pl-tag { font-size: 10px; padding: 1px 5px; border-radius: 8px; background: #e4dbbe; color: #6f6551; }
         .mp-pl-tag.off { background: #f1d6cf; color: #9d3b2f; }
+        /* Turn timer: countdown in the HUD, banner while the KI plays an absent player's seat */
+        #mp-turn-clock { font-family: monospace; font-weight: bold; padding: 4px 10px; margin-left: 6px; }
+        #mp-turn-clock.mp-clock-low { background: #9d3b2f; color: #fff; }
+        #mp-afk-banner {
+            position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1001;
+            background: #fffbe8; color: #333; border: 2px solid #9d3b2f; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; gap: 10px; align-items: center;
+            /* % of the body: the game turns the body on phones held upright (html.turn) */
+            width: max-content; max-width: calc(100% - 32px); box-sizing: border-box; font-size: 14px;
+        }
+        #mp-afk-banner[hidden] { display: none; }
+        #mp-afk-banner .btn { width: auto; margin: 0; white-space: nowrap; flex: 0 0 auto; }
     `;
     document.head.appendChild(style);
 
@@ -1112,9 +1200,18 @@ window.addEventListener('DOMContentLoaded', () => {
             <i style="font-style:normal; margin-right:4px;">🌐</i> 
             <b id="mp-cred-box" style="font-family:monospace; font-size:14px;"></b>
           </span>
+          <span class="res" id="mp-turn-clock" title="${TX('Zeit für diesen Zug')}" hidden></span>
         `;
         headerHud.insertBefore(wrap, document.querySelector('.hud-res'));
     }
+
+    // Turn timer: shown while the KI plays our seat because we missed our turns
+    const afk = document.createElement('div');
+    afk.id = 'mp-afk-banner';
+    afk.hidden = true;
+    afk.innerHTML = `<span id="mp-afk-text">${TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.')}</span>
+        <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>`;
+    document.body.appendChild(afk);
 });
 
 // --- Monkey Patch redraw() to fix army reference sync bug ---
@@ -1155,7 +1252,7 @@ if (originalRunBots) {
     window.runBots = function () {
         if (MP.active) {
             if (typeof S !== 'undefined' && S && S.over) return gameOver();
-            if (S && S.cur === MP.playerIndex) return humanTurnStart();
+            if (MP.isMyTurn()) return humanTurnStart();
             MP.syncTurnBlocker();
             return redraw();
         }
@@ -1166,7 +1263,7 @@ const originalHumanTurnStart = window.humanTurnStart;
 if (originalHumanTurnStart) {
     window.humanTurnStart = function () {
         // Only open the turn-start dialogs (food, free pick …) for the player whose turn it is.
-        if (MP.active && typeof S !== 'undefined' && S && !S.over && S.cur !== MP.playerIndex) {
+        if (MP.active && typeof S !== 'undefined' && S && !S.over && !MP.isMyTurn()) {
             MP.syncTurnBlocker();
             return redraw();
         }
@@ -1279,7 +1376,7 @@ const patchTurnButton = setInterval(() => {
         aEnd.onclick = () => {
             if (MP.active) {
                 if (!S || S.over) return;
-                if (MP.playerIndex !== S.cur) return toast(TX('Du bist nicht am Zug!'));
+                if (!MP.isMyTurn()) return toast(TX('Du bist nicht am Zug!'));
                 if (typeof ui !== 'undefined' && ui.botLock) return;
                 // Hard block from ui.js (v80+): an army still standing in a city prevents
                 // ending the turn – the server rejects it too.
@@ -1942,6 +2039,10 @@ MP.applyLang = function () {
     if (wait && !MP.asyncId) wait.textContent = TX('Warte auf deinen Zug...');
     const cred = document.querySelector('#mp-cred-wrapper .res');
     if (cred) cred.title = TX('Lobby Zugangsdaten');
+    set('mp-afk-text', TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.'));
+    set('mp-afk-btn', TX('Ich bin zurück'));
+    const clock = $('mp-turn-clock');
+    if (clock) clock.title = TX('Zeit für diesen Zug');
     document.documentElement.style.setProperty('--mp-on-turn', JSON.stringify(' ◂ ' + TX('am Zug')));
     this.drawLegalFooter();
     if ($('mp-main-auth-container') && $('mp-main-auth-container').innerHTML) this.drawMainMenuAuth();

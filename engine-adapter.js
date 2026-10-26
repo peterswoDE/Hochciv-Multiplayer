@@ -606,6 +606,26 @@ function makeAdapter(engineDir, label) {
     }
 
     /**
+     * Live turn timer (sockets/game.js): the time of the current human is up. The KI plays the
+     * rest of the turn at `kiLevel`, the turn ends and the bots / KI after it move. With `keepKi`
+     * the seat stays a KI seat (absent player) until it is handed back.
+     */
+    function finishTurnForAbsent(state, kiLevel, keepKi, onStateChanged) {
+        if (!ensureEngineLoaded() || state.over) return;
+        const p = state.players[state.cur];
+        const before = { kind: p.kind, kiLevel: p.kiLevel };
+        Object.assign(p, { kind: 'ki', kiLevel });
+        try {
+            autoTurn(state);
+        } catch (err) {
+            console.error(`[Engine Adapter] KI turn for absent player ${state.cur} failed:`, err);
+        }
+        if (!keepKi) Object.assign(p, before);
+        E.endTurn(state);
+        runBots(state, onStateChanged);
+    }
+
+    /**
      * Return a sanitised copy of the state for a specific player.
      * Currently sends the full state (the board game has no hidden info
      * beyond dice-roll results, which are seeded).
@@ -621,7 +641,7 @@ function makeAdapter(engineDir, label) {
         marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
         advanceDraft, assignDoubles, isAutoPlayer, kiLevelFor, randomAbility, checkCustomMap,
         engineConst, turnOrderSlots, peekNext, advanceWithoutBegin, applyLateAbility, autoTurn,
-        ensureEngineLoaded,
+        finishTurnForAbsent, ensureEngineLoaded,
         getEngine: () => E,
         version: () => engineConst('APP_VERSION') || label,
     };

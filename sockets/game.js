@@ -3,6 +3,14 @@ const engine = require('../engine-adapter');
 const { User, Game, sequelize } = require('../models');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
+const config = require('../config');
+
+/* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
+   the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
+   until the player hands it back ('turn:reclaim'). */
+const TURN_TIMES = [0, 60, 120, 180, 300, 600];
+const AFK_AFTER = 3;
+const AFK_KI_LEVEL = { ranked: 'schwer', normal: 'mittel' };
 
 /**
  * Register a socket event handler that cannot take the process down: the payload is
@@ -101,6 +109,7 @@ module.exports = function registerHandlers(io) {
                 socket.emit('game:start', {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
                     yourIndex: sortedStateIndex,
+                    turn: turnInfo(s),
                 });
             }
         });
@@ -151,6 +160,7 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerCount !== undefined) newConfig.playerCount = int(newConfig.playerCount, 2, 8);
                 if (newConfig.kiCount !== undefined) newConfig.kiCount = int(newConfig.kiCount, 0, 7);
                 if (newConfig.randomCivs !== undefined) newConfig.randomCivs = !!newConfig.randomCivs;
+                if (newConfig.turnTime !== undefined) newConfig.turnTime = TURN_TIMES.includes(newConfig.turnTime) ? newConfig.turnTime : 0;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -374,6 +384,8 @@ module.exports = function registerHandlers(io) {
             });
             if (err) return ack({ error: err });
 
+            sessions.recordActivity(sessionId);
+            me.missedTurns = 0;             // acting is being there (turn timer)
             ack({ ok: true });
 
             // Re-sync all connected clients immediately after a valid action
@@ -394,6 +406,7 @@ module.exports = function registerHandlers(io) {
             const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
             if (err) return ack({ error: err });
 
+            sessions.recordActivity(sessionId);
             st.placedCount++;
             ack({ ok: true });
 
@@ -408,6 +421,25 @@ module.exports = function registerHandlers(io) {
                     console.error('Error starting game after placement', e);
                 }
             }
+        });
+
+        // ── Turn timer: an absent player takes their seat back from the KI ───
+        on(socket, 'turn:reclaim', (_data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'playing' || !session.state) return ack({ error: 'Spiel läuft nicht.' });
+            if (!me.afk) return ack({ ok: true });
+            const S = session.state;
+            const pi = engine.stateIndexOf(S, myIndex(), me);
+            if (pi === -1) return ack({ error: 'Ungültiger Spieler.' });
+            me.afk = false;
+            me.missedTurns = 0;
+            S.players[pi].kind = 'human';
+            // The KI may already sit in this turn (its loop stops at a human): the clock starts anew
+            if (S.cur === pi) session.turnClock = null;
+            sessions.recordActivity(sessionId);
+            ack({ ok: true });
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+            broadcastState(io, session);
         });
 
         // ── Disconnect ───────────────────────────────────────────────────────
@@ -478,6 +510,22 @@ module.exports = function registerHandlers(io) {
             }
         }, 15000);
     }
+    // Turn timer: once a second, end the turns whose time is up
+    if (!io.__turnInterval) {
+        io.__turnInterval = setInterval(() => {
+            const now = Date.now();
+            for (const session of sessions.getAllSessions().values()) {
+                const tc = session.turnClock;
+                if (!tc || !tc.deadline || now < tc.deadline) continue;
+                try {
+                    timeOutTurn(io, session);
+                } catch (err) {
+                    console.error(`[Turn timer] Error in session ${session.id}:`, err);
+                }
+            }
+        }, 1000);
+        io.__turnInterval.unref();
+    }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -514,6 +562,7 @@ function emitGameStart(io, session) {
             io.to(lobbyPlayer.socketId).emit('game:start', {
                 state: engine.stateForPlayer(session.state, finalIndex),
                 yourIndex: finalIndex,
+                turn: turnInfo(session),
             });
         }
     });
@@ -543,6 +592,7 @@ function publicPlayers(session) {
         userId: p.dbUserId || null,     // account for the player profile (client/profile.js)
         kind: p.kind,                   // 'human' | 'ki' (the client places KI seats like the server)
         isBot: p.kind === 'bot' || p.kind === 'ki',     // computer seat (KI fill-in)
+        afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
     }));
 }
 
@@ -558,7 +608,69 @@ function broadcastState(io, session) {
         state: sharedState,
         currentPlayer: session.state.cur,
         round: session.state.round,
+        turn: turnInfo(session),
     });
+}
+
+// ── Turn timer ────────────────────────────────────────────────────────────────
+
+const turnTimeMs = session => {
+    const t = session.gameConfig && session.gameConfig.turnTime;
+    return TURN_TIMES.includes(t) && t > 0 ? t * 1000 * config.TURN_TIMER_SCALE : 0;
+};
+
+/**
+ * Keep session.turnClock = { key, deadline } in step with the state: a new turn (round and
+ * player) of a human starts the clock, KI / bot turns and games without a limit have none.
+ */
+function updateTurnClock(session) {
+    const S = session.state;
+    if (!S || S.over || session.status !== 'playing') { session.turnClock = null; return; }
+    const key = S.round + ':' + S.cur;
+    if (session.turnClock && session.turnClock.key === key) return;
+    const ms = turnTimeMs(session);
+    const human = !engine.isAutoPlayer(S.players[S.cur]);
+    session.turnClock = { key, deadline: ms && human ? Date.now() + ms : null };
+}
+
+/** For the clients: { total, left } in ms (left null: no clock running now), or null without a limit. */
+function turnInfo(session) {
+    updateTurnClock(session);
+    const total = turnTimeMs(session);
+    if (!total) return null;
+    const tc = session.turnClock;
+    return { total, left: tc && tc.deadline ? Math.max(0, tc.deadline - Date.now()) : null };
+}
+
+/**
+ * The current player's time is up: the KI plays the rest of the turn and ends it. After
+ * AFK_AFTER such turns in a row the KI keeps the seat – unless nobody else would be left to
+ * play, then only this turn is played for them.
+ */
+function timeOutTurn(io, session) {
+    const S = session.state;
+    session.turnClock.deadline = null;              // once per turn
+    if (!S || S.over || session.status !== 'playing') return;
+    const pi = S.cur;
+    if (engine.isAutoPlayer(S.players[pi])) return;
+    const lp = session.players.find((p, i) => engine.stateIndexOf(S, i, p) === pi);
+    if (!lp) return;
+
+    lp.missedTurns = (lp.missedTurns || 0) + 1;
+    const othersActive = session.players.some(p => p !== lp && p.kind === 'human' && !p.afk);
+    lp.afk = lp.missedTurns >= AFK_AFTER && othersActive;
+    const level = session.gameConfig.ranked ? AFK_KI_LEVEL.ranked : AFK_KI_LEVEL.normal;
+    console.log(`[Turn timer] Session ${session.id}: time up for ${lp.name} (${lp.missedTurns} in a row${lp.afk ? ', KI keeps the seat' : ''})`);
+
+    sessions.recordActivity(session.id);
+    if (lp.socketId) io.to(lp.socketId).emit('turn:timeout', { afk: lp.afk });
+    engine.finishTurnForAbsent(S, level, lp.afk, () => {
+        broadcastState(io, session);
+        checkGameOver(io, session);
+    });
+    if (lp.afk) io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
+    broadcastState(io, session);
+    checkGameOver(io, session);
 }
 
 /**

@@ -8,7 +8,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 
 | Order | # | Feature | Live games | Rundenspiele | Status |
 |---|---|---|---|---|---|
-| 1 | F2 | [Turn timer](#f2-turn-timer) | ✔ | – (7-day rule stays) | ⬜ |
+| 1 | F2 | [Turn timer](#f2-turn-timer) | ✔ | – (7-day rule stays) | ✅ |
 | 2 | F3 | [Rematch](#f3-rematch) | ✔ | – | ⬜ |
 | 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ⬜ |
 | 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ⬜ |
@@ -36,7 +36,16 @@ The numbers are those of the original proposal. The order puts the small fixes f
 
 **Also fixes:** game actions did not count as activity (`sessions.recordActivity`), so the cleanup dropped every live game from the session store 10 minutes after its start. Players who were connected kept playing, but reconnects failed with "Sitzung nicht gefunden".
 
-**Status:** ⬜ planned
+**Implementation**
+- `sockets/game.js`: `gameConfig.turnTime` (seconds, one of 0/60/120/180/300/600, checked in `lobby:config`). `session.turnClock = { key, deadline }` follows the state. A new human turn (`round:cur`) starts the clock; KI turns have none. `state:update` and `game:start` carry `turn: { total, left }`, or `null` without a limit. A 1-second loop calls `timeOutTurn()`: it counts `missedTurns` on the lobby player, sends `turn:timeout` to that player, and has the engine finish the turn. On the third miss the player becomes `afk` (in `publicPlayers`), unless no other active human would be left. Any action resets the count. `turn:reclaim` hands the seat back and restarts the clock.
+- `engine-adapter.js`: `finishTurnForAbsent(state, kiLevel, keepKi, onStateChanged)`: the KI plays the rest of the turn (medium, hardest in ranked games), then `endTurn` and the following bot/KI turns.
+- `sessions.js` / `config.js`: actions and start-tile placement count as activity. Running games (placement, draft, playing) are removed after `SESSION_TIMEOUT_MS` (2 h) without activity, lobbies and finished games after `LOBBY_TIMEOUT_MS` (10 min). `TURN_TIMER_SCALE` shortens the turns for tests.
+- `mp.js`: lobby row *Zeit pro Zug* with a hint. Countdown `#mp-turn-clock` in the HUD, red in the last 30 seconds, with a toast to the player on turn. `turn:timeout` closes open dialogs and says why. `#mp-afk-banner` with *Ich bin zurück*. The player list tags the seat *KI (abwesend)*. `MP.isMyTurn()` (own turn and not absent) replaces the plain `S.cur === playerIndex` checks.
+- Texts in `client/i18n.js`.
+
+**Tests:** `tests/timer/turn-timer.test.js` (run with `TURN_TIMER_SCALE=0.05`): lobby setting, countdown, three timeouts, the KI takeover, *Ich bin zurück*, no clock without a limit, and the cleanup rules. `tests/i18n/english.test.js` covers the new lobby row.
+
+**Status:** ✅ on `development`
 
 ## F3 Rematch
 
