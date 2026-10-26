@@ -7,6 +7,7 @@ const config = require('../config');
 const chat = require('../utils/chat');
 const Stats = require('../utils/stats');
 const Replay = require('../utils/replay');
+const Summary = require('../utils/summary');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -122,6 +123,8 @@ module.exports = function registerHandlers(io) {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
                     yourIndex: sortedStateIndex,
                     turn: turnInfo(s),
+                    // back in the middle of one's own turn: its summary again
+                    summary: s.lastSummary && s.lastSummary.me === sortedStateIndex ? s.lastSummary : undefined,
                 });
             }
         });
@@ -702,6 +705,30 @@ function recordStats(session, final) {
     } catch (err) {
         console.error(`[Replay] Recording failed in session ${session.id}:`, err);
     }
+    try {
+        session.marks = Summary.track(session.marks, engine.getEngine(), S);
+    } catch (err) {
+        console.error(`[Summary] Tracking failed in session ${session.id}:`, err);
+    }
+}
+
+/**
+ * "Since your last turn" (utils/summary.js): when a human's turn begins, what happened since
+ * their last one – sent once with that state update (public information, derived from the state).
+ */
+function turnSummary(session) {
+    const S = session.state;
+    const key = S.round + ':' + S.cur;
+    if (session.summaryKey === key) return undefined;
+    session.summaryKey = key;
+    session.lastSummary = null;
+    if (S.over || engine.isAutoPlayer(S.players[S.cur])) return undefined;
+    try {
+        session.lastSummary = Summary.summarize(engine.getEngine(), S, session.marks, S.cur);
+    } catch (err) {
+        console.error(`[Summary] Failed in session ${session.id}:`, err);
+    }
+    return session.lastSummary || undefined;
 }
 
 function broadcastState(io, session) {
@@ -718,6 +745,7 @@ function broadcastState(io, session) {
         currentPlayer: session.state.cur,
         round: session.state.round,
         turn: turnInfo(session),
+        summary: turnSummary(session),
     });
 }
 

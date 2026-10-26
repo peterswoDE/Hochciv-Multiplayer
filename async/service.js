@@ -17,6 +17,7 @@ const { finalPoints } = require('../utils/score');
 const chatLib = require('../utils/chat');
 const Stats = require('../utils/stats');
 const Replay = require('../utils/replay');
+const Summary = require('../utils/summary');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
@@ -39,7 +40,7 @@ function fromRow(row) {
         engine: d.engine || null,          // null: started before versions were recorded = v83
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
         hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [], stats: d.stats || null,
-        replay: d.replay || null,
+        replay: d.replay || null, marks: d.marks || null,
         state: row.state || null,
         waitSince: row.waitSince ? new Date(row.waitSince).getTime() : Date.now(),
         reminded: !!row.reminded,
@@ -63,7 +64,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], stats: g.stats || null, replay: g.replay || null },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], stats: g.stats || null, replay: g.replay || null, marks: g.marks || null },
         state: S,
     };
 }
@@ -145,6 +146,11 @@ async function recordStats(g) {
         } catch (err) {
             console.error(`[Async] Replay frame failed for ${g.id}:`, err);
         }
+        try {
+            g.marks = Summary.track(g.marks, L.ENG(g).getEngine(), g.state);       // "since your last turn"
+        } catch (err) {
+            console.error(`[Async] Summary tracking failed for ${g.id}:`, err);
+        }
     }
 }
 
@@ -166,13 +172,11 @@ async function settle(g, before) {
     if (fresh.length) {
         const viewing = await viewers(g.id);
         const absent = fresh.filter(u => !viewing.has(u));
-        notify(absent, {
-            type: 'turn', gameId: g.id,
-            subject: 'Du bist am Zug',
-            text: g.status === 'placement' ? 'Lege dein Startplättchen in deinem Rundenspiel.'
-                : g.status === 'draft' ? 'Du bist im Draft deines Rundenspiels dran.'
-                    : `Du bist in deinem Rundenspiel am Zug (Runde ${g.state ? g.state.round : 1}).`,
-        });
+        const text = g.status === 'placement' ? 'Lege dein Startplättchen in deinem Rundenspiel.'
+            : g.status === 'draft' ? 'Du bist im Draft deines Rundenspiels dran.'
+                : `Du bist in deinem Rundenspiel am Zug (Runde ${g.state ? g.state.round : 1}).`;
+        // each with what happened since their last turn (utils/summary.js)
+        for (const u of absent) notify([u], { type: 'turn', gameId: g.id, subject: 'Du bist am Zug', text, ...L.summaryText(g, u) });
     }
     if (before.status !== g.status && (g.status === 'finished' || g.status === 'cancelled')) {
         const ids = g.seats.map(s => s.userId).filter(Boolean);

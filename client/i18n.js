@@ -180,6 +180,21 @@
         '%s übernimmt die Führung.': '%s takes the lead.',
         'Größter Sprung: %s, +%s Punkte.': 'Biggest jump: %s, +%s points.',
 
+        // ── "Since your last turn" (mp.js, utils/summary.js) ─────────────────────────────
+        'Seit deinem letzten Zug': 'Since your last turn',
+        'Runde %s bis %s': 'Rounds %s to %s',
+        'Du hast %s verloren.': 'You lost %s.',
+        '%s hat dir %s abgenommen.': '%s took %s from you.',
+        'Du hast %s von %s erobert.': 'You conquered %s from %s.',
+        '%s ist ausgeschieden.': '%s is out.',
+        'eine Stadt': 'a city',
+        '%s Städte': '%s cities',
+        'Keine Eroberungen, keine Wunder – die anderen haben ausgebaut.': 'No conquests, no wonders – the others have been building.',
+        'Alle Ereignisse (%s)': 'All events (%s)',
+        'Bei jedem Zug automatisch zeigen': 'Show automatically every turn',
+        'Du': 'You',
+        'Weiter': 'Continue',
+
         // ── Replays (client/replay.js) ───────────────────────────────────────────────────
         'Wiederholung': 'Replay',
         'Wiederholung ansehen': 'Watch the replay',

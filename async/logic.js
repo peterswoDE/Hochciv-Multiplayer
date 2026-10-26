@@ -11,6 +11,7 @@
  *     invites: [{ userId, username, status }],
  *     chat:   [message] – the last 200 chat messages (utils/chat.js),
  *     stats:  score and counts over the rounds, key moments (utils/stats.js),
+ *     marks:  per state player the point of their last turn ("since your last turn", utils/summary.js),
  *     pre:    null | { plan } (tile map placement) | { draft: { V, D } } (Marathon),
  *     hold:   true while the game waits for an unclaimed seat (S.cur is that seat, its
  *             beginTurn has not run yet),
@@ -24,6 +25,7 @@
  */
 const engine = require('../engine-adapter');
 const { renameInState } = require('../utils/rename');
+const Summary = require('../utils/summary');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and are v83. New games get the current one. */
@@ -654,6 +656,24 @@ function removeUser(g, userId) {
     return null;
 }
 
+// ── "Since your last turn" for e-mail and push ───────────────────────────────────
+
+/** { summary, short } texts for the user whose turn it is now (utils/summary.js), or {}. */
+function summaryText(g, userId) {
+    const seat = seatOf(g, userId);
+    if (!seat || g.status !== 'playing' || !g.state) return {};
+    const pi = stateIndex(g, seat.slot);
+    const sum = Summary.summarize(ENG(g).getEngine(), g.state, g.marks, pi);
+    const name = i => {
+        const s = g.seats[g.state.players[i].slot];
+        const civ = (civDef(g.state.players[i].civ) || {}).n || g.state.players[i].civ;
+        return s && s.name ? `${s.name} (${civ})` : civ;
+    };
+    const wonders = ENG(g).engineConst('WONDERS') || [];
+    const wonder = k => (wonders.find(w => w.k === k) || {}).n || k;
+    return Summary.text(sum, name, wonder) || {};
+}
+
 // ── Views ─────────────────────────────────────────────────────────────────────
 
 /** Short info for the game list. */
@@ -730,12 +750,16 @@ function view(g, userId) {
     if (g.state) {
         out.state = g.state;
         out.myIndex = mine ? stateIndex(g, mine.slot) : -1;
+        // "since your last turn" (utils/summary.js) while it is the player's turn
+        if (g.status === 'playing' && !g.hold && out.myIndex >= 0 && g.state.cur === out.myIndex) {
+            out.summary = Summary.summarize(ENG(g).getEngine(), g.state, g.marks, out.myIndex) || undefined;
+        }
     }
     return out;
 }
 
 module.exports = {
     create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, DELETED_NAME, IN_PREPHASE,
-    waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree, engineVersionOf, ENG,
+    waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
     MMR_PENALTY,
 };

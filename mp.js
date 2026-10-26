@@ -35,6 +35,8 @@ const MP = {
     spectatorCount: 0,      // live game: how many are watching
     replay: false,          // the page shows a replay (client/replay.js, ?replay=<id>)
     lastRecord: null,       // the stored match of the game that just ended: { id, replay }
+    summary: null,          // "since your last turn" of our current / last turn (utils/summary.js)
+    summaryShownKey: null,  // the turn whose summary popped up already
 
     /** Live game: the KI plays our seat because we missed our turns (turn timer). */
     isAfk: function () {
@@ -504,6 +506,7 @@ const MP = {
                 MP.playerIndex = data.yourIndex;
                 MP.lastStats = null;
                 MP.lastRecord = null;
+                MP.takeSummary(data.summary);
                 MP.setTurnClock(data.turn);
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
@@ -523,6 +526,7 @@ const MP = {
             this.socket.on('state:update', data => {
                 if (MP.asyncId) return;
                 MP.setTurnClock(data.turn);
+                MP.takeSummary(data.summary);
                 MP.applyState(data.state);
             });
 
@@ -564,6 +568,7 @@ const MP = {
 
     syncTurnBlocker: function () {
         MP.drawAfkBanner();
+        MP.drawSummaryButton();
         const wait = document.querySelector('.mp-waiting-toast');
         if (wait && MP.spectator) wait.textContent = TX('Du schaust zu');
         if (S && !MP.isMyTurn() && !S.over) {
@@ -571,6 +576,78 @@ const MP = {
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    // ── "Since your last turn" (utils/summary.js) ────────────────────────────
+    /** A summary from the server – ours, and the first one of a turn (later views repeat it). */
+    takeSummary: function (sum) {
+        if (!sum || sum.me !== this.playerIndex) return;
+        if (this.summary && this.summary.key === sum.key) return;
+        this.summary = sum;
+        this.drawSummaryButton();
+    },
+    summaryAuto: function () {
+        try { return localStorage.getItem('hochciv.summary.auto') !== '0'; } catch (_) { return true; }
+    },
+    /** Our turn begins: its summary first (if wanted), the game's own turn-start dialogs after it. */
+    summaryBeforeTurn: function (go) {
+        const sum = this.summary;
+        const key = typeof S !== 'undefined' && S ? S.round + ':' + S.cur : null;
+        if (!sum || sum.key !== key || this.summaryShownKey === key || !this.summaryAuto()) return false;
+        this.summaryShownKey = key;
+        this.showSummary(go);
+        return true;
+    },
+    summaryName: function (i) {
+        const sp = S.players[i];
+        if (!sp) return '?';
+        const civ = typeof civOf === 'function' ? civOf(sp).n : sp.civ;
+        const lp = this.lobbyPlayerOf(sp) || {};
+        return lp.name && !lp.isBot ? `${lp.name} (${civ})` : civ;
+    },
+    showSummary: function (after) {
+        const sum = this.summary;
+        if (!sum || typeof S === 'undefined' || !S) return after && after();
+        const nm = i => (i === this.playerIndex ? `<b>${TX('du')}</b>` : `<b>${escHtml(this.summaryName(i))}</b>`);
+        const city = n => (n === 1 ? TX('eine Stadt') : TX('%s Städte', n));
+        const wonder = k => { const w = typeof WONDER_BY_KEY !== 'undefined' && WONDER_BY_KEY[k]; return escHtml(w ? (typeof T === 'function' ? T(w.n) : w.n) : k); };
+        const alerts = [];
+        for (const l of sum.lost) alerts.push(l.by === -1 ? `⚔ ${TX('Du hast %s verloren.', city(l.n))}` : `⚔ ${TX('%s hat dir %s abgenommen.', nm(l.by), city(l.n))}`);
+        for (const g of sum.gained) alerts.push(`🏰 ${TX('Du hast %s von %s erobert.', city(g.n), nm(g.from))}`);
+        for (const p of sum.players) if (p.out) alerts.push(`☠ ${TX('%s ist ausgeschieden.', nm(p.pi))}`);
+        for (const w of sum.wonders) alerts.push(`🏛 ${TX('%s baut %s.', nm(w.pi), wonder(w.k))}`);
+        const diff = d => (d > 0 ? `<span class="mp-sum-up">+${d}</span>` : d < 0 ? `<span class="mp-sum-down">−${-d}</span>` : '');
+        const score = i => { try { return victoryScore(S, i).total; } catch (_) { return '–'; } };
+        const rows = sum.players.map(p => {
+            const sp = S.players[p.pi];
+            const cities = S.cities.filter(c => c.owner === p.pi).length;
+            const techs = Object.keys(sp.techs || {}).filter(k => sp.techs[k]).length;
+            const col = typeof civOf === 'function' ? civOf(sp).color : '#999';
+            return `<tr${p.pi === this.playerIndex ? ' class="mp-sum-me"' : ''}>
+                <td><span class="mp-pl-dot" style="display:inline-block;vertical-align:middle;background:${escHtml(col)}"></span> ${p.pi === this.playerIndex ? TX('Du') : escHtml(this.summaryName(p.pi))}</td>
+                <td class="mp-sum-num">${score(p.pi)} ${diff(p.ds)}</td><td class="mp-sum-num">${cities} ${diff(p.dc)}</td>
+                <td class="mp-sum-num">${techs} ${diff(p.dt)}</td><td class="mp-sum-num">${diff(p.da) || '·'}</td></tr>`;
+        }).join('');
+        const span = sum.since === sum.round ? TX('Runde %s', sum.round) : TX('Runde %s bis %s', sum.since, sum.round);
+        modal(TX('Seit deinem letzten Zug'), `
+            <p class="sub">${span}</p>
+            ${alerts.length ? `<ul class="mp-sum-alerts">${alerts.map(a => `<li>${a}</li>`).join('')}</ul>` : `<p>${TX('Keine Eroberungen, keine Wunder – die anderen haben ausgebaut.')}</p>`}
+            <div style="overflow-x:auto"><table class="tbl mp-sum-table">
+              <tr><th>${TX('Reich')}</th><th class="mp-sum-num">${TX('Punkte')}</th><th class="mp-sum-num">${TX('Städte')}</th><th class="mp-sum-num">${TX('Technologien')}</th><th class="mp-sum-num">${TX('Armeen')}</th></tr>
+              ${rows}</table></div>
+            <details class="mp-sum-log"><summary>${TX('Alle Ereignisse (%s)', sum.log.length)}</summary>
+              <div>${typeof logHtml === 'function' ? logHtml(sum.log) : ''}</div></details>
+            <label class="row mp-sum-auto"><span>${TX('Bei jedem Zug automatisch zeigen')}</span>
+              <input type="checkbox" id="mp-sum-auto" ${this.summaryAuto() ? 'checked' : ''}></label>
+            <button class="btn wide primary" id="mp-sum-go">${TX('Weiter')}</button>`);
+        $('mp-sum-auto').onchange = e => { try { localStorage.setItem('hochciv.summary.auto', e.target.checked ? '1' : '0'); } catch (_) { } };
+        // however the popup is closed (button, ✕, outside), the turn goes on
+        this._afterSummary = after || null;
+        $('mp-sum-go').onclick = () => closeModal();
+    },
+    drawSummaryButton: function () {
+        const btn = $('mp-summary-btn');
+        if (btn) btn.hidden = !(this.active && !this.spectator && this.summary && typeof S !== 'undefined' && S && !S.over);
     },
 
     // ── Turn timer (live games, host setting "Zeit pro Zug") ──────────────────
@@ -1278,6 +1355,19 @@ window.addEventListener('DOMContentLoaded', () => {
             width: max-content; max-width: calc(100% - 32px); box-sizing: border-box; font-size: 14px;
         }
         #mp-afk-banner[hidden] { display: none; }
+        /* "Since your last turn" */
+        #mp-summary-btn { cursor: pointer; margin-left: 6px; padding: 4px 8px; font-size: 15px; border: none; }
+        #mp-summary-btn[hidden] { display: none; }
+        .mp-sum-alerts { padding-left: 18px; margin: 6px 0 10px; }
+        .mp-sum-alerts li { margin: 3px 0; }
+        .mp-sum-table td, .mp-sum-table th { white-space: nowrap; }
+        .mp-sum-num { text-align: right; font-variant-numeric: tabular-nums; }
+        .mp-sum-me td { font-weight: 700; }
+        .mp-sum-up { color: #2e6b34; font-size: 12px; }
+        .mp-sum-down { color: #9d3b2f; font-size: 12px; }
+        .mp-sum-log { margin: 10px 0; }
+        .mp-sum-log > div { max-height: 40vh; overflow-y: auto; font-size: 13px; }
+        .mp-sum-auto { margin: 8px 0; }
         #mp-afk-banner .btn { width: auto; margin: 0; white-space: nowrap; flex: 0 0 auto; }
     `;
     document.head.appendChild(style);
@@ -1353,6 +1443,7 @@ window.addEventListener('DOMContentLoaded', () => {
             <b id="mp-cred-box" style="font-family:monospace; font-size:14px;"></b>
           </span>
           <span class="res" id="mp-turn-clock" title="${TX('Zeit für diesen Zug')}" hidden></span>
+          <button type="button" class="res" id="mp-summary-btn" title="${TX('Seit deinem letzten Zug')}" hidden onclick="event.stopPropagation(); MP.showSummary()">📋</button>
         `;
         headerHud.insertBefore(wrap, document.querySelector('.hud-res'));
     }
@@ -1379,6 +1470,19 @@ if (originalRedraw) {
             if (freshArmy) ui.army = freshArmy;
         }
         return originalRedraw.apply(this, arguments);
+    };
+}
+
+// ── Monkey Patch closeModal(): after "since your last turn", the turn goes on ──
+// The popup comes before the game's turn-start dialogs (food, free pick …). However it is
+// closed – "Weiter", ✕ or a tap beside it – those follow.
+const originalCloseModal = window.closeModal;
+if (originalCloseModal) {
+    window.closeModal = function () {
+        const r = originalCloseModal.apply(this, arguments);
+        const after = MP._afterSummary;
+        if (after) { MP._afterSummary = null; setTimeout(after, 0); }
+        return r;
     };
 }
 
@@ -1438,6 +1542,9 @@ if (originalHumanTurnStart) {
             MP.syncTurnBlocker();
             return redraw();
         }
+        // "Since your last turn" pops up first; the game's turn-start dialogs follow when it closes
+        const self = this, args = arguments;
+        if (MP.active && MP.summaryBeforeTurn(() => originalHumanTurnStart.apply(self, args))) return redraw();
         return originalHumanTurnStart.apply(this, arguments);
     };
 }
@@ -2135,6 +2242,7 @@ const ASYNC = {
         this.placing = false;
         const fresh = !prev || !['playing', 'finished'].includes(prev.status) || !$('screen-game').classList.contains('show');
         MP.playerIndex = view.myIndex;
+        MP.takeSummary(view.summary);                 // "since your last turn" – needs our index
         if (fresh) {
             closeModal();
             if (typeof draftState !== 'undefined') draftState = null;
@@ -2223,6 +2331,8 @@ MP.applyLang = function () {
     set('mp-afk-btn', TX('Ich bin zurück'));
     const clock = $('mp-turn-clock');
     if (clock) clock.title = TX('Zeit für diesen Zug');
+    const sumBtn = $('mp-summary-btn');
+    if (sumBtn) sumBtn.title = TX('Seit deinem letzten Zug');
     document.documentElement.style.setProperty('--mp-on-turn', JSON.stringify(' ◂ ' + TX('am Zug')));
     this.drawLegalFooter();
     if ($('mp-main-auth-container') && $('mp-main-auth-container').innerHTML) this.drawMainMenuAuth();
