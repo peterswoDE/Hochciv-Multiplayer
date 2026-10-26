@@ -9,6 +9,7 @@
  *     seats:  [{ slot, civ, ability, kind, userId, name, roman, color, drafted, kiLevel,
  *                started, replaced, penalty, joinedAt }],   // index = slot = newGame() players index
  *     invites: [{ userId, username, status }],
+ *     chat:   [message] – the last 200 chat messages (utils/chat.js),
  *     pre:    null | { plan } (tile map placement) | { draft: { V, D } } (Marathon),
  *     hold:   true while the game waits for an unclaimed seat (S.cur is that seat, its
  *             beginTurn has not run yet),
@@ -635,6 +636,8 @@ function removeUser(g, userId) {
     }
     for (const s of g.seats.filter(x => x.userId === userId)) {
         const old = s.name;
+        // their chat messages go with the account
+        if (g.chat) g.chat = g.chat.filter(m => !(m.slot === s.slot && m.name === old));
         Object.assign(s, { userId: null, name: DELETED_NAME });
         const i = stateIndex(g, s.slot);
         if (i >= 0 && g.state.players[i].name) g.state.players[i].name = DELETED_NAME;

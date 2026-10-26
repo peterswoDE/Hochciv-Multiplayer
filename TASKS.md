@@ -10,7 +10,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 |---|---|---|---|---|---|
 | 1 | F2 | [Turn timer](#f2-turn-timer) | ✔ | – (7-day rule stays) | ✅ |
 | 2 | F3 | [Rematch](#f3-rematch) | ✔ | – | ✅ |
-| 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ⬜ |
+| 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ✅ |
 | 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ⬜ |
 | 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ⬜ |
 | 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ⬜ |
@@ -76,7 +76,16 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - Moderation: a server-side rate limit (5 messages in 10 seconds), plain text only, and a local *mute* per player. Reporting is not part of this.
 - No e-mail or push messages for chat.
 
-**Status:** ⬜ planned
+**Implementation**
+- `utils/chat.js`: the message format `{ id, t, slot, name, kind: text|emote|ping, … }`, checks (plain text up to 300 characters, a fixed emote list, valid hexes for pings), the rate limit (5 per 10 s per sender) and the history (pings are not kept).
+- Live games (`sockets/game.js`): `chat:send` → `chat:msg` to the room. The last 100 messages stay in `session.chat` (also across a rematch), and `chat:history` is sent after every `session:connect`.
+- Rundenspiele (`async/service.js`, `sockets/async.js`): `async:chat`, only for players of the game. Messages are kept in `data.chat` (last 200) and saved in the game's queue, so they can't overwrite a move. `async:chat` goes to everyone who has the game open, with no new view. `chat:history` is sent after `async:open`. Deleting an account removes its messages (`logic.removeUser`).
+- `client/chat.js` (new, injected after `mp.js` by `inject.js`): panel bottom left, collapsible to 💬 with an unread badge. Rundenspiele remember per device what was read (`hochciv.chat.seen.<id>`). Emote row, ping mode (a capture listener on `#map-host` takes the tap before the game opens the hex), pings drawn into `#map #world` after every `drawMap` and gone after 6 s. Muting on this device (`hochciv.chat.muted`). Follows the game's language. `mp.js` attaches it to every new socket.
+- Texts in `client/i18n.js`.
+
+**Tests:** `tests/chat/chat.test.js`: live game (panel, HTML shown as text, unread badge, emote, ping on both screens without opening the hex, the server's checks, the rate limit, muting, English, history after a reconnect) and Rundenspiel (live delivery, stored with the game, unread when opened again, non-players may not write).
+
+**Status:** ✅ on `development`
 
 ## F4 Spectator mode
 

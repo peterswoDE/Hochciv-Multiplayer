@@ -14,6 +14,7 @@ const engine = require('../engine-adapter');
 const { notify } = require('../utils/notify');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
+const chatLib = require('../utils/chat');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
@@ -35,7 +36,7 @@ function fromRow(row) {
         id: row.id, joinCode: row.joinCode, hostUserId: row.hostUserId, status: row.status,
         engine: d.engine || null,          // null: started before versions were recorded = v83
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
-        hold: !!d.hold, result: d.result || null, meta: d.meta || {},
+        hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [],
         state: row.state || null,
         waitSince: row.waitSince ? new Date(row.waitSince).getTime() : Date.now(),
         reminded: !!row.reminded,
@@ -59,7 +60,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [] },
         state: S,
     };
 }
@@ -382,7 +383,32 @@ async function open(user, id) {
     const e = await getEntry(id);
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
     if (!e.g.seats.some(s => s.userId === user.id)) return { error: 'Du spielst in diesem Spiel nicht mit.' };
-    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))) };
+    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [] };
+}
+
+/**
+ * Chat message of a participant (utils/chat.js). Kept with the game (last 200, pings not) and
+ * sent to everyone who has it open as 'async:chat' – not as a whole new view.
+ */
+async function chat(user, id, payload) {
+    const e = await getEntry(id);
+    if (!e.g) return { error: 'Spiel nicht gefunden.' };
+    const seat = e.g.seats.find(s => s.userId === user.id);
+    if (!seat) return { error: 'Nur Mitspieler können schreiben.' };
+    const r = chatLib.build({ slot: seat.slot, name: user.username }, payload, `async:${id}:${user.id}`);
+    if (r.error) return { error: r.error };
+    if (r.msg.kind !== 'ping') {
+        // in the game's queue, so it can't overwrite a move saved at the same time
+        e.busy++;
+        const run = e.queue.then(async () => {
+            e.g.chat = chatLib.remember(e.g.chat, r.msg, chatLib.ASYNC_HISTORY);
+            await save(e.g);
+        });
+        e.queue = run.catch(() => {}).finally(() => { e.busy--; });
+        await run;
+    }
+    if (io) io.to(room(id)).emit('async:chat', { id, msg: r.msg });
+    return { ok: true };
 }
 
 function action(user, id, type, params) {
@@ -515,7 +541,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick,
+    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat,
     setNotifyEmail, sweep, room, removeUser,
     processResult,      // for tests/score
 };
