@@ -17,6 +17,7 @@ const CustomMap = require('./CustomMap')(sequelize);
 const DeviceToken = require('./DeviceToken')(sequelize);
 const Replay = require('./Replay')(sequelize);
 const ReplayFrame = require('./ReplayFrame')(sequelize);
+const Report = require('./Report')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
@@ -43,5 +44,6 @@ module.exports = {
     CustomMap,
     DeviceToken,
     Replay,
-    ReplayFrame
+    ReplayFrame,
+    Report
 };

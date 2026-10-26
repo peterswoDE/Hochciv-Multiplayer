@@ -5,6 +5,7 @@ const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
 const config = require('../config');
 const chat = require('../utils/chat');
+const reports = require('../utils/reports');
 const Stats = require('../utils/stats');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
@@ -317,11 +318,23 @@ module.exports = function registerHandlers(io) {
         on(socket, 'chat:send', (data, ack) => {
             if (watcher) return ack({ error: 'Zuschauer können nicht schreiben.' });
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
-            const r = chat.build({ slot: myIndex(), name: me.name }, data, `live:${sessionId}:${me.clientId}`);
+            const r = chat.build({ slot: myIndex(), name: me.name, uid: me.dbUserId }, data, `live:${sessionId}:${me.clientId}`);
             if (r.error) return ack({ error: r.error });
             session.chat = chat.remember(session.chat, r.msg, chat.LIVE_HISTORY);
             ack({ ok: true });
             io.to(sessionId).emit('chat:msg', r.msg);
+        });
+
+        // Report another player's message (utils/reports.js): players and spectators
+        on(socket, 'chat:report', async (data, ack) => {
+            const who = bound() ? me : watcher;
+            if (!session || !who) return ack({ error: 'Nicht verbunden.' });
+            const u = socket.request.user;
+            const r = await reports.report({
+                source: 'live', sourceId: session.id, history: session.chat, msgId: data && data.id, reason: data && data.reason,
+                reporter: { id: u ? u.id : null, name: u ? u.username : who.name, slot: bound() ? myIndex() : -1 },
+            }).catch(err => { console.error('[Reports]', err); return { error: 'Serverfehler' }; });
+            ack(r);
         });
 
         // ── Rematch (host only): the finished game goes back to its lobby ─────

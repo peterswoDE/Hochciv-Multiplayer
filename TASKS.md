@@ -16,10 +16,11 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ✅ |
 | 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ✅ |
 | 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ✅ |
+| 9 | F11 | [Chat: report and block](#f11-chat-report-and-block) | ✔ | ✔ | ✅ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
 
-The numbers are those of the original proposal. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 was requested after the staging tests of F1. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
 All planned features are on `development` (staging). Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
@@ -202,6 +203,33 @@ All planned features are on `development` (staging). Production (`main`) gets th
 - Texts in `client/i18n.js`.
 
 **Tests:** `tests/match/match.test.js` (run with `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000`): the MMR window and the settings, the queue screen, close MMRs matched and a far one not, a decline (one back in the queue, one out), a closed dialog, both confirming and the ranked game starting by itself with the right settings, a confirmation running out, and no queue without login. All other tests pass with `startGame()`.
+
+**Status:** ✅ on `development`
+
+---
+
+## F11 Chat: report and block
+
+Tapping another player's chat message opens a menu: **report the message** to the admins or **block the player**. Live games and Rundenspiele.
+
+**Decisions**
+- The menu is a list (`CHAT.menuItems` in `client/chat.js`): `{ id, icon, label, when(m), run(m) }`. More options are one more entry; `run` can return a second step (as the report does with its reason field).
+- A report stores the chat history as the **server** has it (live game: last 100 messages, Rundenspiel: last 200, no pings), not what the client sends. Optional reason (300 characters). Players and spectators may report, guests too; nobody twice per message, not their own, at most 10 per hour.
+- Block replaces the earlier device-local *mute*. Logged-in players keep the list with the account (`users.blockedPlayers`): accounts by id (holds across games, devices and names), guests by name. Guests keep it on the device. The old mute list is read as blocks. A blocked player's messages, unread count and pings are hidden. The list is under the chat and on the account page (*Blockierte Spieler*), with *Entblocken*.
+- Admins (admin and superadmin) review reports in the new account tab *Meldungen* (open count on the tab): the chat history with the reported message marked, then *Erledigt* or *Verwerfen* with a note, *Wieder öffnen*, and *Konto sperren* (the existing ban, with its admin/superadmin rules). Closed reports are deleted after 180 days (`REPORT_KEEP_DAYS`).
+- Account deletion: reports stay (moderation record) without the deleted account's name; nobody blocks the account any more.
+
+**Implementation**
+- `models/Report.js` (new, `reports` table); `models/User.js`: `blockedPlayers` (JSONB).
+- `utils/reports.js` (new): `report()` (checks, rate limit, snapshot), `block()` / `unblock()` / `publicBlocks()`, `list()` / `update()` for the admin, `removeUser()` for account deletion, `cleanup()` / `startCleanup()` (`server.js`).
+- `utils/chat.js`: messages carry the sender's account as `uid` (none for guests) – blocks and reports go by it.
+- `sockets/game.js`: `chat:report`. `async/service.js` + `sockets/async.js`: `async:report`.
+- `routes/account.js`: `GET/POST /api/account/blocks`, `DELETE /api/account/blocks/:key`. `routes/admin.js`: `GET /api/admin/reports?status=open|closed`, `POST /api/admin/reports/:id` (`status`, `note`).
+- `client/chat.js`: rows of other players are tappable (keyboard too), the menu over the messages (the panel grows while it is open), Escape closes it; the blocked list under the messages.
+- `client/account.html` / `account.js`: *Blockierte Spieler* in the profile, the *Meldungen* tab.
+- `utils/deleteAccount.js` calls `reports.removeUser()`. Texts in `client/i18n.js`.
+
+**Tests:** `tests/reports/reports.test.js`: live game with two accounts and a guest (the menu, a report with reason and history, refused twice / own / unknown, a guest's report, blocking an account and a guest, no new messages, badge or pings, the account page list and unblocking there), the admin tab (403 for non-admins, open count, history with the marked message, resolve with note, dismiss, closed list, reopen, ban), a Rundenspiel report and an outsider refused, and account deletion. `tests/chat/chat.test.js` blocks on a guest's device instead of muting.
 
 **Status:** ✅ on `development`
 

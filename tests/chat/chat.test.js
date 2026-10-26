@@ -8,7 +8,7 @@
  *
  * Live game (two browser pages, A hosts, B joins): the panel in the game, a text message with
  * HTML in it (shown as text), the unread badge, an emote, a map ping (pulses on the other
- * screen and does not open the tapped hex), muting, the server's checks (empty text, unknown
+ * screen and does not open the tapped hex), blocking on a guest's device, the server's checks (empty text, unknown
  * emoji, rate limit) and the history after a reconnect.
  *
  * Rundenspiel (two test accounts, opened with ?async=<id>): a message arrives live, is stored
@@ -57,7 +57,7 @@ function makeUser() {
     return { name, id };
 }
 const emit = (page, ev, data) => page.evaluate(([ev, data]) => new Promise(r => MP.socket.emit(ev, data, r)), [ev, data || {}]);
-const chatRows = page => page.$$eval('#mp-chat-list .mp-chat-msg', rows => rows.map(r => r.textContent.replace(/\s+/g, ' ').replace('🔇', '').trim()));
+const chatRows = page => page.$$eval('#mp-chat-list .mp-chat-msg', rows => rows.map(r => r.textContent.replace(/\s+/g, ' ').replace('⋯', '').trim()));
 const badge = page => page.$eval('#mp-chat', el => el.dataset.unread);
 
 async function live(browser, errors) {
@@ -148,13 +148,13 @@ async function live(browser, errors) {
     }
     ok(limited && limited.i === 4 && limited.error === 'Zu viele Nachrichten – warte einen Moment.', 'server: rate limit (5 per 10 s)', JSON.stringify(limited));
 
-    // muting on A's device
-    await a.hover('#mp-chat-list .mp-chat-msg:not(.me)');
-    await a.click('#mp-chat-list .mp-chat-msg:not(.me) .mp-chat-mute');
-    ok((await chatRows(a)).every(r => !r.startsWith('ChatB')), 'mute: B\'s messages are hidden on A');
-    ok(/Stumm: ChatB/.test(await a.textContent('#mp-chat-muted')), 'mute: listed under the messages');
-    await a.click('#mp-chat-muted [data-unmute]');
-    ok((await chatRows(a)).some(r => r.startsWith('ChatB')), 'mute: undone');
+    // blocking (A is a guest: kept on A's device) – accounts and reports: tests/reports
+    await a.click('#mp-chat-list .mp-chat-msg:not(.me)');
+    await a.click('#mp-chat-menu [data-item="block"]');
+    ok((await chatRows(a)).every(r => !r.startsWith('ChatB')), 'block: B\'s messages are hidden on A');
+    ok(/Blockiert: ChatB/.test(await a.textContent('#mp-chat-blocked')), 'block: listed under the messages');
+    await a.click('#mp-chat-blocked [data-unblock]');
+    ok((await chatRows(a)).some(r => r.startsWith('ChatB')), 'block: undone');
 
     // English (the game's language buttons)
     const en = await a.evaluate(() => {

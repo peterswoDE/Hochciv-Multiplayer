@@ -9,6 +9,7 @@ const config = require('../config');
 const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
 const { deleteAccount } = require('../utils/deleteAccount');
+const reports = require('../utils/reports');
 const engine = require('../engine-adapter');
 const { engineVersionOf } = require('../async/logic');
 
@@ -183,6 +184,27 @@ router.delete('/users/:id', async (req, res) => {
             return res.status(400).json({ error: 'Dein eigenes Konto löschst du auf der Profil-Seite.' });
         }
         const error = await deleteAccount(targetUser, { io: req.app.locals.io, byAdmin: req.user.username });
+        if (error) return res.status(400).json({ error });
+        res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// --- Chat reports (utils/reports.js) ---
+router.get('/reports', async (req, res) => {
+    try {
+        res.json(await reports.list({ status: req.query.status === 'closed' ? 'closed' : 'open', offset: req.query.offset }));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/reports/:id', async (req, res) => {
+    try {
+        const error = await reports.update(req.params.id, { status: req.body.status, note: req.body.note }, req.user);
         if (error) return res.status(400).json({ error });
         res.json({ ok: true });
     } catch (err) {
