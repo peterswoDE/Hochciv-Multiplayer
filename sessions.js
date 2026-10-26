@@ -288,6 +288,7 @@ function resetForRematch(sessionId) {
         Object.assign(p, {
             index: i, civ: choice.civ || p.civ, ability: choice.ability || p.ability,
             afk: false, missedTurns: 0, drafted: null, roman: null, color: null,
+            chatMute: null,             // the word filter's timeout lasts for one game
         });
         delete p.mappedName;
     });

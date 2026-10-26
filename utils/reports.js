@@ -1,18 +1,29 @@
 /**
- * Chat moderation: reports and blocks.
+ * Chat moderation: reports, the word filter's auto-reports, and blocks.
  *
  *   · Report: a player reports another player's chat message (live game: sockets/game.js,
  *     Rundenspiel: async/service.js). The game's chat history is stored with it, as the server
  *     has it, and an admin reviews it on the account page (routes/admin.js /reports).
- *   · Block: a logged-in player stops seeing someone's messages and pings. The list is kept with
- *     the account (users.blockedPlayers) – accounts by id, guests by name – and the client hides
- *     the messages (client/chat.js). Guests keep their list on the device.
+ *   · Auto-report (moderate): a text with bad language (utils/profanity.js) is not sent but
+ *     reported, and its sender can't write texts for 5 minutes – after a second one, for the
+ *     rest of the game. Emotes and pings stay possible.
+ *   · Guests (no account) can't write texts at all, only emotes and pings.
+ *   · Block: a player stops seeing an account's messages and pings. The list is kept with the
+ *     account (users.blockedPlayers), for guests on the device; the client hides the messages
+ *     (client/chat.js). Guests can't be blocked – only muted for the running game, on the device.
+ *
+ * Reports are kept while the reported account exists; without one (a guest, a deleted account)
+ * KEEP_YEARS after the report.
  */
 const { Op } = require('sequelize');
 const { Report, User } = require('../models');
 const { renameInState } = require('./rename');
+const profanity = require('./profanity');
 
-const KEEP_DAYS = Number(process.env.REPORT_KEEP_DAYS) || 180;    // closed reports
+const KEEP_YEARS = Number(process.env.REPORT_KEEP_YEARS) || 3;    // reports without an account
+const MUTE_MS = Number(process.env.CHAT_MUTE_MS) || 5 * 60 * 1000;  // first strike
+const AUTO_REPORTER = 'Wortfilter';
+const GUEST_TEXT = 'Gäste können nur Emojis senden. Melde dich an, um zu schreiben.';
 const MAX_REASON = 300;
 const MAX_BLOCKED = 200;
 const RATE_COUNT = 10;                     // reports …
@@ -52,6 +63,36 @@ async function report({ source, sourceId, history, msgId, reporter, reason }) {
     return { ok: true };
 }
 
+// ── Word filter: auto-report and the writing timeout ───────────────────────────────────────
+// mute = { strikes, until (ms, first strike) | null, game: true (rest of the game) } | null
+
+const muteActive = (mute, now = Date.now()) => !!mute && (mute.game || (mute.until || 0) > now);
+
+/**
+ * Checks a text message before it is sent. Returns null (fine) or { error, mute } after the
+ * message was auto-reported: not sent, the sender gets the next strike.
+ * `history`: the game's chat so far, `sender`: { id, name }.
+ */
+async function moderate({ source, sourceId, history, msg, sender, mute }) {
+    const words = profanity.check(msg.text);
+    if (!words.length) return null;
+    const strikes = ((mute && mute.strikes) || 0) + 1;
+    const next = strikes >= 2 ? { strikes, until: null, game: true } : { strikes, until: Date.now() + MUTE_MS, game: false };
+    await Report.create({
+        kind: 'chat', source, sourceId, auto: true, matches: words, penalty: next.game ? 'game' : 'timeout',
+        reporterId: null, reporterName: AUTO_REPORTER,
+        reportedId: sender.id || null, reportedName: sender.name,
+        message: msg,
+        context: (history || []).filter(m => m && m.kind !== 'ping').concat(msg),
+    });
+    console.log(`[Reports] Word filter: message of ${sender.name} blocked (${source} ${sourceId}, strike ${strikes}).`);
+    return {
+        error: next.game ? 'Unangemessene Sprache: nicht gesendet. Du kannst in diesem Spiel keine Texte mehr schreiben.'
+            : 'Unangemessene Sprache: nicht gesendet. Du kannst 5 Minuten lang keine Texte schreiben.',
+        mute: next,
+    };
+}
+
 // forget idle reporters now and then
 setInterval(() => {
     const now = Date.now();
@@ -60,24 +101,21 @@ setInterval(() => {
 
 // ── Blocks (logged-in players) ─────────────────────────────────────────────────────────────
 
-const blockKey = b => (b.id ? 'id:' + b.id : 'name:' + b.name);
+const blockKey = b => 'id:' + b.id;
+// entries from before guests could no longer be blocked (by name) are left out
+const accountBlocks = user => (user.blockedPlayers || []).filter(b => b && b.id);
 
 /** The list as the client gets it: [{ key, id, name, at }]. */
-const publicBlocks = user => (user.blockedPlayers || []).map(b => ({ key: blockKey(b), id: b.id || null, name: b.name, at: b.at }));
+const publicBlocks = user => accountBlocks(user).map(b => ({ key: blockKey(b), id: b.id, name: b.name, at: b.at }));
 
-/** Block an account (`id`) or a guest (`name`). Returns { list } or { error }. */
-async function block(user, { id, name }) {
-    id = typeof id === 'string' && id ? id : null;
-    name = typeof name === 'string' ? name.trim().slice(0, 50) : '';
-    if (id) {
-        const other = await User.findByPk(id, { attributes: ['id', 'username'] }).catch(() => null);
-        if (!other) return { error: 'Spieler nicht gefunden.' };
-        name = other.username;
-    }
-    if (!name) return { error: 'Spieler nicht gefunden.' };
+/** Block an account. Guests can't be blocked. Returns { list } or { error }. */
+async function block(user, { id }) {
+    if (typeof id !== 'string' || !id) return { error: 'Gäste kannst du nicht blockieren.' };
+    const other = await User.findByPk(id, { attributes: ['id', 'username'] }).catch(() => null);
+    if (!other) return { error: 'Spieler nicht gefunden.' };
     if (id === user.id) return { error: 'Du kannst dich nicht selbst blockieren.' };
-    const list = (user.blockedPlayers || []).slice();
-    const entry = { id, name, at: new Date().toISOString() };
+    const list = accountBlocks(user);
+    const entry = { id, name: other.username, at: new Date().toISOString() };
     if (list.some(b => blockKey(b) === blockKey(entry))) return { list: publicBlocks(user) };
     if (list.length >= MAX_BLOCKED) return { error: 'Du hast schon zu viele Spieler blockiert.' };
     user.blockedPlayers = list.concat(entry);
@@ -86,7 +124,7 @@ async function block(user, { id, name }) {
 }
 
 async function unblock(user, key) {
-    user.blockedPlayers = (user.blockedPlayers || []).filter(b => blockKey(b) !== key);
+    user.blockedPlayers = accountBlocks(user).filter(b => blockKey(b) !== key);
     await user.save();
     return { list: publicBlocks(user) };
 }
@@ -150,11 +188,13 @@ async function removeUser(user, deletedName) {
     }
 }
 
+/** Reports about an account stay while it exists; the others go KEEP_YEARS after the report. */
 async function cleanup() {
     try {
-        const before = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
-        const n = await Report.destroy({ where: { status: { [Op.ne]: 'open' }, handledAt: { [Op.lt]: before } } });
-        if (n) console.log(`[Reports] Deleted ${n} closed report(s) older than ${KEEP_DAYS} days.`);
+        const before = new Date();
+        before.setFullYear(before.getFullYear() - KEEP_YEARS);
+        const n = await Report.destroy({ where: { reportedId: null, createdAt: { [Op.lt]: before } } });
+        if (n) console.log(`[Reports] Deleted ${n} report(s) without an account, older than ${KEEP_YEARS} years.`);
     } catch (err) {
         console.error('[Reports] Cleanup failed:', err);
     }
@@ -165,4 +205,7 @@ function startCleanup() {
     setInterval(cleanup, 6 * 60 * 60 * 1000).unref();
 }
 
-module.exports = { report, block, unblock, publicBlocks, list, update, removeUser, cleanup, startCleanup, KEEP_DAYS, STATUSES };
+module.exports = {
+    report, moderate, muteActive, block, unblock, publicBlocks, list, update, removeUser, cleanup, startCleanup,
+    KEEP_YEARS, MUTE_MS, STATUSES, GUEST_TEXT, AUTO_REPORTER,
+};

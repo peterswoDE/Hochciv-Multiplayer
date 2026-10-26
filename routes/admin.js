@@ -10,6 +10,7 @@ const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('..
 const bcrypt = require('bcryptjs');
 const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
+const profanity = require('../utils/profanity');
 const engine = require('../engine-adapter');
 const { engineVersionOf } = require('../async/logic');
 
@@ -211,6 +212,44 @@ router.post('/reports/:id', async (req, res) => {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
     }
+});
+
+// --- Chat word filter (utils/profanity.js): the admins' own entries ---
+router.get('/words', async (req, res) => {
+    try {
+        res.json({ list: await profanity.list() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/words', async (req, res) => {
+    try {
+        const error = await profanity.add({ word: req.body.word, kind: req.body.kind, match: req.body.match }, req.user);
+        if (error) return res.status(400).json({ error });
+        res.json({ list: await profanity.list() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.delete('/words/:id', async (req, res) => {
+    try {
+        const error = await profanity.remove(req.params.id);
+        if (error) return res.status(404).json({ error });
+        res.json({ list: await profanity.list() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Try a text against the filter as it is now
+router.post('/words/check', (req, res) => {
+    const text = typeof req.body.text === 'string' ? req.body.text.slice(0, 300) : '';
+    res.json({ words: profanity.check(text) });
 });
 
 // --- Lobby Management ---

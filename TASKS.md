@@ -17,10 +17,11 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ✅ |
 | 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ✅ |
 | 9 | F11 | [Chat: report and block](#f11-chat-report-and-block) | ✔ | ✔ | ✅ |
+| 10 | F12 | [Chat: word filter, guests emote-only](#f12-chat-word-filter-and-guests-emote-only) | ✔ | ✔ | ✅ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
 
-The numbers are those of the original proposal; F11 was requested after the staging tests of F1. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
 All planned features are on `development` (staging). Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
@@ -215,8 +216,8 @@ Tapping another player's chat message opens a menu: **report the message** to th
 **Decisions**
 - The menu is a list (`CHAT.menuItems` in `client/chat.js`): `{ id, icon, label, when(m), run(m) }`. More options are one more entry; `run` can return a second step (as the report does with its reason field).
 - A report stores the chat history as the **server** has it (live game: last 100 messages, Rundenspiel: last 200, no pings), not what the client sends. Optional reason (300 characters). Players and spectators may report, guests too; nobody twice per message, not their own, at most 10 per hour.
-- Block replaces the earlier device-local *mute*. Logged-in players keep the list with the account (`users.blockedPlayers`): accounts by id (holds across games, devices and names), guests by name. Guests keep it on the device. The old mute list is read as blocks. A blocked player's messages, unread count and pings are hidden. The list is under the chat and on the account page (*Blockierte Spieler*), with *Entblocken*.
-- Admins (admin and superadmin) review reports in the new account tab *Meldungen* (open count on the tab): the chat history with the reported message marked, then *Erledigt* or *Verwerfen* with a note, *Wieder öffnen*, and *Konto sperren* (the existing ban, with its admin/superadmin rules). Closed reports are deleted after 180 days (`REPORT_KEEP_DAYS`).
+- Block replaces the earlier device-local *mute*. Only accounts can be blocked, by id (holds across games, devices and names); logged-in players keep the list with the account (`users.blockedPlayers`), guests on the device. Guests can't be blocked: they can be muted for the running game only (F12). A blocked player's messages, unread count and pings are hidden. The list is under the chat and on the account page (*Blockierte Spieler*), with *Entblocken*.
+- Admins (admin and superadmin) review reports in the new account tab *Meldungen* (open count on the tab): the chat history with the reported message marked, then *Erledigt* or *Verwerfen* with a note, *Wieder öffnen*, and *Konto sperren* (the existing ban, with its admin/superadmin rules). Retention: see F12.
 - Account deletion: reports stay (moderation record) without the deleted account's name; nobody blocks the account any more.
 
 **Implementation**
@@ -230,6 +231,56 @@ Tapping another player's chat message opens a menu: **report the message** to th
 - `utils/deleteAccount.js` calls `reports.removeUser()`. Texts in `client/i18n.js`.
 
 **Tests:** `tests/reports/reports.test.js`: live game with two accounts and a guest (the menu, a report with reason and history, refused twice / own / unknown, a guest's report, blocking an account and a guest, no new messages, badge or pings, the account page list and unblocking there), the admin tab (403 for non-admins, open count, history with the marked message, resolve with note, dismiss, closed list, reopen, ban), a Rundenspiel report and an outsider refused, and account deletion. `tests/chat/chat.test.js` blocks on a guest's device instead of muting.
+
+**Status:** ✅ on `development`
+
+---
+
+## F12 Chat: word filter and guests emote-only
+
+Texts with bad language are not sent but reported automatically, and the sender gets a writing timeout. Guests (no account) can only send emotes and pings. Live games and Rundenspiele.
+
+**Decisions**
+- **Filter base:** the `obscenity` library (MIT) does the matching. It sees through l33t speak, look-alike characters and repeated letters ("sh1t", "Wiiichser") and has an English list that avoids the usual false hits ("assassin"). German words come from the LDNOOBW list in `naughty-words` (CC-BY-4.0), matched as whole words so "arsch" doesn't hit "Marsch".
+- **Curated German words** in `utils/profanity.js`:
+  - `DE_SKIP`: list words that are harmless in a game (nackt, Rosette, Bonze, Kimme, Penis, …) don't count.
+  - `DE_EXTRA`: common words the list lacks (Hurensohn, Scheiß…, fick…, Spast, Mongo, Nazi, …).
+  - `DE_ALLOW`: German words the English list would hit (dick/dicke, Fagott, Analphabet, Assel, wanken, …). Allowing "dick" lets the English insult through as well, because the German word is far more common here. The English list's own allowance of "fick" is removed.
+- **Admin words** live in the database (`banned_words`): *Sperren* (whole word, or also inside words) or *Erlauben* (never counts). Changes apply at once, and the tab has a field to test a text against the filter.
+- **Penalty:**
+  - A flagged text is not shown to anyone. It is auto-reported (reporter "Wortfilter", with the words found, the penalty, and the history plus the message).
+  - First time: no texts for 5 minutes (`CHAT_MUTE_MS`). Second time: no texts for the rest of the game.
+  - Emotes and pings stay possible. The chat shows why the text field is gone and until when.
+  - Live games keep the timeout with the seat; a rematch is a new game and resets it. Rundenspiele keep it with the game (`data.chatMutes`), so it outlasts a restart.
+- **Guests:** the server refuses their texts, and the chat shows a hint instead of the text field. Guests can't be blocked. The message menu offers *Für dieses Spiel stummschalten* instead: kept in the browser tab (sessionStorage) for this game only (session + seed), listed under the chat and undone there.
+- **Retention:** reports about an account are kept as long as the account exists. Reports without one (a guest, or an account that was deleted, which anonymizes its reports) are deleted 3 years after the report (`REPORT_KEEP_YEARS`).
+
+**Implementation**
+- `package.json`: `obscenity` 0.4.6, `naughty-words` 1.2.0.
+- `utils/profanity.js` (new): the matcher from the built-in lists plus `banned_words`, `check(text)`, which tests the text as typed and with punctuation as spaces (the library's word ends miss "Hurensohn!!", but "sh!t" needs the "!"), `reload()` at start and after changes, and `list/add/remove`. `models/BannedWord.js` (new).
+- `utils/reports.js`: `moderate()` (check, auto-report, next strike), `muteActive()`, `GUEST_TEXT`; blocks accept accounts only, and old name entries are dropped; `cleanup()` follows the new retention. `models/Report.js`: `auto`, `matches`, `penalty`.
+- `sockets/game.js` `chat:send`: refuses guest texts, refuses texts during a timeout, runs `moderate`. `chat:history` carries `guest` and `mute`. `sessions.js`: a rematch clears `chatMute`.
+- `async/service.js` `chat()`: the same, with `chatMutes` saved through the game's queue. `open()` and `sockets/async.js` send the timeout with the history. `async/logic.js` `removeUser` drops the account's timeout.
+- `routes/admin.js`: `GET/POST /api/admin/words`, `DELETE /api/admin/words/:id`, `POST /api/admin/words/check`. `server.js` loads the list after the DB sync.
+- `client/chat.js`:
+  - the note instead of the text field (guest or timeout), refreshed when the timeout ends;
+  - the menu shows *block* for accounts and *mute for this game* for guests;
+  - both lists sit under the chat;
+  - the rotated-phone rules are scoped to portrait, as in the game's `style.css`.
+- `mp.js`: a rematch clears the timeout on the client.
+- `client/account.html` / `account.js`: the *Wortfilter* section in *Meldungen*, and auto-reports showing the words and penalty. Texts in `client/i18n.js`.
+- `docker-compose.local.yml`: `CHAT_MUTE_MS` for the test.
+
+**Tests:** `tests/filter/filter.test.js` (run server and test with `CHAT_MUTE_MS=4000`) covers:
+- the filter: hits, including disguised spellings, and no false hits on game words;
+- guests: texts refused, emotes and pings allowed, the hint shown;
+- the first bad text: hidden, auto-reported, the timeout and its note, emotes still allowed; after the timeout a clean text passes;
+- the second bad text: blocked for the rest of the game, also after a reconnect;
+- the admin word list: ban whole word and word part, allow, duplicates, removal, the check field, 403 for non-admins;
+- a Rundenspiel: the timeout is stored with the game and sent when it is opened;
+- retention.
+
+`tests/reports` and `tests/chat` now use accounts for texts, a guest sends emotes, and the guest is muted instead of blocked.
 
 **Status:** ✅ on `development`
 

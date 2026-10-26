@@ -40,7 +40,7 @@ function fromRow(row) {
         id: row.id, joinCode: row.joinCode, hostUserId: row.hostUserId, status: row.status,
         engine: d.engine || null,          // null: started before versions were recorded = v83
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
-        hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [], stats: d.stats || null,
+        hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [], chatMutes: d.chatMutes || {}, stats: d.stats || null,
         replay: d.replay || null, marks: d.marks || null,
         state: row.state || null,
         waitSince: row.waitSince ? new Date(row.waitSince).getTime() : Date.now(),
@@ -65,7 +65,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], stats: g.stats || null, replay: g.replay || null, marks: g.marks || null },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], chatMutes: g.chatMutes || {}, stats: g.stats || null, replay: g.replay || null, marks: g.marks || null },
         state: S,
     };
 }
@@ -439,7 +439,7 @@ async function open(user, id) {
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
     const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);
     if (!e.g.seats.some(s => s.userId === user.id) && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
-    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [] };
+    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [], chatMute: (e.g.chatMutes || {})[user.id] || null };
 }
 
 /**
@@ -451,8 +451,25 @@ async function chat(user, id, payload) {
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
     const seat = e.g.seats.find(s => s.userId === user.id);
     if (!seat) return { error: 'Nur Mitspieler können schreiben.' };
+    const mute = (e.g.chatMutes || {})[user.id] || null;
+    const isText = payload.kind !== 'emote' && payload.kind !== 'ping';
+    if (isText && reports.muteActive(mute)) return { error: 'Du kannst gerade keine Texte schreiben.', mute };
     const r = chatLib.build({ slot: seat.slot, name: user.username, uid: user.id }, payload, `async:${id}:${user.id}`);
     if (r.error) return { error: r.error };
+    if (r.msg.kind === 'text') {
+        const v = await reports.moderate({ source: 'async', sourceId: id, history: e.g.chat, msg: r.msg, sender: { id: user.id, name: user.username }, mute });
+        if (v) {
+            // kept with the game (in its queue, like a message): the timeout outlasts a restart
+            e.busy++;
+            const run = e.queue.then(async () => {
+                e.g.chatMutes = { ...(e.g.chatMutes || {}), [user.id]: v.mute };
+                await save(e.g);
+            });
+            e.queue = run.catch(() => {}).finally(() => { e.busy--; });
+            await run;
+            return v;
+        }
+    }
     if (r.msg.kind !== 'ping') {
         // in the game's queue, so it can't overwrite a move saved at the same time
         e.busy++;

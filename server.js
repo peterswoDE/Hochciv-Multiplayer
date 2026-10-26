@@ -118,6 +118,8 @@ app.use(passport.session());
 // Initialize ORM
 sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
+    // the admins' words for the chat filter (utils/profanity.js)
+    require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`
         CREATE TABLE IF NOT EXISTS "session" (
           "sid" varchar NOT NULL COLLATE "default",

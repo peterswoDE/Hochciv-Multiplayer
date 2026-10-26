@@ -5,8 +5,12 @@
  *   · a panel at the bottom left, collapsible to a "💬 Chat" pill with the number of unread messages;
  *   · text, a row of quick emotes, and map pings: 📍, then tap a hex – it pulses on every screen;
  *   · tapping another player's message opens a menu (CHAT.menuItems): report the message to the
- *     admins, block the player. Blocked players' messages and pings are hidden; the list is kept
- *     with the account (/api/account/blocks), for guests on this device. Shown under the chat.
+ *     admins, block the player (accounts: kept with the own account, /api/account/blocks – for
+ *     guests on this device) or mute a guest for this game (this browser tab). Blocked and
+ *     muted players' messages and pings are hidden; the lists are shown under the chat;
+ *   · guests can only send emotes and pings; after a text with bad language the server's word
+ *     filter stops texts for 5 minutes, after a second one for the rest of the game
+ *     (utils/reports.js) – the input field says so.
  *
  * The server sends the history as 'chat:history' after joining (live: session:connect,
  * Rundenspiel: async:open), new messages as 'chat:msg' (live) / 'async:chat' (Rundenspiel).
@@ -19,8 +23,10 @@ const CHAT = {
     pings: [],                  // active pings { r, c, color, until }
     PING_MS: 6000,
     EMOTES: ['👍', '👎', '😂', '😮', '😢', '😡', '🤝', '⚔️', '🙏', '🎉', '🤔', '👋'],     // as utils/chat.js
-    LOCAL_KEY: 'hochciv.chat.blocked',  // guests: [{ id, name }] on this device
-    OLD_MUTED_KEY: 'hochciv.chat.muted',    // the earlier mute list (names) – read as blocks
+    LOCAL_KEY: 'hochciv.chat.blocked',  // guests: [{ id, name }] on this device (accounts only)
+    guest: false,               // this player has no account: emotes and pings only
+    mute: null,                 // the word filter's timeout { strikes, until, game } (server)
+    muteTimer: null,
     blocks: [],                 // the account's list [{ key, id, name }] (logged in)
     blocksOf: null,             // … loaded for this user id
     menuMsg: null,              // the message the open menu is about
@@ -31,6 +37,8 @@ const CHAT = {
         socket.on('chat:history', data => {
             if (!data || (data.id && data.id !== MP.asyncId) || (!data.id && MP.asyncId)) return;
             this.list = Array.isArray(data.list) ? data.list : [];
+            this.guest = !!data.guest;
+            this.setMute(data.mute);
             const seen = this.seen();
             this.unread = this.isOpen() ? 0 : this.list.filter(m => m.t > seen && !this.mine(m) && !this.isBlocked(m)).length;
             if (this.isOpen()) this.markSeen();
@@ -51,12 +59,18 @@ const CHAT = {
     },
 
     send: function (payload) {
-        const done = res => { if (res && res.error) toast(TXS(res.error)); };
+        const done = res => {
+            if (!res || !res.error) return;
+            if (res.mute) this.setMute(res.mute);
+            if (res.guest) { this.guest = true; this.render(); }
+            toast(TXS(res.error));
+        };
         if (MP.asyncId) MP.socket.emit('async:chat', Object.assign({ id: MP.asyncId }, payload), done);
         else MP.socket.emit('chat:send', payload, done);
     },
 
     submit: function () {
+        if (this.textBlockedReason()) return;
         const input = $('mp-chat-input');
         const text = input.value.trim();
         if (!text) return;
@@ -67,21 +81,17 @@ const CHAT = {
     mine: m => m.slot === MP.lobbyIndex,
 
     // ── Blocking ─────────────────────────────────────────────────────────────────────
-    // An entry with an id blocks that account, one without blocks the name of a guest.
+    // Only accounts can be blocked (by id). Entries by name from before are left out, and so is
+    // the old mute list of names ('hochciv.chat.muted').
     localBlocks: function () {
         let list = [];
-        try {
-            list = JSON.parse(localStorage.getItem(this.LOCAL_KEY) || '[]');
-            JSON.parse(localStorage.getItem(this.OLD_MUTED_KEY) || '[]').forEach(name => {
-                if (!list.some(b => !b.id && b.name === name)) list.push({ id: null, name });
-            });
-        } catch (_) { }
-        return list.map(b => ({ key: b.id ? 'id:' + b.id : 'name:' + b.name, id: b.id || null, name: b.name, local: true }));
+        try { list = JSON.parse(localStorage.getItem(this.LOCAL_KEY) || '[]'); } catch (_) { }
+        return list.filter(b => b && b.id).map(b => ({ key: 'id:' + b.id, id: b.id, name: b.name, local: true }));
     },
     saveLocal: function (list) {
         try {
             localStorage.setItem(this.LOCAL_KEY, JSON.stringify(list.map(b => ({ id: b.id, name: b.name }))));
-            localStorage.removeItem(this.OLD_MUTED_KEY);
+            localStorage.removeItem('hochciv.chat.muted');
         } catch (_) { }
     },
     /** Everything blocked: the account's list (logged in) and this device's. */
@@ -90,8 +100,47 @@ const CHAT = {
         const own = MP.user ? this.blocks : [];
         return own.concat(local.filter(b => !own.some(o => o.key === b.key)));
     },
-    matches: (b, m) => (b.id ? b.id === m.uid : !m.uid && b.name === m.name),
-    isBlocked: function (m) { return !this.mine(m) && this.blocked().some(b => this.matches(b, m)); },
+    matches: (b, m) => !!m.uid && b.id === m.uid,
+    isBlocked: function (m) {
+        return !this.mine(m) && (this.blocked().some(b => this.matches(b, m)) || this.isGameMuted(m));
+    },
+
+    // ── Guests: muted for the running game only (this browser tab) ──────────────────
+    // A rematch is a new game: the key has the game's seed.
+    gameKey: () => 'hochciv.chat.gamemute.' + (MP.asyncId || `${MP.sessionId}:${(MP.gameConfig && MP.gameConfig.seed) || ''}`),
+    guestKey: m => `${m.slot}:${m.name}`,
+    gameMutes: function () {
+        try { return JSON.parse(sessionStorage.getItem(this.gameKey()) || '[]'); } catch (_) { return []; }
+    },
+    isGameMuted: function (m) { return !m.uid && this.gameMutes().some(g => g.key === this.guestKey(m)); },
+    muteForGame: function (m) {
+        const list = this.gameMutes().filter(g => g.key !== this.guestKey(m)).concat({ key: this.guestKey(m), name: m.name });
+        try { sessionStorage.setItem(this.gameKey(), JSON.stringify(list)); } catch (_) { }
+        toast(TX('%s ist für dieses Spiel stummgeschaltet.', m.name));
+        this.render();
+    },
+    unmuteForGame: function (key) {
+        const g = this.gameMutes().find(x => x.key === key);
+        try { sessionStorage.setItem(this.gameKey(), JSON.stringify(this.gameMutes().filter(x => x.key !== key))); } catch (_) { }
+        if (g) toast(TX('%s ist nicht mehr stummgeschaltet.', g.name));
+        this.render();
+    },
+
+    // ── Writing texts: guests can't, the word filter's timeout ───────────────────────
+    setMute: function (mute) {
+        this.mute = mute && (mute.game || (mute.until || 0) > Date.now()) ? mute : null;
+        clearTimeout(this.muteTimer);
+        if (this.mute && !this.mute.game) this.muteTimer = setTimeout(() => this.setMute(null), this.mute.until - Date.now() + 200);
+        this.render();
+    },
+    /** null if texts may be written, else why not (shown instead of the input field). */
+    textBlockedReason: function () {
+        if (this.guest) return TX('Als Gast kannst du nur Emojis senden. Melde dich an, um zu schreiben.');
+        if (!this.mute) return null;
+        if (this.mute.game) return TX('Wegen unangemessener Sprache kannst du in diesem Spiel keine Texte mehr schreiben.');
+        const at = new Date(this.mute.until).toLocaleTimeString(HC_I18N.locale(), { hour: '2-digit', minute: '2-digit' });
+        return TX('Wegen unangemessener Sprache kannst du bis %s Uhr keine Texte schreiben.', at);
+    },
 
     /** The account's list, once per login. */
     loadBlocks: function () {
@@ -104,7 +153,8 @@ const CHAT = {
     },
 
     block: async function (m) {
-        const entry = { id: m.uid || null, name: m.name };
+        if (!m.uid) return;                     // guests can't be blocked (muteForGame)
+        const entry = { id: m.uid, name: m.name };
         if (MP.user) {
             const res = await fetch('/api/account/blocks', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry),
@@ -165,7 +215,8 @@ const CHAT = {
                 },
             }),
         },
-        { id: 'block', icon: '🚫', label: 'Spieler blockieren', when: () => true, run: m => { CHAT.block(m); } },
+        { id: 'block', icon: '🚫', label: 'Spieler blockieren', when: m => !!m.uid, run: m => { CHAT.block(m); } },
+        { id: 'mute', icon: '🔇', label: 'Für dieses Spiel stummschalten', when: m => !m.uid, run: m => { CHAT.muteForGame(m); } },
     ],
 
     openMenu: function (m) {
@@ -252,10 +303,20 @@ const CHAT = {
         list.innerHTML = rows.join('') || `<p class="mp-chat-empty">${TX('Noch keine Nachrichten.')}</p>`;
         const foot = $('mp-chat-blocked');
         if (foot) {
-            foot.hidden = !blocked.length;
-            foot.innerHTML = blocked.length ? TX('Blockiert: %s', blocked.map(b =>
-                `<span class="mp-chat-blk">${escHtml(b.name)} <a href="#" data-unblock="${escHtml(b.key)}" title="${TX('Entblocken')}">✕</a></span>`).join(', ')) : '';
+            const muted = this.gameMutes();
+            const parts = [];
+            if (blocked.length) parts.push(TX('Blockiert: %s', blocked.map(b =>
+                `<span class="mp-chat-blk">${escHtml(b.name)} <a href="#" data-unblock="${escHtml(b.key)}" title="${TX('Entblocken')}">✕</a></span>`).join(', ')));
+            if (muted.length) parts.push(TX('Stumm in diesem Spiel: %s', muted.map(g =>
+                `<span class="mp-chat-blk">${escHtml(g.name)} <a href="#" data-unmute="${escHtml(g.key)}" title="${TX('Stummschaltung aufheben')}">✕</a></span>`).join(', ')));
+            foot.hidden = !parts.length;
+            foot.innerHTML = parts.join(' · ');
         }
+        const why = this.textBlockedReason();
+        const note = $('mp-chat-note');
+        if (note) { note.hidden = !why; note.textContent = why || ''; }
+        $('mp-chat-input').hidden = !!why;
+        $('mp-chat-send').hidden = !!why;
         if (this.menuMsg && !this.list.some(m => m.id === this.menuMsg.id && !this.isBlocked(m))) this.closeMenu();
         if (atBottom) this.scrollDown();
     },
@@ -314,6 +375,7 @@ const CHAT = {
             <form id="mp-chat-form" autocomplete="off">
               <button type="button" id="mp-chat-emote-btn" title="${TX('Emoji senden')}">🙂</button>
               <button type="button" id="mp-chat-ping-btn" title="${TX('Auf ein Feld zeigen')}">📍</button>
+              <span id="mp-chat-note" hidden></span>
               <input id="mp-chat-input" maxlength="300" placeholder="${TX('Nachricht …')}">
               <button type="submit" id="mp-chat-send" title="${TX('Senden')}">➤</button>
             </form>`;
@@ -333,6 +395,8 @@ const CHAT = {
             if (e.target.closest('#mp-chat-menu')) return;
             const un = e.target.closest('[data-unblock]');
             if (un) { e.preventDefault(); return this.unblock(un.dataset.unblock); }
+            const um = e.target.closest('[data-unmute]');
+            if (um) { e.preventDefault(); return this.unmuteForGame(um.dataset.unmute); }
             const row = e.target.closest('[data-msg]');
             if (row) {
                 const m = this.list.find(x => x.id === row.dataset.msg);
@@ -379,8 +443,12 @@ const CHAT = {
             }
             #mp-chat-header { background: #a89f91; color: #fff; padding: 6px 10px; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; user-select: none; }
             #mp-chat-list { max-height: 28vh; min-height: 60px; overflow-y: auto; padding: 6px 8px; }
-            /* phone held upright: the game turns the page (html.turn) – its height is the screen's width */
-            html.turn #mp-chat-list { max-height: 18vw; }
+            /* phone held upright: the game turns the page (html.turn in portrait, style.css) – its
+               height is the screen's width */
+            @media (orientation: portrait) {
+                html.turn #mp-chat-list { max-height: 18vw; }
+                html.turn #mp-chat.mp-menu-open #mp-chat-list { min-height: min(200px, calc(100vw - 260px)); }
+            }
             .mp-chat-msg { display: grid; grid-template-columns: 12px 1fr auto; gap: 0 6px; align-items: start; padding: 2px 0; overflow-wrap: anywhere; }
             .mp-chat-msg .mp-pl-dot { margin-top: 3px; }
             .mp-chat-msg.me b { color: #9d3b2f; }
@@ -391,7 +459,7 @@ const CHAT = {
             .mp-chat-msg[data-msg]:hover .mp-chat-more, .mp-chat-msg[data-msg]:focus .mp-chat-more { opacity: 0.8; }
             @media (hover: none) { .mp-chat-more { opacity: 0.5; } }
             /* the menu on a message: over the messages, below the header; the panel grows for it */
-            #mp-chat.mp-menu-open #mp-chat-list { min-height: 200px; }
+            #mp-chat.mp-menu-open #mp-chat-list { min-height: min(200px, calc(100vh - 260px)); }
             #mp-chat-menu { position: absolute; left: 6px; right: 6px; top: 36px; bottom: 6px; z-index: 2; display: flex; flex-direction: column;
                 pointer-events: none; overflow-y: auto; }
             #mp-chat-menu > * { pointer-events: auto; background: #fffdf3; border: 1px solid #a89f91; }
@@ -418,6 +486,8 @@ const CHAT = {
             #mp-chat-emotes button:hover { background: rgba(0,0,0,0.08); }
             #mp-chat-form { display: flex; gap: 4px; padding: 6px; border-top: 1px solid #ddd; }
             #mp-chat-form input { flex: 1; min-width: 0; font-size: 14px; padding: 4px 6px; }
+            #mp-chat-form [hidden] { display: none; }
+            #mp-chat-note { flex: 1; min-width: 0; font-size: 12px; color: #6f6551; align-self: center; line-height: 1.3; }
             #mp-chat-form button { border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 15px; }
             html.mp-ping-mode #mp-chat-ping-btn { background: #9d3b2f; color: #fff; }
             html.mp-ping-mode #map { cursor: crosshair; }

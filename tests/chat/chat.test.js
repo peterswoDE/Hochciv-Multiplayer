@@ -6,9 +6,9 @@
  *   npm i --no-save playwright-core
  *   node tests/chat/chat.test.js [http://localhost:3000]
  *
- * Live game (two browser pages, A hosts, B joins): the panel in the game, a text message with
+ * Live game (two browser pages with test accounts, A hosts, B joins): the panel in the game, a text message with
  * HTML in it (shown as text), the unread badge, an emote, a map ping (pulses on the other
- * screen and does not open the tapped hex), blocking on a guest's device, the server's checks (empty text, unknown
+ * screen and does not open the tapped hex), blocking, the server's checks (empty text, unknown
  * emoji, rate limit) and the history after a reconnect.
  *
  * Rundenspiel (two test accounts, opened with ?async=<id>): a message arrives live, is stored
@@ -61,8 +61,16 @@ const chatRows = page => page.$$eval('#mp-chat-list .mp-chat-msg', rows => rows.
 const badge = page => page.$eval('#mp-chat', el => el.dataset.unread);
 
 async function live(browser, errors) {
-    const newPage = async name => {
+    // texts need an account (guests can only send emotes: tests/filter)
+    const users = [makeUser(), makeUser()];
+    try { await liveGame(browser, errors, users); } finally { sql(`DELETE FROM users WHERE id IN ('${users[0].id}', '${users[1].id}')`); }
+}
+
+async function liveGame(browser, errors, users) {
+    const newPage = async (name, u) => {
         const ctx = await browser.newContext({ locale: 'de-DE' });
+        const login = await ctx.request.post(BASE + '/api/auth/login', { data: { username: u.name, password: PASSWORD } });
+        if (login.status() !== 200) throw new Error('login failed for ' + u.name);
         const page = await ctx.newPage();
         page.on('pageerror', e => errors.push(`${name}: ${e.message}`));
         await page.goto(BASE + '/');
@@ -71,7 +79,7 @@ async function live(browser, errors) {
         await page.waitForFunction(() => typeof MP.setMode === 'function');
         return page;
     };
-    const a = await newPage('A'), b = await newPage('B');
+    const a = await newPage('A', users[0]), b = await newPage('B', users[1]);
     await a.evaluate(() => MP.setMode('host'));
     await a.fill('#mp-hn', 'ChatA');
     await a.evaluate(() => MP.host());
@@ -148,12 +156,15 @@ async function live(browser, errors) {
     }
     ok(limited && limited.i === 4 && limited.error === 'Zu viele Nachrichten – warte einen Moment.', 'server: rate limit (5 per 10 s)', JSON.stringify(limited));
 
-    // blocking (A is a guest: kept on A's device) – accounts and reports: tests/reports
+    // blocking (kept with A's account) – more in tests/reports
     await a.click('#mp-chat-list .mp-chat-msg:not(.me)');
     await a.click('#mp-chat-menu [data-item="block"]');
+    await until(async () => (await chatRows(a)).every(r => !r.startsWith('ChatB')));      // stored with the account first
     ok((await chatRows(a)).every(r => !r.startsWith('ChatB')), 'block: B\'s messages are hidden on A');
-    ok(/Blockiert: ChatB/.test(await a.textContent('#mp-chat-blocked')), 'block: listed under the messages');
+    // the list names the account (blocks are per account), not the name typed in the lobby
+    ok((await a.textContent('#mp-chat-blocked')).includes(`Blockiert: ${users[1].name}`), 'block: listed under the messages', await a.textContent('#mp-chat-blocked'));
     await a.click('#mp-chat-blocked [data-unblock]');
+    await until(async () => (await chatRows(a)).some(r => r.startsWith('ChatB')));
     ok((await chatRows(a)).some(r => r.startsWith('ChatB')), 'block: undone');
 
     // English (the game's language buttons)

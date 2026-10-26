@@ -480,6 +480,40 @@
                 </div>
                 <div id="admin-reports-list"></div>
                 <button id="btn-admin-reports-more" class="btn small" style="display:none; margin-top:15px;">Weitere laden</button>
+
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h3>Wortfilter</h3>
+                    <p style="color: #666; font-size: 14px;">Chat-Texte mit unangemessener Sprache werden nicht gesendet,
+                        sondern automatisch gemeldet; der Absender kann 5 Minuten lang keine Texte schreiben, nach einem
+                        zweiten Mal bis zum Ende des Spiels. Grundlage sind eingebaute Listen (Englisch, Deutsch). Hier
+                        kommen eigene Wörter dazu, oder Wörter, die nie als unangemessen gelten.</p>
+                    <form id="form-admin-word" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;">
+                        <input type="text" id="admin-word" maxlength="60" required placeholder="Wort" style="flex:1; min-width:160px;">
+                        <select id="admin-word-kind">
+                            <option value="ban">Sperren</option>
+                            <option value="allow">Erlauben</option>
+                        </select>
+                        <select id="admin-word-match">
+                            <option value="word">nur als ganzes Wort</option>
+                            <option value="part">auch als Wortteil</option>
+                        </select>
+                        <button type="submit" class="btn small btn-primary">Hinzufügen</button>
+                    </form>
+                    <p id="msg-admin-word" style="font-size:14px;"></p>
+                    <div style="overflow-x: auto;">
+                        <table id="table-admin-words">
+                            <thead>
+                                <tr><th>Wort</th><th>Art</th><th>Treffer</th><th>Von</th><th></th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <form id="form-admin-wordcheck" style="display:flex; gap:8px; margin:15px 0 5px;">
+                        <input type="text" id="admin-wordcheck" maxlength="300" placeholder="Text zum Prüfen" style="flex:1;">
+                        <button type="submit" class="btn small">Prüfen</button>
+                    </form>
+                    <p id="msg-admin-wordcheck" style="font-size:14px;"></p>
+                </div>
             </div>
 
             <!-- Admin Users Tab -->

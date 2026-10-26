@@ -98,7 +98,7 @@ module.exports = function registerHandlers(io) {
             socket.join(sessionId);
 
             ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
-            socket.emit('chat:history', { list: s.chat || [] });
+            socket.emit('chat:history', { list: s.chat || [], guest: !me.dbUserId, mute: me.chatMute || null });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
@@ -315,11 +315,20 @@ module.exports = function registerHandlers(io) {
         });
 
         // ── Chat: text, emotes, map pings (utils/chat.js) ────────────────────
-        on(socket, 'chat:send', (data, ack) => {
+        on(socket, 'chat:send', async (data, ack) => {
             if (watcher) return ack({ error: 'Zuschauer können nicht schreiben.' });
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            // texts: only with an account, and not during a timeout of the word filter
+            if (data.kind !== 'emote' && data.kind !== 'ping') {
+                if (!me.dbUserId) return ack({ error: reports.GUEST_TEXT, guest: true });
+                if (reports.muteActive(me.chatMute)) return ack({ error: 'Du kannst gerade keine Texte schreiben.', mute: me.chatMute });
+            }
             const r = chat.build({ slot: myIndex(), name: me.name, uid: me.dbUserId }, data, `live:${sessionId}:${me.clientId}`);
             if (r.error) return ack({ error: r.error });
+            if (r.msg.kind === 'text') {
+                const v = await reports.moderate({ source: 'live', sourceId: session.id, history: session.chat, msg: r.msg, sender: { id: me.dbUserId, name: me.name }, mute: me.chatMute });
+                if (v) { me.chatMute = v.mute; return ack(v); }
+            }
             session.chat = chat.remember(session.chat, r.msg, chat.LIVE_HISTORY);
             ack({ ok: true });
             io.to(sessionId).emit('chat:msg', r.msg);

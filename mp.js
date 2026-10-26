@@ -343,6 +343,7 @@ const MP = {
         this.players = data.players;
         this.gameConfig = data.gameConfig || {};
         this.playerIndex = this.spectator ? -1 : null;
+        if (typeof CHAT !== 'undefined') CHAT.setMute(null);     // the word filter's timeout ends with the game
         this.lastStats = null;
         this.lastRecord = null;
         this.lastTurnKey = null;

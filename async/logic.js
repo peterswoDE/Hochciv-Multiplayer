@@ -642,6 +642,7 @@ function removeUser(g, userId) {
         const old = s.name;
         // their chat messages go with the account, the statistics lose the name
         if (g.chat) g.chat = g.chat.filter(m => !(m.slot === s.slot && m.name === old));
+        if (g.chatMutes) delete g.chatMutes[userId];       // the word filter's timeout (utils/reports.js)
         if (g.stats && g.stats.players) g.stats.players.forEach(p => { if (p.name === old) p.name = DELETED_NAME; });
         Object.assign(s, { userId: null, name: DELETED_NAME });
         const i = stateIndex(g, s.slot);

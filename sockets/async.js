@@ -35,7 +35,7 @@ module.exports = function registerAsyncHandlers(io) {
             socket.data.asyncId = id;
             socket.join(service.room(id));
             // after the reply: the client knows which game is open only once it has the view
-            setImmediate(() => socket.emit('chat:history', { id, list: r.chat || [] }));
+            setImmediate(() => socket.emit('chat:history', { id, list: r.chat || [], guest: false, mute: r.chatMute || null }));
             return { ok: true, view: r.view };
         });
 
