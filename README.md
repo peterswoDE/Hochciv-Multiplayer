@@ -14,6 +14,7 @@ Planned and in-progress features for the multiplayer experience are tracked in [
 * **Accounts:** Registration with e-mail activation, password reset, Google and Discord login, two-factor authentication (authenticator app, passkeys, e-mail code), MMR ranking and match history.
 * **Admin panel:** Server status, maintenance mode, registration switch, lobby and user management, OAuth configuration.
 * **Reconnects:** Players who lose their connection or reload the page are put back into their seat.
+* **Rematch (live games):** On the end screen the host can start a *Revanche*. Everyone still connected goes back to the same lobby (same code and settings, everyone's own choice of nation) and can start the next game from there.
 * **Turn timer (live games):** The host sets the time per turn: no limit (default), or 1 to 10 minutes. A countdown runs in the HUD. When the time is up, the KI finishes the turn. After three missed turns in a row, the KI keeps playing the seat until the player clicks *Ich bin zurück*.
 
 ## How it works

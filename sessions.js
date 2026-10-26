@@ -241,6 +241,38 @@ function updatePlayer(sessionId, playerIndex, updates) {
     return true;
 }
 
+/**
+ * Rematch: a finished game goes back to its lobby. The connected humans keep their seats
+ * (re-indexed) and their lobby choice of nation and ability; KI seats and players who left
+ * are dropped. Same code, password and settings, a new seed.
+ * @returns {object|string} the session, or an error message
+ */
+function resetForRematch(sessionId) {
+    const session = sessions.get(sessionId);
+    if (!session) return 'Sitzung nicht gefunden.';
+    if (session.status !== 'finished') return 'Die Partie ist noch nicht vorbei.';
+    const host = session.players[session.hostIndex];
+    session.players = session.players.filter(p => p.kind === 'human' && p.connected);
+    session.players.forEach((p, i) => {
+        const choice = p.choice || {};
+        Object.assign(p, {
+            index: i, civ: choice.civ || p.civ, ability: choice.ability || p.ability,
+            afk: false, missedTurns: 0, drafted: null, roman: null, color: null,
+        });
+        delete p.mappedName;
+    });
+    session.hostIndex = Math.max(0, session.players.indexOf(host));
+    // map / setup are set by the server at the start (tile map, Marathon), the seed is new
+    const { map, setup, ...gameConfig } = session.gameConfig;
+    session.gameConfig = { ...gameConfig, seed: crypto.randomInt(2 ** 31) };
+    Object.assign(session, {
+        status: 'lobby', state: null, gameOverProcessed: false,
+        placementState: null, draft: null, turnClock: null,
+    });
+    recordActivity(sessionId);
+    return session;
+}
+
 function getPublicSessions() {
     const list = [];
     for (const [id, s] of sessions) {
@@ -277,6 +309,7 @@ module.exports = {
     kickPlayer,
     updateConfig,
     updatePlayer,
+    resetForRematch,
     getPublicSessions,
     recordActivity,
     getAllSessions: () => sessions,

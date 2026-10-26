@@ -302,6 +302,55 @@ const MP = {
         else body.insertAdjacentHTML('beforeend', html);
     },
 
+    /**
+     * End screen of a live game: "Revanche" for the host (back to the lobby with the same group),
+     * a note for everyone else. The game's own "Nochmal spielen" would start a local game.
+     */
+    addRematch: function () {
+        const body = document.getElementById('ov-body');
+        if (!body || document.getElementById('mp-rematch-box')) return;
+        const again = $('go-again');
+        if (again) {
+            const sub = again.nextElementSibling;
+            if (sub && sub.classList.contains('sub')) sub.remove();
+            again.remove();
+        }
+        if (this.asyncId) return;
+        const box = document.createElement('div');
+        box.id = 'mp-rematch-box';
+        box.innerHTML = this.lobbyIndex === this.hostIndex
+            ? `<button class="btn primary wide" id="mp-rematch" onclick="MP.rematch()">${TX('Revanche')}</button>
+               <p class="sub" style="margin:6px 2px 10px;text-align:center">${TX('Alle, die noch verbunden sind, kommen zurück in die Lobby – mit denselben Einstellungen.')}</p>`
+            : `<p class="sub" style="margin:6px 2px 10px;text-align:center">${TX('Der Host kann eine Revanche starten – dann geht es für alle zurück in die Lobby.')}</p>`;
+        const menu = $('go-menu');
+        if (menu) menu.parentNode.insertBefore(box, menu);
+        else body.appendChild(box);
+    },
+    rematch: function () {
+        this.socket.emit('session:rematch', {}, res => { if (res && res.error) toast(TXS(res.error)); });
+    },
+    /** The host started a rematch: leave the finished game for the lobby. */
+    enterRematch: async function (data) {
+        this.lobbyIndex = data.playerIndex;
+        this.hostIndex = data.hostIndex;
+        this.players = data.players;
+        this.gameConfig = data.gameConfig || {};
+        this.playerIndex = null;
+        this.lastTurnKey = null;
+        this.placementFinished = false;
+        this.setTurnClock(null);
+        S = null;
+        document.body.classList.remove('mp-waiting');
+        ['mp-persistent-log-container', 'mp-players-container'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+        const confetti = $('confetti');
+        if (confetti) confetti.remove();
+        closeModal();
+        show('screen-menu');
+        await this.showLobby();
+        this.setMode('waiting');
+        toast(TX('Revanche! Ihr seid zurück in der Lobby.'));
+    },
+
     updatePersistentLog: function () {
         if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
         const plc = document.getElementById('mp-persistent-log-container');
@@ -367,6 +416,10 @@ const MP = {
                 toast(data && data.reason ? TXS(data.reason) : TX('Du wurdest vom Host gekickt.'));
                 MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
             });
+            this.socket.on('session:rematch', data => {
+                if (MP.asyncId) return;
+                MP.enterRematch(data);
+            });
             this.socket.on('session:index', data => {
                 MP.lobbyIndex = data.playerIndex;
                 if (data.hostIndex !== undefined) MP.hostIndex = data.hostIndex;
@@ -394,7 +447,9 @@ const MP = {
                     if (MP.placementFinished) window.toast(TX('Warten auf andere Spieler...'));
                 }
 
-                const origPlaceSeat = window.placeSeat;
+                // the game's own placeSeat – once, a rematch on the same page would wrap the wrapper
+                MP.placementFinished = false;
+                const origPlaceSeat = MP._origPlaceSeat = MP._origPlaceSeat || window.placeSeat;
                 window.placeSeat = function (plan, seat, o, cell) {
                     if (seat.idx === MP.lobbyIndex) {
                         MP.placementFinished = true;
@@ -1237,7 +1292,9 @@ if (originalGameOver) {
         const r = originalGameOver.apply(this, arguments);
         if (MP.active) {
             MP.addGameOverPlayers();
+            MP.addRematch();
             MP.updatePlayerList();
+            MP.setTurnClock(null);
         }
         return r;
     };
