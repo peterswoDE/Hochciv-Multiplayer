@@ -128,8 +128,41 @@ For local testing, Discord needs a public HTTPS URL. Use a tunnel, e.g. `cloudfl
 
 ### Updating
 
-* **Server:** pull the new image and recreate: `docker compose pull && docker compose up -d`.
+* **Server:** pull the new image and recreate: `docker compose pull && docker compose up -d`. Before that, the change has been tested on staging (see below).
 * **Game version:** comes with the server image (`HochCiv/` in this repository) – updating the server updates the game.
+
+## Branches and release flow
+
+```
+feature/… or fix/…  ──PR──▶  development  ──▶  staging server  ──PR──▶  main  ──▶  production
+                             (image :staging,     (test there)          (image :latest + vX.Y.Z,
+                              Watchtower updates)                         GitHub release)
+```
+
+1. Branch from `development` (`git fetch && git switch -c feature/… origin/development`).
+2. Test locally with `docker-compose.local.yml`, then open a PR **into `development`**.
+3. Merging builds `peterswode/hochciv-multiplayer:staging` (plus `staging-<commit>`). Watchtower on the server pulls it within a few minutes and restarts staging.
+4. Test on staging (web and, if needed, the Android app pointed at the staging URL).
+5. When staging is good, open a PR **`development` → `main`**. Merging builds the release (`latest` + version tag), then update production as described under *Updating*.
+
+Hotfixes that cannot wait go from a `hotfix/…` branch off `main` straight into `main`; merge `main` back into `development` afterwards (PR `main` → `development`) so the two do not drift. The *PR Source Check* workflow fails every PR into `main` that comes from another branch than `development` or `hotfix/…`.
+
+## Staging (semi-live)
+
+Staging runs on the production server next to production, with its own containers (`hochciv-multiplayer-staging`, `hochciv-staging-db`), its own empty database and its own subdomain. Production is never touched: the Watchtower in `docker-compose.staging.yml` only updates containers labelled for the `hochciv-staging` scope.
+
+1. DNS: point the staging subdomain (e.g. `staging.hochciv.de`) at the server and get a certificate for it.
+2. Put `docker-compose.staging.yml` into its **own** folder (not the production one), copy `.env.template` next to it as `.env` and fill it in:
+   * `SESSION_SECRET`: a different value than production.
+   * `BASE_URL`: the staging URL, e.g. `https://staging.hochciv.de`.
+   * `POSTGRES_PASSWORD`: its own value.
+   * SMTP: optional; leave `SMTP_HOST` empty to only log mails. Leave `FCM_SERVICE_ACCOUNT` empty unless you test push.
+3. Start: `docker compose -f docker-compose.staging.yml up -d`.
+4. Proxy the subdomain to `hochciv-multiplayer-staging:3000` – see the staging block in `nginx-example.conf`.
+5. Register an account on staging and make it superadmin: `docker exec hochciv-multiplayer-staging node elevate.js <your-username> superadmin`.
+6. Google / Discord login on staging: add `https://staging.hochciv.de/api/auth/google/callback` and `…/api/auth/discord/callback` as additional redirect URLs to the same OAuth apps, and enter client ID and secret in the staging admin panel (the staging database is separate).
+
+Watchtower checks for a new `staging` image every 5 minutes (`WATCHTOWER_POLL_INTERVAL` in `.env`, in seconds). See what it did with `docker logs hochciv-staging-watchtower`. To pin staging to a specific build, stop Watchtower and change the image tag to `staging-<commit>`.
 
 ### Startup troubleshooting
 

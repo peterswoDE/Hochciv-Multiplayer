@@ -1,0 +1,75 @@
+# Staging setup ("semi-live"), runs next to production on the same server.
+# Runs the image built from the development branch (tag "staging"); Watchtower
+# pulls every new staging image and restarts the server. Own database, own
+# container names – production is not touched. Settings come from the .env file
+# next to this file (copy .env.template to .env and fill it in). See README.md.
+
+name: hochciv-staging
+
+services:
+  hochciv-staging-db:
+    image: postgres:15-alpine
+    container_name: hochciv-staging-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hochciv}
+      # Only used when the database volume is created for the first time.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+      POSTGRES_DB: ${POSTGRES_DB:-hochciv}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  hochciv-staging:
+    image: peterswode/hochciv-multiplayer:staging
+    container_name: hochciv-multiplayer-staging
+    restart: unless-stopped
+    depends_on:
+      - hochciv-staging-db
+    labels:
+      # Only containers with these labels are updated by the Watchtower below.
+      - com.centurylinklabs.watchtower.enable=true
+      - com.centurylinklabs.watchtower.scope=hochciv-staging
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # Required. Use a different value than production.
+      - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in .env to a long random string}
+      # Public URL of staging, e.g. https://staging.hochciv.de
+      - BASE_URL=${BASE_URL:-}
+      - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:-password123}@hochciv-staging-db:5432/${POSTGRES_DB:-hochciv}
+      # E-mail – optional. Without SMTP_HOST, mails are only written to the log.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      # Push notifications – leave empty on staging unless you test push.
+      - FCM_SERVICE_ACCOUNT=${FCM_SERVICE_ACCOUNT:-}
+    networks:
+      - nginx
+      - internal
+
+  watchtower:
+    image: nickfedor/watchtower:1.23.0
+    container_name: hochciv-staging-watchtower
+    restart: unless-stopped
+    environment:
+      # Only update containers labelled for this scope – never production.
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_SCOPE=hochciv-staging
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-300}
+      - WATCHTOWER_CLEANUP=true
+    labels:
+      - com.centurylinklabs.watchtower.scope=hochciv-staging
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  nginx:
+    external: true
+  internal:
+
+volumes:
+  pgdata:
