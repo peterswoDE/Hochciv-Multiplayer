@@ -68,7 +68,9 @@ services:
 
 networks:
   nginx:
+    # The Docker network of the reverse proxy (PROXY_NETWORK in .env, default "nginx").
     external: true
+    name: ${PROXY_NETWORK:-nginx}
   internal:
 
 volumes:

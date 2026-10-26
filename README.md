@@ -66,6 +66,7 @@ The production setup uses the pre-built image `peterswode/hochciv-multiplayer` b
    ```bash
    docker network create nginx
    ```
+   If your proxy is already in a network with another name (e.g. `proxy`), skip this and set `PROXY_NETWORK=proxy` in `.env`.
 3. Put `docker-compose.yml` into a folder, copy `.env.template` next to it as `.env` and fill it in (see below). At least `SESSION_SECRET` and `BASE_URL` must be set.
 4. Start:
    ```bash
@@ -87,6 +88,7 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 | `BASE_URL` | **yes** for OAuth/passkeys | Public URL, scheme and host only, e.g. `https://hochciv.example` – no path, no trailing characters. Used for OAuth callbacks, links in e-mails and as the passkey origin. A malformed value stops the server at startup. Without it, OAuth redirects to `http://localhost:3000` and fails. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
+| `PROXY_NETWORK` | no | Docker network of the reverse proxy (default `nginx`). |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
 
 ### Google / Discord login
@@ -158,7 +160,7 @@ Staging runs on the production server next to production, with its own container
    * `POSTGRES_PASSWORD`: its own value.
    * SMTP: optional; leave `SMTP_HOST` empty to only log mails. Leave `FCM_SERVICE_ACCOUNT` empty unless you test push.
 3. Start: `docker compose -f docker-compose.staging.yml up -d`.
-4. Proxy the subdomain to `hochciv-multiplayer-staging:3000` – see the staging block in `nginx-example.conf`.
+4. Proxy the subdomain to `hochciv-multiplayer-staging:3000` with WebSocket support – see the staging block in `nginx-example.conf`, or in Nginx Proxy Manager add a proxy host for it with *Websockets Support* on. `PROXY_NETWORK` must be the same network as production's.
 5. Register an account on staging and make it superadmin: `docker exec hochciv-multiplayer-staging node elevate.js <your-username> superadmin`.
 6. Google / Discord login on staging: add `https://staging.hochciv.de/api/auth/google/callback` and `…/api/auth/discord/callback` as additional redirect URLs to the same OAuth apps, and enter client ID and secret in the staging admin panel (the staging database is separate).
 
