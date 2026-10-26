@@ -570,7 +570,9 @@ function kiTechBonus(S, pi, k, K, y) {
   switch (k) {
     case 'keramik': return 0.5 * H * Math.min(cities, 6);
     case 'verbundwerkstoffe': return cities * H * Math.max(1, H) / 3;
-    case 'dampfmaschine': return 0.35 * H * cities * Math.max(1, popOf(S, pi) / Math.max(1, cities));
+    // keine Münzkosten fürs Wachsen, seit v89 dazu ein bezahlter Schritt mehr – der gewichtet wie Keramik
+    case 'dampfmaschine': return 0.35 * H * cities * Math.max(1, popOf(S, pi) / Math.max(1, cities)) +
+      0.5 * H * Math.min(cities, 6);
     case 'rad': return 1.2 * H * Math.max(0, cities - 1) + 2;
     case 'eisenbahn': return 1.0 * H * Math.max(0, cities - 1) + 2;
     case 'navigation': return 5;
@@ -847,9 +849,9 @@ function kiWonderValue(S, pi, K) {
   return v;
 }
 
-/* Bewertung nach dem Zug: auf einer Wegwerfkopie die Kampfphase durchrechnen
-   (Belagerungen, Flankieren, Wirtschaftssieg), dann kiValue. So sieht die Bewertung, was
-   eine Aktion am Zugende auslöst. X wird dabei verändert – nur mit Kopien aufrufen. */
+/* Bewertung nach dem Zug: auf einer Wegwerfkopie die Kampfphase durchrechnen (Belagerungen,
+   dann Flankieren; dazu der Wirtschaftssieg), dann kiValue. So sieht die Bewertung, was eine
+   Aktion am Zugende auslöst. X wird dabei verändert – nur mit Kopien aufrufen. */
 function kiScore(X, pi, K) {
   if (!X.over) combatPhase(X, pi);
   // Wirtschaftssieg: geprüft am Rundenende (v85). Wer die Runde beschließt, für den ist das

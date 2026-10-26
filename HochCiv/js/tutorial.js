@@ -655,7 +655,7 @@ function tutMaybeAdvance() {
   // Wer zurückblättert, will nachlesen – dort darf nicht sofort wieder vorgesprungen
   // werden. Automatisch geht es nur auf dem weitesten je erreichten Schritt weiter.
   if (ui.tut.i < (ui.tut.max || 0)) return;
-  if (ui.botLock) return;
+  if (ui.botLock || ui.combat) return;        // Bot-Fenster offen, Kampf läuft noch (v90)
   const p = tutP();
   // offene Rückschau: nur, was sich noch wählen lässt (v87 – ein leerer Anspruch hält nichts auf)
   if ((p.freePicks || []).some(c => c.n > 0) || backPickOptions(S, RU()).length) return;
@@ -664,7 +664,7 @@ function tutMaybeAdvance() {
   const from = ui.tut.i;
   ui.tutAuto = true;
   const go = () => {
-    if (!ui.tut || ui.tut.i !== from || !tutDone()) { ui.tutAuto = false; return; }
+    if (!ui.tut || ui.tut.i !== from || !tutDone() || ui.combat) { ui.tutAuto = false; return; }
     closeSheet(); closeModal();
     tutMove(1);
     ui.tutAuto = false;                // erst danach frei: eine Stufe je Aktion, keine Kette

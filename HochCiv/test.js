@@ -162,7 +162,8 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     }
   }
   eq([abw.slice(0, 2), n], [[], 2800], 'Gegenprobe: 400 zufällige Techstände × 7 Ziele wie nach der Regel gerechnet');
-  // Die Techtexte nennen die Summe ihrer Kette und was sie einschließen – deutsch und englisch
+  // Die Techtexte nennen die Summe, die ihr Glied setzt – deutsch und englisch. Seit v89 ohne
+  // „(inkl. …)" (Anweisung des Autors); die Regel steht im Regelbogen.
   const ZIEL = { de: { G: 'Grasland', W: 'Wald', B: 'Gebirge', F: 'Fluss', M: 'Meer', pop: 'Je Bevölkerung' },
     en: { G: 'Grassland', W: 'Forest', B: 'Mountains', F: 'River', M: 'Sea', pop: 'Per population' } };
   const ART = { de: [['Wissenschaft', 'Wissenschaft'], ['Nahrung', 'Nahrung'], ['Münze', 'Münzen']],
@@ -170,15 +171,16 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const de = k => DATA_DE ? DATA_DE.tech[k] : [TECH_BY_KEY[k].n, TECH_BY_KEY[k].e];
   const tx = (lang, k) => lang === 'de' ? de(k) : DATA_EN.tech[k];
   const soll = (lang, on, ch, i) => ZIEL[lang][on] + ': ' +
-    ch[i].y.map((v, j) => v ? `+${v} ${ART[lang][j][v > 1 ? 1 : 0]}` : '').filter(Boolean).join(', ') +
-    (i ? ` (${lang === 'de' ? 'inkl.' : 'incl.'} ${ch.slice(0, i).map(g => tx(lang, g.k)[0]).join(', ')})` : '');
+    ch[i].y.map((v, j) => v ? `+${v} ${ART[lang][j][v > 1 ? 1 : 0]}` : '').filter(Boolean).join(', ');
   const falsch = [];
   for (const on of Object.keys(YIELD_CHAINS)) for (const ch of YIELD_CHAINS[on]) ch.forEach((g, i) => {
     for (const lang of ['de', 'en']) if (tx(lang, g.k)[1] !== soll(lang, on, ch, i)) falsch.push(`${lang}:${g.k} „${tx(lang, g.k)[1]}" statt „${soll(lang, on, ch, i)}"`);
   });
-  eq(falsch, [], 'jeder Ertragstext (deutsch und englisch) nennt die Summe seiner Kette und was er einschließt');
-  eq(de('ki')[1], 'Wald: +3 Wissenschaft (inkl. Mathematik, Elektrizität)', 'so liest sich das: Künstliche Intelligenz');
-  eq(DATA_EN.tech.containerlogistik[1], 'Sea: +2 food, +1 coin (incl. Fishing, Sailing)', '… und Containerlogistik englisch');
+  eq(falsch, [], 'jeder Ertragstext (deutsch und englisch) nennt die Summe, die sein Glied setzt');
+  eq(de('ki')[1], 'Wald: +3 Wissenschaft', 'so liest sich das: Künstliche Intelligenz');
+  eq(DATA_EN.tech.containerlogistik[1], 'Sea: +2 food, +1 coin', '… und Containerlogistik englisch');
+  eq(TECHS.filter(t => /inkl\.|incl\./.test(de(t.k)[1] + ' ' + DATA_EN.tech[t.k][1])).map(t => t.k), [],
+    'kein Techtext sagt mehr „inkl." bzw. „incl." (v89)');
 }
 
 /* --- Griechische Technologiekosten aus dem Beispiel
@@ -425,6 +427,110 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     [[SIEGE_BONUS, SIEGE_BONUS], [3 + SIEGE_BONUS, 3 + SIEGE_BONUS]], 'Tutorial (deutsch, lang und kurz): +3, also 6 statt 3');
   eq([enTut.length, enTut.every(v => v.includes(`(+${SIEGE_BONUS} attack against cities)`) &&
     v.includes(`<b>${3 + SIEGE_BONUS} instead of 3</b>`))], [2, true], 'Tutorial (englisch): dieselben Zahlen');
+}
+
+/* --- Kampfphase (v91, Anweisung des Autors): erst die Städte, dann wird flankiert – wie bis
+   v89. v90 hatte es umgedreht, und dann fielen Städte, die verteidigt waren. Eine Armee an ihrer
+   Stadt verteidigt diese also mit, auch wenn sie im selben Zug noch weggeflankt wird. Dazu die
+   Einträge für das Nachspielen (`rec`, seit v90): Art, Feld, Werte, Ausgang, beteiligte Felder,
+   Stand davor – in der Reihenfolge, in der gerechnet wird. */
+{
+  // Englands Hauptstadt C, daneben Englands Armee E; Griechenland flankiert E von G1 und G2
+  // (gegenüber), G1 steht zugleich an C. Griechenland Macht 5, England 3, C mit 3 Bevölkerung:
+  // Verteidigung mit E 3 + 3 = 6 ≥ 5 – die Stadt hält; danach fällt E (5 > 3).
+  const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 9 });
+  const C = capitalOf(S, 1); C.pop = 3;
+  const frei = (r, c) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c);
+  let lage = null;
+  for (const [er, ec] of neighbors(C.r, C.c)) {
+    if (lage || !frei(er, ec)) continue;
+    for (const [g1r, g1c] of neighbors(er, ec)) {
+      if (lage || !frei(g1r, g1c) || hexDistance(g1r, g1c, C.r, C.c) !== 1) continue;
+      const g2 = neighbors(er, ec).find(([r, c]) => frei(r, c) && hexDistance(r, c, C.r, C.c) === 2 &&
+        hexOpposite(er, ec, g1r, g1c, r, c));
+      if (g2) lage = { E: [er, ec], G1: [g1r, g1c], G2: g2 };
+    }
+  }
+  eq(!!lage, true, 'Stellung gefunden: Armee an der Stadt, von zwei Seiten flankierbar');
+  const E = { id: 951, owner: 1, r: lage.E[0], c: lage.E[1], mp: 0, born: 0 };
+  S.armies.push(E,
+    { id: 952, owner: 0, r: lage.G1[0], c: lage.G1[1], mp: 0, born: 0 },
+    { id: 953, owner: 0, r: lage.G2[0], c: lage.G2[1], mp: 0, born: 0 });
+  S.players[0].power = 5; S.players[1].power = 3;
+  eq([defenseValue(S, C), attackValue(S, 0, attackersOn(S, 0, C).length)], [6, 5],
+    'vor dem Kampf: Verteidigung 6 (mit der Armee), Angriff 5');
+  const kopie = (mitArmee, belagerung) => {
+    const X = JSON.parse(JSON.stringify(Object.assign({}, S, { log: [] })));
+    if (mitArmee && !X.armies.some(a => a.id === 951)) X.armies.push(Object.assign({}, E));
+    X.sieges = belagerung ? { ['0|' + C.id]: belagerung } : {};
+    X.cur = 0;
+    return X;
+  };
+  S.cur = 0;
+  const rec = [], seq = S.logSeq;
+  finishTurn(S, rec);
+  eq([S.armies.includes(E), S.sieges['0|' + C.id] || 0], [false, 0],
+    'erst die Stadt: sie hält (5 ≤ 6, die Armee verteidigt mit) – dann wird die Armee weggeflankt (5 > 3)');
+  eq(logSince(S, seq).filter(l => l.c === 'fight').map(l => /flankiert/.test(l.m) ? 'flanke' : 'stadt'),
+    ['flanke'], 'im Protokoll nur die Flanke (eine Stadt, die ohne laufende Belagerung hält, steht dort nicht)');
+  eq(rec.map(e => [e.art, e.pi, e.gegner, e.r, e.c, e.a, e.d, e.sieg]),
+    [['stadt', 0, 1, C.r, C.c, 5, 6, false], ['flanke', 0, 1, E.r, E.c, 5, 3, true]], 'zwei Einträge: Stadt, dann Flanke');
+  eq([rec[0].von.map(String), rec[1].von.map(String).sort(), rec[0].zug || 0, !!rec[0].genommen, !!rec[0].gebrochen],
+    [[String(lage.G1)], [lage.G1, lage.G2].map(String).sort(), 0, false, false], 'beteiligte Felder und Ausgang');
+  eq([rec[0].snap.armies.some(a => a.id === 951), rec[1].snap.armies.some(a => a.id === 951)], [true, true],
+    'Stand davor: bei der Stadt und bei der Flanke steht die Armee noch');
+  eq(rec[0].snap.cities.find(x => x.id === C.id).pop, 3, '… und die Stadt mit ihrer Bevölkerung davor');
+  // Was der Autor ausschließen will: läuft die Belagerung schon (1/2), hält die verteidigte Stadt
+  // trotzdem – die Belagerung bricht ab, auch wenn ihre Armee danach weggeflankt wird.
+  {
+    const W = kopie(true, 1), r = [];
+    finishTurn(W, r);
+    eq([W.cities.find(x => x.id === C.id).owner, W.sieges['0|' + C.id], W.armies.some(a => a.id === 951), r[0].art, r[0].gebrochen],
+      [1, 0, false, 'stadt', true], 'Belagerung 1/2 und Armee an der Stadt: die Stadt hält, die Belagerung bricht, dann fällt die Armee');
+  }
+  // Zweiter Treffer ohne verteidigende Armee: erobert (3 − 2 = 1 bleibt) bzw. zerstört (bei 2)
+  const nochmal = pop => {
+    const X = kopie(false, 1);
+    X.cities.find(x => x.id === C.id).pop = pop;
+    const r = []; finishTurn(X, r);
+    const e = r.find(x => x.art === 'stadt');
+    return [e.zug, e.genommen, e.zerstoert];
+  };
+  eq([nochmal(3), nochmal(2)], [[2, true, false], [2, true, true]], 'zweiter Treffer: erobert bzw. zerstört');
+  // Ohne `rec` dasselbe Ergebnis (KI, Bots, Tests rechnen so)
+  const Y = kopie(true, 0);
+  finishTurn(Y);
+  eq([Y.armies.some(a => a.id === 951), Y.sieges['0|' + C.id] || 0], [false, 0], 'ohne Aufzeichnung derselbe Ausgang');
+  // Eine Flanke, für die die Macht nicht reicht, ist auch ein Kampf – sie hält
+  const Z = kopie(true, 0); Z.players[0].power = 3;
+  const rz = []; finishTurn(Z, rz);
+  const fz = rz.find(e => e.art === 'flanke');
+  eq([rz.map(e => e.art), fz.a, fz.d, fz.sieg, Z.armies.some(a => a.id === 951)], [['stadt', 'flanke'], 3, 3, false, true],
+    'Flanke 3 gegen 3: ein Kampf nach der Stadt, die Armee hält (Gleichstand hält)');
+}
+
+/* --- Zugfolge nach Plätzen (v90, Anweisung des Autors): mit cfg.seatOrder ziehen die Reiche in
+   der Reihenfolge der Plätze, ohne bleibt es bei Russland → Griechenland → England → Wikinger. */
+{
+  const plaetze = [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }, { civ: 'russland', kind: 'bot' }];
+  // Plättchenkarte (nur dort sitzt eine Zivilisation doppelt): Hauptstädte nach Platz
+  const plan = tilePlan(plaetze.map(p => p.civ), 21), rnd = mapRng(22);
+  plan.seats.forEach(st => botPlaceSeat(plan, st, rnd));
+  const map = tileMap(plan);
+  const A = newGame({ seed: 3, map, players: plaetze.map(p => Object.assign({}, p)), seatOrder: true, startPlayer: 1 });
+  eq(A.players.map(p => [p.civ, p.slot]), [['russland', 0], ['griechenland', 1], ['russland', 2]], 'nach Plätzen: 1, 2, 3');
+  const folge = [];
+  for (let i = 0; i < 4; i++) { folge.push(A.players[A.cur].slot); A.cur = (A.cur + 1) % A.players.length; }
+  eq([A.startIdx, folge], [1, [1, 2, 0, 1]], 'ab dem Startspieler (Platz 2): 2 → 3 → 1 → 2');
+  const B = newGame({ seed: 3, map, players: plaetze.map(p => Object.assign({}, p)), startPlayer: 1 });
+  eq(B.players.map(p => [p.civ, p.slot]), [['russland', 0], ['russland', 2], ['griechenland', 1]],
+    'ohne Schalter nach Zivilisation (bis v89 überall): Platz 1, Platz 3, Platz 2');
+  eq(B.players[B.startIdx].slot, 1, '… der Startspieler bleibt der Platz, nicht die Zivilisation');
+  eq(A.players.map((p, i) => { const c = capitalOf(A, i); const e = map.capitals[p.slot]; return c.r === e.r && c.c === e.c; }),
+    [true, true, true], 'jede Hauptstadt steht auf dem Startfeld ihres Platzes');
+  const vier = CIVS.map(c => ({ civ: c.k, kind: 'bot' }));
+  eq(newGame({ seed: 3, map: MAP_ORIGINAL, players: vier }).players.map(p => p.civ), ORDER.slice(),
+    'klassisch: Russland → Griechenland → England → Wikinger');
 }
 
 /* ==================================================== Bot-Armeeprioritäten
@@ -983,6 +1089,41 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(t.pop, 6, 'auch so drei Schritte');
 }
 
+/* Dampfmaschine (v89, Anweisung des Autors): wie Keramik ein bezahlter Wachstumsschritt mehr
+   je Stadt und Runde, dazu wie bisher keine Münzkosten. Alle drei Wachstumstechnologien
+   zusammen: 3 bezahlte und 1 kostenloser Schritt. */
+{
+  const S = mk('griechenland', ['dampfmaschine', 'gentechnik']);
+  const c = capitalOf(S, 0); c.pop = 3; c.grown = 0; c.freeUsed = 0; c.born = 0;
+  S.players[0].res = { sci: 0, food: 999, coins: 999 };
+  eq(growLimits(S, 0), { max: 2, paid: 2, free: 0 }, 'Dampfmaschine allein: zwei bezahlte Schritte');
+  eq(growPrice(S, 0, c), { food: 3, coins: 0 }, '… ohne Münzkosten wie bisher');
+  eq([growCity(S, 0, c, 'paid'), growCity(S, 0, c, 'paid')], [null, null], 'zweimal bezahlt gewachsen');
+  eq(canGrowPaid(S, 0, c), 'Diese Runde schon gewachsen.', 'ein dritter bezahlter Schritt nicht');
+  eq([c.pop, S.players[0].res.coins, S.players[0].res.food], [5, 999, 999 - 3 - 4], '3 → 5, nur Nahrung bezahlt');
+  const A = mk('griechenland', ['keramik', 'dampfmaschine', 'verbundwerkstoffe', 'gentechnik']);
+  const a = capitalOf(A, 0); a.pop = 2; a.grown = 0; a.freeUsed = 0; a.born = 0;
+  A.players[0].res = { sci: 0, food: 999, coins: 999 };
+  eq(growLimits(A, 0), { max: 4, paid: 3, free: 1 }, 'Keramik + Dampfmaschine + Verbundwerkstoffe: 3 bezahlt + 1 gratis');
+  eq([growCity(A, 0, a, 'paid'), growCity(A, 0, a, 'free'), growCity(A, 0, a, 'paid'), growCity(A, 0, a, 'paid')],
+    [null, null, null, null], 'vier Schritte in einer Runde, der kostenlose dazwischen');
+  eq([a.pop, canGrow(A, 0, a)], [6, 'Diese Runde schon gewachsen.'], '2 → 6, ein fünfter nicht');
+  eq(growLimits(mk('griechenland', ['keramik', 'dampfmaschine']), 0), { max: 3, paid: 3, free: 0 }, 'Keramik + Dampfmaschine: drei bezahlte');
+  // „Alle Städte wachsen" folgt von selbst: ein Schritt je Tipp, jetzt bis zu drei bezahlte
+  const B = mk('griechenland', ['keramik', 'dampfmaschine', 'gentechnik']);
+  capitalOf(B, 0).born = 0;
+  B.players[0].res = { sci: 0, food: 999, coins: 999 };
+  eq([1, 2, 3, 4].map(() => growAll(B, 0, 'paid').done), [1, 1, 1, 0], 'Sammelaktion: dreimal je ein Schritt, dann nicht mehr');
+  // Texte: Keramik und Dampfmaschine nennen den zusätzlichen Schritt gleich, deutsch und englisch
+  eq([TECH_BY_KEY.keramik.e, TECH_BY_KEY.dampfmaschine.e],
+    ['1× zusätzliches Wachstum pro Stadt', 'Keine Münzkosten für Bevölkerungswachstum; 1× zusätzliches Wachstum pro Stadt'],
+    'Texte deutsch: Keramik im Wortlaut der Dampfmaschine');
+  eq([DATA_EN.tech.keramik[1], DATA_EN.tech.dampfmaschine[1]],
+    ['One extra growth per city', 'No coin cost for population growth; one extra growth per city'], 'englisch ebenso');
+  eq(TECHS.filter(t => /1× zusätzliches Wachstum pro Stadt/.test(t.e)).map(t => t.k).sort(), GROW_EXTRA_PAID.slice().sort(),
+    'genau die Technologien, deren Text den Schritt nennt, geben ihn (GROW_EXTRA_PAID)');
+}
+
 /* nur Verbundwerkstoffe: normales Wachstum + 1x gratis = max 2 */
 {
   const S = mk('griechenland', ['verbundwerkstoffe']);
@@ -1399,7 +1540,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 
 /* Tech-Labels und Sortierung nach Kosten */
 {
-  eq(TECH_BY_KEY.keramik.e, 'Bevölkerung 2× pro Runde wachsen lassen', 'Keramik hat ein eigenständiges Label');
+  eq(TECH_BY_KEY.keramik.e, '1× zusätzliches Wachstum pro Stadt', 'Keramik hat ein eigenständiges Label (seit v89 im Wortlaut der Dampfmaschine)');
   eq(TECH_BY_KEY.verbundwerkstoffe.e, '1× zusätzliches, kostenloses Wachstum pro Stadt', 'Verbundwerkstoffe zeigt das Gratis-Wachstum');
   const prod = techsIn(1, 0).map(t => t.c);
   eq(prod, prod.slice().sort((a, b) => a - b), 'Techs sind nach Kosten sortiert');

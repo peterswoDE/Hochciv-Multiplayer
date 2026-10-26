@@ -287,8 +287,16 @@ function newGame(cfg) {
   // Gleiche Zivilisationen behalten ihre Reihenfolge aus dem Aufbau (stabile Sortierung),
   // und der Startspieler wird über den Platz bestimmt, nicht über die Zivilisation –
   // sonst zeigte „Startspieler Russland" bei zwei Russlands auf das falsche Reich.
+  /* Seit v90 (Anweisung des Autors): mit cfg.seatOrder ziehen die Reiche in der Reihenfolge
+     der Plätze aus dem Aufbau – so setzt es die Oberfläche, wo der Aufbau nummerierte Plätze
+     hat (Plättchenkarte, drei Reiche, Duell). Bis v89 galt auch dort ORDER, und mit zwei
+     gleichen Zivilisationen zogen die Plätze in seltsamer Folge (Platz 1 Russland, Platz 3
+     Russland, erst dann Platz 2 Griechenland). Ohne den Schalter – die klassische Aufstellung
+     mit allen vier Zivilisationen, Marathon, Tutorial, Tests – bleibt es bei ORDER: dort ist
+     jede Zivilisation ihr eigener Platz (Russland im Osten, dann im Uhrzeigersinn). */
   const startPc = cfg.players[cfg.startPlayer ?? 0];
-  const ordered = cfg.players.slice().sort((a, b) => ORDER.indexOf(a.civ) - ORDER.indexOf(b.civ));
+  const ordered = cfg.seatOrder ? cfg.players.slice()
+    : cfg.players.slice().sort((a, b) => ORDER.indexOf(a.civ) - ORDER.indexOf(b.civ));
   const startIdx = Math.max(0, ordered.indexOf(startPc));
   const S = {
     v: 2, seed: (cfg.seed ?? Math.floor(Math.random() * 2 ** 31)) | 0,
@@ -1250,11 +1258,14 @@ function arriveAt(S, army, r, c, cost) {
 const moveBudget = a => a.halted ? -1 : a.mp;
 
 /* ------------------------------------------------------------ Aktionen */
-/* Wie oft eine Stadt pro Runde wachsen darf und wie oft davon kostenlos:
-   Keramik = 2× bezahlt, Verbundwerkstoffe = +1× gratis, beide zusammen bis 3×. */
+/* Wie oft eine Stadt pro Runde wachsen darf und wie oft davon kostenlos: ein bezahlter
+   Schritt, Keramik +1 und seit v89 (Anweisung des Autors) die Dampfmaschine +1 bezahlten
+   (bis v88 strich sie nur die Münzkosten); Verbundwerkstoffe +1 kostenlos. Alle drei
+   zusammen: 3 bezahlte und 1 kostenloser Schritt je Stadt und Runde. */
+const GROW_EXTRA_PAID = ['keramik', 'dampfmaschine'];   // je +1 bezahlter Schritt
 function growLimits(S, pi) {
   const p = S.players[pi];
-  const paid = has(p, 'keramik') ? 2 : 1;      // bezahlte Schritte je Runde
+  const paid = 1 + GROW_EXTRA_PAID.filter(k => has(p, k)).length;   // bezahlte Schritte je Runde
   const free = has(p, 'verbundwerkstoffe') ? 1 : 0;   // zusätzlich, und nur kostenlos
   return { max: paid + free, paid, free };
 }
@@ -1967,39 +1978,86 @@ function powerView(S) {
   }));
   return { cities, armies };
 }
-function combatPhase(S, pi) {
+/* Kampfphase am Ende eines Zugs: die Armeen des Reichs pi greifen an – erst die Städte, dann
+   wird flankiert. So war es bis v89 und ist es wieder seit v91 (Anweisung des Autors): eine
+   Armee an ihrer Stadt verteidigt diese mit, auch wenn sie im selben Zug noch weggeflankt
+   wird. v90 hatte die Reihenfolge umgedreht – dann fielen Städte, die verteidigt waren.
+   Umgekehrt wirkt eine Eroberung schon auf das Flankieren desselben Zugs (eroberte Stadt mit
+   Burgenbau als Position, Kriegerkultur je Stadt, Zeus, Bot-Macht = Bevölkerung).
+   `rec` (nur die Oberfläche, seit v90): Hier hinein kommt jeder Kampf als Eintrag – Art, Feld,
+   Angreifer und Verteidiger, beide Werte, Ausgang, die beteiligten Felder und der Stand der
+   Karte davor (combatEntry), in der Reihenfolge, in der gerechnet wird. Daraus spielt die
+   Oberfläche den Kampf Schritt für Schritt nach; die Regel selbst läuft wie immer in einem Zug
+   durch, auch ohne `rec` (KI, Bots, Tests). */
+function combatPhase(S, pi, rec) {
   const p = S.players[pi];
-  // Wikinger "Beutezüge": Stand vor den Belagerungen festhalten, Auszahlung nächste Runde
+  // Wikinger "Beutezüge": Stand vor dem Kampf festhalten, Auszahlung nächste Runde
   if (isAbil(p, 'kampfertrag')) {
     const raid = raidYield(S, pi);
     p.raidPending = raid.sum;
     if (raid.sum) log(S, 'act', T('%s: Beutezüge ergeben %s (%s) – gutgeschrieben zu Beginn der nächsten Runde.', civOf(p).n, raid.sum, raid.parts.join(', ')));
   }
-  // Belagerungen
+  // 1 Städte: Belagerung, nach dem zweiten Treffer in Folge erobert
   for (const city of S.cities.slice()) {
     if (city.owner === pi) continue;
     const sk = pi + '|' + city.id;
     const atk = attackersOn(S, pi, city);
     if (!atk.length) { delete S.sieges[sk]; continue; }
     const a = attackValue(S, pi, atk.length), d = defenseValue(S, city);
+    const e = rec ? combatEntry(S, {
+      art: 'stadt', pi, gegner: city.owner, r: city.r, c: city.c, a, d, sieg: a > d,
+      von: atk.map(x => [x.r, x.c]),
+    }) : null;
     if (a > d) {
       S.sieges[sk] = (S.sieges[sk] || 0) + 1;
       log(S, 'fight', T('Kampf um %ss Stadt: Angriff %s > Verteidigung %s (Zug %s/2).', civOf(S.players[city.owner]).n, a, d, S.sieges[sk]));
-      if (S.sieges[sk] >= 2) captureCity(S, pi, city);
+      if (e) e.zug = S.sieges[sk];
+      if (S.sieges[sk] >= 2) {
+        captureCity(S, pi, city);
+        if (e) { e.genommen = true; e.zerstoert = !S.cities.includes(city); }
+      }
     } else {
+      if (e) e.gebrochen = !!S.sieges[sk];
       if (S.sieges[sk]) log(S, 'fight', T('Belagerung gebrochen (Angriff %s ≤ Verteidigung %s).', a, d));
       S.sieges[sk] = 0;
     }
+    if (e) rec.push(e);
   }
-  // Flankieren: Stellung (canFlank), dann der Machtvergleich.
+  // 2 Flankieren: Stellung (canFlank), dann der Machtvergleich – mit dem Stand nach den
+  //   Städten. Jede Stellung ist ein Kampf, auch wenn die Macht nicht reicht (dann bleibt die
+  //   Armee stehen).
   const flankSpots = flankSpotsOf(S, pi);
   for (const enemy of S.armies.slice()) {
-    if (enemy.owner === pi) continue;
-    if (canFlank(S, pi, enemy, flankSpots) && powerOf(S, pi) > powerOf(S, enemy.owner)) {
-      S.armies = S.armies.filter(a => a !== enemy);
+    if (enemy.owner === pi || !canFlank(S, pi, enemy, flankSpots)) continue;
+    const a = powerOf(S, pi), d = powerOf(S, enemy.owner);
+    if (rec) rec.push(combatEntry(S, {
+      art: 'flanke', pi, gegner: enemy.owner, r: enemy.r, c: enemy.c, a, d, sieg: a > d,
+      von: flankersOf(S, pi, enemy, flankSpots),
+    }));
+    if (a > d) {
+      S.armies = S.armies.filter(x => x !== enemy);
       log(S, 'fight', T('%s flankiert und zerstört eine Armee von %s.', civOf(p).n, civOf(S.players[enemy.owner]).n));
     }
   }
+}
+// Von wo aus flankiert wird: die Positionen des Angreifers in Reichweite des Gegners
+function flankersOf(S, pi, enemy, spots) {
+  const rng = projectRange(S, pi);
+  return (spots || flankSpotsOf(S, pi)).filter(([r, c]) => {
+    const d = hexDistance(r, c, enemy.r, enemy.c);
+    return d >= 1 && d <= rng;
+  });
+}
+/* Ein Kampfeintrag samt Kartenstand DAVOR: Städte, Armeen, Wunder und die Reiche (für
+   Farben und Grenzen) – genug, um die Karte so zu zeichnen, wie sie vor diesem Kampf stand. */
+function combatEntry(S, e) {
+  e.snap = {
+    cities: JSON.parse(JSON.stringify(S.cities)),
+    armies: JSON.parse(JSON.stringify(S.armies)),
+    wonders: JSON.parse(JSON.stringify(S.wonders || [])),
+    players: S.players.map(q => Object.assign({}, q)),
+  };
+  return e;
 }
 function captureCity(S, pi, city) {
   const p = S.players[pi], loser = S.players[city.owner];
@@ -2207,9 +2265,10 @@ function pendingWarnings(S, pi) {
 }
 /* Schritt 4 + 5 des Zuges. Läuft für Menschen wie Bots an genau einer Stelle –
    sonst würde ein Belagerungszähler zweimal pro Zug steigen. */
-function finishTurn(S) {
+// `rec`: siehe combatPhase – die Oberfläche bekommt so jeden Kampf zum Nachspielen
+function finishTurn(S, rec) {
   if (S.over) return S.over;
-  combatPhase(S, S.cur);
+  combatPhase(S, S.cur, rec);
   // Der Wirtschaftssieg wird nicht am Zugende geprüft, sondern am Ende der Runde für alle
   // (checkEconomyRoundEnd, v85).
   return S.over;
