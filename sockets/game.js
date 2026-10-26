@@ -43,6 +43,7 @@ module.exports = function registerHandlers(io) {
         let sessionId = null;
         let session = null;
         let me = null;          // this socket's player object in session.players
+        let watcher = null;     // … or its spectator object in session.spectators (spectator mode)
 
         // Players are re-indexed when someone leaves the lobby, so the index is always looked up
         const myIndex = () => (session ? session.players.indexOf(me) : -1);
@@ -59,11 +60,15 @@ module.exports = function registerHandlers(io) {
                 return ack({ error: 'Falsches Passwort.' });
             const player = typeof data.clientId === 'string'
                 ? s.players.find(p => p.kind === 'human' && p.clientId === data.clientId) : null;
+            const spectator = !player && typeof data.clientId === 'string'
+                ? (s.spectators || []).find(w => w.clientId === data.clientId) : null;
+            if (spectator) return watch(s, spectator, ack);
             if (!player) return ack({ error: 'Ungültiger Spieler. Bitte erneut beitreten.' });
 
             sessionId = s.id;
             session = s;
             me = player;
+            watcher = null;
             const playerIndex = myIndex();
 
             sessions.recordActivity(sessionId);
@@ -88,7 +93,7 @@ module.exports = function registerHandlers(io) {
             // Join a Socket.IO room for this session
             socket.join(sessionId);
 
-            ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex });
+            ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
             socket.emit('chat:history', { list: s.chat || [] });
 
             // Tell everyone a player (re-)connected
@@ -115,6 +120,24 @@ module.exports = function registerHandlers(io) {
                 });
             }
         });
+
+        /** Spectator mode: bind this socket as a viewer – sees everything, can't act or write. */
+        function watch(s, w, ack) {
+            sessionId = s.id;
+            session = s;
+            me = null;
+            watcher = w;
+            w.connected = true;
+            w.socketId = socket.id;
+            socket.join(sessionId);
+            ack({ ok: true, spectator: true, playerIndex: -1, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
+            socket.emit('chat:history', { list: s.chat || [] });
+            io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(s) });
+            if (s.status === 'draft' && s.draft) socket.emit('draft:update', engine.draftPayload(s));
+            if (s.status === 'playing' && s.state) {
+                socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, turn: turnInfo(s) });
+            }
+        }
 
         // ── Kick Player (Host only) ──────────────────────────────────────────
         on(socket, 'session:kick', (data, ack) => {
@@ -430,6 +453,7 @@ module.exports = function registerHandlers(io) {
 
         // ── Chat: text, emotes, map pings (utils/chat.js) ────────────────────
         on(socket, 'chat:send', (data, ack) => {
+            if (watcher) return ack({ error: 'Zuschauer können nicht schreiben.' });
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
             const r = chat.build({ slot: myIndex(), name: me.name }, data, `live:${sessionId}:${me.clientId}`);
             if (r.error) return ack({ error: r.error });
@@ -453,6 +477,14 @@ module.exports = function registerHandlers(io) {
                     players: publicPlayers(session), gameConfig: session.gameConfig,
                 });
             });
+            // spectators keep watching: the lobby, then the next game
+            for (const w of session.spectators || []) {
+                if (!w.connected || !w.socketId) continue;
+                io.to(w.socketId).emit('session:rematch', {
+                    playerIndex: -1, spectator: true, hostIndex: session.hostIndex,
+                    players: publicPlayers(session), gameConfig: session.gameConfig,
+                });
+            }
         });
 
         // ── Turn timer: an absent player takes their seat back from the KI ───
@@ -477,6 +509,13 @@ module.exports = function registerHandlers(io) {
         // ── Disconnect ───────────────────────────────────────────────────────
         socket.on('disconnect', () => {
             try {
+                if (watcher) {
+                    if (watcher.socketId !== socket.id) return;     // replaced by a newer connection
+                    watcher.connected = false;
+                    watcher.socketId = null;
+                    io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(session) });
+                    return;
+                }
                 // Ignore if this socket was kicked or replaced by a newer connection of the same player
                 if (!bound() || me.socketId !== socket.id) return;
                 const playerIndex = myIndex();
@@ -586,7 +625,7 @@ function checkGameOver(io, session) {
     processGameOverMmr(session, io, session.id, isRanked);
 }
 
-/** Send every connected player the fresh game state and their own state index. */
+/** Send every connected player the fresh game state and their own state index (spectators: -1). */
 function emitGameStart(io, session) {
     session.players.forEach((lobbyPlayer, lobbyIndex) => {
         if (lobbyPlayer.socketId) {
@@ -598,6 +637,10 @@ function emitGameStart(io, session) {
             });
         }
     });
+    for (const w of session.spectators || []) {
+        if (!w.connected || !w.socketId) continue;
+        io.to(w.socketId).emit('game:start', { state: engine.stateForPlayer(session.state, -1), yourIndex: -1, turn: turnInfo(session) });
+    }
 }
 
 /** Marathon: all abilities are drafted – start the real game with them. */

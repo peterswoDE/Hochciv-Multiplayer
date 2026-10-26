@@ -75,6 +75,7 @@ function createSession(gameConfig, hostInfo) {
             },
         ],
         state: null,                  // filled when game starts
+        spectators: [],               // { clientId, name, socketId, connected } – see addSpectator
     };
 
     sessions.set(sessionId, session);
@@ -114,6 +115,8 @@ function joinSession(joinCode, password, playerInfo) {
         fallbackName = fallbackName + " (2)";
     }
 
+    // a spectator who takes a free seat stops watching
+    if (session.spectators) session.spectators = session.spectators.filter(w => w.clientId !== String(playerInfo.clientId).slice(0, 100));
     session.players.push({
         index: playerIndex,
         name: fallbackName,
@@ -126,6 +129,33 @@ function joinSession(joinCode, password, playerInfo) {
     });
 
     return { sessionId, playerIndex };
+}
+
+/**
+ * Watch a session without a seat (spectator mode): with code and password, in any phase.
+ * A spectator can't act and can't write in the chat. Up to MAX_SPECTATORS at once; the same
+ * clientId comes back as the same spectator (reconnect). A player of the session stays a player.
+ * @returns {object|string} { sessionId, spectator: true } or error string
+ */
+function addSpectator(joinCode, password, info) {
+    const sessionId = codeIndex.get(String(joinCode).toUpperCase());
+    if (!sessionId) return 'Ungültiger Beitrittscode.';
+    const session = sessions.get(sessionId);
+    if (!session) return 'Sitzung nicht gefunden.';
+    if (session.password !== password) return 'Falsches Passwort.';
+    const clientId = String(info.clientId).slice(0, 100);
+    if (session.players.some(p => p.clientId === clientId)) return { sessionId, spectator: false };
+    if (!session.spectators) session.spectators = [];
+    if (session.spectators.some(w => w.clientId === clientId)) return { sessionId, spectator: true };
+    // room for a new one: forget spectators who are gone
+    if (spectatorCount(session) >= config.MAX_SPECTATORS) return 'Es schauen schon zu viele zu.';
+    session.spectators = session.spectators.filter(w => w.connected);
+    session.spectators.push({ clientId, name: cleanName(info.name, 'Zuschauer'), socketId: null, connected: false });
+    return { sessionId, spectator: true };
+}
+
+function spectatorCount(session) {
+    return (session.spectators || []).filter(w => w.connected).length;
 }
 
 /**
@@ -273,20 +303,24 @@ function resetForRematch(sessionId) {
     return session;
 }
 
+/** Public lobbies to join, and public games that are running (to watch: status ≠ 'lobby'). */
 function getPublicSessions() {
     const list = [];
     for (const [id, s] of sessions) {
-        if (s.status === 'lobby' && s.isPublic) {
-            list.push({
-                id: s.id,
-                joinCode: s.joinCode,
-                password: s.password,
-                hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
-                playersCount: s.players.length,
-                maxPlayers: humanSeats(s),
-                mapKey: s.gameConfig.mapKey || '0',
-            });
-        }
+        // nobody connected: abandoned, removed by the next cleanup – nothing to join or watch
+        if (!s.isPublic || s.status === 'finished' || !s.players.some(p => p.connected)) continue;
+        list.push({
+            id: s.id,
+            joinCode: s.joinCode,
+            password: s.password,
+            status: s.status,
+            hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
+            playersCount: s.players.length,
+            maxPlayers: humanSeats(s),
+            mapKey: s.gameConfig.mapKey || '0',
+            round: s.state ? s.state.round : null,
+            spectators: spectatorCount(s),
+        });
     }
     return list;
 }
@@ -302,6 +336,8 @@ function recordActivity(sessionId) {
 module.exports = {
     createSession,
     joinSession,
+    addSpectator,
+    spectatorCount,
     getSession,
     getSessionByCode,
     removeSession,

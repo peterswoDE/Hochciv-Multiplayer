@@ -367,6 +367,11 @@ async function list(user) {
         where: { isPublic: true, status: { [Op.in]: ['setup', 'playing'] }, [Op.not]: { participantIds: { [Op.contains]: [user.id] } } },
         attributes: attrs, order: [['updatedAt', 'DESC']], limit: 50,
     });
+    // Spectator mode: public games that are being played, to watch
+    const watch = await AsyncGame.findAll({
+        where: { isPublic: true, status: 'playing', [Op.not]: { participantIds: { [Op.contains]: [user.id] } } },
+        attributes: attrs, order: [['updatedAt', 'DESC']], limit: 20,
+    });
     const u = await User.findByPk(user.id);
     return {
         notifyEmail: u ? u.notifyEmail : true,
@@ -375,14 +380,19 @@ async function list(user) {
         mine: mine.map(summarize),
         invites: invites.map(summarize).filter(s => s.freeSeats.length && s.mySlot == null),
         open: open.map(summarize).filter(s => s.freeSeats.length),
+        watch: watch.map(summarize).filter(s => !s.freeSeats.length),
     };
 }
 
-/** A socket opens a game: participants only (also after a KI takeover, to watch). */
+/**
+ * A socket opens a game: its players (also after a KI takeover), and anybody for a public game
+ * that is being played (spectator mode – the view has no seat, actions and chat are refused).
+ */
 async function open(user, id) {
     const e = await getEntry(id);
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
-    if (!e.g.seats.some(s => s.userId === user.id)) return { error: 'Du spielst in diesem Spiel nicht mit.' };
+    const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);
+    if (!e.g.seats.some(s => s.userId === user.id) && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
     return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [] };
 }
 

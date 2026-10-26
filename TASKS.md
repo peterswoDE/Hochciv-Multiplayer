@@ -11,7 +11,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 1 | F2 | [Turn timer](#f2-turn-timer) | ✔ | – (7-day rule stays) | ✅ |
 | 2 | F3 | [Rematch](#f3-rematch) | ✔ | – | ✅ |
 | 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ✅ |
-| 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ⬜ |
+| 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ✅ |
 | 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ⬜ |
 | 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ⬜ |
 | 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ⬜ |
@@ -97,7 +97,18 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - Rundenspiele: public games can be watched from the list (read-only).
 - Spectators see the whole board, the log and the chat. They can't act or write in the chat. The player list shows how many are watching.
 
-**Status:** ⬜ planned
+**Implementation**
+- `sessions.js`: `session.spectators` (`{ clientId, name, socketId, connected }`), `addSpectator()` (code and password, any phase, at most `MAX_SPECTATORS` = 20 connected, the same clientId comes back, a player stays a player), and `spectatorCount()`. A spectator who takes a free seat with `joinSession` stops watching. `getPublicSessions()` also lists running public games (`status`, `round`, `spectators`) and leaves out sessions where nobody is connected.
+- `routes/api.js`: `POST /api/sessions/watch { joinCode, password, viewer: { name, clientId } }`.
+- `sockets/game.js`: `session:connect` with a spectator's clientId binds the socket as `watcher`, not as a player. Every player handler (`bound()`) then refuses, `chat:send` says *Zuschauer können nicht schreiben.*, and `game:start` / `draft:update` / state updates arrive like for players with `yourIndex: -1`. `spectators:update { count }` goes to the room. The rematch keeps spectators (`session:rematch` with `spectator: true`).
+- `routes/activity.js` / `activity/bridge.js`: a game that is already running, or a full lobby, makes the Discord user a spectator, and the bridge uses `MP.enterSession()`.
+- Rundenspiele (`async/service.js`): `open()` also lets non-players open public games that are being played or finished (read-only view: no seat, `myIndex: -1`). Actions and chat are refused by the existing checks. `list()` returns `watch`: running public games without a free seat.
+- `mp.js`: `MP.spectator`. `watch()` + `enterSession()` (shared after `session:connect`). The lobby mode `watching` shows "Du schaust zu" while the host hasn't started yet. *Zuschauen* in the join form, in the public list (running games: "Läuft · Runde n · 👁 k") and in the Rundenspiele list (section *Laufende öffentliche Spiele – zuschauen*). Actions and end of turn say *Du schaust nur zu.* `viewerHook` gives spectators the screens of the player on turn. Spectators see a note while start tiles are placed. The player list title shows "👁 n" and the HUD shows "👁 Zuschauer".
+- Texts in `client/i18n.js`.
+
+**Tests:** `tests/spectators/spectators.test.js`: the session store (limit, comeback, room after leaving, a player stays a player, a wrong password, the hand-over to a free seat), a live game (watching the lobby, the game from the start, refused actions and chat, the count, the public list, watching mid-game, every move arrives, the end screen, the rematch) and Rundenspiele (listed, read-only, refused actions and chat, a private game can't be watched).
+
+**Status:** ✅ on `development`
 
 ## F6 Post-game statistics
 

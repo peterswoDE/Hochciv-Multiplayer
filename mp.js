@@ -31,6 +31,8 @@ const MP = {
     WIN_BONUS: 10,          // points for the winner on top of victoryScore – same as utils/score.js
     TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
     turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
+    spectator: false,       // watching without a seat (live game or public Rundenspiel)
+    spectatorCount: 0,      // live game: how many are watching
 
     /** Live game: the KI plays our seat because we missed our turns (turn timer). */
     isAfk: function () {
@@ -250,6 +252,8 @@ const MP = {
         if (!box || !list) return;
         if (!this.active || typeof S === 'undefined' || !S || !S.players) { box.style.display = 'none'; return; }
         box.style.display = '';
+        const title = $('mp-players-title');
+        if (title) title.textContent = TX('Spieler') + (this.spectatorCount ? ` · 👁 ${this.spectatorCount}` : '');
         list.innerHTML = S.players.map((sp, i) => {
             const lp = this.lobbyPlayerOf(sp) || {};
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ, color: '#999' };
@@ -331,11 +335,11 @@ const MP = {
     },
     /** The host started a rematch: leave the finished game for the lobby. */
     enterRematch: async function (data) {
-        this.lobbyIndex = data.playerIndex;
+        this.lobbyIndex = this.spectator ? null : data.playerIndex;
         this.hostIndex = data.hostIndex;
         this.players = data.players;
         this.gameConfig = data.gameConfig || {};
-        this.playerIndex = null;
+        this.playerIndex = this.spectator ? -1 : null;
         this.lastTurnKey = null;
         this.placementFinished = false;
         this.setTurnClock(null);
@@ -347,7 +351,7 @@ const MP = {
         closeModal();
         show('screen-menu');
         await this.showLobby();
-        this.setMode('waiting');
+        this.setMode(this.spectator ? 'watching' : 'waiting');
         toast(TX('Revanche! Ihr seid zurück in der Lobby.'));
     },
 
@@ -417,6 +421,10 @@ const MP = {
                 toast(data && data.reason ? TXS(data.reason) : TX('Du wurdest vom Host gekickt.'));
                 MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
             });
+            this.socket.on('spectators:update', data => {
+                MP.spectatorCount = data && data.count || 0;
+                MP.updatePlayerList();
+            });
             this.socket.on('session:rematch', data => {
                 if (MP.asyncId) return;
                 MP.enterRematch(data);
@@ -433,6 +441,8 @@ const MP = {
 
             this.socket.on('placement:start', data => {
                 MP.renderLobby = null; closeModal();
+                // spectators see the map once every start tile lies (game:start)
+                if (MP.spectator) return modal(TX('Zuschauen'), `<p>${TX('Die Spieler legen ihre Startplättchen. Die Karte erscheint, sobald alle gelegt haben.')}</p>`);
 
                 // Clever trick: Tell the native random map generator that EVERY other player across the network is a Bot!
                 // This tricks the native UI to instantly autocomplete them and ONLY present the single local player queue 
@@ -500,6 +510,7 @@ const MP = {
                 MP.renderLobby = null; // Prevent Lobby from opening mid-game on reconnects
                 closeModal();
                 startGameScreen();
+                MP.updatePlayerList();
             });
 
 
@@ -533,6 +544,8 @@ const MP = {
 
     syncTurnBlocker: function () {
         MP.drawAfkBanner();
+        const wait = document.querySelector('.mp-waiting-toast');
+        if (wait && MP.spectator) wait.textContent = TX('Du schaust zu');
         if (S && !MP.isMyTurn() && !S.over) {
             document.body.classList.add('mp-waiting');
         } else {
@@ -653,6 +666,7 @@ const MP = {
           <label class="row"><span>${TX('Passwort')}</span><input type="number" id="mp-p" style="width:100px"></label>
           <label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${savedName}"></label>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">${TX('Beitreten')}</button>
+          <button class="btn wide ghost" onclick="MP.watch($('mp-c').value.trim(), $('mp-p').value.trim(), $('mp-n').value.trim())">${TX('Zuschauen')}</button>
         `;
             } else if (mode === 'host') {
                 const savedName = localStorage.getItem('mp-name') || 'Host';
@@ -681,15 +695,22 @@ const MP = {
                                 c.innerHTML = `<p class="sub">${TX('Keine öffentlichen Lobbys gefunden.')}</p>`;
                                 return;
                             }
+                            // lobbies to join, and running games to watch (spectator mode)
                             c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
-                                list.map(l => `
+                                list.map(l => {
+                                    const running = l.status && l.status !== 'lobby';
+                                    const info = running
+                                        ? (l.round ? TX('Läuft · Runde %s', escHtml(l.round)) : TX('Läuft')) + (l.spectators ? ` · 👁 ${escHtml(l.spectators)}` : '')
+                                        : TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers));
+                                    const btn = running
+                                        ? `<button class="btn small" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, ($('mp-pln') || {}).value)">${TX('Zuschauen')}</button>`
+                                        : `<button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>`;
+                                    return `
                                 <tr style="border-bottom:1px solid #ccc;">
-                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers))}</small></td>
-                                    <td style="padding: 8px 4px; text-align:right;">
-                                        <button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>
-                                    </td>
-                                </tr>
-                            `).join('') + '</table>';
+                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${info}</small></td>
+                                    <td style="padding: 8px 4px; text-align:right;">${btn}</td>
+                                </tr>`;
+                                }).join('') + '</table>';
                         })
                         .catch(() => {
                             const c = $('mp-pl-container');
@@ -699,6 +720,16 @@ const MP = {
 
                 fetchList();
                 this._publicListTimer = setInterval(fetchList, 5000);
+            } else if (mode === 'watching') {
+                // spectator of a live game that has not started yet
+                h = `
+          <h3>${TX('Du schaust zu')} <span class="sub" style="float:right">${TX('Code')}: <b>${escHtml(this.joinCode)}</b></span></h3>
+          <p>${TX('Das Spiel beginnt, sobald der Host es startet – du siehst es dann von Anfang an.')}</p>
+          <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
+            ${this.players.map(p => `<tr><td><b>${escHtml(p.name)}</b> ${p.index === this.hostIndex ? `(${TX('Host')})` : ''}</td><td>${p.connected ? TX('Verbunden') : TX('Wartet')}</td></tr>`).join('')}
+          </table>
+          <button class="btn wide ghost" onclick="location.reload()">${TX('Zuschauen beenden')}</button>
+        `;
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 const cnt = this.lobbyCounts();
@@ -901,6 +932,7 @@ const MP = {
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
+                this.spectator = false;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
@@ -919,6 +951,48 @@ const MP = {
             console.error(e);
             toast(TX('Server nicht erreichbar: %s', e.message));
         }
+    },
+
+    /** Spectator mode: watch a live game (or its lobby) with code and password. */
+    watch: async function (joinCode, password, name) {
+        if (!joinCode || !password) return toast(TX('Bitte Code und Passwort eingeben.'));
+        name = (name || localStorage.getItem('mp-name') || TX('Zuschauer')).trim();
+        try {
+            toast(TX('Verbinde...'));
+            const res = await fetch(`${this.serverUrl}/api/sessions/watch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ joinCode, password, viewer: { name, clientId: this.getClientId() } })
+            });
+            const data = await res.json();
+            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
+            this.sessionId = data.sessionId;
+            this.joinCode = joinCode.toUpperCase();
+            this.password = password;
+            await this.connect();
+            this.socket.emit('session:connect', { sessionId: this.sessionId, clientId: this.getClientId(), password }, ack => {
+                if (ack.error) return toast(TXS(ack.error));
+                this.enterSession(ack);
+            });
+        } catch (e) {
+            console.error(e);
+            toast(TX('Server nicht erreichbar: %s', e.message));
+        }
+    },
+    /** After session:connect: take over the lobby state (players, settings, host, our seat or spectator). */
+    enterSession: function (ack) {
+        this.active = true;
+        this.spectator = !!ack.spectator;
+        this.lobbyIndex = this.spectator ? null : ack.playerIndex;
+        if (this.spectator) this.playerIndex = -1;
+        this.players = ack.players;
+        this.gameConfig = ack.gameConfig || {};
+        this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
+        this.spectatorCount = ack.spectators || 0;
+        const credBox = $('mp-cred-box');
+        if (credBox) credBox.textContent = this.spectator ? `👁 ${TX('Zuschauer')} · Code: ${this.joinCode}` : `Code: ${this.joinCode}  PW: ${this.password}`;
+        if (ack.status === 'lobby') this.setMode(this.spectator ? 'watching' : 'waiting');
+        else toast(TX('Spiel läuft, lade Zustand...'));
     },
 
     joinPublic: async function (joinCode, password) {
@@ -955,6 +1029,7 @@ const MP = {
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
+                this.spectator = false;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
@@ -1019,6 +1094,7 @@ const MP = {
                 if (ack.error) return toast(TXS(ack.error));
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
                 this.active = true;
+                this.spectator = false;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || config;
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
@@ -1380,7 +1456,8 @@ if (originalDraftChoose) {
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────
 // The game shows its screens for the player who looks at them (viewer in ui.js) – here that is
 // always the own empire, also during other players' turns (e.g. the tech tree).
-if (typeof viewerHook !== 'undefined') viewerHook = () => (MP.active && Number.isInteger(MP.playerIndex) ? MP.playerIndex : null);
+// Spectators (playerIndex -1) see the screens of the player on turn, as in a local game.
+if (typeof viewerHook !== 'undefined') viewerHook = () => (MP.active && Number.isInteger(MP.playerIndex) && MP.playerIndex >= 0 ? MP.playerIndex : null);
 // A game without that (v83, only for Rundenspiele started on it) would show the tree of the
 // player on turn – there "Forschen" stays blocked while it is not your turn (CSS below).
 else document.documentElement.classList.add('mp-no-viewer');
@@ -1410,6 +1487,7 @@ for (const [fnName, makePayload] of Object.entries(ACTIONS)) {
     if (!orig) continue; // safety check
     window[fnName] = function (state, ...args) {
         if (MP.active) {
+            if (MP.spectator) return TX('Du schaust nur zu.');
             const pi = fnName === 'moveArmy' ? args[0].owner : args[0];
             if (pi !== MP.playerIndex) return TX('Du bist nicht am Zug (oder nicht deine Armee).');
 
@@ -1434,6 +1512,7 @@ const patchTurnButton = setInterval(() => {
         aEnd.onclick = () => {
             if (MP.active) {
                 if (!S || S.over) return;
+                if (MP.spectator) return toast(TX('Du schaust nur zu.'));
                 if (!MP.isMyTurn()) return toast(TX('Du bist nicht am Zug!'));
                 if (typeof ui !== 'undefined' && ui.botLock) return;
                 // Hard block from ui.js (v80+): an army still standing in a city prevents
@@ -1646,6 +1725,7 @@ const ASYNC = {
             ${section(TX('Warten auf andere'), waiting, TX('Keine.'))}
             ${section(TX('Einladungen'), d.invites, TX('Keine offenen Einladungen.'))}
             ${section(TX('Offene Spiele'), d.open, TX('Keine öffentlichen Spiele mit freiem Platz.'))}
+            ${(d.watch || []).length ? section(TX('Laufende öffentliche Spiele – zuschauen'), d.watch, '') : ''}
             ${takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15), '') : ''}
             <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="#" onclick="MP.showAccountModal(); return false;">${TX('Spielhistorie')}</a>`)}</p>
             <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
@@ -1672,6 +1752,7 @@ const ASYNC = {
         const member = g.mySlot != null;
         const btns = [];
         if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">${TX('Öffnen')}</button>`);
+        else if (g.status === 'playing' && !g.freeSeats.length) btns.push(`<button class="btn small" onclick="ASYNC.open('${g.id}')">${TX('Zuschauen')}</button>`);
         else btns.push(`<button class="btn small primary" onclick="ASYNC.showJoin('${g.id}')">${TX('Beitreten')}</button>`);
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
@@ -1958,6 +2039,7 @@ const ASYNC = {
     enter: function (view) {
         MP.active = true;
         MP.asyncId = view.id;
+        MP.spectator = view.mySlot == null;          // a public game opened to watch
         MP.sessionId = null;
         MP.renderLobby = null;
         MP.lobbyIndex = view.mySlot;
@@ -1965,7 +2047,7 @@ const ASYNC = {
         this.view = null;
         this.placing = false;
         const credBox = $('mp-cred-box');
-        if (credBox) credBox.textContent = TX('Rundenspiel %s · Liste', view.joinCode);
+        if (credBox) credBox.textContent = view.mySlot == null ? `👁 ${TX('Zuschauer')} · ${TX('Liste')}` : TX('Rundenspiel %s · Liste', view.joinCode);
         this.apply(view);
     },
 
@@ -1974,6 +2056,7 @@ const ASYNC = {
         if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
         MP.asyncId = null;
         MP.active = false;
+        MP.spectator = false;
         this.view = null;
         this.placing = false;
         document.body.classList.remove('mp-waiting');
@@ -1988,7 +2071,7 @@ const ASYNC = {
         this.view = view;
         MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
         const toastEl = document.querySelector('.mp-waiting-toast');
-        if (toastEl) toastEl.textContent = view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
+        if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
 
         if (view.status === 'cancelled') {
             toast(TX('Das Rundenspiel wurde abgebrochen.'));

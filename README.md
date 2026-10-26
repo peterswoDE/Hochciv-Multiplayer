@@ -15,6 +15,7 @@ Planned and in-progress features for the multiplayer experience are tracked in [
 * **Admin panel:** Server status, maintenance mode, registration switch, lobby and user management, OAuth configuration.
 * **Reconnects:** Players who lose their connection or reload the page are put back into their seat.
 * **In-game chat:** In live games and Rundenspiele: text messages, quick emotes and map pings (📍, then tap a hex, and it pulses on every screen). A Rundenspiel keeps its last 200 messages with the game and shows unread messages when it is opened again. Players can mute others on their own device, and the server limits each sender to 5 messages in 10 seconds.
+* **Spectator mode:** *Zuschauen* with code and password, or from the public list, which also shows running public games. Spectators see the board, the log and the chat, but can't act or write; the player list shows how many are watching (up to 20). In the Discord Activity, whoever joins a running game or a full lobby watches. Public Rundenspiele can be watched from the Rundenspiele list.
 * **Rematch (live games):** On the end screen the host can start a *Revanche*. Everyone still connected goes back to the same lobby (same code and settings, everyone's own choice of nation) and can start the next game from there.
 * **Turn timer (live games):** The host sets the time per turn: no limit (default), or 1 to 10 minutes. A countdown runs in the HUD. When the time is up, the KI finishes the turn. After three missed turns in a row, the KI keeps playing the seat until the player clicks *Ich bin zurück*.
 
