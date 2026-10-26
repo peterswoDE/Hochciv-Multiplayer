@@ -403,6 +403,11 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
    „Tutorial beenden" – dort gehört er über die Karte. */
 html.w-side body.tut .toast{left:auto;right:16px;transform:translateY(-18px);max-width:58%}
 html.w-side body.tut .toast.show{transform:none}
+/* Während der Kampf nachgespielt wird (v90), liegt der Hinweis über der gesperrten
+   Aktionsleiste: oben verdeckte er die Werte von Kämpfen in den oberen Reihen. */
+.toast.unten,html.w-side body.tut .toast.unten{left:50%;right:auto;top:auto;bottom:calc(11px + var(--safe-b));
+  transform:translateX(-50%) translateY(18px);max-width:86%}
+.toast.unten.show,html.w-side body.tut .toast.unten.show{transform:translateX(-50%)}
 
 /* Die folgenden Klassen setzt syncLayout() auf <html>. Bewusst keine Media Queries:
    im gedrehten Hochformat (html.turn) misst eine Media Query den ungedrehten Viewport

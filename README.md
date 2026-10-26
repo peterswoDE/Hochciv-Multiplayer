@@ -18,11 +18,11 @@ Authoritative multiplayer backend for **Hochciv**, built with Node.js, Express, 
 The game ships with this repository – nothing is downloaded, neither when the image is built nor at container start:
 
 * `HochCiv/` – the current game (based on [timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv), with the multiplayer changes). Served at `/`; its engine runs live games and new Rundenspiele.
-* `HochCiv-v87/`, `HochCiv-v83/` – versions that were deployed before (v87, v83), unchanged. Rundenspiele started on one of them keep playing with its rules until they end: the server runs its engine for them, and `mp.js` opens them in that version at `/v87/` or `/v83/`. Once no such game is running any more, the folder can be removed (together with its entry in `GAME_DIRS` in `engine-adapter.js`, `GAMES` in `scripts/build-public.js`, `OLD_VERSIONS` in `mp.js` and the volume in `docker-compose.local.yml`).
+* `HochCiv-v88/`, `HochCiv-v87/`, `HochCiv-v83/` – versions that were deployed before (v88, v87, v83), unchanged. Rundenspiele started on one of them keep playing with its rules until they end: the server runs its engine for them, and `mp.js` opens them in that version at `/v88/`, `/v87/` or `/v83/`. Once no such game is running any more, the folder can be removed (together with its entry in `GAME_DIRS` in `engine-adapter.js`, `GAMES` in `scripts/build-public.js`, `OLD_VERSIONS` in `mp.js` and the volume in `docker-compose.local.yml`).
 
 This server adds multiplayer on top of the game:
 
-1. **Build** – `scripts/build-public.js` (run by the Dockerfile and again at container start) copies all versions into `public/`, `public/v87/` and `public/v83/`, leaving out development files (tests, tools, notes).
+1. **Build** – `scripts/build-public.js` (run by the Dockerfile and again at container start) copies all versions into `public/`, `public/v88/`, `public/v87/` and `public/v83/`, leaving out development files (tests, tools, notes).
 2. **Inject** – it copies `mp.js` into each copy and, via `inject.js`, adds three scripts to its `index.html`: the Socket.IO client (served by this server), `mp.js` and the Discord Activity bridge.
 3. **Hook** – in the browser, `mp.js` replaces the game's action functions so that moves are sent to the server, and adds the lobby, login and account UI.
 4. **Rules on the server** – `engine-adapter.js` loads the same game files into the server (one sandbox per version) and applies every move there. Each Rundenspiel records the version it was started with (`engine`); games from before that have none and are v83.
@@ -146,7 +146,7 @@ docker compose -f docker-compose.local.yml up -d --build
 ```
 
 * Game: <http://localhost:3000>, database: `localhost:5432` (only from this machine; user/password `hochciv` / `password123`).
-* The server code and the game (`HochCiv/`, `HochCiv-v87/`, `HochCiv-v83/`) are mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local` (`public/` is rebuilt at start). Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
+* The server code and the game (`HochCiv/`, `HochCiv-v88/`, `HochCiv-v87/`, `HochCiv-v83/`) are mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local` (`public/` is rebuilt at start). Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
 * Runs without `NODE_ENV=production`: e-mails (activation codes, reset codes) are printed to the log (`docker logs hochciv-multiplayer-local`).
 * Optional SMTP settings can go into `secrets.env` (gitignored).
 * Make yourself admin: `docker exec hochciv-multiplayer-local node elevate.js <username> superadmin`.
@@ -158,7 +158,7 @@ npm install
 npm start
 ```
 
-You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`). Run `node scripts/build-public.js` once (and after changes to the game or `mp.js`) so the server can serve the game page; the engine is always loaded from `HochCiv/` (and `HochCiv-v87/`, `HochCiv-v83/`).
+You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`). Run `node scripts/build-public.js` once (and after changes to the game or `mp.js`) so the server can serve the game page; the engine is always loaded from `HochCiv/` (and `HochCiv-v88/`, `HochCiv-v87/`, `HochCiv-v83/`).
 
 ## Architecture
 
@@ -168,7 +168,7 @@ You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`
 * `maps/service.js` – Custom maps in the account: save (checked with the engine's `checkCustomMap`), publish with a code, load by code. Deleting an account deletes its maps; merging accounts moves them.
 * `routes/activity.js` – Discord Activity: OAuth code exchange and one lobby per activity instance.
 * `activity/` – Discord Activity bridge for the browser (`bridge.js`). `build.js` bundles it with the Embedded App SDK (`npm run build:activity`; the Dockerfile does this in a build stage). The bundle is served as `/js/activity.js`.
-* `HochCiv/`, `HochCiv-v87/`, `HochCiv-v83/` – the game (current version, and v87/v83 for Rundenspiele started on them).
+* `HochCiv/`, `HochCiv-v88/`, `HochCiv-v87/`, `HochCiv-v83/` – the game (current version, and v88/v87/v83 for Rundenspiele started on them).
 * `scripts/build-public.js` – builds `public/` from the game; `inject.js` patches each copy's `index.html` (Socket.IO client, `mp.js`, Activity bridge).
 * `sockets/game.js` – Live games: lobby, start, moves, placement, draft, reconnects.
 * `sockets/async.js`, `async/` – Rundenspiele: rules, storage, notifications, timeouts.

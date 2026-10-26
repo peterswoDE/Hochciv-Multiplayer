@@ -43,6 +43,13 @@ Datei beschreibt die Standardregeln; die experimentelle Variante v2 steht in Abs
 - Eroberung: -2 Bevoelkerung (Rittertum -1, Militaergericht 0). Bleibt 0 uebrig, wird die
   Stadt zerstoert. Die Stadt faellt, wenn der Angriff **zwei aufeinanderfolgende eigene
   Zuege** hoeher war; sinkt er dazwischen, beginnt die Zaehlung neu.
+- **Reihenfolge am Zugende:** erst die Städte, dann das Flankieren – so bis v89 und wieder seit
+  v91 (Anweisung des Autors). Eine Armee an ihrer Stadt verteidigt diese also mit, auch wenn sie
+  im selben Zug noch weggeflankt wird; eine laufende Belagerung bricht dann ab, die Stadt fällt
+  nicht. Eine Eroberung wirkt dagegen schon auf das Flankieren desselben Zugs (eroberte Stadt mit
+  Burgenbau als Position, Kriegerkultur, Zeus, Bot-Macht = Bevölkerung). v90 hatte die
+  Reihenfolge umgedreht – dann fielen verteidigte Städte. Die Beutezüge der Wikinger werden vor
+  beidem festgehalten. Abschnitte „(v90)" und „(v91)" am Ende.
 
 ## 2. Bewegung und Armeen
 
@@ -254,6 +261,8 @@ Die früher „experimentell v2" genannten Regeln **sind** jetzt die Regeln. Das
   normale Technologien.
 - **Verbundwerkstoffe**: 1× zusätzliches, **kostenloses** Wachstum pro Stadt und Runde.
   Allein also 2×, mit Keramik bis 3×, davon eins gratis. Eigener Knopf „Kostenlos wachsen".
+  *(Seit v89 gibt auch die Dampfmaschine einen bezahlten Schritt mehr – mit Keramik und
+  Dampfmaschine bis 4×, davon eins gratis; siehe Abschnitt v89.)*
   Bezahltes und kostenloses Kontingent werden **getrennt** geführt (`growLimits().paid` bzw.
   `.free`, verbraucht über `city.grown` und `city.freeUsed`): das Gratis-Kontingent lässt
   sich nicht in einen zweiten **bezahlten** Schritt umwandeln. Vorher prüfte `canGrowPaid`
@@ -4345,7 +4354,8 @@ deutsch und englisch – Blatt, Zahl an der Leiste, beide „Weiter".
 * **Texte:** Die Techtexte nennen die Summe und die eingeschlossenen Technologien („Wald: +3
   Wissenschaft (inkl. Mathematik, Elektrizität)", englisch „Forest: +3 science (incl.
   Mathematics, Electricity)"); die ersten Glieder und die einzelnen bleiben, wie sie waren.
-  Der Regelbogen erklärt die Regel in einem Absatz unter der Geländetabelle.
+  Der Regelbogen erklärt die Regel in einem Absatz unter der Geländetabelle. *(Seit v89 ohne
+  „inkl. …" – Anweisung des Autors, siehe dort.)*
 
 ### Belagerungsmaschinen +3
 
@@ -4434,6 +4444,330 @@ Sichtkontrolle in Chromium (iPad quer, deutsch und englisch; Telefon quer): Haup
 Technologiebogen mit den längeren Texten (Kacheln brechen sauber um, wie schon bei längeren
 Texten), Ertragsübersicht mit Bürokratie ohne Zusatz, der Satz im Regelbogen unter der
 Geländetabelle.
+
+## Doppeltipp auf nachgerückte Knöpfe · Ertragstexte ohne „inkl." · Dampfmaschine: ein Wachstum mehr (v89)
+
+**Rückmeldung und Wunsch des Autors (24.10.):**
+1. „Beim Öffnen von Fähigkeiten wachsen manchmal alle Städte sofort ganz" – ohne Weg, es
+   nachzustellen.
+2. Die Zusätze „inkl. Mathematik" usw. von den Technologiekacheln entfernen.
+3. Die Dampfmaschine erlaubt ein zusätzliches Wachstum; Keramik im Wortlaut daran angleichen.
+
+### „Alle Städte wachsen" ohne Absicht (gemeldet, die Ursache nur eingegrenzt)
+
+* **Was es nicht ist:** Das Öffnen selbst ändert am Spielstand nichts. Geprüft in jsdom über
+  20 Partien mit je bis zu 8 Zügen, zufälligen Technologien (darunter Keramik,
+  Verbundwerkstoffe, Dampfmaschine, Gentechnik, Massenmedien, Sklaverei), Mitteln, Städten und
+  Griechenlands drei Fähigkeiten, gegen Bots und KI: Spielstand vor und nach dem Öffnen (zweimal) Zeichen für
+  Zeichen gleich. Die Vorschau der Sammelaktionen läuft auf einer Kopie (`growAllPlan`), die
+  Zahl an der Leiste (`freeActions`) liest nur. Ein Doppeltipp auf „Fähigkeiten" erreicht das
+  Blatt nicht: die Leiste liegt darüber (`z-index` 26 gegen 25), auch während das Blatt
+  hereingleitet (in Chromium in neun Fenstergrößen, hochkant und quer, nachgeprüft).
+* **Was sich nachstellen ließ** (Chromium, iPad quer 1180 × 820 und hochkant 810 × 1080, echte
+  Tipps): Griechenland mit Freier Forschung, ein langes Blatt (viele verfügbare Technologien,
+  Spionage mit vielen kopierbaren). Wer eine Technologie der Freien Forschung wählt und 0,12 s
+  später noch einmal an dieselbe Stelle tippt (Doppeltipp, oder weil der erste Tipp nicht zu
+  wirken schien), trifft – je nach Zeile – „Alle Städte wachsen" oder „Kopieren": Nach der Wahl
+  zeichnet sich das Blatt neu, die Liste der Freien Forschung verschwindet, und der Rest rückt
+  nach oben unter den Finger. Ebenso nach einer Kopie (die nächste rückt nach) und im
+  Stadtblatt nach „Kostenlos wachsen" („Bevölkerung wachsen" rückt an seine Stelle).
+  Außerdem gleitet jedes Blatt beim Öffnen 0,18 s lang ins Bild – ein früher Tipp trifft, was
+  gerade vorbeizieht.
+* **Ob das der gemeldete Fall war, ist nicht belegt** – die Meldung nennt keinen Tipp nach
+  dem Öffnen. Es ist der einzige Weg, der sich gefunden hat; mit Keramik zweimal getroffen,
+  wüchsen die Städte auch „ganz".
+* **Behebung:** Ein Knopf im Blatt zählt erst 0,4 s (`SHEET_CALM_MS`) nach dem Öffnen oder
+  Neuzeichnen (`sheet()` setzt `sheetCalm.until`; eine Erfassung am Blatt, `sheetCalmGuard`,
+  verwirft den Klick vor dem `onclick`). **Ausnahme 1:** derselbe Knopf, dessen Tipp das Blatt
+  neu gezeichnet hat (erkannt an `data-act`/`data-label`, nicht an der Zufalls-id) – zweimal
+  „+1 Macht" oder noch einmal „Bevölkerung wachsen" bleiben flott, das ist gewollt. **Ausnahme
+  2:** das Blatt eines Bot- oder KI-Zugs (`locked`) – dort gibt es nur „Weiter".
+  Nachgeprüft in Chromium: Tipp 0,25 s nach dem Öffnen auf „Alle Städte wachsen" – nichts;
+  Freie Forschung und Doppeltipp – nur die Technologie; bewusster Tipp danach – alle Städte
+  wachsen; zweimal schnell „+1 Macht" – +2.
+* **Auslegung – 0,4 s:** länger als der Abstand eines Doppeltipps, kürzer als die Zeit, ein neu
+  gezeichnetes Blatt zu lesen und bewusst zu tippen. Ein verworfener Tipp bleibt stumm.
+* **Nicht gemacht:** eine Rückfrage vor „Alle Städte wachsen" („Nochmal tippen") – sie hätte
+  auch den gefundenen Fall verhindert, macht aber jede bewusste Nutzung umständlicher.
+
+### Ertragstexte ohne „inkl."
+
+* Die Techtexte nennen nur noch die Summe, die das Glied setzt: „Wald: +3 Wissenschaft",
+  „Meer: +2 Nahrung, +1 Münze", englisch „Forest: +3 science" – auf den Kacheln, im Regelbogen
+  und überall, wo der Text steht (eine Quelle: TECHS und `DATA_EN`). Die Regel selbst erklärt
+  weiter der Absatz unter der Geländetabelle im Regelbogen.
+
+### Dampfmaschine: ein bezahltes Wachstum mehr
+
+* `growLimits`: ein bezahlter Schritt je Stadt und Runde, je einer mehr für Keramik und
+  Dampfmaschine (`GROW_EXTRA_PAID`), dazu einer kostenlos mit Verbundwerkstoffen. Alle drei:
+  3 bezahlte und 1 kostenloser Schritt. Die Dampfmaschine streicht weiter die Münzkosten –
+  auch für den zusätzlichen Schritt.
+* **Texte:** Keramik „1× zusätzliches Wachstum pro Stadt" (vorher „Bevölkerung 2× pro Runde
+  wachsen lassen"), Dampfmaschine „Keine Münzkosten für Bevölkerungswachstum; 1× zusätzliches
+  Wachstum pro Stadt" – im Stil von Verbundwerkstoffe („1× zusätzliches, kostenloses Wachstum
+  pro Stadt"). Englisch „One extra growth per city" bzw. „No coin cost for population growth;
+  one extra growth per city".
+* **Auslegung – „pro Stadt" heißt je Stadt und Runde**, wie bei Keramik und Verbundwerkstoffe.
+* **KI:** Sie wächst über die Regel (`canGrowPaid`), nutzt den Schritt also von selbst. Ihr
+  fester Zuschlag für die Dampfmaschine (`kiTechBonus`) bekommt den Anteil, den Keramik für
+  denselben Schritt hat (0,5 · H je Stadt, höchstens 6 Städte). Bots wachsen nach ihren
+  eigenen Würfelregeln und merken nichts davon.
+* **Gemessen** (`tools_ki.js`, dieselben Startwerte mit v88 und v89 – der Unterschied ist nur
+  die Dampfmaschine samt KI-Zuschlag):
+
+  | Reihe | v88 | v89 |
+  |---|---|---|
+  | `selbst 100` (KI gegen KI, Duell) | Forschung 43, Wirtschaft 29, Militär 28 | Forschung 39, Wirtschaft 36, Militär 25 |
+  | `selbst 40 reiche=4` | Militär 34, Forschung 6 | Militär 34, Forschung 6 |
+  | `duell 60 diff=david` | KI 29, Bot 31 · Militär 33, Wirtschaft 14, Forschung 13 | KI 30, Bot 30 · Militär 30, Wirtschaft 13, Forschung 17 |
+  | `vier 40 diff=koenig` | KI 14, Bots 26 · Militär 37, Forschung 3 | KI 14, Bots 26 · Militär 36, Forschung 4 |
+
+  Gegen Bots gewinnt die KI so oft wie vorher; KI gegen KI enden mehr Duelle mit dem
+  Wirtschaftssieg (29 → 36 von 100) – plausibel, mehr Wachstum heißt mehr Anteil an der
+  Weltbevölkerung. Endrunde überall unverändert (Median 5 bzw. 6). Kleine Reihen.
+
+### Abgesichert
+
+`test.js`: Dampfmaschine allein zwei bezahlte Schritte ohne Münzkosten, ein dritter nicht;
+alle drei Wachstumstechnologien 3 + 1 Schritte, in gemischter Reihenfolge, ein fünfter nicht;
+Keramik und Dampfmaschine drei bezahlte; „Alle Städte wachsen" dreimal je ein Schritt; die
+Texte deutsch und englisch, und genau die Technologien, deren Text den Schritt nennt, stehen in
+`GROW_EXTRA_PAID`. Ertragstexte: aus der Kette nachgerechnet ohne Zusatz, keiner sagt mehr
+„inkl."/„incl.".
+`smoke.js`, Schritt „v89" mit echten Klick-Ereignissen: Tipp gleich nach dem Öffnen auf „Alle
+Städte wachsen" – nichts; Freie Forschung, dann sofort „Alle Städte wachsen" und „Kopieren" –
+nur die Technologie; nach der Pause bewusst – wirkt; zweimal „+1 Macht" – +2; Stadtblatt:
+„Kostenlos wachsen", dann sofort „Bevölkerung wachsen" – +1; „Weiter" im Bot-Blatt sofort.
+Schritt „v88": die Kacheln ohne „inkl.", deutsch und englisch.
+Gegenproben (je eine Stelle absichtlich falsch): ohne Wache, alles sperren (auch denselben
+Knopf), das Bot-Blatt mitsperren, die Dampfmaschine nicht in `GROW_EXTRA_PAID`, Keramik mit
+altem Text, „incl." wieder an einem Text – jede schlägt an.
+
+## Kampf am Zugende nachgespielt · erst Flanken, dann Städte · Zugfolge nach Plätzen (v90)
+
+**Wunsch des Autors (24.10.):**
+1. Am Zugende jeden Kampf einzeln zeigen – „erst die Flankierungen, dann die Städte" –, mit den
+   Machtwerten von Angreifer und Verteidiger auf dem Kampffeld, je 1 s, dann auflösen und zum
+   nächsten Kampf. So soll man folgen können.
+2. Mit mehreren gleichen Zivilisationen ist die Zugfolge seltsam – sie soll an den Plätzen
+   hängen.
+
+### Erst die Flankierungen, dann die Städte (Regeländerung)
+
+**In v91 zurückgenommen** (Anweisung des Autors, Abschnitt „(v91)" am Ende): es gilt wieder erst
+die Städte, dann das Flankieren. Was hier zur Reihenfolge steht, beschreibt nur v90.
+
+* **Bis v89 rechnete `combatPhase` umgekehrt:** erst alle Belagerungen, dann das Flankieren.
+  Das stand in keinem Dokument. Ein Nachspiel, das in anderer Reihenfolge zeigt, als gerechnet
+  wird, wäre falsch – eine eben weggeflankte Armee verteidigte im nächsten Bild noch ihre
+  Stadt. Deshalb rechnet seit v90 auch die Regelmaschine in der genannten Reihenfolge. **Zum
+  Zurückdrehen angeboten** (offener Punkt 44): Städte wieder zuerst hieße, die beiden Blöcke in
+  `combatPhase` zu tauschen – das Nachspiel folgt dann von selbst.
+* **Was sich ändert – in beide Richtungen** (aus dem Code; die Häufigkeit unten gemessen):
+  (a) Eine weggeflankte Armee verteidigt ihre Stadt im selben Zug nicht mehr mit – das hilft
+  dem Angreifer. (b) Was erst eine Eroberung möglich machte, kommt für das Flankieren desselben
+  Zugs jetzt zu spät: eine eroberte Stadt mit Burgenbau als Flankenposition, die Kriegerkultur
+  (+2 Macht je Stadt mit Burgenbau) bei Eroberer und Verlierer, Zeus mit der Stadt, und bei
+  Bots die Macht (= Bevölkerung), die mit einer verlorenen Stadt sinkt. Das hilft dem
+  Verteidiger.
+* **Unverändert:** die Beutezüge der Wikinger (vor allen Kämpfen festgehalten), der Ablauf
+  einer Belagerung (zwei Treffer in Folge), Gleichstand hält.
+* **KI:** Sie bewertet ihre Züge mit `combatPhase` selbst (`kiScore`), sieht die neue
+  Reihenfolge also von selbst. Ihre Gewichte sind nicht neu abgestimmt.
+* **Gemessen, wie oft die Reihenfolge zählt** (`tools_ki.js` mit dem neuen Schalter
+  `reihenfolge`: jede echte Kampfphase läuft zusätzlich auf einer Kopie in alter Reihenfolge,
+  verglichen werden Armeen, Städte, Belagerungen und Spielende; Startwerte wie v88/v89):
+
+  | Reihe | Kampfphasen mit Kampf | davon Flanke und Stadt | Ergebnis anders | für den Angreifer besser / schlechter |
+  |---|---|---|---|---|
+  | `selbst 100` | 208 | 71 | 6 | 3 / 3 (1 Spielende) |
+  | `selbst 40 reiche=4` | 145 | 35 | 6 | 1 / 5 |
+  | `duell 60 diff=david` | 309 | 44 | 12 | 4 / 8 |
+  | `vier 40 diff=koenig` | 387 | 62 | 15 | 4 / 10, 1 gemischt (1 Spielende) |
+
+  Zusammen: in 39 von 1049 Kampfphasen mit Kampf (knapp 4 %) ändert die Reihenfolge etwas,
+  12-mal zugunsten des Angreifers, 26-mal zu seinen Ungunsten (meist überlebt eine Armee, die
+  in alter Reihenfolge nach einer Eroberung noch weggeflankt worden wäre), einmal gemischt.
+  „Besser/schlechter" zählt eigene Städte, Belagerungszähler und zerstörte gegnerische
+  Armeen; Werte über verschiedene Größen sind nicht verrechnet.
+* **Gemessen, was am Ende herauskommt** (dieselben Startwerte mit v89 und v90 – der
+  Unterschied ist nur die Reihenfolge):
+
+  | Reihe | v89 | v90 |
+  |---|---|---|
+  | `selbst 100` (KI gegen KI, Duell) | Platz 0 48, Platz 1 52 · Forschung 39, Wirtschaft 36, Militär 25 | gleich |
+  | `selbst 40 reiche=4` | Militär 34, Forschung 6 | gleich |
+  | `duell 60 diff=david` | KI 30, Bot 30 · Militär 30, Wirtschaft 13, Forschung 17 | KI 29, Bot 31 · Siegarten gleich |
+  | `vier 40 diff=koenig` | KI 14, Bots 26 · Militär 36, Forschung 4 | KI 16, Bots 24 · Militär 38, Forschung 2 |
+
+  Kaum Wirkung auf Sieger und Siegarten; kleine Reihen.
+
+### Das Nachspiel
+
+* **Gerechnet wird wie immer in einem Zug**, die Oberfläche zeigt es danach. `finishTurn(S, rec)`
+  reicht `rec` an `combatPhase` weiter, und die legt je Kampf einen Eintrag an: `art`
+  (`'flanke'`/`'stadt'`), `pi`, `gegner`, Feld `r`/`c`, Angriff `a`, Verteidigung `d`, `sieg`
+  (a > d), `von` (die Felder des Angreifers: bei der Flanke seine Positionen in Reichweite der
+  Armee, `flankersOf`; bei der Stadt die Angreifer), bei Städten `zug` (1/2), `genommen`,
+  `zerstoert`, `gebrochen`, und `snap` – Städte, Armeen, Wunder und Reiche im Stand **vor**
+  diesem Kampf (`combatEntry`). Ohne `rec` rechnet alles wie vorher (KI-Kopien, Bots, Tests).
+* **Was ein Kampf ist:** jede Flankenstellung (`canFlank`), auch wenn die Macht nicht reicht –
+  dann „≤ · hält"; jede Stadt mit Angreifern in Reichweite. Eine Belagerung, die endet, weil
+  niemand mehr davorsteht, ist keiner.
+* **Ein Bild je Kampf** (`playCombat` → `combatFrame`/`combatDraw`, `COMBAT_MS` = 1000): die
+  Karte im Stand davor; das Kampffeld golden, die Felder des Angreifers in seiner Farbe
+  umrandet; **⚔️ Angriff** in seiner Farbe, **🛡️ Verteidigung** in der des Verteidigers,
+  dazwischen **>** oder **≤**; darüber „Flanke 1/2 · Armee zerstört", „Stadt 2/2 · Belagerung
+  1/2", „… · erobert", „… · Stadt zerstört", „… · Belagerung gebrochen", „… · hält". Nach dem
+  letzten Bild der Stand nach allen Kämpfen.
+* **Wo die Werte stehen:** gut zwei Felder über (oder unter) dem Kampffeld, mit einem Strich
+  darauf – auf dem Feld selbst verdeckten sie, wer dort steht, direkt daneben die Angreifer.
+  Gewählt wird unter sechs Lagen (oben/unten, dazu je ein Feld nach links/rechts) die, die am
+  wenigsten Figuren der Angreifer verdeckt und nicht über den Kartenrand ragt; bei Gleichstand
+  oben. Auf kleinen Bildschirmen wachsen die Werte mit (Ziel etwa 14 px Schrift; Maßstab =
+  kleineres Verhältnis von Bildschirm- zu Kartenmaß, hochkant gedreht mit vertauschten Seiten).
+  Nachgesehen in Chromium: iPad quer, iPad hochkant gedreht, Telefon quer.
+* **Während des Nachspiels:** die Leiste ist gesperrt (`lockBar` mit `ui.combat`), „Zug
+  beenden" wirkt nicht, das Füttern (🌾) öffnet nicht, ein Tipp auf die Karte **überspringt**
+  den Rest (`tapHex` → `endCombat`). Bei mehr als einem Kampf steht über der gesperrten
+  Leiste „2 Kämpfe – Tippen auf die Karte überspringt" (`.toast.unten`) – oben, wo Meldungen
+  sonst stehen, verdeckte er Werte und Zeile von Kämpfen in den oberen Reihen (Telefon quer
+  schon ab der dritten). Das Menü (☰) beendet das Nachspiel wie ein Tipp auf die Karte und
+  öffnet erst dann – sonst zeigte und exportierte es den halben Zugwechsel. Ein Neuzeichnen
+  zwischendurch (`redraw`) zeichnet das Kampfbild und **speichert nicht** (sonst speichert jedes
+  `redraw`): im eigenen Zug ist dann schon gekämpft, aber noch nicht gewechselt, und nach dem
+  Neuladen käme der Kampf ein zweites Mal. Das Tutorial schaltet erst danach weiter.
+* **Danach:** im eigenen Zug wie bisher Sieg, Zugwechsel, Bots – aber ohne die Meldung des
+  letzten Kampfs, die bis v89 nach dem Zugende kam (sie stand jetzt doppelt und verdeckte oben
+  den Anfang eines folgenden Bot-Kampfs; ohne Nachspiel kommt sie wie bisher). Im Zug eines
+  Bots oder der KI erst das Nachspiel, dann ihr Blatt mit „Weiter".
+* **Neu laden mitten im Nachspiel:** Bot/KI: gespeichert ist vor dem Nachspiel (samt
+  `S.autoPlayed`), es kommt gleich ihr Blatt, kein zweiter Kampf. Eigener Zug: gespeichert
+  wird erst beim Zugwechsel – der Zug steht wieder vor „Zug beenden", der Kampf kommt beim
+  nächsten Zugende genauso (im Kampf wird nicht gewürfelt). In Chromium nachgeprüft: neu
+  geladen 0,5 s nach „Zug beenden" – Armee wieder da, Belagerung 0; erneut beendet –
+  Belagerung 1, nicht 2.
+* **Auslegungen** (offener Punkt 45): (a) 1 s je Kampf auch bei vielen Kämpfen – deshalb das
+  Überspringen. Wie lang das wird, gemessen in denselben vier Reihen (Schalter `kampflaenge`,
+  1049 Kampfphasen mit Kampf): Median 1–2 Kämpfe, in 90 % höchstens 3–6, 59-mal mehr als 5,
+  5-mal mehr als 10, höchstens 16 (zu viert) – also meist 1–2 s, selten über 10 s.
+  (b) Fehlgeschlagene Flanken werden gezeigt („hält"), Belagerungen ohne Angreifer nicht.
+  (c) Die Werte neben statt auf dem Kampffeld. (d) Die Zeile mit Ausgang und Nummer ist eine
+  Zugabe. (e) Auch die Kämpfe von Bots und KI. (f) Die Beutezüge der Wikinger sind kein Kampf
+  und erscheinen nur im Protokoll.
+
+### Zugfolge nach Plätzen
+
+* `newGame(cfg)`: mit `cfg.seatOrder` bleibt die Reihenfolge der Aufbau-Liste (= der Plätze),
+  ohne wird wie bisher stabil nach `ORDER` sortiert. Der Startspieler zeigt in beiden Fällen
+  auf den Platz.
+* Die Oberfläche setzt den Schalter, wo der Aufbau nummerierte Plätze zeigt (`platzNummern`:
+  Plättchenkarte außer Marathon, oder weniger als vier Reiche) – auch bei „Nochmal spielen"
+  (`startFromRecipe`). Nur dort kann eine Zivilisation doppelt sitzen (Plättchenkarte).
+* **Auslegung** (offener Punkt 45): Die klassische Aufstellung mit allen vier Zivilisationen
+  und der Marathon behalten Russland → Griechenland → England → Wikinger. Dort ist jede
+  Zivilisation ihr eigener Platz, der Aufbau listet Zivilisationen statt Plätzen (in der
+  Anzeigereihenfolge Griechenland, England, Russland, Wikinger – danach zu ziehen, wäre
+  willkürlich), und auf der Originalkarte ist diese Folge der Uhrzeigersinn (Hauptstädte in
+  Zeile/Spalte 4/15 Ost, 9/10 Süd, 5/3 West, 1/8 Nord).
+* Was an der Zugfolge hängt, rechnet über die Liste der Reiche und bleibt richtig:
+  Startausgleich (Zweiter, Dritter, Vierter), Rundenwechsel beim Startspieler. Laufende
+  Partien behalten ihre Reihenfolge (sie steht im Spielstand). Tutorial, Tests und
+  `tools_ki.js` setzen den Schalter nicht.
+
+### Abgesichert
+
+`test.js`: Armee an der Stadt, von zwei Seiten flankierbar – vorher Verteidigung 6 gegen
+Angriff 5, nach dem Zugende Armee weg und Belagerung 1/2; Protokoll Flanke, dann Stadt; zwei
+Einträge mit Feld, Werten, Ausgang, beteiligten Feldern und Stand davor; zweiter Treffer
+erobert bzw. zerstört; ohne Aufzeichnung derselbe Ausgang; Flanke 3 gegen 3 ist ein Kampf und
+hält. Zugfolge: Plättchenkarte mit Russland, Griechenland, Russland – mit Schalter Platz 1, 2,
+3 und ab Platz 2 die Folge 2, 3, 1; ohne Schalter wie bis v89; Hauptstädte auf den Startfeldern
+ihrer Plätze; klassisch R → G → E → W.
+`smoke.js`, Schritte „v90": Zugende mit Flanke und Stadt – zwei Bilder in dieser Reihenfolge
+mit ⚔️ 5 > 🛡️ 3 und Zeile, die geflankte Armee im ersten Bild noch da, im zweiten weg; die
+Werte verdecken weder Angreifer noch Kampffeld; Leiste gesperrt, „Zug beenden" wirkungslos;
+Neuzeichnen behält das Bild und speichert nicht; der Hinweis unten; englische Zeile ohne
+fehlende Übersetzung; ein Tipp überspringt, danach keine Meldung mehr und der Zugwechsel mit
+Bot-Blatt. Bot-Zug: erst das Kampfbild, dann das Blatt. ☰ mitten im Nachspiel: Rest
+übersprungen, Zug gewechselt, dann das Menü. Tutorial: eine erledigte Aufgabe schaltet erst
+nach dem Kampf weiter. Aufbau: Plättchenkarte zu dritt mit zweimal Russland zieht nach
+Plätzen, klassisch unverändert.
+In Chromium, mit `index.html` und mit der Einzeldatei: iPad quer, iPad hochkant gedreht
+(englisch), Telefon quer – zwei Bilder mit den richtigen Zeilen, danach das Bot-Blatt, keine
+Fehler; Neuladen mitten im Nachspiel. Nur mit `index.html`: ein Fall „hält" (Flanke 3 gegen 3,
+Stadt 3 gegen 6).
+Gegenproben (je eine Stelle absichtlich falsch): `test.js` – Städte wieder zuerst, Einträge
+ohne Stand davor (bricht ab), nur siegreiche Flanken aufgezeichnet, Zugfolge nie bzw. immer
+nach Plätzen, Stadt ohne Angreiferfelder, mit Aufzeichnung anders gerechnet; `smoke.js` –
+Leiste nicht gesperrt, „Zug beenden" offen, Tipp überspringt nicht, Aufbau ohne Plätze,
+Bot-Zug ohne Nachspiel, Werte über den Angreifern (zwei Fassungen), Hinweis oben, Hinweis
+bleibt, Bild ohne Stand davor, Bilder in umgekehrter Folge, Neuzeichnen mit dem Stand danach,
+Meldung doppelt, Speichern im Nachspiel, ☰ ohne Ende des Nachspiels – jede schlägt an. Die
+beiden Wachen im Tutorial (vor dem Weiterschalten und im verzögerten Schritt) fangen einander
+ab: eine allein entfernt, bleibt der Test grün; beide zusammen schlägt er an. Nicht im Test:
+der Maßstab der Werte (jsdom misst keine Karte) – nachgesehen in Chromium.
+
+## Städte wieder vor den Flanken (v91)
+
+**Anweisung des Autors (24.10.)**, nach v90: Mit den Flanken zuerst könnten Städte fallen, die
+verteidigt sind – zurück zu „erst die Städte, dann das Flankieren". (Der Satz „erst die
+Flankierungen, dann die Städte" im Wunsch zu v90 beschrieb nicht die Regel.)
+
+* **`combatPhase`:** wieder erst alle Städte, dann das Flankieren; die Flankenpositionen werden
+  nach den Städten bestimmt. Gegen den Code von v89 verglichen: anders sind nur die Einträge für
+  das Nachspiel (`rec`) und eine gleichwertige Schreibweise der Flankenbedingung.
+* **Folgen (wie bis v89):** Eine Armee an ihrer Stadt verteidigt diese mit, auch wenn sie im
+  selben Zug noch weggeflankt wird – eine laufende Belagerung (1/2) bricht dann ab, die Stadt
+  fällt nicht. Eine Eroberung wirkt schon auf das Flankieren desselben Zugs (eroberte Stadt mit
+  Burgenbau als Position, Kriegerkultur, Zeus, Bot-Macht = Bevölkerung).
+* **Nachspiel:** folgt der Regel von selbst (die Bilder sind die Einträge in Rechenreihenfolge) –
+  erst die Städte, dann die Flanken, etwa „Stadt 1/2 · hält" und danach „Flanke 2/2 · Armee
+  zerstört". Sonst unverändert gegenüber v90.
+* **`tools_ki.js … reihenfolge`** vergleicht jetzt mit der anderen Reihenfolge, „Flanken zuerst"
+  (`anderePhase`); „besser/schlechter" heißt: die Flanken zuerst hätten dem Angreifer mehr bzw.
+  weniger gebracht. Die Zahlen im Abschnitt v90 stammen aus Partien, die selbst mit den Flanken
+  zuerst liefen, und lassen sich nur mit v90 nachrechnen.
+
+* **Gemessen** (`tools_ki.js … reihenfolge kampflaenge`, Startwerte wie v89/v90): v91 kommt in
+  allen vier Reihen auf **genau die Ergebnisse von v89** – Sieger, Startspielerquote, Endrunde,
+  Siegarten:
+
+  | Reihe | v89 | v90 (Flanken zuerst) | v91 |
+  |---|---|---|---|
+  | `selbst 100` | Platz 0 48, Platz 1 52 · Forschung 39, Wirtschaft 36, Militär 25 | gleich | gleich wie v89 |
+  | `selbst 40 reiche=4` | Militär 34, Forschung 6 | gleich | gleich wie v89 |
+  | `duell 60 diff=david` | KI 30, Bot 30 · Militär 30, Wirtschaft 13, Forschung 17 | KI 29, Bot 31 | gleich wie v89 |
+  | `vier 40 diff=koenig` | KI 14, Bots 26 · Militär 36, Forschung 4 | KI 16, Bots 24 · Militär 38, Forschung 2 | gleich wie v89 |
+
+  Wie oft die andere Reihenfolge etwas geändert hätte, jetzt aus Partien mit der Regel: in 35
+  von 1049 Kampfphasen mit Kampf, 5-mal zugunsten des Angreifers, 28-mal zu seinen Ungunsten,
+  2-mal gemischt. Kämpfe je Phase: Median 1–2, in 90 % höchstens 3–6, höchstens 16.
+
+### Abgesichert (v91)
+
+`test.js`, „Kampfphase (v91)": Armee an der Stadt, von zwei Seiten flankierbar – die Stadt hält
+(5 ≤ 6, die Armee verteidigt mit), danach fällt die Armee (5 > 3); im Protokoll nur die Flanke;
+Einträge Stadt, dann Flanke, beide im Stand davor mit der Armee; **läuft die Belagerung schon
+(1/2), hält die verteidigte Stadt trotzdem, die Belagerung bricht ab, erst danach fällt die
+Armee** – der Fall, den der Autor ausschließen will; zweiter Treffer ohne Armee erobert bzw.
+zerstört; ohne Aufzeichnung derselbe Ausgang; Flanke 3 gegen 3 als Kampf nach der Stadt.
+`smoke.js`, „v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke …": Bild 1
+die Stadt (⚔️ 5 ≤ 🛡️ 6, „Stadt 1/2 · hält", ein Angreiferfeld), Bild 2 die Flanke (⚔️ 5 > 🛡️ 3,
+„Flanke 2/2 · Armee zerstört", zwei Felder), die Armee in beiden Bildern noch zu sehen, die Werte
+verdecken in keinem Bild Angreifer oder Kampffeld; englisch „City 1/2 · holds", „Flank 2/2 ·
+army destroyed"; nach dem Überspringen: keine Belagerung, Armee weg. Die übrigen Schritte von
+v90 unverändert.
+Gegenproben (je eine Stelle absichtlich falsch): die Flanken wieder zuerst – `test.js` schlägt
+an (8 Prüfungen, darunter die verteidigte Stadt mit Belagerung 1/2, die dann an Griechenland
+fällt), `smoke.js` ebenso (Reihenfolge der Bilder, Ausgang nach ☰); mit den neuen Bildern
+wiederholt: Werte über den Angreifern (zwei Fassungen – die eine fällt erst im Bild der Flanke
+auf, deshalb prüft der Schritt jetzt beide Bilder), Bild ohne Stand davor, Bilder rückwärts,
+Speichern im Nachspiel – jede schlägt an. In Chromium (`index.html` und Einzeldatei, iPad quer,
+iPad hochkant gedreht englisch, Telefon quer): erst „Stadt 1/2 · hält", dann „Flanke 2/2 · Armee
+zerstört", danach das Bot-Blatt; Neuladen mitten im Nachspiel – Armee wieder da, erneut beendet
+genau einmal gekämpft.
 
 ## Bots nicht mehr wählbar · Duell auf den festen Karten (Mehrspieler-Erweiterung)
 

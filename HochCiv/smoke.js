@@ -44,6 +44,9 @@ const AUTO = p => p.kind === 'bot' || p.kind === 'ki';
 // Das Auto-Weiterschalten im Tutorial läuft in der App über setTimeout. Im Test
 // wird die Verzögerung auf 0 gesetzt, damit es synchron und damit prüfbar abläuft.
 SET('TUT_AUTO_MS', 0);
+// Ebenso das Nachspielen der Kämpfe am Zugende (v90): ohne Wartezeit läuft der Zugwechsel
+// wie bisher synchron durch. Der Schritt „v90" schaltet es eigens ein.
+SET('COMBAT_MS', 0);
 
 const $ = id => window.document.getElementById(id);
 const step = (label, fn) => {
@@ -3669,9 +3672,11 @@ step('v88: Hauptmenü „Ne Runde Civ?", Ertragstechnologien in Bogen, Übersich
   if (meer && !reihen.some(r => r.includes('Meer') && r.includes('🌾' + meer.y[1]) && r.includes('🪙' + meer.y[2]) &&
     meer.y[1] === 2 * meer.count && meer.y[2] === 2 * meer.count))
     throw new Error('Meereszeile nicht 🌾2 🪙2 je Feld: ' + reihen.join(' | '));
-  for (const t of ['Wald: +3 Wissenschaft (inkl. Mathematik, Elektrizität)', 'Meer: +2 Nahrung, +1 Münze (inkl. Fischerei, Segeln)',
-    'Je Bevölkerung: +2 Münzen (inkl. Fließband)', '+3 Angriff gegen Städte'])
+  for (const t of ['Wald: +3 Wissenschaft', 'Meer: +2 Nahrung, +1 Münze', 'Je Bevölkerung: +2 Münzen', '+3 Angriff gegen Städte'])
     if (!body().includes(t)) throw new Error('Bogen: fehlt „' + t + '"');
+  // seit v89 ohne „(inkl. …)" auf den Kacheln (Anweisung des Autors)
+  const effs = [...$('ov-body').querySelectorAll('.tech .eff')].map(e => e.textContent);
+  if (effs.some(t => /inkl\./.test(t))) throw new Error('Kachel mit „inkl.": ' + effs.find(t => /inkl\./.test(t)));
   G('closeModal')();
   // Regelbogen: der erklärende Satz, die Texte, Singularität 120 – deutsch und englisch
   const regeln = () => {
@@ -3688,15 +3693,308 @@ step('v88: Hauptmenü „Ne Runde Civ?", Ertragstechnologien in Bogen, Übersich
     G('clearMissing')();
     const [en, singEn] = regeln();
     $('a-tech').onclick(); const bogenEn = body(); G('closeModal')();
-    for (const t of ['Yield technologies include the cheaper ones of their field', 'Forest: +3 science (incl. Mathematics, Electricity)', '+3 attack against cities'])
+    for (const t of ['Yield technologies include the cheaper ones of their field', 'Forest: +3 science', '+3 attack against cities'])
       if (!en.includes(t)) throw new Error('Regelbogen englisch: fehlt „' + t + '"');
-    if (!bogenEn.includes('Sea: +2 food, +1 coin (incl. Fishing, Sailing)')) throw new Error('Bogen englisch ohne Containerlogistik-Text');
+    if (!bogenEn.includes('Sea: +2 food, +1 coin') || /incl\./.test(bogenEn)) throw new Error('Bogen englisch: Containerlogistik-Text fehlt oder „incl." steht noch da');
     if (JSON.stringify(singEn) !== '["120","Singularity"]') throw new Error('Singularity englisch: ' + singEn.join(' '));
     const fehlt = G('missingStrings')();
     if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
   } finally { G('switchLang')('de'); }
   console.log('       Menü DE/EN · Wald ' + (wald ? `×${wald.count} → 🔬${wald.y[0]}` : '–') +
     ' · Meer ' + (meer ? `×${meer.count} → 🌾${meer.y[1]} 🪙${meer.y[2]}` : '–') + ' · Texte in Bogen und Regelbogen DE/EN · Singularität 120');
+});
+
+/* ======================================================= v89
+   Gemeldet: „beim Öffnen von Fähigkeiten wachsen manchmal alle Städte" (nicht nachstellbar).
+   Nachgestellt in Chromium: nach einer Aktion zeichnet sich das Blatt neu, der Rest rutscht
+   nach oben, und ein Doppeltipp traf „Alle Städte wachsen". Jetzt zählt ein Tipp auf einen
+   Knopf erst 0,4 s nach dem Öffnen/Neuzeichnen – außer auf denselben Knopf. Hier mit echten
+   Klick-Ereignissen (die Erfassung am Blatt sieht nur die), die Zeit über sheetCalm.until. */
+step('v89: frisch gezeigte Blätter nehmen kurz keine Tipps an – außer auf denselben Knopf', () => {
+  const S = griechenSpiel('gratistech'), pi = S.cur, p = G('P')(S);
+  ['verbundwerkstoffe', 'keramik', 'spionage', 'gentechnik'].forEach(k => { p.techs[k] = true; });
+  G('techPool')(S).filter(t => t.age <= 1).forEach(t => { p.avail[t.k] = true; });
+  S.players.forEach((o, i) => { if (i !== pi) G('TECHS').slice(0, 40).forEach(t => { if (!p.techs[t.k]) o.techs[t.k] = true; }); });
+  p.res = { sci: 20, food: 40, coins: 40 };
+  G('redraw')();
+  const tippe = el => {
+    if (!el) throw new Error('Knopf fehlt');
+    el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  };
+  const calm = G('sheetCalm');
+  const pops = () => G('citiesOf')(S, pi).map(c => c.pop).join(',');
+  const knopf = sel => $('sheet-body').querySelector(sel);
+  const vorher = pops();
+  // 1 Öffnen und sofort „Alle Städte wachsen" – das Blatt gleitet noch herein: zählt nicht
+  $('a-abil').onclick();
+  tippe(knopf('[data-act="wachsen:bezahlt"]'));
+  if (pops() !== vorher) throw new Error('Tipp gleich nach dem Öffnen hat gewirkt');
+  // 2 Freie Forschung wählen (nach der Pause) – wirkt. Der Doppeltipp, der danach auf
+  //   „Alle Städte wachsen" oder „Kopieren" fällt, nicht.
+  calm.until = 0;
+  const vorTech = Object.keys(p.techs).length;
+  tippe(knopf('[data-act^="forschung:"]'));
+  if (Object.keys(p.techs).length !== vorTech + 1) throw new Error('Freie Forschung ging nicht');
+  const coins = p.res.coins;
+  tippe(knopf('[data-act="wachsen:bezahlt"]'));
+  tippe(knopf('[data-act^="kopie:bezahlt:"]'));
+  if (pops() !== vorher || p.res.coins !== coins || Object.keys(p.techs).length !== vorTech + 1)
+    throw new Error('Doppeltipp nach dem Neuzeichnen hat gewirkt');
+  // 3 bewusst, nach der Pause: wirkt
+  calm.until = 0;
+  tippe(knopf('[data-act="wachsen:bezahlt"]'));
+  const nachher = pops();
+  if (nachher === vorher) throw new Error('bewusster Tipp auf „Alle Städte wachsen" ohne Wirkung');
+  // 4 derselbe Knopf darf gleich wieder: zweimal schnell „+1 Macht"
+  p.res.coins = 40;
+  $('a-power').onclick(); calm.until = 0;
+  const m = p.power;
+  tippe(knopf('[data-n="1"]'));
+  tippe(knopf('[data-n="1"]'));
+  if (p.power !== m + 2) throw new Error('zweimal „+1 Macht" gab +' + (p.power - m));
+  // 5 Stadtblatt: nach „Kostenlos wachsen" rückt „Bevölkerung wachsen" an seine Stelle –
+  //   der Doppeltipp darauf zählt nicht
+  G('closeSheet')();
+  const ct = G('citiesOf')(S, pi).find(c => G('freeGrowthAvailable')(S, pi, c));
+  if (!ct) throw new Error('keine Stadt mit kostenlosem Wachstum');
+  G('tapHex')(ct.r, ct.c); calm.until = 0;
+  const pop0 = ct.pop;
+  const nachLabel = l => [...$('sheet-body').querySelectorAll('.opt')].find(b => b.dataset.label === l);
+  tippe(nachLabel('Kostenlos wachsen'));
+  tippe(nachLabel('Bevölkerung wachsen'));
+  if (ct.pop !== pop0 + 1) throw new Error(`Stadtblatt: ${pop0} → ${ct.pop} statt +1`);
+  // 6 Blatt eines Bot- oder KI-Zugs: „Weiter" wirkt sofort
+  G('closeSheet')();
+  $('a-end').onclick();
+  if (!G('ui').botLock) $('a-end').onclick();          // eine Warnung bestätigen
+  if (!G('ui').botLock) throw new Error('kein Bot-Blatt nach dem Zugende');
+  const wer = G('S').cur;
+  tippe($('bot-next-top'));
+  if (G('S').cur === wer) throw new Error('„Weiter" im Bot-Blatt wirkte nicht sofort');
+  let guard = 0;
+  while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  console.log(`       Öffnen + Tipp: nichts · Freie Forschung + Doppeltipp: nur die Technologie · bewusst: ${vorher} → ${nachher} · 2× „+1 Macht": +2 · Stadtblatt: +1 · Bot-„Weiter" sofort`);
+});
+
+/* ======================================================= v90 / v91
+   Kampf nachspielen (v90): am Zugende jeder Kampf einzeln, in der Reihenfolge der Regel – seit
+   v91 wieder erst die Städte, dann die Flanken –, mit beiden Machtwerten auf dem Kampffeld.
+   Die Bilder schaltet hier nicht der Zeitgeber weiter (die Schritte laufen synchron), sondern
+   combatNext – so wie es der Zeitgeber täte. */
+// Griechenland (Mensch) gegen eine Bot-Stadt: Armee daneben, von G1 (auch an der Stadt) und
+// G2 (gegenüber) flankierbar. Macht 5 gegen 3, Stadt mit 3 Bevölkerung: Verteidigung 6 mit der
+// Armee – die Stadt hält (die Armee verteidigt mit), danach wird die Armee weggeflankt.
+const kampfLage = () => {
+  const S = griechenSpiel('basis'), pi = S.cur;
+  const frei = (r, c) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c);
+  for (const C of S.cities.filter(c => c.owner !== pi && S.players[c.owner].kind === 'bot')) {
+    for (const [er, ec] of G('neighbors')(C.r, C.c)) {
+      if (!frei(er, ec)) continue;
+      for (const [g1r, g1c] of G('neighbors')(er, ec)) {
+        if (!frei(g1r, g1c) || G('hexDistance')(g1r, g1c, C.r, C.c) !== 1) continue;
+        const g2 = G('neighbors')(er, ec).find(([r, c]) => frei(r, c) &&
+          G('hexDistance')(r, c, C.r, C.c) === 2 && G('hexOpposite')(er, ec, g1r, g1c, r, c));
+        if (!g2) continue;
+        G('citiesOf')(S, C.owner).forEach(c => { c.pop = 1; });
+        C.pop = 3;                                          // Bot-Macht = Bevölkerung = 3
+        const E = { id: 981, owner: C.owner, r: er, c: ec, mp: 0, born: 0 };
+        S.armies.push(E,
+          { id: 982, owner: pi, r: g1r, c: g1c, mp: 0, born: 0 },
+          { id: 983, owner: pi, r: g2[0], c: g2[1], mp: 0, born: 0 });
+        S.players[pi].power = 5;
+        G('redraw')();
+        return { S, pi, C, E };
+      }
+    }
+  }
+  throw new Error('keine Kampfstellung gefunden');
+};
+const fightText = cls => { const el = $('map').querySelector('.' + cls); return el ? el.textContent : null; };
+// Steht auf dem Feld eine Armee dieses Reichs? (gezeichnet als Symbol in seiner Farbe)
+const armeeGezeichnet = (r, c, owner) => {
+  const [x, y] = G('hexCenter')(r, c, G('HEX'));
+  const farbe = G('civOf')(G('S').players[owner]).color;
+  return [...$('map').querySelectorAll('text')].some(t =>
+    +t.getAttribute('x') === x && +t.getAttribute('y') === y + 8 && t.getAttribute('fill') === farbe);
+};
+step('v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke, mit beiden Werten', () => {
+  const { S, pi, C, E } = kampfLage();
+  SET('COMBAT_MS', 1000);
+  try {
+    $('a-end').onclick();
+    if (!G('ui').combat) $('a-end').onclick();              // eine Warnung bestätigen
+    const k = G('ui').combat;
+    if (!k) throw new Error('kein Nachspiel');
+    if (k.kaempfe.map(f => f.art).join() !== 'stadt,flanke') throw new Error('Reihenfolge: ' + k.kaempfe.map(f => f.art).join());
+    // Bild 1: die Stadt – sie hält, die Armee verteidigt mit. Gerechnet ist schon alles (auch die
+    // Flanke danach), gezeichnet der Stand davor.
+    if (S.armies.includes(E)) throw new Error('die Flanke ist nicht schon gerechnet');
+    if (!armeeGezeichnet(E.r, E.c, E.owner)) throw new Error('Bild 1 zeigt die Armee an der Stadt nicht mehr');
+    if (!window.document.body.classList.contains('blocked')) throw new Error('Leiste während des Nachspiels nicht gesperrt');
+    const b1 = [fightText('fight-a'), fightText('fight-sign'), fightText('fight-d'), fightText('fight-caption')];
+    if (JSON.stringify(b1) !== JSON.stringify(['⚔️ 5', '≤', '🛡️ 6', 'Stadt 1/2 · hält']))
+      throw new Error('Bild 1: ' + b1.join(' | '));
+    if ($('map').querySelectorAll('.fight-from').length !== 1) throw new Error('Stadt: nicht genau der Angreifer markiert');
+    // Die Werte verdecken weder die Figuren der Angreifer noch das Kampffeld (in jedem Bild)
+    const figur = G('HEX') * 0.55;
+    const kasten = cls => ['x', 'y', 'width', 'height'].map(a => +$('map').querySelector('.' + cls + '-box').getAttribute(a));
+    const freiVonWerten = bild => {
+      for (const p of $('map').querySelectorAll('.fight-from, .fight-field')) {
+        const [hx, hy] = p.getAttribute('transform').match(/translate\(([-\d.]+),([-\d.]+)\)/).slice(1).map(Number);
+        for (const cls of ['fight-a', 'fight-d']) {
+          const [x, y, w, h] = kasten(cls);
+          if (hx + figur > x && hx - figur < x + w && hy + figur > y && hy - figur < y + h)
+            throw new Error(bild + ': ' + cls + ' verdeckt das Feld ' + p.getAttribute('class') + ' bei ' + hx + ',' + hy);
+        }
+      }
+    };
+    freiVonWerten('Bild 1');
+    // Ein Neuzeichnen zwischendurch (Tutorial, …) behält das Kampfbild – und speichert nicht:
+    // gekämpft ist schon, gewechselt noch nicht; nach dem Neuladen käme der Kampf ein zweites Mal
+    const gespeichert = () => G('load')('hochciv.save');
+    if (!gespeichert()) throw new Error('kein Spielstand gespeichert');
+    G('redraw')();
+    if (fightText('fight-caption') !== 'Stadt 1/2 · hält' || !armeeGezeichnet(E.r, E.c, E.owner))
+      throw new Error('Neuzeichnen während des Nachspiels zeigt schon den Stand danach');
+    if (gespeichert().sieges[pi + '|' + C.id] || !gespeichert().armies.some(a => a.id === E.id))
+      throw new Error('während des Nachspiels gespeichert: der Kampf käme nach dem Neuladen doppelt');
+    // Der Hinweis zum Überspringen liegt unten (über der gesperrten Leiste) und bleibt stehen
+    const hinweis = $('toast');
+    if (!hinweis.classList.contains('show') || !hinweis.classList.contains('unten') ||
+      hinweis.textContent !== '2 Kämpfe – Tippen auf die Karte überspringt')
+      throw new Error('Hinweis: ' + hinweis.className + ' „' + hinweis.textContent + '"');
+    // Während des Nachspiels: kein zweites Zugende, kein Feldblatt
+    const seq = S.logSeq;
+    $('a-end').onclick();
+    if (S.logSeq !== seq || S.cur !== pi) throw new Error('„Zug beenden" wirkte während des Nachspiels');
+    // Bild 2: die Flanke – Macht 5 gegen 3, die Armee steht im Bild noch (Stand davor)
+    G('combatNext')();
+    const b2 = [fightText('fight-a'), fightText('fight-sign'), fightText('fight-d'), fightText('fight-caption')];
+    if (JSON.stringify(b2) !== JSON.stringify(['⚔️ 5', '>', '🛡️ 3', 'Flanke 2/2 · Armee zerstört']))
+      throw new Error('Bild 2: ' + b2.join(' | '));
+    if ($('map').querySelectorAll('.fight-from').length !== 2) throw new Error('Flanke: nicht beide Felder markiert');
+    if (!armeeGezeichnet(E.r, E.c, E.owner)) throw new Error('Bild 2 zeigt die Armee vor der Flanke nicht');
+    freiVonWerten('Bild 2');
+    // Englisch
+    G('switchLang')('en');
+    try {
+      G('clearMissing')();
+      const cap = [G('combatCaption')(k.kaempfe[0], 0, 2), G('combatCaption')(k.kaempfe[1], 1, 2)].join(' | ');
+      if (cap !== 'City 1/2 · holds | Flank 2/2 · army destroyed') throw new Error('englisch: ' + cap);
+      const fehlt = G('missingStrings')();
+      if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.join(' | '));
+    } finally { G('switchLang')('de'); }
+    // Ein Tipp auf die Karte überspringt den Rest; danach geht es wie gewohnt weiter
+    SET('COMBAT_MS', 0);
+    G('tapHex')(C.r, C.c);
+    if (G('ui').combat) throw new Error('Tippen hat nicht übersprungen');
+    // weder der Hinweis noch – doppelt zum eben Gezeigten – der letzte Kampf als Meldung
+    if (hinweis.classList.contains('show')) throw new Error('nach dem Nachspiel steht noch: „' + hinweis.textContent + '"');
+    if (S.sieges[pi + '|' + C.id] || S.armies.includes(E)) throw new Error('Ausgang: die Stadt hält (keine Belagerung), die Armee fällt');
+    if (G('S').cur === pi || !G('ui').botLock) throw new Error('nach dem Nachspiel kein Zugwechsel mit Bot-Blatt');
+    let guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  } finally { SET('COMBAT_MS', 0); }
+  console.log('       Bild 1: ⚔️ 5 ≤ 🛡️ 6 · Stadt 1/2 · hält · Bild 2: ⚔️ 5 > 🛡️ 3 · Flanke 2/2 · Armee zerstört · Tipp überspringt');
+});
+step('v90: das Menü (☰) beendet ein laufendes Nachspiel, bevor es öffnet', () => {
+  const { S, pi, C, E } = kampfLage();
+  SET('COMBAT_MS', 1000);
+  try {
+    $('a-end').onclick();
+    if (!G('ui').combat) $('a-end').onclick();
+    if (!G('ui').combat) throw new Error('kein Nachspiel');
+    SET('COMBAT_MS', 0);
+    $('g-menu').onclick();
+    if (G('ui').combat) throw new Error('das Nachspiel läuft weiter');
+    if (!$('overlay').classList.contains('show')) throw new Error('das Menü ist nicht offen');
+    if (G('S').cur === pi && !G('ui').botLock) throw new Error('kein Zugwechsel');
+    if (S.sieges[pi + '|' + C.id] || S.armies.includes(E)) throw new Error('Ausgang: die Stadt hält, die Armee fällt');
+    G('closeModal')();
+    let guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  } finally { SET('COMBAT_MS', 0); }
+  console.log('       ☰ mitten im Nachspiel: Rest übersprungen, Zug gewechselt, dann das Menü');
+});
+step('v90: im Zug eines Bots erst der Kampf, dann das Blatt', () => {
+  const S = griechenSpiel('basis'), pi = S.cur;
+  // Ein Bot mit einer Armee an der eigenen Hauptstadt; sein Zug selbst tut nichts (botTurn
+  // stillgelegt), damit genau dieser Angriff übrig bleibt.
+  const cap = G('capitalOf')(S, pi);
+  const bi = S.players.findIndex(p => p.kind === 'bot');
+  const spot = G('neighbors')(cap.r, cap.c).find(([r, c]) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c));
+  S.armies.push({ id: 991, owner: bi, r: spot[0], c: spot[1], mp: 0, born: 0 });
+  const echt = G('botTurn');
+  SET('botTurn', () => { });
+  SET('COMBAT_MS', 1000);
+  try {
+    // bis zum Zug dieses Bots durchklicken
+    $('a-end').onclick();
+    if (!G('ui').botLock && !G('ui').combat) $('a-end').onclick();
+    let guard = 0;
+    while (G('S').cur !== bi && G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+    const k = G('ui').combat;
+    if (!k) throw new Error('kein Nachspiel im Bot-Zug');
+    if ($('sheet').classList.contains('open')) throw new Error('das Bot-Blatt ist schon offen');
+    if (k.kaempfe[0].art !== 'stadt' || k.kaempfe[0].pi !== bi) throw new Error('falscher Kampf: ' + JSON.stringify(k.kaempfe[0]).slice(0, 80));
+    SET('COMBAT_MS', 0);
+    G('combatNext')();
+    if (G('ui').combat || !$('sheet').classList.contains('open') || !$('bot-next')) throw new Error('nach dem Nachspiel kein Bot-Blatt');
+    guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  } finally { SET('botTurn', echt); SET('COMBAT_MS', 0); }
+  console.log('       Bot-Angriff auf die Hauptstadt: erst das Kampfbild, dann das Blatt mit „Weiter"');
+});
+step('v90: das Tutorial schaltet nicht weiter, solange ein Kampf nachgespielt wird', () => {
+  G('tutorialStart')();
+  for (let i = 0; i < 3; i++) G('tutMove')(1);              // drei Lesetexte, dann: gründen
+  const ziel = G('tutStep')().allow.hex()[0];
+  G('closeSheet')();
+  $('a-found').onclick();
+  G('tapHex')(ziel[0], ziel[1]);
+  const knopf = [...$('sheet-body').querySelectorAll('.opt')].find(b => b.dataset.label === 'Hier gründen');
+  if (!knopf) throw new Error('kein Gründen-Knopf');
+  G('ui').combat = { kaempfe: [], i: 0, weiter: () => { }, timer: null };   // „ein Kampf läuft"
+  try {
+    knopf.onclick();
+    if (G('ui').tut.i !== 3) throw new Error('schaltet mitten im Kampf weiter');
+  } finally { G('ui').combat = null; G('lockBar')(); }
+  G('redraw')();
+  if (G('ui').tut.i !== 4) throw new Error('nach dem Kampf nicht weiter (Schritt ' + (G('ui').tut.i + 1) + ')');
+  G('tutorialQuit')();
+  console.log('       Aufgabe erledigt während des Kampfs: Schritt 4 bleibt, danach Schritt 5');
+});
+step('v90: Zugfolge nach Plätzen – Plättchenkarte zu dritt mit zweimal Russland', () => {
+  $('m-new').onclick();
+  G('setupSetMode')('drei');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  ['russland', 'griechenland', 'russland'].forEach((civ, i) => {
+    const sel = $('setup-list').children[i].querySelector('[data-civpick]');
+    sel.value = civ; sel.onchange();
+  });
+  $('setup-list').children[0].querySelector('[data-kind="human"]').onclick();
+  [1, 2].forEach(i => $('setup-list').children[i].querySelector('[data-kind="ki"]').onclick());
+  $('setup-start').value = '1'; $('setup-start').onchange();
+  const mitEreignis = $('setup-events').checked;
+  $('setup-events').checked = false; $('setup-events').onchange();
+  mitBots(() => $('setup-go').onclick());
+  $('setup-events').checked = mitEreignis; $('setup-events').onchange();
+  G('closeModal')();
+  {
+    const st = G('placeState'), seat = G('placeSeatNow')();
+    const rcs = G('slotRC')(st.plan, seat.slot), ok = G('placeOptions')(st.plan, seat, st.o);
+    const i = ok.indexOf(true);
+    G('plTap')(rcs[i][0], rcs[i][1]); G('placeConfirm')(); G('placeConfirm')();
+  }
+  const S = G('S');
+  const reihe = S.players.map(p => p.civ + '/' + p.slot).join(' ');
+  if (reihe !== 'russland/0 griechenland/1 russland/2') throw new Error('Zugfolge: ' + reihe);
+  if (S.players[S.startIdx].slot !== 1) throw new Error('Startspieler nicht Platz 2');
+  // die klassische Aufstellung bleibt bei Russland → Griechenland → England → Wikinger
+  const K = (() => { frischesSpiel(); return G('S'); })();
+  if (K.players.map(p => p.civ).join() !== 'russland,griechenland,england,wikinger')
+    throw new Error('klassisch: ' + K.players.map(p => p.civ).join());
+  console.log('       Plätze 1–3 (Russland, Griechenland, Russland) ziehen in dieser Reihenfolge, ab Platz 2 · klassisch unverändert');
 });
 
 step('Duell auf den festen Karten: zwei Hauptstädte auf ihren Sternen, Duellschwellen', () => {
