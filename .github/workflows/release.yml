@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - development
     tags:
       - "v*.*.*"
   workflow_dispatch:
@@ -30,12 +31,20 @@ jobs:
       - name: Determine Docker Tag
         id: vars
         run: |
+          # CHANNEL_TAG: "latest" is production, "staging" is the development branch
+          # (pulled by Watchtower on the staging server, see docker-compose.staging.yml).
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "IMG_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            echo "CHANNEL_TAG=latest" >> $GITHUB_ENV
           elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
             echo "IMG_TAG=${{ steps.tag_version.outputs.new_tag }}" >> $GITHUB_ENV
+            echo "CHANNEL_TAG=latest" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == refs/heads/development ]]; then
+            echo "IMG_TAG=staging-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+            echo "CHANNEL_TAG=staging" >> $GITHUB_ENV
           else
             echo "IMG_TAG=dev-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+            echo "CHANNEL_TAG=dev" >> $GITHUB_ENV
           fi
 
       # Login Docker Hub
@@ -61,8 +70,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:latest
-            ghcr.io/peterswode/hochciv-multiplayer:latest
+            ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ env.CHANNEL_TAG }}
+            ghcr.io/peterswode/hochciv-multiplayer:${{ env.CHANNEL_TAG }}
             ${{ vars.DOCKERHUB_USERNAME }}/hochciv-multiplayer:${{ env.IMG_TAG }}
             ghcr.io/peterswode/hochciv-multiplayer:${{ env.IMG_TAG }}
 
