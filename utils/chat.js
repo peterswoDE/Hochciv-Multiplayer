@@ -3,10 +3,11 @@
  * checks, the rate limit and the message format. Both keep a short history; pings are not
  * stored (they only mark a hex for a few seconds).
  *
- *   message = { id, t, slot, name, kind: 'text' | 'emote' | 'ping', text?, emote?, r?, c? }
+ *   message = { id, t, slot, name, uid?, kind: 'text' | 'emote' | 'ping', text?, emote?, r?, c? }
  *
  * `slot` is the sender's seat (lobby index / Rundenspiel slot) – the client takes the colour
- * from it. Texts are plain text: the client escapes them.
+ * from it. `uid` is the sender's account (none for guests): blocking and reporting go by it
+ * (utils/reports.js). Texts are plain text: the client escapes them.
  */
 const crypto = require('crypto');
 
@@ -42,6 +43,7 @@ setInterval(() => {
 function build(sender, payload, key) {
     const p = payload && typeof payload === 'object' ? payload : {};
     const base = { id: crypto.randomUUID(), t: Date.now(), slot: sender.slot, name: sender.name };
+    if (sender.uid) base.uid = sender.uid;
     let msg;
     if (p.kind === 'emote') {
         if (!EMOTES.includes(p.emote)) return { error: 'Unbekanntes Emoji.' };

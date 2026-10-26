@@ -49,5 +49,6 @@ module.exports = function registerAsyncHandlers(io) {
         on('async:place', data => service.place(user(), data.id, data.o, data.cell));
         on('async:draft', data => service.draftPick(user(), data.id, data.abilityId));
         on('async:chat', data => service.chat(user(), data.id, data));
+        on('async:report', data => service.report(user(), data.id, data.msgId, data.reason));
     });
 };

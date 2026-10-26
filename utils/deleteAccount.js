@@ -8,6 +8,7 @@ const sessions = require('../sessions');
 const asyncService = require('../async/service');
 const mapService = require('../maps/service');
 const replay = require('./replay');
+const reports = require('./reports');
 const { DELETED_NAME } = require('../async/logic');
 const { destroyOtherSessions } = require('./auth');
 const { sendMail } = require('./mailer');
@@ -53,6 +54,9 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
         await user.destroy({ transaction });
     });
     await destroyOtherSessions(sequelize, user.id);
+
+    // Chat reports keep the conversation, without the name; nobody blocks the account any more
+    try { await reports.removeUser(user, DELETED_NAME); } catch (err) { console.error('[Accounts] Reports cleanup failed:', err); }
 
     // Replays name the players in every state and in the log (utils/replay.js)
     for (const { gameId, from } of renamed) {

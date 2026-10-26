@@ -6,6 +6,7 @@ const { sequelize, User, Game, Passkey } = require('../models');
 const totp = require('../utils/totp');
 const { sendMail } = require('../utils/mailer');
 const { deleteAccount } = require('../utils/deleteAccount');
+const reports = require('../utils/reports');
 const {
     EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, consumeCode, destroyOtherSessions,
@@ -192,6 +193,29 @@ router.get('/history', async (req, res) => {
             limit: 50
         });
         res.json(games);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Chat: players whose messages this account doesn't see (utils/reports.js)
+router.get('/blocks', (req, res) => res.json({ list: reports.publicBlocks(req.user) }));
+
+router.post('/blocks', async (req, res) => {
+    try {
+        const r = await reports.block(req.user, { id: req.body && req.body.id, name: req.body && req.body.name });
+        if (r.error) return res.status(400).json(r);
+        res.json(r);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.delete('/blocks/:key', async (req, res) => {
+    try {
+        res.json(await reports.unblock(req.user, req.params.key));
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });

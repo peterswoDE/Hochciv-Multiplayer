@@ -15,6 +15,7 @@ const { notify } = require('../utils/notify');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
 const chatLib = require('../utils/chat');
+const reports = require('../utils/reports');
 const Stats = require('../utils/stats');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
@@ -450,7 +451,7 @@ async function chat(user, id, payload) {
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
     const seat = e.g.seats.find(s => s.userId === user.id);
     if (!seat) return { error: 'Nur Mitspieler können schreiben.' };
-    const r = chatLib.build({ slot: seat.slot, name: user.username }, payload, `async:${id}:${user.id}`);
+    const r = chatLib.build({ slot: seat.slot, name: user.username, uid: user.id }, payload, `async:${id}:${user.id}`);
     if (r.error) return { error: r.error };
     if (r.msg.kind !== 'ping') {
         // in the game's queue, so it can't overwrite a move saved at the same time
@@ -464,6 +465,19 @@ async function chat(user, id, payload) {
     }
     if (io) io.to(room(id)).emit('async:chat', { id, msg: r.msg });
     return { ok: true };
+}
+
+/** Report a chat message (utils/reports.js) – whoever may open the game: players and spectators. */
+async function report(user, id, msgId, reason) {
+    const e = await getEntry(id);
+    if (!e.g) return { error: 'Spiel nicht gefunden.' };
+    const seat = e.g.seats.find(s => s.userId === user.id);
+    const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);     // as open()
+    if (!seat && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
+    return reports.report({
+        source: 'async', sourceId: id, history: e.g.chat || [], msgId, reason,
+        reporter: { id: user.id, name: user.username, slot: seat ? seat.slot : -1 },
+    });
 }
 
 function action(user, id, type, params) {
@@ -600,7 +614,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat,
+    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report,
     setNotifyEmail, sweep, room, removeUser,
     processResult,      // for tests/score
 };

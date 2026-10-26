@@ -132,6 +132,13 @@ module.exports = (sequelize) => {
             defaultValue: true,
             allowNull: false,
         },
+        // Chat: players whose messages this user doesn't see (utils/reports.js),
+        // [{ id (account) | null, name, at }] – guests are blocked by name
+        blockedPlayers: {
+            type: DataTypes.JSONB,
+            defaultValue: [],
+            allowNull: false,
+        },
         currentChallenge: {
             type: DataTypes.STRING,
             allowNull: true,

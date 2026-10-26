@@ -152,6 +152,7 @@ app.use('/api/profile', require('./routes/profile'));
 // Finished matches with their statistics and replays (routes/games.js); old replays are deleted
 app.use('/api/games', require('./routes/games'));
 require('./utils/replay').startCleanup();
+require('./utils/reports').startCleanup();
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
 // Push notifications of the Android app
