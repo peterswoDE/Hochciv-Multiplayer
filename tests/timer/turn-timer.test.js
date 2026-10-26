@@ -1,16 +1,19 @@
 /**
  * The turn timer of live games (sockets/game.js, mp.js) against the local docker setup, with
- * turns shortened to 3 seconds:
+ * turns shortened to 3 seconds and the KI keeping a seat after two missed turns (instead of
+ * three – A only passes, so the KI may end the game by round 5 or 6):
  *
- *   TURN_TIMER_SCALE=0.05 docker compose -f docker-compose.local.yml up -d --build
+ *   TURN_TIMER_SCALE=0.05 TURN_TIMER_AFK_AFTER=2 docker compose -f docker-compose.local.yml up -d --build
  *   npm i --no-save playwright-core
- *   node tests/timer/turn-timer.test.js [http://localhost:3000]
+ *   TURN_TIMER_AFK_AFTER=2 node tests/timer/turn-timer.test.js [http://localhost:3000]
  *
  * Two browser pages play a live game through the real game page: A hosts and sets "Zeit pro
- * Zug" to 1 minute (3 s here), B joins and never moves (large map, two easy KI empires). Checked: the lobby setting (an invalid
- * value is refused), the countdown in the HUD, B's turns end when the time is up, after three
- * of them the KI keeps B's seat (banner, player list) and B's turns no longer wait, "Ich bin
- * zurück" hands the seat back and the clock runs for B again. Without a limit there is no clock.
+ * Zug" to 1 minute (3 s here), B joins and never moves (large map, two easy KI empires).
+ * Checked: the lobby setting (an invalid value is refused), the countdown in the HUD, B's turns
+ * end when the time is up, after TURN_TIMER_AFK_AFTER of them the KI keeps B's seat (banner,
+ * player list) and B's turn no longer waits, "Ich bin zurück" hands the seat back and the clock
+ * runs for B again. Should the KI still end a game before all checks have run, a new game is
+ * played (up to three). Without a limit there is no clock.
  *
  * The session cleanup (sessions.js) is checked directly: a running game is kept for 2 hours
  * without actions, a lobby for 10 minutes.
@@ -21,6 +24,7 @@
 const fs = require('fs');
 
 const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
+const AFK = Number(process.env.TURN_TIMER_AFK_AFTER) || 3;     // as the server was started with
 const BROWSER = process.env.HOCHCIV_BROWSER || [
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -122,36 +126,40 @@ async function attempt(newPage) {
         check(first && /^⏱ 0:0[1-3]$/.test(first.clock), 'HUD: the countdown is shown', first && first.clock);
 
         // A moves at once whenever it is A's turn; B never moves
-        let aTurns = 0;
         driver = setInterval(() => {
             a.evaluate(() => {
-                if (!S || S.over || !MP.isMyTurn() || MP._ending === S.round + ':' + S.cur) return false;
+                if (!S || S.over || !MP.isMyTurn() || MP._ending === S.round + ':' + S.cur) return;
                 MP._ending = S.round + ':' + S.cur;
                 if (typeof closeModal === 'function') closeModal();
                 MP.sendAction({ type: 'endTurn' });
-                return true;
-            }).then(r => { if (r) aTurns++; }).catch(() => { });
+            }).catch(() => { });
         }, 150);
 
-        // B: three turns time out, then the KI keeps the seat
+        // B: AFK turns time out (TURN_TIMER_AFK_AFTER, 3 by default), then the KI keeps the seat
         const timeouts = [];
         await b.exposeFunction('__timeout', d => timeouts.push(d));
         await b.evaluate(() => MP.socket.on('turn:timeout', d => window.__timeout(d)));
+        // when whose turn began, as A sees it
+        await a.evaluate(() => { window.__turns = []; MP.socket.on('state:update', d => window.__turns.push([Date.now(), d.state.round, d.state.cur])); });
         const t0 = Date.now();
-        await until(() => timeouts.length >= 3, 30000);
-        check(timeouts.length >= 3, 'B: three turns ended by the timer', `${timeouts.length} in ${Math.round((Date.now() - t0) / 1000)} s`);
-        check(timeouts[0] && timeouts[0].afk === false && timeouts[2] && timeouts[2].afk === true, 'B: the third one hands the seat to the KI', JSON.stringify(timeouts.slice(0, 3)));
+        await until(() => timeouts.length >= AFK, 30000);
+        check(timeouts.length >= AFK, `B: ${AFK} turns ended by the timer`, `${timeouts.length} in ${Math.round((Date.now() - t0) / 1000)} s`);
+        check(timeouts.slice(0, AFK - 1).every(t => t.afk === false) && timeouts[AFK - 1] && timeouts[AFK - 1].afk === true,
+            `B: the ${AFK}th one hands the seat to the KI`, JSON.stringify(timeouts.slice(0, AFK)));
         const bAfk = await until(async () => { const i = await info(b); return i.banner && i.afk ? i : null; }, 5000);
         check(!!bAfk, 'B: banner "Die KI spielt für dich" is shown');
         const aView = await until(async () => { const i = await info(a); return /KI \(abwesend\)/.test(i.tag) ? i : null; }, 5000);
         check(!!aView, 'A: the player list shows B as "KI (abwesend)"');
 
-        // the KI plays B's turns at once now – A gets turn after turn without waiting
-        const before = aTurns, t1 = Date.now();
-        await until(() => aTurns >= before + 2, 8000);
-        const per = (Date.now() - t1) / Math.max(1, aTurns - before);
-        check(aTurns >= before + 2 && per < 2500, 'B absent: the game no longer waits for B', `${aTurns - before} turns of A, ${Math.round(per)} ms each`);
-        check(timeouts.length === 3, 'B absent: no further timeouts', String(timeouts.length));
+        // the KI plays B's next turn at once – a turn that waited for B would last 3 s
+        const t1 = Date.now(), bIdx = await b.evaluate(() => MP.playerIndex);
+        const bTurnMs = await until(() => a.evaluate(([since, bi]) => {
+            const t = window.__turns, k = t.findIndex(x => x[0] >= since && x[2] === bi);
+            const end = k >= 0 ? t.slice(k + 1).find(x => x[2] !== bi) : null;
+            return end ? end[0] - t[k][0] : null;
+        }, [t1, bIdx]), 10000);
+        check(bTurnMs != null && bTurnMs < 2000, 'B absent: the game no longer waits for B', `B's turn took ${bTurnMs} ms`);
+        check(timeouts.length === AFK, 'B absent: no further timeouts', String(timeouts.length));
 
         // B is back (A keeps moving at once) – B's turns wait for B and run the clock again
         await b.click('#mp-afk-btn', { timeout: 5000 });
@@ -159,14 +167,14 @@ async function attempt(newPage) {
         check(!!back, 'B: "Ich bin zurück" hands the seat back');
         const bTurn = await until(async () => { const i = await info(b); return i.cur === i.me && i.clock ? i : null; }, 15000);
         check(!!bTurn, 'B: it is B\'s own turn again, with the clock running', bTurn && bTurn.clock);
-        await until(() => timeouts.length >= 4, 15000);
-        check(timeouts.length === 4 && timeouts[3].afk === false, 'B: the timer ends B\'s turn again (counted from zero)', JSON.stringify(timeouts[3]));
+        await until(() => timeouts.length >= AFK + 1, 15000);
+        check(timeouts.length === AFK + 1 && timeouts[AFK].afk === false, 'B: the timer ends B\'s turn again (counted from zero)', JSON.stringify(timeouts[AFK]));
     } catch (err) {
         results.push([false, 'scenario ran through', String(err.message || err).split('\n')[0]]);
     } finally {
         if (driver) clearInterval(driver);
     }
-    const over = a ? await a.evaluate(() => !!(typeof S !== 'undefined' && S && S.over)).catch(() => false) : false;
+    const over = a ? await a.evaluate(() => (typeof S !== 'undefined' && S && S.over ? `round ${S.round}: ${S.over.how}` : null)).catch(() => null) : null;
     for (const p of [a, b]) if (p) await p.context().close().catch(() => { });
     return { results, over };
 }
@@ -189,7 +197,7 @@ async function attempt(newPage) {
         for (let n = 1; n <= 3; n++) {
             const r = await attempt(newPage);
             if (r.results.some(x => !x[0]) && r.over && n < 3) {
-                console.log(`(game ${n} ended before all checks had run – a new game)`);
+                console.log(`(game ${n} ended before all checks had run – ${r.over} – a new game)`);
                 continue;
             }
             r.results.forEach(x => ok(...x));

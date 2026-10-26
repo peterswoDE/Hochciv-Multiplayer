@@ -13,7 +13,7 @@ const Summary = require('../utils/summary');
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
    until the player hands it back ('turn:reclaim'). */
 const TURN_TIMES = [0, 60, 120, 180, 300, 600];
-const AFK_AFTER = 3;
+const AFK_AFTER = config.TURN_TIMER_AFK_AFTER;        // 3 (tests may shorten it)
 const AFK_KI_LEVEL = { ranked: 'schwer', normal: 'mittel' };
 
 /**
