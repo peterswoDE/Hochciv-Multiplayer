@@ -38,12 +38,31 @@ function finishLogin(req, res, user) {
     });
 }
 
-/** The user waiting for the second factor, or null. */
+const MFA_PENDING_MS = 10 * 60 * 1000;      // the first factor counts this long
+
+/** The user waiting for the second factor, or null (also once MFA_PENDING_MS have passed). */
 async function pendingUser(req) {
     const id = req.session.mfaPendingUserId;
     if (!id) return null;
+    if (!(Date.now() - (req.session.mfaPendingAt || 0) < MFA_PENDING_MS)) {
+        req.session.mfaPendingUserId = null;
+        return null;
+    }
     const user = await User.findByPk(id);
     return user && !user.isBanned ? user : null;
+}
+
+/** The second factors of an account – { totp, passkey, email } – or null if it has none. */
+async function secondFactors(user) {
+    const passkey = (await Passkey.count({ where: { UserId: user.id } })) > 0;
+    const methods = { totp: !!user.totpEnabled, passkey, email: !!user.emailOtpEnabled };
+    return methods.totp || methods.passkey || methods.email ? methods : null;
+}
+
+/** The first factor is done (password, Google, Discord): wait for the second one. */
+function awaitSecondFactor(req, user) {
+    req.session.mfaPendingUserId = user.id;
+    req.session.mfaPendingAt = Date.now();
 }
 
 // Register endpoint
@@ -118,18 +137,10 @@ router.post('/login', rateLimit, (req, res, next) => {
             if (!user.isActive) return res.status(403).json({ error: 'Konto noch nicht aktiviert' });
             if (user.isBanned) return res.status(403).json({ error: 'Konto gesperrt' });
 
-            const hasPasskeys = (await Passkey.count({ where: { UserId: user.id } })) > 0;
-
-            if (user.totpEnabled || hasPasskeys || user.emailOtpEnabled) {
-                req.session.mfaPendingUserId = user.id;
-                return res.json({
-                    mfaRequired: true,
-                    methods: {
-                        totp: user.totpEnabled,
-                        passkey: hasPasskeys,
-                        email: user.emailOtpEnabled
-                    }
-                });
+            const methods = await secondFactors(user);
+            if (methods) {
+                awaitSecondFactor(req, user);
+                return res.json({ mfaRequired: true, methods });
             }
 
             finishLogin(req, res, user);
@@ -188,7 +199,8 @@ router.post('/login/totp', rateLimit, async (req, res) => {
         if (!user || !token) return res.status(400).json({ error: 'Sitzung abgelaufen oder Token fehlt' });
         if (!user.totpEnabled) return res.status(400).json({ error: 'Ungültige Anfrage' });
 
-        if (!(await totp.checkUserToken(user, token))) return res.status(400).json({ error: 'Ungültiger Code' });
+        const wrong = await totp.checkLimited(user, token);
+        if (wrong) return res.status(400).json({ error: wrong });
 
         req.session.mfaPendingUserId = null;
         finishLogin(req, res, user);
@@ -370,6 +382,18 @@ router.post('/reset-password/confirm', rateLimit, async (req, res) => {
     }
 });
 
+// The second factor still missing after a Google/Discord login (/?oauth=mfa opens the dialog)
+router.get('/mfa-pending', async (req, res) => {
+    try {
+        const user = await pendingUser(req);
+        const methods = user && await secondFactors(user);
+        if (!methods) return res.status(404).json({ error: 'Sitzung abgelaufen' });
+        res.json({ mfaRequired: true, methods });
+    } catch (err) {
+        res.status(500).json({ error: 'Fehler' });
+    }
+});
+
 // Get current user (session check)
 router.get('/me', (req, res) => {
     if (req.isAuthenticated()) {
@@ -464,7 +488,7 @@ router.post('/google/idtoken', rateLimit, async (req, res) => {
                 return res.status(500).json({ ok: false, reason: 'error' });
             }
             if (!user) return res.status(403).json({ ok: false, reason: oauthFailureReason(info) });
-            req.login(user, (loginErr) => {
+            const login = () => req.login(user, (loginErr) => {
                 if (loginErr) {
                     console.error('[OAuth] Google app login error:', loginErr);
                     return res.status(500).json({ ok: false, reason: 'error' });
@@ -472,6 +496,13 @@ router.post('/google/idtoken', rateLimit, async (req, res) => {
                 markAuthenticated(req);
                 res.json({ ok: true, linked: linking });
             });
+            // Google proves the account, but not the second factor it has set up: the app opens
+            // /?oauth=mfa, where the dialog asks for it (as after the web callback)
+            secondFactors(user).then(methods => {
+                if (!methods || linking) return login();
+                awaitSecondFactor(req, user);
+                res.json({ ok: false, reason: 'mfa' });
+            }).catch(() => res.status(500).json({ ok: false, reason: 'error' }));
         });
     } catch (err) {
         console.error('[OAuth] Google app login error:', err);
@@ -520,7 +551,7 @@ for (const provider of ['google', 'discord']) {
                 console.error(`[OAuth] ${label} Auth failed. Info:`, info);
                 return res.redirect(`/?oauth=${oauthFailureReason(info)}`);
             }
-            req.login(user, (loginErr) => {
+            const login = () => req.login(user, (loginErr) => {
                 if (loginErr) {
                     console.error(`[OAuth] ${label} Login Error:`, loginErr);
                     return res.redirect('/?oauth=error');
@@ -528,6 +559,14 @@ for (const provider of ['google', 'discord']) {
                 markAuthenticated(req);     // also how OAuth-only accounts re-confirm (account page)
                 res.redirect(linking ? '/?oauth=linked' : '/?oauth=ok');
             });
+            // The provider proves the account, but not the second factor it has set up: like
+            // after the password, the login waits for it (/?oauth=mfa opens the dialog). Linking
+            // from the account page doesn't – that user is logged in already.
+            secondFactors(user).then(methods => {
+                if (!methods || linking) return login();
+                awaitSecondFactor(req, user);
+                res.redirect('/?oauth=mfa');
+            }).catch(() => res.redirect('/?oauth=error'));
         })(req, res, next);
     });
 }

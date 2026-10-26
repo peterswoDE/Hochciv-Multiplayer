@@ -4,11 +4,11 @@
  * Rundenspiele go on without it (async/logic.js removeUser), live games drop the account link.
  */
 const { sequelize, User, Game, Passkey, TotpToken, DeviceToken } = require('../models');
-const sessions = require('../sessions');
 const asyncService = require('../async/service');
 const mapService = require('../maps/service');
 const replay = require('./replay');
 const reports = require('./reports');
+const { detachUser } = require('./detachUser');
 const { DELETED_NAME } = require('../async/logic');
 const { destroyOtherSessions } = require('./auth');
 const { sendMail } = require('./mailer');
@@ -63,16 +63,8 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
         try { await replay.renameInReplay(gameId, from, DELETED_NAME); } catch (err) { console.error('[Accounts] Replay rename failed:', err); }
     }
 
-    // Live games in memory: the seat plays on, but its result no longer goes to the account
-    for (const s of sessions.getAllSessions().values()) {
-        for (const p of s.players) if (p.dbUserId === user.id) Object.assign(p, { dbUserId: null, dbUsername: null });
-    }
-    if (io) {
-        for (const s of await io.fetchSockets()) {
-            const u = s.request && s.request.user;
-            if ((u && u.id === user.id) || s.data.userId === user.id) s.disconnect(true);
-        }
-    }
+    // Live games: the seat plays on without the account; open sockets are closed
+    await detachUser(io, user.id);
 
     console.log(`[Accounts] Deleted account ${user.username} (${user.id})${byAdmin ? ` by admin ${byAdmin}` : ''}.`);
     if (mailable(user.email)) {

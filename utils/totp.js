@@ -25,4 +25,35 @@ async function checkUserToken(user, token) {
     return tokens.some(t => checkToken(token, t.secret));
 }
 
-module.exports = { newSecret, keyUri, checkToken, checkUserToken };
+const MAX_ATTEMPTS = 5;
+const LOCK_MS = 15 * 60 * 1000;
+
+/**
+ * checkUserToken with a limit per account (the IP limit alone lets someone with the password keep
+ * guessing from many addresses): after MAX_ATTEMPTS wrong codes in a row, no code is accepted for
+ * LOCK_MS. Returns null when the code is right, else the error (German, translated by the client).
+ */
+async function checkLimited(user, token) {
+    if (user.totpLockedUntil && user.totpLockedUntil > new Date()) {
+        return 'Zu viele falsche Codes. Versuche es in 15 Minuten erneut.';
+    }
+    if (await checkUserToken(user, token)) {
+        if (user.totpAttempts || user.totpLockedUntil) {
+            user.totpAttempts = 0;
+            user.totpLockedUntil = null;
+            await user.save();
+        }
+        return null;
+    }
+    user.totpAttempts = (user.totpAttempts || 0) + 1;
+    if (user.totpAttempts >= MAX_ATTEMPTS) {
+        user.totpAttempts = 0;
+        user.totpLockedUntil = new Date(Date.now() + LOCK_MS);
+        await user.save();
+        return 'Zu viele falsche Codes. Versuche es in 15 Minuten erneut.';
+    }
+    await user.save();
+    return 'Ungültiger Code';
+}
+
+module.exports = { newSecret, keyUri, checkToken, checkUserToken, checkLimited, MAX_ATTEMPTS };

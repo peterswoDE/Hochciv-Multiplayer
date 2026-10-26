@@ -43,7 +43,11 @@ router.post('/reauth', rateLimit, async (req, res) => {
         const token = str(req.body.token, 10);
         let ok = false;
         if (password && user.password_hash) ok = await bcrypt.compare(password, user.password_hash);
-        else if (token && user.totpEnabled) ok = await totp.checkUserToken(user, token);
+        else if (token && user.totpEnabled) {
+            const wrong = await totp.checkLimited(user, token);      // limited per account (utils/totp.js)
+            if (wrong) return res.status(400).json({ error: wrong === 'Ungültiger Code' ? 'Ungültiger Code.' : wrong });
+            ok = true;
+        }
         if (!ok) return res.status(400).json({ error: password ? 'Das Passwort ist falsch.' : 'Ungültiger Code.' });
         markAuthenticated(req);
         res.json({ ok: true });

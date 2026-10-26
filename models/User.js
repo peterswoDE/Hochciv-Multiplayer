@@ -102,6 +102,10 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
         },
+        // Wrong authenticator codes in a row (utils/totp.js checkLimited): after 5 the codes are
+        // refused until totpLockedUntil
+        totpAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
+        totpLockedUntil: { type: DataTypes.DATE, allowNull: true },
         totpEnabled: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
