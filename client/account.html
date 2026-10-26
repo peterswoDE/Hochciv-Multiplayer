@@ -19,7 +19,8 @@
 
         .nav-tabs {
             display: flex;
-            gap: 15px;
+            flex-wrap: wrap;              /* with the admin tabs the row is wider than a phone */
+            gap: 5px 15px;
             margin-bottom: 30px;
             border-bottom: 2px solid rgba(0, 0, 0, 0.1);
             padding-bottom: 10px;
@@ -184,6 +185,8 @@
                     style="display:none; color: var(--red);">Server-Status</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-lobbies"
                     style="display:none; color: var(--red);">Lobbys</button>
+                <button class="nav-tab admin-tab" data-target="tab-admin-running"
+                    style="display:none; color: var(--red);">Laufende Spiele</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-games"
                     style="display:none; color: var(--red);">Spiele</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-users"
@@ -357,17 +360,36 @@
                 </table>
             </div>
 
-            <!-- Admin Games Tab -->
-            <div id="tab-admin-games" class="tab-content">
-                <h2 style="font-family: Georgia, serif; color: var(--red);">Spiele-Übersicht</h2>
-                <h3>Laufende Rundenspiele</h3>
+            <!-- Admin Running Games Tab -->
+            <div id="tab-admin-running" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">Laufende Spiele</h2>
+                <button id="btn-admin-running-reload" class="btn small" style="margin-bottom:15px;">Aktualisieren</button>
+
+                <h3>Nach Spielversion</h3>
                 <div style="overflow-x: auto;">
-                    <table id="table-admin-running" style="margin-bottom: 30px;">
+                    <table id="table-admin-versions" style="margin-bottom: 10px;">
+                        <thead>
+                            <tr>
+                                <th>Version</th>
+                                <th>Live-Spiele</th>
+                                <th>Rundenspiele</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p style="font-size:13px; color:#666; margin-bottom:30px;">Rundenspiele laufen bis zum Ende mit der Version, mit der sie gestartet wurden. Hat eine ältere Version keine Spiele mehr, kann ihr Ordner (HochCiv-vNN) entfernt werden.</p>
+
+                <h3>Live-Spiele <small id="admin-live-total" style="font-weight:normal; color:#666;"></small></h3>
+                <div style="overflow-x: auto;">
+                    <table id="table-admin-live" style="margin-bottom: 30px;">
                         <thead>
                             <tr>
                                 <th>Code</th>
+                                <th>Version</th>
                                 <th>Status</th>
                                 <th>Runde</th>
+                                <th>Am Zug</th>
                                 <th>Spieler</th>
                                 <th>Letzte Aktivität</th>
                             </tr>
@@ -375,8 +397,29 @@
                         <tbody></tbody>
                     </table>
                 </div>
-                <p style="font-size:13px; color:#666; margin-top:-20px; margin-bottom:30px;">Laufende Live-Spiele stehen im Tab „Lobbys“.</p>
 
+                <h3>Rundenspiele <small id="admin-async-total" style="font-weight:normal; color:#666;"></small></h3>
+                <div style="overflow-x: auto;">
+                    <table id="table-admin-running" style="margin-bottom: 30px;">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Version</th>
+                                <th>Status</th>
+                                <th>Runde</th>
+                                <th>Wartet auf</th>
+                                <th>Spieler</th>
+                                <th>Wartet seit</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin Games Tab -->
+            <div id="tab-admin-games" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">Spiele-Übersicht</h2>
                 <h3>Beendete Spiele <small id="admin-games-total" style="font-weight:normal; color:#666;"></small></h3>
                 <form id="form-admin-games-search" style="display:flex; gap:8px; margin:10px 0 15px;">
                     <input type="search" id="admin-games-q" placeholder="Nach Spieler suchen …" maxlength="50" style="flex:1;">

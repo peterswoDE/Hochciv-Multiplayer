@@ -352,6 +352,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ASYNC_STATUS = { setup: 'Spielersuche', placement: 'Startplättchen', draft: 'Draft', playing: 'Läuft' };
     const winnerNames = g => g.participants.filter(p => p.isWinner).map(p => p.name);
 
+    // --- Admin: running games (live and Rundenspiele) with their game version ---
+    const LIVE_STATUS = { placement: 'Startplättchen', draft: 'Draft', playing: 'Läuft' };
+    // "12.10.2026, 14:03 (vor 3 T.)" – how long ago, so stuck games stand out
+    function whenAgo(t) {
+        const d = new Date(t), mins = Math.floor((Date.now() - d.getTime()) / 60000);
+        const ago = mins < 60 ? `${Math.max(0, mins)} Min.` : mins < 1440 ? `${Math.floor(mins / 60)} Std.` : `${Math.floor(mins / 1440)} T.`;
+        return `${esc(d.toLocaleString('de-DE'))} <small>(vor ${ago})</small>`;
+    }
+
+    async function loadAdminRunning() {
+        const vBody = document.querySelector('#table-admin-versions tbody');
+        const lBody = document.querySelector('#table-admin-live tbody');
+        const rBody = document.querySelector('#table-admin-running tbody');
+        try {
+            const res = await fetch('/api/admin/running');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            vBody.innerHTML = Object.entries(data.versions).map(([v, n]) => `
+                <tr>
+                    <td><b>${esc(v)}</b>${v === data.current ? ' <small>(aktuell)</small>' : n.live + n.rundenspiele === 0 ? ' <small>(keine Spiele mehr)</small>' : ''}</td>
+                    <td>${esc(n.live)}</td>
+                    <td>${esc(n.rundenspiele)}</td>
+                </tr>`).join('');
+
+            document.getElementById('admin-live-total').textContent = `(${data.live.length})`;
+            lBody.innerHTML = data.live.length === 0 ? '<tr><td colspan="7">Keine laufenden Live-Spiele.</td></tr>'
+                : data.live.map(g => `
+                <tr>
+                    <td><b>${esc(g.joinCode)}</b></td>
+                    <td>${esc(g.version)}</td>
+                    <td>${esc(LIVE_STATUS[g.status] || g.status)}</td>
+                    <td>${esc(g.round || '-')}</td>
+                    <td>${esc(g.turn || '-')}</td>
+                    <td style="font-size:13px">${g.players.map(p => esc(p.name) + (p.kind !== 'human' ? ' (KI)' : p.connected ? '' : ' <small>(getrennt)</small>')).join(', ')}</td>
+                    <td>${whenAgo(g.lastActivity)}</td>
+                </tr>`).join('');
+
+            document.getElementById('admin-async-total').textContent = `(${data.rundenspiele.length})`;
+            rBody.innerHTML = data.rundenspiele.length === 0 ? '<tr><td colspan="7">Keine laufenden Rundenspiele.</td></tr>'
+                : data.rundenspiele.map(g => `
+                <tr>
+                    <td><b>${esc(g.joinCode)}</b>${g.ranked ? ' <small>(gewertet)</small>' : ''}${g.isPublic ? ' <small>(öffentlich)</small>' : ''}</td>
+                    <td>${esc(g.version)}</td>
+                    <td>${esc(ASYNC_STATUS[g.status] || g.status)}</td>
+                    <td>${esc(g.round || '-')}</td>
+                    <td>${esc(g.waitingFor || '-')}</td>
+                    <td style="font-size:13px">${g.players.map(p => nameLink(p.name, p.userId) + (p.isBot ? ' (Bot)' : p.replaced ? ' (KI)' : '')).join(', ')}</td>
+                    <td>${whenAgo(g.waitSince)}</td>
+                </tr>`).join('');
+        } catch (e) {
+            vBody.innerHTML = '<tr><td colspan="3">Fehler beim Laden.</td></tr>';
+            lBody.innerHTML = rBody.innerHTML = '<tr><td colspan="7">Fehler beim Laden.</td></tr>';
+        }
+    }
+
+    document.querySelector('[data-target="tab-admin-running"]').addEventListener('click', loadAdminRunning);
+    document.getElementById('btn-admin-running-reload').addEventListener('click', loadAdminRunning);
+
     async function loadAdminGames(append) {
         const tbody = document.querySelector('#table-admin-games tbody');
         const moreBtn = document.getElementById('btn-admin-games-more');
@@ -365,19 +424,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await fetch('/api/admin/games?' + params);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-
-            if (data.running) {
-                const rBody = document.querySelector('#table-admin-running tbody');
-                rBody.innerHTML = data.running.length === 0 ? '<tr><td colspan="5">Keine laufenden Rundenspiele.</td></tr>'
-                    : data.running.map(g => `
-                    <tr>
-                        <td><b>${esc(g.joinCode)}</b>${g.ranked ? ' <small>(gewertet)</small>' : ''}${g.isPublic ? ' <small>(öffentlich)</small>' : ''}</td>
-                        <td>${esc(ASYNC_STATUS[g.status] || g.status)}</td>
-                        <td>${esc(g.round || '-')}</td>
-                        <td style="font-size:13px">${g.players.map(p => nameLink(p.name, p.userId) + (p.isBot ? ' (Bot)' : p.replaced ? ' (KI)' : '')).join(', ')}</td>
-                        <td>${esc(new Date(g.updatedAt).toLocaleString('de-DE'))}</td>
-                    </tr>`).join('');
-            }
 
             const start = adminGames.length;
             adminGames = adminGames.concat(data.finished);
