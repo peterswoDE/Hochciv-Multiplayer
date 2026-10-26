@@ -12,7 +12,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 2 | F3 | [Rematch](#f3-rematch) | ✔ | – | ✅ |
 | 3 | F1 | [Chat, emotes, map pings](#f1-chat-emotes-and-map-pings) | ✔ | ✔ | ✅ |
 | 4 | F4 | [Spectator mode](#f4-spectator-mode) | ✔ | ✔ (public games) | ✅ |
-| 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ⬜ |
+| 5 | F6 | [Post-game statistics](#f6-post-game-statistics) | ✔ | ✔ | ✅ |
 | 6 | F7 | [Replays](#f7-replays) | ✔ | ✔ | ⬜ |
 | 7 | F5 | ["Since your last turn" summary](#f5-since-your-last-turn-summary) | ✔ | ✔ (+ e-mail / push) | ⬜ |
 | 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ⬜ |
@@ -119,7 +119,19 @@ The numbers are those of the original proposal. The order puts the small fixes f
 - The end screen gets a *Statistik* tab: a score chart over the rounds and the key moments (wonders, cities taken, empires eliminated, biggest jumps).
 - The data is stored with the match (`games` table), so the match history on the account page can show it later as well.
 
-**Status:** ⬜ planned
+**Implementation**
+- `utils/stats.js`: `record(stats, E, S, names, final)`. A point (`{ r, p: [{ s, c, pop, t, a, w, d }] }`) is taken when a round begins, and at the end the last round's point is taken again. Between points it finds the events: wonders, conquered cities (city owners are tracked), empires out, a new leader. `publicStats()` strips the bookkeeping (`owners`, `wonders`).
+- Live games (`sockets/game.js`): `recordStats()` in every `broadcastState` (a no-op within a round) and the final point in `checkGameOver`. `game:stats` goes to the room right after `game:over`, and again on a reconnect after the end. The match record gets `stats`. The rematch clears them.
+- Rundenspiele (`async/service.js`): `recordStats(g)` in `settle()` before saving, so it covers every move and every KI turn. Stored in `data.stats` and in the match record, and the finished view carries it (`logic.view`).
+- `models/Game.js`: new column `stats` (JSONB, null for older matches; added by `sync({ alter: true })`).
+- `routes/games.js`: `GET /api/games/:id`, a public match summary (names, nations, points, MMR changes) with its statistics. `routes/profile.js` sends only `hasStats` per match, not the statistics themselves.
+- `client/stats.js` (new, injected after `mp.js`): `STATS.render()` draws the chart. The nation colours are the empires' identity on the map, but they fail the colour-blind checks as a chart palette, so every line also has its own marker shape, and there are a legend, end labels (left out where they would collide), a crosshair tooltip with every empire, and a table view (points per round, counts at the end). Key moments list captures per round, wonders by name and the biggest jump. `addToEndScreen()` adds *📊 Statistik* to the end screen, and `loadInto()` loads a stored match. `client/profile.js` draws the chart when a match with statistics is opened.
+- `mp.js`: `MP.lastStats` (live: `game:stats`; Rundenspiel: the view). The log, player list and chat panels are now at `z-index` 29, below the game's dialogs (30): before, they covered every dialog.
+- Texts in `client/i18n.js`.
+
+**Tests:** `tests/stats/stats.test.js`: recording with the engine (one point per round, final scores, events, names), a real Rundenspiel played to the end by the KI through the service (`finish-async.js`: stored, in the view and in the match record), and a live game in the browser (end screen, chart, legend, tooltip, key moments, table, the match record, `GET /api/games/:id`, the chart in the profile).
+
+**Status:** ✅ on `development`
 
 ## F7 Replays
 

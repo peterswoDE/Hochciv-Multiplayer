@@ -10,6 +10,7 @@
  *                started, replaced, penalty, joinedAt }],   // index = slot = newGame() players index
  *     invites: [{ userId, username, status }],
  *     chat:   [message] – the last 200 chat messages (utils/chat.js),
+ *     stats:  score and counts over the rounds, key moments (utils/stats.js),
  *     pre:    null | { plan } (tile map placement) | { draft: { V, D } } (Marathon),
  *     hold:   true while the game waits for an unclaimed seat (S.cur is that seat, its
  *             beginTurn has not run yet),
@@ -714,6 +715,12 @@ function view(g, userId) {
         };
     }
     if (g.status === 'draft') out.draft = deepCopy(g.pre.draft);
+    // the end screen's statistics (utils/stats.js), without their bookkeeping
+    if (g.status === 'finished' && g.stats) {
+        const { owners, wonders, ...stats } = g.stats;
+        void owners; void wonders;
+        out.stats = stats;
+    }
     if (g.state) {
         out.state = g.state;
         out.myIndex = mine ? stateIndex(g, mine.slot) : -1;

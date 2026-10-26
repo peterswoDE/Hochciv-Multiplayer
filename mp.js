@@ -340,6 +340,7 @@ const MP = {
         this.players = data.players;
         this.gameConfig = data.gameConfig || {};
         this.playerIndex = this.spectator ? -1 : null;
+        this.lastStats = null;
         this.lastTurnKey = null;
         this.placementFinished = false;
         this.setTurnClock(null);
@@ -498,6 +499,7 @@ const MP = {
                 if (MP.asyncId) return;
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
+                MP.lastStats = null;
                 MP.setTurnClock(data.turn);
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
@@ -533,6 +535,13 @@ const MP = {
             // Asynchronous games: the full view (status, seats, state / placement / draft)
             this.socket.on('async:update', view => {
                 if (view && view.id === MP.asyncId) ASYNC.apply(view);
+            });
+
+            // Post-game statistics (client/stats.js), right after 'game:over'
+            this.socket.on('game:stats', data => {
+                if (MP.asyncId || !data) return;
+                MP.lastStats = data.stats;
+                if (typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
             });
 
             this.socket.on('game:over', winData => {
@@ -1188,7 +1197,7 @@ window.addEventListener('DOMContentLoaded', () => {
         #mp-persistent-log-container {
             position: fixed; right: 10px; top: 60px; width: 320px;
             background: rgba(255,255,240,0.95); pointer-events: auto;
-            border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
+            border: 2px solid #a89f91; border-radius: 6px; z-index: 29;   /* above map, bar and sheet (≤ 26), below the game's dialogs (30) */
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
             transition: width 0.2s, height 0.2s, border-radius 0.2s;
         }
@@ -1223,7 +1232,7 @@ window.addEventListener('DOMContentLoaded', () => {
         #mp-players-container {
             position: fixed; left: 10px; top: 60px; width: 240px;
             background: rgba(255,255,240,0.95); pointer-events: auto;
-            border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
+            border: 2px solid #a89f91; border-radius: 6px; z-index: 29;   /* above map, bar and sheet (≤ 26), below the game's dialogs (30) */
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; color: #333; overflow: hidden;
             transition: width 0.2s, height 0.2s, border-radius 0.2s;
         }
@@ -1370,6 +1379,7 @@ if (originalGameOver) {
         if (MP.active) {
             MP.addGameOverPlayers();
             MP.addRematch();
+            if (MP.lastStats && typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
             MP.updatePlayerList();
             MP.setTurnClock(null);
         }
@@ -2069,6 +2079,7 @@ const ASYNC = {
     apply: function (view) {
         const prev = this.view;
         this.view = view;
+        MP.lastStats = view.stats || null;            // a finished game: its statistics (client/stats.js)
         MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
         const toastEl = document.querySelector('.mp-waiting-toast');
         if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');

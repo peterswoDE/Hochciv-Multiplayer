@@ -296,7 +296,7 @@ function resetForRematch(sessionId) {
     const { map, setup, ...gameConfig } = session.gameConfig;
     session.gameConfig = { ...gameConfig, seed: crypto.randomInt(2 ** 31) };
     Object.assign(session, {
-        status: 'lobby', state: null, gameOverProcessed: false,
+        status: 'lobby', state: null, gameOverProcessed: false, stats: null,
         placementState: null, draft: null, turnClock: null,
     });
     recordActivity(sessionId);
