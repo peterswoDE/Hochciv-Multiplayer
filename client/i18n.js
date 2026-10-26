@@ -144,7 +144,6 @@
         'Reich': 'Empire',
         'Punkte': 'Points',
         'Warten auf andere Spieler...': 'Waiting for the other players…',
-        'Spiel-Log': 'Game log',
         'Warte auf deinen Zug...': 'Waiting for your turn…',
         'Lobby Zugangsdaten': 'Lobby access',
         'Das Spiel startet …': 'The game is starting …',

@@ -116,13 +116,13 @@ const emit = (page, ev, data) => page.evaluate(([ev, data]) => new Promise(r => 
         await a.click('#mp-rematch');
         const lobby = p => p.waitForFunction(() => !!document.getElementById('mp-p-civ-0') && document.getElementById('screen-menu').classList.contains('show'), null, { timeout: 10000 });
         await Promise.all([lobby(a), lobby(b)]);
-        const la = await a.evaluate(() => ({ code: MP.joinCode, players: MP.players.map(p => p.name + ':' + p.civ), me: MP.lobbyIndex, host: MP.hostIndex, seed: MP.gameConfig.seed, map: MP.gameConfig.map, state: S, log: getComputedStyle(document.getElementById('mp-persistent-log-container')).display }));
+        const la = await a.evaluate(() => ({ code: MP.joinCode, players: MP.players.map(p => p.name + ':' + p.civ), me: MP.lobbyIndex, host: MP.hostIndex, seed: MP.gameConfig.seed, map: MP.gameConfig.map, state: S, list: getComputedStyle(document.getElementById('mp-players-container')).display }));
         const lb = await b.evaluate(() => ({ players: MP.players.length, me: MP.lobbyIndex, waiting: document.body.classList.contains('mp-waiting') }));
         ok(la.code === cred.code, 'rematch: same lobby code', la.code);
         ok(la.players.length === 2 && la.players[0] === 'RematchA:random' && la.players[1] === 'RematchB:russland', 'rematch: A and B only, with their lobby choices (A: Zufall)', la.players.join(', '));
         ok(la.me === 0 && la.host === 0 && lb.me === 1 && lb.players === 2, 'rematch: seats and host', `A ${la.me}, host ${la.host}, B ${lb.me}`);
         ok(la.seed !== seed1, 'rematch: a new seed', `${seed1} → ${la.seed}`);
-        ok(la.state === null && la.log === 'none' && !lb.waiting, 'rematch: the old game is cleared from the screen');
+        ok(la.state === null && la.list === 'none' && !lb.waiting, 'rematch: the old game is cleared from the screen');
         ok(await a.isVisible('text=Spiel starten'), 'rematch: the host can start again');
 
         // the second game starts for both

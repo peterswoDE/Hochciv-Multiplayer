@@ -7,8 +7,9 @@
  *
  * At a desktop window, a phone held sideways and a phone held upright (the game turns the page):
  * code, password and turn timer stay on one line in the header, the collapsed chat is a pill
- * labelled "Chat", the game log does not cover the map's zoom buttons, and open panels
- * (chat, player list, log) never cover each other – opening one collapses the one in its way.
+ * labelled "Chat", there is no second game log beside the game's own "Protokoll", and the open
+ * chat and player list never cover each other or the map's zoom buttons – opening one collapses
+ * the other when it is in the way.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -29,19 +30,18 @@ const ok = (cond, name, info) => {
     if (!cond) failed++;
 };
 
-// rectangles of the open panels and the zoom buttons, and which of them overlap
+// which of the open panels and the map's zoom buttons overlap
 const overlaps = page => page.evaluate(() => {
     const rect = el => el && el.offsetWidth ? el.getBoundingClientRect() : null;
     const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-    const panels = ['mp-chat', 'mp-players-container', 'mp-persistent-log-container']
+    const panels = ['mp-chat', 'mp-players-container']
         .map(id => document.getElementById(id))
         .filter(el => el && el.offsetWidth && !el.classList.contains('mp-log-minimized'))
         .map(el => ({ id: el.id, r: rect(el) }));
     const zoom = rect(document.querySelector('#map') && document.querySelector('#map').parentNode.querySelector('.m-zoom'));
     const out = [];
     panels.forEach((p, i) => panels.slice(i + 1).forEach(q => { if (hit(p.r, q.r)) out.push(p.id + ' / ' + q.id); }));
-    const log = document.getElementById('mp-persistent-log-container');
-    if (zoom && rect(log) && hit(rect(log), zoom)) out.push('log / zoom buttons');
+    if (zoom) panels.forEach(p => { if (hit(p.r, zoom)) out.push(p.id + ' / zoom buttons'); });
     return out;
 });
 
@@ -95,19 +95,12 @@ async function run(browser, [w, h]) {
     const pill = await a.$eval('#mp-chat', el => ({ min: el.classList.contains('mp-log-minimized'), label: getComputedStyle(el, '::before').content }));
     ok(pill.min && /Chat/.test(pill.label), `${size}: closed chat is labelled`, pill.label);
 
-    // the log appears (as after the first turn), then the chat opens
-    await a.evaluate(() => {
-        document.getElementById('mp-persistent-log-container').classList.remove('mp-log-minimized');
-        S.log.push(...Array.from({ length: 8 }, () => ({ txt: 'Testzeile für das Layout', r: S.round })));
-        MP.updatePersistentLog();
-    });
-    await a.waitForTimeout(400);
-    let hits = await overlaps(a);
-    ok(hits.length === 0, `${size}: log shown – nothing covered`, hits.join(', '));
+    ok(!(await a.$('#mp-persistent-log-container')), `${size}: no extra game log panel (the game has "Protokoll")`);
+
     await a.click('#mp-chat');
     await a.waitForTimeout(400);
     ok(await a.evaluate(() => CHAT.isOpen()), `${size}: chat opens`);
-    hits = await overlaps(a);
+    let hits = await overlaps(a);
     ok(hits.length === 0, `${size}: chat open – nothing covered`, hits.join(', '));
 
     // the player list opened again wins over what is in its way
