@@ -361,13 +361,47 @@ const MP = {
         toast(TX('Revanche! Ihr seid zurück in der Lobby.'));
     },
 
+    /** Lobby code and password in the game's header (spectators: the code only). */
+    showCred: function () {
+        const box = $('mp-cred-box');
+        if (!box) return;
+        const code = `<span class="mp-cred-lbl">Code: </span>${escHtml(this.joinCode || '')}`;
+        box.innerHTML = this.spectator ? `👁 ${escHtml(TX('Zuschauer'))} · ${code}`
+            : `${code} · PW ${escHtml(this.password || '')}`;
+    },
+
+    /**
+     * Chat, player list and game log are separate floating panels. On small screens two open ones
+     * can cover each other: the one that just opened (keep) stays, the others collapse. Without
+     * keep, chat comes before the player list before the log (the log opens by itself).
+     */
+    fitPanels: function (keep) {
+        if (keep) this._lastPanel = keep;
+        clearTimeout(this._fitTimer);
+        this._fitTimer = setTimeout(() => {            // after the 0.2 s open transition
+            const open = ['mp-chat', 'mp-players-container', 'mp-persistent-log-container'].map($)
+                .filter(el => el && el.offsetWidth && !el.classList.contains('mp-log-minimized'));
+            if (keep) open.sort((a, b) => (b === keep) - (a === keep));
+            const kept = [];
+            const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+            for (const el of open) {
+                const r = el.getBoundingClientRect();
+                if (!kept.some(k => hit(k, r))) { kept.push(r); continue; }
+                el.classList.add('mp-log-minimized');
+                if (el.id === 'mp-chat' && typeof CHAT !== 'undefined') CHAT.cancelPing();
+            }
+        }, 250);
+    },
+
     updatePersistentLog: function () {
         if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
         const plc = document.getElementById('mp-persistent-log-container');
         const pl = document.getElementById('mp-persistent-log-content');
         if (pl && plc && typeof logHtml === 'function') {
             const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
+            const appears = plc.style.display !== 'block';
             plc.style.display = 'block';
+            if (appears) this.fitPanels();
             pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
             if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
         }
@@ -1037,8 +1071,7 @@ const MP = {
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
-                const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+                this.showCred();
 
                 if (ack.status === 'playing' || ack.status === 'draft') {
                     toast(TX('Spiel läuft, lade Zustand...'));
@@ -1089,8 +1122,7 @@ const MP = {
         this.gameConfig = ack.gameConfig || {};
         this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
         this.spectatorCount = ack.spectators || 0;
-        const credBox = $('mp-cred-box');
-        if (credBox) credBox.textContent = this.spectator ? `👁 ${TX('Zuschauer')} · Code: ${this.joinCode}` : `Code: ${this.joinCode}  PW: ${this.password}`;
+        this.showCred();
         if (ack.status === 'lobby') this.setMode(this.spectator ? 'watching' : 'waiting');
         else toast(TX('Spiel läuft, lade Zustand...'));
     },
@@ -1134,8 +1166,7 @@ const MP = {
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
-                const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+                this.showCred();
 
                 if (ack.status === 'playing' || ack.status === 'draft') {
                     toast(TX('Spiel läuft, lade Zustand...'));
@@ -1199,8 +1230,7 @@ const MP = {
                 this.gameConfig = ack.gameConfig || config;
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
-                const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+                this.showCred();
 
                 this.setMode('waiting');
             });
@@ -1286,32 +1316,30 @@ window.addEventListener('DOMContentLoaded', () => {
             100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
         }
         #mp-persistent-log-container {
-            position: fixed; right: 10px; top: 60px; width: 320px;
+            position: fixed; right: 60px; top: 60px; width: 320px; max-width: calc(100% - 330px);
             background: rgba(255,255,240,0.95); pointer-events: auto;
             border: 2px solid #a89f91; border-radius: 6px; z-index: 29;   /* above map, bar and sheet (≤ 26), below the game's dialogs (30) */
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
             transition: width 0.2s, height 0.2s, border-radius 0.2s;
         }
         #mp-persistent-log-container.mp-log-minimized {
-            width: 44px !important;
-            height: 44px !important;
-            border-radius: 50% !important;
+            width: auto !important;
+            height: 34px !important;
+            border-radius: 17px !important;
             border: none !important;
             background: #a89f91 !important;
             cursor: pointer !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            padding: 0 !important;
+            padding: 0 12px !important;
         }
+        .mp-log-minimized::before { color: #fff; font-weight: bold; font-size: 13px; white-space: nowrap; }
         #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-header,
         #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-content {
             display: none !important;
         }
-        #mp-persistent-log-container.mp-log-minimized::before {
-            content: "📝";
-            font-size: 20px;
-        }
+        #mp-persistent-log-container.mp-log-minimized::before { content: "📝 " var(--mp-lbl-log, "Spiel-Log"); }
         #mp-persistent-log-header {
             background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
         }
@@ -1328,12 +1356,12 @@ window.addEventListener('DOMContentLoaded', () => {
             transition: width 0.2s, height 0.2s, border-radius 0.2s;
         }
         #mp-players-container.mp-log-minimized {
-            width: 44px !important; height: 44px !important; border-radius: 50% !important;
+            width: auto !important; height: 34px !important; border-radius: 17px !important; padding: 0 12px !important;
             border: none !important; background: #a89f91 !important; cursor: pointer !important;
-            display: flex !important; justify-content: center !important; align-items: center !important; padding: 0 !important;
+            display: flex !important; justify-content: center !important; align-items: center !important;
         }
         #mp-players-container.mp-log-minimized > * { display: none !important; }
-        #mp-players-container.mp-log-minimized::before { content: "👥"; font-size: 20px; }
+        #mp-players-container.mp-log-minimized::before { content: "👥 " var(--mp-lbl-players, "Spieler"); }
         #mp-players-container[style*="display: none"] { display: none !important; }
         #mp-players-header {
             background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
@@ -1349,6 +1377,13 @@ window.addEventListener('DOMContentLoaded', () => {
         .mp-pl-tag.off { background: #f1d6cf; color: #9d3b2f; }
         /* Turn timer: countdown in the HUD, banner while the KI plays an absent player's seat */
         #mp-turn-clock { font-family: monospace; font-weight: bold; padding: 4px 10px; margin-left: 6px; }
+        #mp-cred-wrapper { min-width: 0; }
+        #mp-cred-wrapper .res { white-space: nowrap; }
+        @media (max-width: 1000px) {
+            .mp-cred-lbl { display: none; }
+            #mp-cred-box { font-size: 13px !important; }
+            #mp-cred-wrapper .res { padding: 4px 6px !important; }
+        }
         #mp-turn-clock.mp-clock-low { background: #9d3b2f; color: #fff; }
         #mp-afk-banner {
             position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1001;
@@ -1396,6 +1431,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const plc = document.getElementById('mp-persistent-log-container');
         if (plc.classList.contains('mp-log-minimized')) {
             plc.classList.remove('mp-log-minimized');
+            MP.fitPanels(plc);
             const pl = document.getElementById('mp-persistent-log-content');
             if (pl) pl.scrollTop = pl.scrollHeight;
         }
@@ -1415,6 +1451,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(pList);
     const setPlayersOpen = open => {
         pList.classList.toggle('mp-log-minimized', !open);
+        if (open) MP.fitPanels(pList);
         try { localStorage.setItem('mp-players-open', open ? '1' : '0'); } catch (_) { }
     };
     let playersOpen = true;
@@ -2337,6 +2374,9 @@ MP.applyLang = function () {
     const sumBtn = $('mp-summary-btn');
     if (sumBtn) sumBtn.title = TX('Seit deinem letzten Zug');
     document.documentElement.style.setProperty('--mp-on-turn', JSON.stringify(' ◂ ' + TX('am Zug')));
+    [['--mp-lbl-log', 'Spiel-Log'], ['--mp-lbl-players', 'Spieler'], ['--mp-lbl-chat', 'Chat']]
+        .forEach(([v, t]) => document.documentElement.style.setProperty(v, JSON.stringify(TX(t))));
+    if (this.joinCode) this.showCred();
     this.drawLegalFooter();
     if ($('mp-main-auth-container') && $('mp-main-auth-container').innerHTML) this.drawMainMenuAuth();
     ASYNC.drawBadge();
@@ -2442,3 +2482,5 @@ window.addEventListener('DOMContentLoaded', () => {
     `;
     document.head.appendChild(style);
 });
+// A turned phone or a smaller window: open panels may now cover each other
+window.addEventListener('resize', () => MP.fitPanels(MP._lastPanel));

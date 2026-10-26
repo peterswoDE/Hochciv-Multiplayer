@@ -2,7 +2,7 @@
  * In-game chat for live games and Rundenspiele (server: utils/chat.js, sockets/game.js,
  * async/service.js). Loaded on the game page after mp.js (inject.js).
  *
- *   · a panel at the bottom left, collapsible to a 💬 bubble with the number of unread messages;
+ *   · a panel at the bottom left, collapsible to a "💬 Chat" pill with the number of unread messages;
  *   · text, a row of quick emotes, and map pings: 📍, then tap a hex – it pulses on every screen;
  *   · muting a player hides their messages and pings on this device (localStorage).
  *
@@ -91,7 +91,7 @@ const CHAT = {
     setOpen: function (open) {
         $('mp-chat').classList.toggle('mp-log-minimized', !open);
         try { localStorage.setItem('mp-chat-open', open ? '1' : '0'); } catch (_) { }
-        if (open) { this.markSeen(); this.render(); this.scrollDown(); }
+        if (open) { this.markSeen(); this.render(); this.scrollDown(); MP.fitPanels($('mp-chat')); }
         else this.cancelPing();
     },
 
@@ -104,7 +104,9 @@ const CHAT = {
         const box = $('mp-chat');
         if (!box) return;
         const inGame = MP.active && $('screen-game') && $('screen-game').classList.contains('show');
+        const appears = inGame && box.style.display === 'none';
         box.style.display = inGame ? '' : 'none';
+        if (appears) MP.fitPanels();
         box.dataset.unread = this.unread > 0 ? (this.unread > 9 ? '9+' : String(this.unread)) : '';
         const spectator = !!MP.spectator;
         $('mp-chat-form').hidden = spectator;
@@ -224,12 +226,13 @@ const CHAT = {
                 box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; color: #333; overflow: hidden; pointer-events: auto;
                 display: flex; flex-direction: column;
             }
+            /* collapsed: a labelled pill like the player list and the log (mp.js) */
             #mp-chat.mp-log-minimized {
-                width: 44px !important; height: 44px !important; border-radius: 50% !important; border: none !important;
-                background: #a89f91 !important; cursor: pointer !important; justify-content: center; align-items: center;
+                width: auto !important; height: 34px !important; border-radius: 17px !important; border: none !important; padding: 0 12px;
+                background: #a89f91 !important; cursor: pointer !important; justify-content: center; align-items: center; overflow: visible;
             }
             #mp-chat.mp-log-minimized > * { display: none !important; }
-            #mp-chat.mp-log-minimized::before { content: "💬"; font-size: 20px; }
+            #mp-chat.mp-log-minimized::before { content: "💬 " var(--mp-lbl-chat, "Chat"); }
             #mp-chat.mp-log-minimized:not([data-unread=""])::after {
                 content: attr(data-unread); position: absolute; top: -2px; right: -2px; background: #c0392b; color: #fff;
                 border-radius: 9px; min-width: 18px; height: 18px; font-size: 11px; font-weight: bold; line-height: 18px; text-align: center; padding: 0 4px;
