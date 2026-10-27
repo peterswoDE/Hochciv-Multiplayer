@@ -138,6 +138,21 @@
             color: white;
         }
 
+        /* Blocked players (profile) and chat reports (admin) */
+        .blocked-list { list-style: none; padding: 0; margin: 10px 0 0; }
+        .blocked-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #eee; }
+        .report-card { border: 1px solid #ddd; border-radius: 6px; padding: 12px 14px; margin-bottom: 15px; background: rgba(255,255,255,0.6); }
+        .report-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 8px; }
+        .report-meta { color: #666; font-size: 13px; }
+        .report-chat { max-height: 260px; overflow-y: auto; background: rgba(0,0,0,0.04); border-radius: 4px; padding: 6px 8px; font-size: 14px; margin: 8px 0; }
+        .report-chat div { padding: 2px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+        .report-chat .by-reported { background: rgba(157,59,47,0.08); }
+        .report-chat .reported { background: rgba(157,59,47,0.25); font-weight: 600; }
+        .report-chat time { color: #888; font-size: 12px; margin-right: 6px; }
+        .report-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+        .report-actions input { flex: 1; min-width: 180px; }
+        #admin-reports-badge:not(:empty) { background: var(--red); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 12px; margin-left: 4px; }
+
         body.modal-mode .portal-header {
             display: none !important;
         }
@@ -191,6 +206,8 @@
                     style="display:none; color: var(--red);">Spiele</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-users"
                     style="display:none; color: var(--red);">User</button>
+                <button class="nav-tab admin-tab" data-target="tab-admin-reports"
+                    style="display:none; color: var(--red);">Meldungen<span id="admin-reports-badge"></span></button>
                 <button class="nav-tab superadmin-tab" data-target="tab-admin-oauth"
                     style="display:none; color: #5865F2;">OAuth</button>
             </div>
@@ -266,6 +283,13 @@
                         (Demnächst)</button>
                     <button class="btn btn-oauth discord" id="btn-link-discord" disabled
                         style="margin-top: 10px;">Discord verknüpfen (Demnächst)</button>
+                </div>
+
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h3>Blockierte Spieler</h3>
+                    <p style="color: #666; font-size: 14px;">Ihre Chat-Nachrichten und Hinweise auf der Karte siehst du
+                        nicht. Blockieren kannst du im Spiel: auf eine Nachricht tippen.</p>
+                    <ul id="blocked-list" class="blocked-list"></ul>
                 </div>
 
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
@@ -441,6 +465,55 @@
                     </table>
                 </div>
                 <button id="btn-admin-games-more" class="btn small" style="display:none; margin-top:15px;">Weitere laden</button>
+            </div>
+
+            <!-- Admin: chat reports -->
+            <div id="tab-admin-reports" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">Gemeldete Chat-Nachrichten</h2>
+                <div style="display:flex; gap:8px; align-items:center; margin:10px 0 15px;">
+                    <select id="admin-reports-status">
+                        <option value="open">Offen</option>
+                        <option value="closed">Erledigt</option>
+                    </select>
+                    <small id="admin-reports-total" style="color:#666;"></small>
+                    <button id="btn-admin-reports-reload" class="btn small">Neu laden</button>
+                </div>
+                <div id="admin-reports-list"></div>
+                <button id="btn-admin-reports-more" class="btn small" style="display:none; margin-top:15px;">Weitere laden</button>
+
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h3>Wortfilter</h3>
+                    <p style="color: #666; font-size: 14px;">Chat-Texte mit unangemessener Sprache werden nicht gesendet,
+                        sondern automatisch gemeldet; der Absender kann 5 Minuten lang keine Texte schreiben, nach einem
+                        zweiten Mal bis zum Ende des Spiels. Grundlage sind eingebaute Listen (Englisch, Deutsch). Hier
+                        kommen eigene Wörter dazu, oder Wörter, die nie als unangemessen gelten.</p>
+                    <form id="form-admin-word" style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;">
+                        <input type="text" id="admin-word" maxlength="60" required placeholder="Wort" style="flex:1; min-width:160px;">
+                        <select id="admin-word-kind">
+                            <option value="ban">Sperren</option>
+                            <option value="allow">Erlauben</option>
+                        </select>
+                        <select id="admin-word-match">
+                            <option value="word">nur als ganzes Wort</option>
+                            <option value="part">auch als Wortteil</option>
+                        </select>
+                        <button type="submit" class="btn small btn-primary">Hinzufügen</button>
+                    </form>
+                    <p id="msg-admin-word" style="font-size:14px;"></p>
+                    <div style="overflow-x: auto;">
+                        <table id="table-admin-words">
+                            <thead>
+                                <tr><th>Wort</th><th>Art</th><th>Treffer</th><th>Von</th><th></th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <form id="form-admin-wordcheck" style="display:flex; gap:8px; margin:15px 0 5px;">
+                        <input type="text" id="admin-wordcheck" maxlength="300" placeholder="Text zum Prüfen" style="flex:1;">
+                        <button type="submit" class="btn small">Prüfen</button>
+                    </form>
+                    <p id="msg-admin-wordcheck" style="font-size:14px;"></p>
+                </div>
             </div>
 
             <!-- Admin Users Tab -->

@@ -34,6 +34,8 @@ module.exports = function registerAsyncHandlers(io) {
             socket.data.userId = user().id;
             socket.data.asyncId = id;
             socket.join(service.room(id));
+            // after the reply: the client knows which game is open only once it has the view
+            setImmediate(() => socket.emit('chat:history', { id, list: r.chat || [], guest: false, mute: r.chatMute || null }));
             return { ok: true, view: r.view };
         });
 
@@ -46,5 +48,7 @@ module.exports = function registerAsyncHandlers(io) {
         on('async:action', data => service.action(user(), data.id, data.type, data.params));
         on('async:place', data => service.place(user(), data.id, data.o, data.cell));
         on('async:draft', data => service.draftPick(user(), data.id, data.abilityId));
+        on('async:chat', data => service.chat(user(), data.id, data));
+        on('async:report', data => service.report(user(), data.id, data.msgId, data.reason));
     });
 };

@@ -3,6 +3,19 @@ const engine = require('../engine-adapter');
 const { User, Game, sequelize } = require('../models');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
+const config = require('../config');
+const chat = require('../utils/chat');
+const reports = require('../utils/reports');
+const Stats = require('../utils/stats');
+const Replay = require('../utils/replay');
+const Summary = require('../utils/summary');
+
+/* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
+   the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
+   until the player hands it back ('turn:reclaim'). */
+const TURN_TIMES = [0, 60, 120, 180, 300, 600];
+const AFK_AFTER = config.TURN_TIMER_AFK_AFTER;        // 3 (tests may shorten it)
+const AFK_KI_LEVEL = { ranked: 'schwer', normal: 'mittel' };
 
 /**
  * Register a socket event handler that cannot take the process down: the payload is
@@ -34,6 +47,7 @@ module.exports = function registerHandlers(io) {
         let sessionId = null;
         let session = null;
         let me = null;          // this socket's player object in session.players
+        let watcher = null;     // … or its spectator object in session.spectators (spectator mode)
 
         // Players are re-indexed when someone leaves the lobby, so the index is always looked up
         const myIndex = () => (session ? session.players.indexOf(me) : -1);
@@ -50,11 +64,15 @@ module.exports = function registerHandlers(io) {
                 return ack({ error: 'Falsches Passwort.' });
             const player = typeof data.clientId === 'string'
                 ? s.players.find(p => p.kind === 'human' && p.clientId === data.clientId) : null;
+            const spectator = !player && typeof data.clientId === 'string'
+                ? (s.spectators || []).find(w => w.clientId === data.clientId) : null;
+            if (spectator) return watch(s, spectator, ack);
             if (!player) return ack({ error: 'Ungültiger Spieler. Bitte erneut beitreten.' });
 
             sessionId = s.id;
             session = s;
             me = player;
+            watcher = null;
             const playerIndex = myIndex();
 
             sessions.recordActivity(sessionId);
@@ -79,7 +97,8 @@ module.exports = function registerHandlers(io) {
             // Join a Socket.IO room for this session
             socket.join(sessionId);
 
-            ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex });
+            ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
+            socket.emit('chat:history', { list: s.chat || [], guest: !me.dbUserId, mute: me.chatMute || null });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
@@ -90,10 +109,16 @@ module.exports = function registerHandlers(io) {
                 newHostIndex: s.hostIndex
             });
 
+            // A lobby of the matchmaking starts as soon as everyone is there (sockets/match.js)
+            if (s.match && s.match.onConnect) s.match.onConnect();
+
             // Marathon draft in progress: show the reconnecting player the draft screen
             if (s.status === 'draft' && s.draft) {
                 socket.emit('draft:update', engine.draftPayload(s));
             }
+
+            if (s.status === 'finished' && s.stats) socket.emit('game:stats', { stats: Stats.publicStats(s.stats) });
+            if (s.status === 'finished' && s.gameRecord) socket.emit('game:record', s.gameRecord);
 
             // If game is already playing, send current state to the reconnecting player right away
             if (s.status === 'playing' && s.state) {
@@ -101,9 +126,30 @@ module.exports = function registerHandlers(io) {
                 socket.emit('game:start', {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
                     yourIndex: sortedStateIndex,
+                    turn: turnInfo(s),
+                    // back in the middle of one's own turn: its summary again
+                    summary: s.lastSummary && s.lastSummary.me === sortedStateIndex ? s.lastSummary : undefined,
                 });
             }
         });
+
+        /** Spectator mode: bind this socket as a viewer – sees everything, can't act or write. */
+        function watch(s, w, ack) {
+            sessionId = s.id;
+            session = s;
+            me = null;
+            watcher = w;
+            w.connected = true;
+            w.socketId = socket.id;
+            socket.join(sessionId);
+            ack({ ok: true, spectator: true, playerIndex: -1, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
+            socket.emit('chat:history', { list: s.chat || [] });
+            io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(s) });
+            if (s.status === 'draft' && s.draft) socket.emit('draft:update', engine.draftPayload(s));
+            if (s.status === 'playing' && s.state) {
+                socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, turn: turnInfo(s) });
+            }
+        }
 
         // ── Kick Player (Host only) ──────────────────────────────────────────
         on(socket, 'session:kick', (data, ack) => {
@@ -151,6 +197,7 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerCount !== undefined) newConfig.playerCount = int(newConfig.playerCount, 2, 8);
                 if (newConfig.kiCount !== undefined) newConfig.kiCount = int(newConfig.kiCount, 0, 7);
                 if (newConfig.randomCivs !== undefined) newConfig.randomCivs = !!newConfig.randomCivs;
+                if (newConfig.turnTime !== undefined) newConfig.turnTime = TURN_TIMES.includes(newConfig.turnTime) ? newConfig.turnTime : 0;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -189,154 +236,8 @@ module.exports = function registerHandlers(io) {
                 return ack({ error: 'Nur der Host kann das Spiel starten.' });
             if (session.status !== 'lobby')
                 return ack({ error: 'Spiel läuft bereits.' });
-            if (session.players.filter(p => p.kind === 'human').length < 1)
-                return ack({ error: 'Mindestens ein Spieler nötig.' });
-            sessions.recordActivity(sessionId);
-
-            const gc = session.gameConfig;
-            const isPlaettchen = gc.mapKey === 'plaettchen' || gc.mapKey === 'random';
-            const isCustom = gc.mapKey === 'eigene';
-            if (isCustom && !gc.customMap) return ack({ error: 'Es ist noch keine eigene Karte gewählt.' });
-            // Marathon (v83): the standard random map 24 × 36 (four realms) or a custom map set
-            // to the marathon rules; abilities are drafted
-            const isMarathon = gc.mapKey === 'marathon' || (isCustom && !!gc.customMap.marathon);
-            // nations chosen freely, also twice: tile map and custom maps (start points, not stars)
-            const freeCivs = isPlaettchen || isCustom;
-            if (isMarathon && !engine.marathonAvailable())
-                return ack({ error: 'Diese Hochciv-Version kennt den Marathon noch nicht.' });
-
-            /* Empires: playerCount in all, kiCount of them reserved for the KI; free human
-               seats are filled with KI as well. Older lobbies: 4 (or, "Nur Menschen", exactly the
-               humans). The map decides how many are possible (mapLimits in engine.js). */
-            const humans = session.players.length;
-            const total = Number.isInteger(gc.playerCount) ? gc.playerCount : (gc.noKi ? humans : Math.max(4, humans));
-            const kiSeats = Number.isInteger(gc.kiCount) ? gc.kiCount : 0;
-            const lim = engine.getEngine().mapLimits(isPlaettchen ? 'plaettchen' : gc.mapKey, gc.customMap);
-            if (total < lim.min || total > lim.max)
-                return ack({ error: lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.` });
-            if (humans > total - kiSeats)
-                return ack({ error: `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.` });
-            gc.playerCount = total;
-            gc.duel = total === 2;
-
-            // "Random nations for everyone": the host's setting overrides every player's choice
-            if (gc.randomCivs) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
-
-            // Check for duplicate civilizations (fixed maps: every nation once; "random" is
-            // resolved below to a nation nobody else has)
-            if (!freeCivs) {
-                const usedCivs = new Set();
-                for (const p of session.players) {
-                    if (p.civ === 'random' || p.civ === 'zufall') continue;
-                    if (usedCivs.has(p.civ)) return ack({ error: `Die Nation '${p.civ}' wurde mehrfach gewählt! Auf dieser Karte sitzt jede Nation genau einmal.` });
-                    usedCivs.add(p.civ);
-                }
-            }
-
-            // Fill the empty seats with KI players up to the number of empires
-            while (session.players.length < total) {
-                session.players.push({
-                    index: session.players.length,
-                    kind: 'ki',
-                    kiLevel: engine.kiLevelFor(session.gameConfig.difficulty),
-                    name: `KI ${session.players.length}`,
-                    civ: 'random',
-                    ability: 'random',
-                    connected: false
-                });
-            }
-
-            // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
-            const engineApi = engine.getEngine();
-            const CIVS = engineApi.CIVS || [];
-            const allCivs = CIVS.map(c => c.k).filter(k => k !== 'random' && k !== 'zufall');
-            const pick = list => list[Math.floor(Math.random() * list.length)];
-            // Random nations: fixed maps take one nobody has; free maps the least used ones, so
-            // with more than four empires every nation comes once before any comes twice
-            session.players.forEach((p, i) => {
-                if (p.civ !== 'random' && p.civ !== 'zufall') return;
-                const used = k => session.players.filter((q, j) => j !== i && q.civ === k).length;
-                const fewest = Math.min(...allCivs.map(used));
-                const pool = allCivs.filter(k => freeCivs ? used(k) === fewest : used(k) === 0);
-                p.civ = pick(pool.length > 0 ? pool : allCivs);
-            });
-            session.players.forEach(p => {
-                if (p.ability !== 'random' && p.ability !== 'zufall') return;
-                const civDef = CIVS.find(c => c.k === p.civ) || { abilities: [{ k: 'basis' }] };
-                p.ability = pick(civDef.abilities).k;
-            });
-
-            engine.assignDoubles(session.players);
-
-            // Update clients immediately with finalized synced randomly rolled names & abilities
-            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
-
-            try {
-                if (isPlaettchen) {
-                    const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
-                    const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
-                    if (!plan) return ack({ error: 'Für diese Spielerzahl gibt es keine Plättchenkarte.' });
-
-                    // v66+: starting techs and wonder pools are rolled before placement
-                    // (the clients roll the same thing locally from the same seed).
-                    session.gameConfig.seed = seed;
-                    session.gameConfig.setup = engine.rollSetup(session, seed);
-
-                    // Computer seats place right away: the KI looks at what a human in its
-                    // seat would see (needs the setup above); bot rules are the fallback.
-                    const rnd = engineApi.mapRng(seed + 12345);
-                    const humanSeats = [];
-                    plan.seats.forEach(seat => {
-                        const spl = session.players[seat.idx];
-                        if (spl && spl.kind === 'ki') {
-                            const err = typeof engineApi.kiPlaceSeat === 'function'
-                                ? engineApi.kiPlaceSeat(plan, seat, { civ: spl.civ, ability: spl.ability }, session.gameConfig.setup) : 'no ki';
-                            if (err) engineApi.botPlaceSeat(plan, seat, rnd);
-                        } else if (spl && spl.kind === 'bot') {
-                            engineApi.botPlaceSeat(plan, seat, rnd);
-                        } else {
-                            humanSeats.push(seat);
-                        }
-                    });
-
-                    session.status = 'placement';
-                    session.placementState = {
-                        plan, seed, rnd,
-                        humanSeats,
-                        placedCount: 0
-                    };
-
-                    ack({ ok: true });
-                    const { setup: _setup, ...publicCfg } = session.gameConfig;
-                    io.to(sessionId).emit('placement:start', {
-                        cfg: publicCfg,
-                        seed,
-                        queue: humanSeats,
-                        at: 0,
-                        plan
-                    });
-                    return;
-                }
-
-                if (isMarathon) {
-                    // Map + starting techs first; everyone sees them and drafts abilities
-                    engine.startDraft(session);
-                    session.status = 'draft';
-                    ack({ ok: true });
-                    if (engine.isDraftDone(session)) return finishDraft(io, session);
-                    io.to(sessionId).emit('draft:update', engine.draftPayload(session));
-                    return;
-                }
-
-                session.state = engine.createGame(session);
-                session.status = 'playing';
-            } catch (err) {
-                console.error('Error creating game:', err);
-                return ack({ error: 'Fehler beim Spielstart.' });
-            }
-
-            ack({ ok: true });
-            emitGameStart(io, session);
+            const err = startGame(io, session);
+            ack(err ? { error: err } : { ok: true });
         });
 
         // ── Marathon draft: a human picks an ability ─────────────────────────
@@ -374,6 +275,8 @@ module.exports = function registerHandlers(io) {
             });
             if (err) return ack({ error: err });
 
+            sessions.recordActivity(sessionId);
+            me.missedTurns = 0;             // acting is being there (turn timer)
             ack({ ok: true });
 
             // Re-sync all connected clients immediately after a valid action
@@ -394,6 +297,7 @@ module.exports = function registerHandlers(io) {
             const err = engine.getEngine().placeSeat(st.plan, seat, data.o, data.cell);
             if (err) return ack({ error: err });
 
+            sessions.recordActivity(sessionId);
             st.placedCount++;
             ack({ ok: true });
 
@@ -410,9 +314,92 @@ module.exports = function registerHandlers(io) {
             }
         });
 
+        // ── Chat: text, emotes, map pings (utils/chat.js) ────────────────────
+        on(socket, 'chat:send', async (data, ack) => {
+            if (watcher) return ack({ error: 'Zuschauer können nicht schreiben.' });
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            // texts: only with an account, and not during a timeout of the word filter
+            if (data.kind !== 'emote' && data.kind !== 'ping') {
+                if (!me.dbUserId) return ack({ error: reports.GUEST_TEXT, guest: true });
+                if (reports.muteActive(me.chatMute)) return ack({ error: 'Du kannst gerade keine Texte schreiben.', mute: me.chatMute });
+            }
+            const r = chat.build({ slot: myIndex(), name: me.name, uid: me.dbUserId }, data, `live:${sessionId}:${me.clientId}`);
+            if (r.error) return ack({ error: r.error });
+            if (r.msg.kind === 'text') {
+                const v = await reports.moderate({ source: 'live', sourceId: session.id, history: session.chat, msg: r.msg, sender: { id: me.dbUserId, name: me.name }, mute: me.chatMute });
+                if (v) { me.chatMute = v.mute; return ack(v); }
+            }
+            session.chat = chat.remember(session.chat, r.msg, chat.LIVE_HISTORY);
+            ack({ ok: true });
+            io.to(sessionId).emit('chat:msg', r.msg);
+        });
+
+        // Report another player's message (utils/reports.js): players and spectators
+        on(socket, 'chat:report', async (data, ack) => {
+            const who = bound() ? me : watcher;
+            if (!session || !who) return ack({ error: 'Nicht verbunden.' });
+            const u = socket.request.user;
+            const r = await reports.report({
+                source: 'live', sourceId: session.id, history: session.chat, msgId: data && data.id, reason: data && data.reason,
+                reporter: { id: u ? u.id : null, name: u ? u.username : who.name, slot: bound() ? myIndex() : -1 },
+            }).catch(err => { console.error('[Reports]', err); return { error: 'Serverfehler' }; });
+            ack(r);
+        });
+
+        // ── Rematch (host only): the finished game goes back to its lobby ─────
+        on(socket, 'session:rematch', (_data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost()) return ack({ error: 'Nur der Host kann eine Revanche starten.' });
+            const r = sessions.resetForRematch(sessionId);
+            if (typeof r === 'string') return ack({ error: r });
+            ack({ ok: true });
+            // Players who left are no longer in the lobby; everyone else gets their new seat
+            session.players.forEach((p, i) => {
+                if (!p.socketId) return;
+                io.to(p.socketId).emit('session:rematch', {
+                    playerIndex: i, hostIndex: session.hostIndex,
+                    players: publicPlayers(session), gameConfig: session.gameConfig,
+                });
+            });
+            // spectators keep watching: the lobby, then the next game
+            for (const w of session.spectators || []) {
+                if (!w.connected || !w.socketId) continue;
+                io.to(w.socketId).emit('session:rematch', {
+                    playerIndex: -1, spectator: true, hostIndex: session.hostIndex,
+                    players: publicPlayers(session), gameConfig: session.gameConfig,
+                });
+            }
+        });
+
+        // ── Turn timer: an absent player takes their seat back from the KI ───
+        on(socket, 'turn:reclaim', (_data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'playing' || !session.state) return ack({ error: 'Spiel läuft nicht.' });
+            if (!me.afk) return ack({ ok: true });
+            const S = session.state;
+            const pi = engine.stateIndexOf(S, myIndex(), me);
+            if (pi === -1) return ack({ error: 'Ungültiger Spieler.' });
+            me.afk = false;
+            me.missedTurns = 0;
+            S.players[pi].kind = 'human';
+            // The KI may already sit in this turn (its loop stops at a human): the clock starts anew
+            if (S.cur === pi) session.turnClock = null;
+            sessions.recordActivity(sessionId);
+            ack({ ok: true });
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+            broadcastState(io, session);
+        });
+
         // ── Disconnect ───────────────────────────────────────────────────────
         socket.on('disconnect', () => {
             try {
+                if (watcher) {
+                    if (watcher.socketId !== socket.id) return;     // replaced by a newer connection
+                    watcher.connected = false;
+                    watcher.socketId = null;
+                    io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(session) });
+                    return;
+                }
                 // Ignore if this socket was kicked or replaced by a newer connection of the same player
                 if (!bound() || me.socketId !== socket.id) return;
                 const playerIndex = myIndex();
@@ -478,9 +465,184 @@ module.exports = function registerHandlers(io) {
             }
         }, 15000);
     }
+    // Turn timer: once a second, end the turns whose time is up
+    if (!io.__turnInterval) {
+        io.__turnInterval = setInterval(() => {
+            const now = Date.now();
+            for (const session of sessions.getAllSessions().values()) {
+                const tc = session.turnClock;
+                if (!tc || !tc.deadline || now < tc.deadline) continue;
+                try {
+                    timeOutTurn(io, session);
+                } catch (err) {
+                    console.error(`[Turn timer] Error in session ${session.id}:`, err);
+                }
+            }
+        }, 1000);
+        io.__turnInterval.unref();
+    }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Start the game of a lobby: check the settings, fill the free seats with KI, deal random
+ * nations and abilities, then the tile placement, the Marathon draft or the game itself.
+ * Called by the host's 'game:start' and by the matchmaking (sockets/match.js).
+ * Returns an error message (German) or null.
+ */
+function startGame(io, session) {
+    if (session.players.filter(p => p.kind === 'human').length < 1)
+        return 'Mindestens ein Spieler nötig.';
+    sessions.recordActivity(session.id);
+
+    const gc = session.gameConfig;
+    const isPlaettchen = gc.mapKey === 'plaettchen' || gc.mapKey === 'random';
+    const isCustom = gc.mapKey === 'eigene';
+    if (isCustom && !gc.customMap) return 'Es ist noch keine eigene Karte gewählt.';
+    // Marathon (v83): the standard random map 24 × 36 (four realms) or a custom map set
+    // to the marathon rules; abilities are drafted
+    const isMarathon = gc.mapKey === 'marathon' || (isCustom && !!gc.customMap.marathon);
+    // nations chosen freely, also twice: tile map and custom maps (start points, not stars)
+    const freeCivs = isPlaettchen || isCustom;
+    if (isMarathon && !engine.marathonAvailable())
+        return 'Diese Hochciv-Version kennt den Marathon noch nicht.';
+
+    /* Empires: playerCount in all, kiCount of them reserved for the KI; free human
+       seats are filled with KI as well. Older lobbies: 4 (or, "Nur Menschen", exactly the
+       humans). The map decides how many are possible (mapLimits in engine.js). */
+    const humans = session.players.length;
+    const total = Number.isInteger(gc.playerCount) ? gc.playerCount : (gc.noKi ? humans : Math.max(4, humans));
+    const kiSeats = Number.isInteger(gc.kiCount) ? gc.kiCount : 0;
+    const lim = engine.getEngine().mapLimits(isPlaettchen ? 'plaettchen' : gc.mapKey, gc.customMap);
+    if (total < lim.min || total > lim.max)
+        return lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.`;
+    if (humans > total - kiSeats)
+        return `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.`;
+    gc.playerCount = total;
+    gc.duel = total === 2;
+
+    // Each player's own lobby choice, for a rematch ("random" is resolved below)
+    session.players.forEach(p => { p.choice = { civ: p.civ, ability: p.ability }; });
+
+    // "Random nations for everyone": the host's setting overrides every player's choice
+    if (gc.randomCivs) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
+
+    // Check for duplicate civilizations (fixed maps: every nation once; "random" is
+    // resolved below to a nation nobody else has)
+    if (!freeCivs) {
+        const usedCivs = new Set();
+        for (const p of session.players) {
+            if (p.civ === 'random' || p.civ === 'zufall') continue;
+            if (usedCivs.has(p.civ)) return `Die Nation '${p.civ}' wurde mehrfach gewählt! Auf dieser Karte sitzt jede Nation genau einmal.`;
+            usedCivs.add(p.civ);
+        }
+    }
+
+    // Fill the empty seats with KI players up to the number of empires
+    while (session.players.length < total) {
+        session.players.push({
+            index: session.players.length,
+            kind: 'ki',
+            kiLevel: engine.kiLevelFor(session.gameConfig.difficulty),
+            name: `KI ${session.players.length}`,
+            civ: 'random',
+            ability: 'random',
+            connected: false
+        });
+    }
+
+    // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
+    const engineApi = engine.getEngine();
+    const CIVS = engineApi.CIVS || [];
+    const allCivs = CIVS.map(c => c.k).filter(k => k !== 'random' && k !== 'zufall');
+    const pick = list => list[Math.floor(Math.random() * list.length)];
+    // Random nations: fixed maps take one nobody has; free maps the least used ones, so
+    // with more than four empires every nation comes once before any comes twice
+    session.players.forEach((p, i) => {
+        if (p.civ !== 'random' && p.civ !== 'zufall') return;
+        const used = k => session.players.filter((q, j) => j !== i && q.civ === k).length;
+        const fewest = Math.min(...allCivs.map(used));
+        const pool = allCivs.filter(k => freeCivs ? used(k) === fewest : used(k) === 0);
+        p.civ = pick(pool.length > 0 ? pool : allCivs);
+    });
+    session.players.forEach(p => {
+        if (p.ability !== 'random' && p.ability !== 'zufall') return;
+        const civDef = CIVS.find(c => c.k === p.civ) || { abilities: [{ k: 'basis' }] };
+        p.ability = pick(civDef.abilities).k;
+    });
+
+    engine.assignDoubles(session.players);
+
+    // Update clients immediately with finalized synced randomly rolled names & abilities
+    io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
+
+    try {
+        if (isPlaettchen) {
+            const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
+            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
+            if (!plan) return 'Für diese Spielerzahl gibt es keine Plättchenkarte.';
+
+            // v66+: starting techs and wonder pools are rolled before placement
+            // (the clients roll the same thing locally from the same seed).
+            session.gameConfig.seed = seed;
+            session.gameConfig.setup = engine.rollSetup(session, seed);
+
+            // Computer seats place right away: the KI looks at what a human in its
+            // seat would see (needs the setup above); bot rules are the fallback.
+            const rnd = engineApi.mapRng(seed + 12345);
+            const humanSeats = [];
+            plan.seats.forEach(seat => {
+                const spl = session.players[seat.idx];
+                if (spl && spl.kind === 'ki') {
+                    const err = typeof engineApi.kiPlaceSeat === 'function'
+                        ? engineApi.kiPlaceSeat(plan, seat, { civ: spl.civ, ability: spl.ability }, session.gameConfig.setup) : 'no ki';
+                    if (err) engineApi.botPlaceSeat(plan, seat, rnd);
+                } else if (spl && spl.kind === 'bot') {
+                    engineApi.botPlaceSeat(plan, seat, rnd);
+                } else {
+                    humanSeats.push(seat);
+                }
+            });
+
+            session.status = 'placement';
+            session.placementState = {
+                plan, seed, rnd,
+                humanSeats,
+                placedCount: 0
+            };
+
+            const { setup: _setup, ...publicCfg } = session.gameConfig;
+            io.to(session.id).emit('placement:start', {
+                cfg: publicCfg,
+                seed,
+                queue: humanSeats,
+                at: 0,
+                plan
+            });
+            return null;
+        }
+
+        if (isMarathon) {
+            // Map + starting techs first; everyone sees them and drafts abilities
+            engine.startDraft(session);
+            session.status = 'draft';
+            if (engine.isDraftDone(session)) { finishDraft(io, session); return null; }
+            io.to(session.id).emit('draft:update', engine.draftPayload(session));
+            return null;
+        }
+
+        session.state = engine.createGame(session);
+        session.status = 'playing';
+    } catch (err) {
+        console.error('Error creating game:', err);
+        return 'Fehler beim Spielstart.';
+    }
+
+    emitGameStart(io, session);
+    return null;
+}
+
 
 /** A lobby player was removed at `removedIndex` – keep hostIndex pointing at the same player. */
 function fixHostAfterRemoval(session, removedIndex) {
@@ -500,23 +662,31 @@ function checkGameOver(io, session) {
     if (!session.state.over || session.gameOverProcessed) return;
     session.gameOverProcessed = true;
     session.status = 'finished';
+    recordStats(session, true);
     io.to(session.id).emit('game:over', session.state.over);
+    io.to(session.id).emit('game:stats', { stats: Stats.publicStats(session.stats) });
     // Always record history, calculate MMR only if ranked
     const isRanked = session.gameConfig && session.gameConfig.ranked === true;
     processGameOverMmr(session, io, session.id, isRanked);
 }
 
-/** Send every connected player the fresh game state and their own state index. */
+/** Send every connected player the fresh game state and their own state index (spectators: -1). */
 function emitGameStart(io, session) {
+    recordStats(session, false);            // the start is the first point / frame
     session.players.forEach((lobbyPlayer, lobbyIndex) => {
         if (lobbyPlayer.socketId) {
             const finalIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
             io.to(lobbyPlayer.socketId).emit('game:start', {
                 state: engine.stateForPlayer(session.state, finalIndex),
                 yourIndex: finalIndex,
+                turn: turnInfo(session),
             });
         }
     });
+    for (const w of session.spectators || []) {
+        if (!w.connected || !w.socketId) continue;
+        io.to(w.socketId).emit('game:start', { state: engine.stateForPlayer(session.state, -1), yourIndex: -1, turn: turnInfo(session) });
+    }
 }
 
 /** Marathon: all abilities are drafted – start the real game with them. */
@@ -543,11 +713,62 @@ function publicPlayers(session) {
         userId: p.dbUserId || null,     // account for the player profile (client/profile.js)
         kind: p.kind,                   // 'human' | 'ki' (the client places KI seats like the server)
         isBot: p.kind === 'bot' || p.kind === 'ki',     // computer seat (KI fill-in)
+        afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
     }));
+}
+
+/** Statistics over the rounds (utils/stats.js) – names from the lobby, KI seats show their nation. */
+/** Display names by state index: the lobby name of humans, null for KI seats (their nation is shown). */
+function stateNames(session) {
+    return session.state.players.map(sp => {
+        const lp = session.players[sp.slot];
+        return lp && lp.kind === 'human' ? lp.name : null;
+    });
+}
+
+/** Statistics over the rounds (utils/stats.js) and the replay frame of a new turn (utils/replay.js). */
+function recordStats(session, final) {
+    const S = session.state;
+    if (!S) return;
+    try {
+        session.stats = Stats.record(session.stats, engine.getEngine(), S, stateNames(session), final);
+    } catch (err) {
+        console.error(`[Stats] Recording failed in session ${session.id}:`, err);
+    }
+    try {
+        session.replay = Replay.addLive(session.replay, S);
+    } catch (err) {
+        console.error(`[Replay] Recording failed in session ${session.id}:`, err);
+    }
+    try {
+        session.marks = Summary.track(session.marks, engine.getEngine(), S);
+    } catch (err) {
+        console.error(`[Summary] Tracking failed in session ${session.id}:`, err);
+    }
+}
+
+/**
+ * "Since your last turn" (utils/summary.js): when a human's turn begins, what happened since
+ * their last one – sent once with that state update (public information, derived from the state).
+ */
+function turnSummary(session) {
+    const S = session.state;
+    const key = S.round + ':' + S.cur;
+    if (session.summaryKey === key) return undefined;
+    session.summaryKey = key;
+    session.lastSummary = null;
+    if (S.over || engine.isAutoPlayer(S.players[S.cur])) return undefined;
+    try {
+        session.lastSummary = Summary.summarize(engine.getEngine(), S, session.marks, S.cur);
+    } catch (err) {
+        console.error(`[Summary] Failed in session ${session.id}:`, err);
+    }
+    return session.lastSummary || undefined;
 }
 
 function broadcastState(io, session) {
     if (!session || !session.state) return;
+    recordStats(session, false);
 
     // Instead of deep cloning per-player in a loop, clone the state exactly once.
     // The engine's stateForPlayer currently treats the state as fully visible for all players.
@@ -558,7 +779,70 @@ function broadcastState(io, session) {
         state: sharedState,
         currentPlayer: session.state.cur,
         round: session.state.round,
+        turn: turnInfo(session),
+        summary: turnSummary(session),
     });
+}
+
+// ── Turn timer ────────────────────────────────────────────────────────────────
+
+const turnTimeMs = session => {
+    const t = session.gameConfig && session.gameConfig.turnTime;
+    return TURN_TIMES.includes(t) && t > 0 ? t * 1000 * config.TURN_TIMER_SCALE : 0;
+};
+
+/**
+ * Keep session.turnClock = { key, deadline } in step with the state: a new turn (round and
+ * player) of a human starts the clock, KI / bot turns and games without a limit have none.
+ */
+function updateTurnClock(session) {
+    const S = session.state;
+    if (!S || S.over || session.status !== 'playing') { session.turnClock = null; return; }
+    const key = S.round + ':' + S.cur;
+    if (session.turnClock && session.turnClock.key === key) return;
+    const ms = turnTimeMs(session);
+    const human = !engine.isAutoPlayer(S.players[S.cur]);
+    session.turnClock = { key, deadline: ms && human ? Date.now() + ms : null };
+}
+
+/** For the clients: { total, left } in ms (left null: no clock running now), or null without a limit. */
+function turnInfo(session) {
+    updateTurnClock(session);
+    const total = turnTimeMs(session);
+    if (!total) return null;
+    const tc = session.turnClock;
+    return { total, left: tc && tc.deadline ? Math.max(0, tc.deadline - Date.now()) : null };
+}
+
+/**
+ * The current player's time is up: the KI plays the rest of the turn and ends it. After
+ * AFK_AFTER such turns in a row the KI keeps the seat – unless nobody else would be left to
+ * play, then only this turn is played for them.
+ */
+function timeOutTurn(io, session) {
+    const S = session.state;
+    session.turnClock.deadline = null;              // once per turn
+    if (!S || S.over || session.status !== 'playing') return;
+    const pi = S.cur;
+    if (engine.isAutoPlayer(S.players[pi])) return;
+    const lp = session.players.find((p, i) => engine.stateIndexOf(S, i, p) === pi);
+    if (!lp) return;
+
+    lp.missedTurns = (lp.missedTurns || 0) + 1;
+    const othersActive = session.players.some(p => p !== lp && p.kind === 'human' && !p.afk);
+    lp.afk = lp.missedTurns >= AFK_AFTER && othersActive;
+    const level = session.gameConfig.ranked ? AFK_KI_LEVEL.ranked : AFK_KI_LEVEL.normal;
+    console.log(`[Turn timer] Session ${session.id}: time up for ${lp.name} (${lp.missedTurns} in a row${lp.afk ? ', KI keeps the seat' : ''})`);
+
+    sessions.recordActivity(session.id);
+    if (lp.socketId) io.to(lp.socketId).emit('turn:timeout', { afk: lp.afk });
+    engine.finishTurnForAbsent(S, level, lp.afk, () => {
+        broadcastState(io, session);
+        checkGameOver(io, session);
+    });
+    if (lp.afk) io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
+    broadcastState(io, session);
+    checkGameOver(io, session);
 }
 
 /**
@@ -654,12 +938,25 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
         }
 
         // Log the Historic Match Record
-        await Game.create({
-            version: engine.getEngine().APP_VERSION || 'Unknown',
+        const version = engine.getEngine().APP_VERSION || 'Unknown';
+        const game = await Game.create({
+            version,
             durationRounds: session.state.round,
             winnerUsername: playersData.find(p => p.isWinner)?.dbUsername || null,
-            participants: playersData
+            participants: playersData,
+            stats: Stats.publicStats(session.stats),
         });
+
+        // The replay (utils/replay.js) – then the end screen can offer it
+        let replay = false;
+        try {
+            replay = await Replay.save(game.id, version, stateNames(session), session.replay && session.replay.frames);
+        } catch (err) {
+            console.error(`[Replay] Saving failed for ${sessionId}:`, err);
+        }
+        session.replay = null;
+        session.gameRecord = { id: game.id, replay };
+        if (io) io.to(sessionId).emit('game:record', session.gameRecord);
 
         console.log(`[Stats] Successfully processed game ${sessionId}. Ranked: ${isRanked}. History saved.`);
 
@@ -670,3 +967,6 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
 
 // for tests/score
 module.exports.processGameOverMmr = processGameOverMmr;
+// for the matchmaking (sockets/match.js)
+module.exports.startGame = startGame;
+module.exports.publicPlayers = publicPlayers;

@@ -122,7 +122,14 @@ function seat(instanceId, user) {
 
         const clientId = rec.clients.get(user.id) || crypto.randomUUID();
         const r = sessions.joinSession(s.joinCode, s.password, { name, clientId });
-        if (typeof r === 'string') return r;
+        if (typeof r === 'string') {
+            // The game runs already or the lobby is full: watch instead (spectator mode)
+            const w = sessions.addSpectator(s.joinCode, s.password, { name, clientId });
+            if (typeof w === 'string') return w;
+            rec.clients.set(user.id, clientId);
+            rec.touched = Date.now();
+            return { sessionId: s.id, joinCode: s.joinCode, password: s.password, clientId, playerIndex: -1, spectator: true, created: false };
+        }
         rec.clients.set(user.id, clientId);
         rec.touched = Date.now();
         return { sessionId: s.id, joinCode: s.joinCode, password: s.password, clientId, playerIndex: r.playerIndex, created: false };

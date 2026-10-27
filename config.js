@@ -31,6 +31,12 @@ module.exports = {
     MAX_PLAYERS: 8,              // empires per game (the tile map and custom maps go up to 8)
     MAX_SESSIONS: 500,         // in-memory lobbies/games at once
     MAX_NAME_LENGTH: 30,
-    SESSION_TIMEOUT_MS: 2 * 60 * 60 * 1000,  // 2 hours
+    MAX_SPECTATORS: 20,        // watching a live game without a seat
+    SESSION_TIMEOUT_MS: 2 * 60 * 60 * 1000,  // a running live game without any action for 2 hours is removed
+    LOBBY_TIMEOUT_MS: 10 * 60 * 1000,        // lobbies and finished games: 10 minutes
     CLEANUP_INTERVAL_MS: 5 * 60 * 1000,       // check every 5 min
+    // Turn timer of live games: the host's seconds are multiplied by this (tests: e.g. 0.05)
+    TURN_TIMER_SCALE: Number(process.env.TURN_TIMER_SCALE) > 0 ? Number(process.env.TURN_TIMER_SCALE) : 1,
+    // … and after this many timed-out turns in a row the KI keeps the seat (tests: 2 – shorter games)
+    TURN_TIMER_AFK_AFTER: Number(process.env.TURN_TIMER_AFK_AFTER) >= 1 ? Number(process.env.TURN_TIMER_AFK_AFTER) : 3,
 };

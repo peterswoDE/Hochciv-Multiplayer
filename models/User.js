@@ -102,6 +102,10 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
         },
+        // Wrong authenticator codes in a row (utils/totp.js checkLimited): after 5 the codes are
+        // refused until totpLockedUntil
+        totpAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
+        totpLockedUntil: { type: DataTypes.DATE, allowNull: true },
         totpEnabled: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
@@ -130,6 +134,13 @@ module.exports = (sequelize) => {
         notifyPush: {
             type: DataTypes.BOOLEAN,
             defaultValue: true,
+            allowNull: false,
+        },
+        // Chat: players whose messages this user doesn't see (utils/reports.js),
+        // [{ id (account) | null, name, at }] – guests are blocked by name
+        blockedPlayers: {
+            type: DataTypes.JSONB,
+            defaultValue: [],
             allowNull: false,
         },
         currentChallenge: {

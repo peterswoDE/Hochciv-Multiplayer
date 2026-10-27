@@ -14,6 +14,11 @@ const engine = require('../engine-adapter');
 const { notify } = require('../utils/notify');
 const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
+const chatLib = require('../utils/chat');
+const reports = require('../utils/reports');
+const Stats = require('../utils/stats');
+const Replay = require('../utils/replay');
+const Summary = require('../utils/summary');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
@@ -35,7 +40,8 @@ function fromRow(row) {
         id: row.id, joinCode: row.joinCode, hostUserId: row.hostUserId, status: row.status,
         engine: d.engine || null,          // null: started before versions were recorded = v83
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
-        hold: !!d.hold, result: d.result || null, meta: d.meta || {},
+        hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [], chatMutes: d.chatMutes || {}, stats: d.stats || null,
+        replay: d.replay || null, marks: d.marks || null,
         state: row.state || null,
         waitSince: row.waitSince ? new Date(row.waitSince).getTime() : Date.now(),
         reminded: !!row.reminded,
@@ -59,7 +65,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], chatMutes: g.chatMutes || {}, stats: g.stats || null, replay: g.replay || null, marks: g.marks || null },
         state: S,
     };
 }
@@ -115,8 +121,43 @@ async function withGame(id, fn) {
     return run;
 }
 
+/** Display names by state index: the players (also after a KI takeover), null for KI seats. */
+function stateNames(g) {
+    return g.state.players.map(sp => {
+        const seat = g.seats[sp.slot];
+        return seat && (seat.kind === 'human' || seat.replaced) ? seat.name : null;
+    });
+}
+
+/**
+ * Statistics over the rounds (utils/stats.js): a new round adds a point, the end the final one.
+ * The replay keeps a frame per turn until the game ends (utils/replay.js).
+ */
+async function recordStats(g) {
+    if (!g.state || !['playing', 'finished'].includes(g.status)) return;
+    if (g.stats && g.stats.final) return;
+    try {
+        g.stats = Stats.record(g.stats, L.ENG(g).getEngine(), g.state, stateNames(g), g.status === 'finished');
+    } catch (err) {
+        console.error(`[Async] Statistics failed for ${g.id}:`, err);
+    }
+    if (g.status === 'playing') {
+        try {
+            await Replay.addAsync(g);
+        } catch (err) {
+            console.error(`[Async] Replay frame failed for ${g.id}:`, err);
+        }
+        try {
+            g.marks = Summary.track(g.marks, L.ENG(g).getEngine(), g.state);       // "since your last turn"
+        } catch (err) {
+            console.error(`[Async] Summary tracking failed for ${g.id}:`, err);
+        }
+    }
+}
+
 /** Save + broadcast; with `before`, also restart the clock and send notifications. */
 async function settle(g, before) {
+    await recordStats(g);
     if (before) {
         const key = waitKey(g);
         if (key !== before.key) { g.waitSince = Date.now(); g.reminded = false; }
@@ -132,13 +173,11 @@ async function settle(g, before) {
     if (fresh.length) {
         const viewing = await viewers(g.id);
         const absent = fresh.filter(u => !viewing.has(u));
-        notify(absent, {
-            type: 'turn', gameId: g.id,
-            subject: 'Du bist am Zug',
-            text: g.status === 'placement' ? 'Lege dein Startplättchen in deinem Rundenspiel.'
-                : g.status === 'draft' ? 'Du bist im Draft deines Rundenspiels dran.'
-                    : `Du bist in deinem Rundenspiel am Zug (Runde ${g.state ? g.state.round : 1}).`,
-        });
+        const text = g.status === 'placement' ? 'Lege dein Startplättchen in deinem Rundenspiel.'
+            : g.status === 'draft' ? 'Du bist im Draft deines Rundenspiels dran.'
+                : `Du bist in deinem Rundenspiel am Zug (Runde ${g.state ? g.state.round : 1}).`;
+        // each with what happened since their last turn (utils/summary.js)
+        for (const u of absent) notify([u], { type: 'turn', gameId: g.id, subject: 'Du bist am Zug', text, ...L.summaryText(g, u) });
     }
     if (before.status !== g.status && (g.status === 'finished' || g.status === 'cancelled')) {
         const ids = g.seats.map(s => s.userId).filter(Boolean);
@@ -212,13 +251,21 @@ async function processResult(g) {
             for (const p of players.filter(x => x.dbUserId))
                 await User.update({ gamesPlayed: sequelize.literal('"gamesPlayed" + 1') }, { where: { id: p.dbUserId } });
         }
-        await Game.create({
+        const game = await Game.create({
             version: E.APP_VERSION || 'Unknown',
             durationRounds: S.round,
             winnerUsername: players.find(p => p.isWinner && p.dbUsername)?.dbUsername || null,
             participants: players,
+            stats: Stats.publicStats(g.stats),
         });
-        g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })) };
+        let replay = false;
+        try {
+            replay = await Replay.saveAsync(g, game.id, E.APP_VERSION || null, stateNames(g));
+        } catch (err) {
+            console.error(`[Async] Replay failed for ${g.id}:`, err);
+        }
+        g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })),
+            gameId: game.id, replay };
     } catch (err) {
         console.error(`[Async] Result processing failed for ${g.id}:`, err);
         g.result = { error: true };
@@ -366,6 +413,11 @@ async function list(user) {
         where: { isPublic: true, status: { [Op.in]: ['setup', 'playing'] }, [Op.not]: { participantIds: { [Op.contains]: [user.id] } } },
         attributes: attrs, order: [['updatedAt', 'DESC']], limit: 50,
     });
+    // Spectator mode: public games that are being played, to watch
+    const watch = await AsyncGame.findAll({
+        where: { isPublic: true, status: 'playing', [Op.not]: { participantIds: { [Op.contains]: [user.id] } } },
+        attributes: attrs, order: [['updatedAt', 'DESC']], limit: 20,
+    });
     const u = await User.findByPk(user.id);
     return {
         notifyEmail: u ? u.notifyEmail : true,
@@ -374,15 +426,75 @@ async function list(user) {
         mine: mine.map(summarize),
         invites: invites.map(summarize).filter(s => s.freeSeats.length && s.mySlot == null),
         open: open.map(summarize).filter(s => s.freeSeats.length),
+        watch: watch.map(summarize).filter(s => !s.freeSeats.length),
     };
 }
 
-/** A socket opens a game: participants only (also after a KI takeover, to watch). */
+/**
+ * A socket opens a game: its players (also after a KI takeover), and anybody for a public game
+ * that is being played (spectator mode – the view has no seat, actions and chat are refused).
+ */
 async function open(user, id) {
     const e = await getEntry(id);
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
-    if (!e.g.seats.some(s => s.userId === user.id)) return { error: 'Du spielst in diesem Spiel nicht mit.' };
-    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))) };
+    const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);
+    if (!e.g.seats.some(s => s.userId === user.id) && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
+    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [], chatMute: (e.g.chatMutes || {})[user.id] || null };
+}
+
+/**
+ * Chat message of a participant (utils/chat.js). Kept with the game (last 200, pings not) and
+ * sent to everyone who has it open as 'async:chat' – not as a whole new view.
+ */
+async function chat(user, id, payload) {
+    const e = await getEntry(id);
+    if (!e.g) return { error: 'Spiel nicht gefunden.' };
+    const seat = e.g.seats.find(s => s.userId === user.id);
+    if (!seat) return { error: 'Nur Mitspieler können schreiben.' };
+    const mute = (e.g.chatMutes || {})[user.id] || null;
+    const isText = payload.kind !== 'emote' && payload.kind !== 'ping';
+    if (isText && reports.muteActive(mute)) return { error: 'Du kannst gerade keine Texte schreiben.', mute };
+    const r = chatLib.build({ slot: seat.slot, name: user.username, uid: user.id }, payload, `async:${id}:${user.id}`);
+    if (r.error) return { error: r.error };
+    if (r.msg.kind === 'text') {
+        const v = await reports.moderate({ source: 'async', sourceId: id, history: e.g.chat, msg: r.msg, sender: { id: user.id, name: user.username }, mute });
+        if (v) {
+            // kept with the game (in its queue, like a message): the timeout outlasts a restart
+            e.busy++;
+            const run = e.queue.then(async () => {
+                e.g.chatMutes = { ...(e.g.chatMutes || {}), [user.id]: v.mute };
+                await save(e.g);
+            });
+            e.queue = run.catch(() => {}).finally(() => { e.busy--; });
+            await run;
+            return v;
+        }
+    }
+    if (r.msg.kind !== 'ping') {
+        // in the game's queue, so it can't overwrite a move saved at the same time
+        e.busy++;
+        const run = e.queue.then(async () => {
+            e.g.chat = chatLib.remember(e.g.chat, r.msg, chatLib.ASYNC_HISTORY);
+            await save(e.g);
+        });
+        e.queue = run.catch(() => {}).finally(() => { e.busy--; });
+        await run;
+    }
+    if (io) io.to(room(id)).emit('async:chat', { id, msg: r.msg });
+    return { ok: true };
+}
+
+/** Report a chat message (utils/reports.js) – whoever may open the game: players and spectators. */
+async function report(user, id, msgId, reason) {
+    const e = await getEntry(id);
+    if (!e.g) return { error: 'Spiel nicht gefunden.' };
+    const seat = e.g.seats.find(s => s.userId === user.id);
+    const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);     // as open()
+    if (!seat && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
+    return reports.report({
+        source: 'async', sourceId: id, history: e.g.chat || [], msgId, reason,
+        reporter: { id: user.id, name: user.username, slot: seat ? seat.slot : -1 },
+    });
 }
 
 function action(user, id, type, params) {
@@ -499,11 +611,15 @@ async function removeUser(userId) {
         return { error: L.IN_PREPHASE };
     }
     for (const row of rows) {
+        let names = [];
         const res = await withGame(row.id, g => {
+            names = g.seats.filter(s => s.userId === userId && s.name).map(s => s.name);
             const err = L.removeUser(g, userId);
             return err ? { error: err } : { ok: true };
         });
         if (res && res.error) return res;
+        // the frames recorded so far for the replay (utils/replay.js)
+        for (const from of names) await Replay.renameInFrames(row.id, from, L.DELETED_NAME);
     }
     return { ok: true };
 }
@@ -515,7 +631,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick,
+    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report,
     setNotifyEmail, sweep, room, removeUser,
     processResult,      // for tests/score
 };

@@ -9,6 +9,9 @@ const config = require('../config');
 const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
 const { deleteAccount } = require('../utils/deleteAccount');
+const reports = require('../utils/reports');
+const profanity = require('../utils/profanity');
+const { detachUser } = require('../utils/detachUser');
 const engine = require('../engine-adapter');
 const { engineVersionOf } = require('../async/logic');
 
@@ -133,10 +136,12 @@ router.post('/users/:id/action', async (req, res) => {
         if (!mayManage(req.user, targetUser)) return res.status(403).json({ error: 'Nur für Super-Administratoren' });
 
         let logoutEverywhere = false;
+        let detach = false;
         if (action === 'ban') {
             if (targetUser.id === req.user.id) return res.status(400).json({ error: 'Du kannst dich nicht selbst bannen.' });
             targetUser.isBanned = true;
             logoutEverywhere = true;
+            detach = true;              // also out of running games and open connections
         } else if (action === 'unban') {
             targetUser.isBanned = false;
         } else if (action === 'set_mmr') {
@@ -168,6 +173,7 @@ router.post('/users/:id/action', async (req, res) => {
 
         await targetUser.save();
         if (logoutEverywhere) await destroyOtherSessions(sequelize, targetUser.id);
+        if (detach) await detachUser(req.app.locals.io, targetUser.id);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: 'Serverfehler' });
@@ -189,6 +195,65 @@ router.delete('/users/:id', async (req, res) => {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });
     }
+});
+
+// --- Chat reports (utils/reports.js) ---
+router.get('/reports', async (req, res) => {
+    try {
+        res.json(await reports.list({ status: req.query.status === 'closed' ? 'closed' : 'open', offset: req.query.offset }));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/reports/:id', async (req, res) => {
+    try {
+        const error = await reports.update(req.params.id, { status: req.body.status, note: req.body.note }, req.user);
+        if (error) return res.status(400).json({ error });
+        res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// --- Chat word filter (utils/profanity.js): the admins' own entries ---
+router.get('/words', async (req, res) => {
+    try {
+        res.json({ list: await profanity.list() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/words', async (req, res) => {
+    try {
+        const error = await profanity.add({ word: req.body.word, kind: req.body.kind, match: req.body.match }, req.user);
+        if (error) return res.status(400).json({ error });
+        res.json({ list: await profanity.list() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.delete('/words/:id', async (req, res) => {
+    try {
+        const error = await profanity.remove(req.params.id);
+        if (error) return res.status(404).json({ error });
+        res.json({ list: await profanity.list() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Try a text against the filter as it is now
+router.post('/words/check', (req, res) => {
+    const text = typeof req.body.text === 'string' ? req.body.text.slice(0, 300) : '';
+    res.json({ words: profanity.check(text) });
 });
 
 // --- Lobby Management ---

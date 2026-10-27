@@ -29,6 +29,25 @@ const MP = {
     asyncId: null,          // id of the open asynchronous game ("Rundenspiel"), else null
     lastTurnKey: null,
     WIN_BONUS: 10,          // points for the winner on top of victoryScore – same as utils/score.js
+    TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
+    turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
+    spectator: false,       // watching without a seat (live game or public Rundenspiel)
+    spectatorCount: 0,      // live game: how many are watching
+    replay: false,          // the page shows a replay (client/replay.js, ?replay=<id>)
+    lastRecord: null,       // the stored match of the game that just ended: { id, replay }
+    summary: null,          // "since your last turn" of our current / last turn (utils/summary.js)
+    summaryShownKey: null,  // the turn whose summary popped up already
+
+    /** Live game: the KI plays our seat because we missed our turns (turn timer). */
+    isAfk: function () {
+        if (this.asyncId) return false;
+        const me = (this.players || []).find(p => p.index === this.lobbyIndex);
+        return !!(me && me.afk);
+    },
+    /** It is our turn and we play it ourselves. */
+    isMyTurn: function () {
+        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk();
+    },
 
     /** Send a game action to the server – live lobby or asynchronous game. */
     sendAction: function (payload, cb) {
@@ -47,11 +66,10 @@ const MP = {
         S = state;
         MP.syncTurnBlocker();
         MP.updateHudDelayed();
-        MP.updatePersistentLog();
         MP.updatePlayerList();
         // round + player: also correct when the same player moves again (everyone else bots)
         const key = S.round + ':' + S.cur;
-        if (S.cur === MP.playerIndex && MP.lastTurnKey !== key && !S.over) {
+        if (MP.isMyTurn() && MP.lastTurnKey !== key && !S.over) {
             MP.lastTurnKey = key;
             MP.lastTurn = S.cur;
             humanTurnStart();
@@ -237,12 +255,16 @@ const MP = {
         if (!box || !list) return;
         if (!this.active || typeof S === 'undefined' || !S || !S.players) { box.style.display = 'none'; return; }
         box.style.display = '';
+        const title = $('mp-players-title');
+        if (title) title.textContent = TX('Spieler') + (this.spectatorCount ? ` · 👁 ${this.spectatorCount}` : '');
         list.innerHTML = S.players.map((sp, i) => {
             const lp = this.lobbyPlayerOf(sp) || {};
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ, color: '#999' };
             const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
             const name = lp.name || civ.n;
-            const status = bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
+            // an absent player's seat (turn timer) is played by the KI, but stays theirs
+            const status = lp.afk ? `<span class="mp-pl-tag off" title="${TX('Hat dreimal nicht gezogen – die KI spielt den Platz')}">${TX('KI (abwesend)')}</span>`
+                : bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
                 : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
                 <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
@@ -287,16 +309,89 @@ const MP = {
         else body.insertAdjacentHTML('beforeend', html);
     },
 
-    updatePersistentLog: function () {
-        if (!this.active || typeof S === 'undefined' || !S || !S.log) return;
-        const plc = document.getElementById('mp-persistent-log-container');
-        const pl = document.getElementById('mp-persistent-log-content');
-        if (pl && plc && typeof logHtml === 'function') {
-            const isScrolledToBottom = pl.scrollHeight - pl.clientHeight <= pl.scrollTop + 10;
-            plc.style.display = 'block';
-            pl.innerHTML = logHtml(S.log.slice(-100)); // Show most recent 100 log lines locally out of ui.js format
-            if (isScrolledToBottom) pl.scrollTop = pl.scrollHeight;
+    /**
+     * End screen of a live game: "Revanche" for the host (back to the lobby with the same group),
+     * a note for everyone else. The game's own "Nochmal spielen" would start a local game.
+     */
+    addRematch: function () {
+        const body = document.getElementById('ov-body');
+        if (!body || document.getElementById('mp-rematch-box')) return;
+        const again = $('go-again');
+        if (again) {
+            const sub = again.nextElementSibling;
+            if (sub && sub.classList.contains('sub')) sub.remove();
+            again.remove();
         }
+        if (this.asyncId || this.replay) return;
+        const box = document.createElement('div');
+        box.id = 'mp-rematch-box';
+        box.innerHTML = this.lobbyIndex === this.hostIndex
+            ? `<button class="btn primary wide" id="mp-rematch" onclick="MP.rematch()">${TX('Revanche')}</button>
+               <p class="sub" style="margin:6px 2px 10px;text-align:center">${TX('Alle, die noch verbunden sind, kommen zurück in die Lobby – mit denselben Einstellungen.')}</p>`
+            : `<p class="sub" style="margin:6px 2px 10px;text-align:center">${TX('Der Host kann eine Revanche starten – dann geht es für alle zurück in die Lobby.')}</p>`;
+        const menu = $('go-menu');
+        if (menu) menu.parentNode.insertBefore(box, menu);
+        else body.appendChild(box);
+    },
+    rematch: function () {
+        this.socket.emit('session:rematch', {}, res => { if (res && res.error) toast(TXS(res.error)); });
+    },
+    /** The host started a rematch: leave the finished game for the lobby. */
+    enterRematch: async function (data) {
+        this.lobbyIndex = this.spectator ? null : data.playerIndex;
+        this.hostIndex = data.hostIndex;
+        this.players = data.players;
+        this.gameConfig = data.gameConfig || {};
+        this.playerIndex = this.spectator ? -1 : null;
+        if (typeof CHAT !== 'undefined') CHAT.setMute(null);     // the word filter's timeout ends with the game
+        this.lastStats = null;
+        this.lastRecord = null;
+        this.lastTurnKey = null;
+        this.placementFinished = false;
+        this.setTurnClock(null);
+        S = null;
+        document.body.classList.remove('mp-waiting');
+        const pl = $('mp-players-container');
+        if (pl) pl.style.display = 'none';
+        const confetti = $('confetti');
+        if (confetti) confetti.remove();
+        closeModal();
+        show('screen-menu');
+        await this.showLobby();
+        this.setMode(this.spectator ? 'watching' : 'waiting');
+        toast(TX('Revanche! Ihr seid zurück in der Lobby.'));
+    },
+
+    /** Lobby code and password in the game's header (spectators: the code only). */
+    showCred: function () {
+        const box = $('mp-cred-box');
+        if (!box) return;
+        const code = `<span class="mp-cred-lbl">Code: </span>${escHtml(this.joinCode || '')}`;
+        box.innerHTML = this.spectator ? `👁 ${escHtml(TX('Zuschauer'))} · ${code}`
+            : `${code} · PW ${escHtml(this.password || '')}`;
+    },
+
+    /**
+     * Chat and player list are separate floating panels. On small screens the two open ones can
+     * cover each other: the one that just opened (keep) stays, the other collapses. Without keep,
+     * the chat stays.
+     */
+    fitPanels: function (keep) {
+        if (keep) this._lastPanel = keep;
+        clearTimeout(this._fitTimer);
+        this._fitTimer = setTimeout(() => {            // after the 0.2 s open transition
+            const open = ['mp-chat', 'mp-players-container'].map($)
+                .filter(el => el && el.offsetWidth && !el.classList.contains('mp-log-minimized'));
+            if (keep) open.sort((a, b) => (b === keep) - (a === keep));
+            const kept = [];
+            const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+            for (const el of open) {
+                const r = el.getBoundingClientRect();
+                if (!kept.some(k => hit(k, r))) { kept.push(r); continue; }
+                el.classList.add('mp-log-minimized');
+                if (el.id === 'mp-chat' && typeof CHAT !== 'undefined') CHAT.cancelPing();
+            }
+        }, 250);
     },
 
     connect: function () {
@@ -309,6 +404,8 @@ const MP = {
         this.socketUserId = userId;
         return new Promise((resolve) => {
             this.socket = io(this.serverUrl);
+            if (typeof CHAT !== 'undefined') CHAT.attach(this.socket);       // client/chat.js
+            if (typeof MATCH !== 'undefined') MATCH.attach(this.socket);     // client/matchmaking.js
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
@@ -344,11 +441,21 @@ const MP = {
                 MP.players = players;
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
+                // turn timer: a seat went to the KI or came back
+                if (typeof S !== 'undefined' && S && $('screen-game') && $('screen-game').classList.contains('show')) MP.syncTurnBlocker();
             });
             this.socket.on('session:kicked', (data) => {
                 MP.active = false;
                 toast(data && data.reason ? TXS(data.reason) : TX('Du wurdest vom Host gekickt.'));
                 MP.setMode('menu'); // Snap directly to menu instead of waiting to reload
+            });
+            this.socket.on('spectators:update', data => {
+                MP.spectatorCount = data && data.count || 0;
+                MP.updatePlayerList();
+            });
+            this.socket.on('session:rematch', data => {
+                if (MP.asyncId) return;
+                MP.enterRematch(data);
             });
             this.socket.on('session:index', data => {
                 MP.lobbyIndex = data.playerIndex;
@@ -362,6 +469,8 @@ const MP = {
 
             this.socket.on('placement:start', data => {
                 MP.renderLobby = null; closeModal();
+                // spectators see the map once every start tile lies (game:start)
+                if (MP.spectator) return modal(TX('Zuschauen'), `<p>${TX('Die Spieler legen ihre Startplättchen. Die Karte erscheint, sobald alle gelegt haben.')}</p>`);
 
                 // Clever trick: Tell the native random map generator that EVERY other player across the network is a Bot!
                 // This tricks the native UI to instantly autocomplete them and ONLY present the single local player queue 
@@ -377,7 +486,9 @@ const MP = {
                     if (MP.placementFinished) window.toast(TX('Warten auf andere Spieler...'));
                 }
 
-                const origPlaceSeat = window.placeSeat;
+                // the game's own placeSeat – once, a rematch on the same page would wrap the wrapper
+                MP.placementFinished = false;
+                const origPlaceSeat = MP._origPlaceSeat = MP._origPlaceSeat || window.placeSeat;
                 window.placeSeat = function (plan, seat, o, cell) {
                     if (seat.idx === MP.lobbyIndex) {
                         MP.placementFinished = true;
@@ -415,6 +526,10 @@ const MP = {
                 if (MP.asyncId) return;
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
+                MP.lastStats = null;
+                MP.lastRecord = null;
+                MP.takeSummary(data.summary);
+                MP.setTurnClock(data.turn);
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
 
@@ -426,17 +541,44 @@ const MP = {
                 MP.renderLobby = null; // Prevent Lobby from opening mid-game on reconnects
                 closeModal();
                 startGameScreen();
+                MP.updatePlayerList();
             });
 
 
             this.socket.on('state:update', data => {
                 if (MP.asyncId) return;
+                MP.setTurnClock(data.turn);
+                MP.takeSummary(data.summary);
                 MP.applyState(data.state);
+            });
+
+            // Turn timer: our time was up – the server (KI) has finished the turn
+            this.socket.on('turn:timeout', data => {
+                if (MP.asyncId) return;
+                if (typeof closeModal === 'function') closeModal();
+                if (typeof closeSheet === 'function') closeSheet();
+                if (typeof ui !== 'undefined' && ui) { ui.army = null; ui.sel = null; ui.mode = null; }
+                toast(data && data.afk ? TX('Die Zeit ist abgelaufen. Du hast dreimal nicht gezogen – die KI spielt jetzt für dich.')
+                    : TX('Die Zeit ist abgelaufen – die KI hat deinen Zug beendet.'));
             });
 
             // Asynchronous games: the full view (status, seats, state / placement / draft)
             this.socket.on('async:update', view => {
                 if (view && view.id === MP.asyncId) ASYNC.apply(view);
+            });
+
+            // Post-game statistics (client/stats.js), right after 'game:over'
+            this.socket.on('game:stats', data => {
+                if (MP.asyncId || !data) return;
+                MP.lastStats = data.stats;
+                if (typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
+            });
+
+            // The match is stored (with its replay): the end screen offers to watch it again
+            this.socket.on('game:record', data => {
+                if (MP.asyncId || !data) return;
+                MP.lastRecord = data;
+                if (typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(data);
             });
 
             this.socket.on('game:over', winData => {
@@ -447,11 +589,126 @@ const MP = {
     },
 
     syncTurnBlocker: function () {
-        if (S && S.cur !== MP.playerIndex && !S.over) {
+        MP.drawAfkBanner();
+        MP.drawSummaryButton();
+        const wait = document.querySelector('.mp-waiting-toast');
+        if (wait && MP.spectator) wait.textContent = TX('Du schaust zu');
+        if (S && !MP.isMyTurn() && !S.over) {
             document.body.classList.add('mp-waiting');
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    // ── "Since your last turn" (utils/summary.js) ────────────────────────────
+    /** A summary from the server – ours, and the first one of a turn (later views repeat it). */
+    takeSummary: function (sum) {
+        if (!sum || sum.me !== this.playerIndex) return;
+        if (this.summary && this.summary.key === sum.key) return;
+        this.summary = sum;
+        this.drawSummaryButton();
+    },
+    summaryAuto: function () {
+        try { return localStorage.getItem('hochciv.summary.auto') !== '0'; } catch (_) { return true; }
+    },
+    /** Our turn begins: its summary first (if wanted), the game's own turn-start dialogs after it. */
+    summaryBeforeTurn: function (go) {
+        const sum = this.summary;
+        const key = typeof S !== 'undefined' && S ? S.round + ':' + S.cur : null;
+        if (!sum || sum.key !== key || this.summaryShownKey === key || !this.summaryAuto()) return false;
+        this.summaryShownKey = key;
+        this.showSummary(go);
+        return true;
+    },
+    summaryName: function (i) {
+        const sp = S.players[i];
+        if (!sp) return '?';
+        const civ = typeof civOf === 'function' ? civOf(sp).n : sp.civ;
+        const lp = this.lobbyPlayerOf(sp) || {};
+        return lp.name && !lp.isBot ? `${lp.name} (${civ})` : civ;
+    },
+    showSummary: function (after) {
+        const sum = this.summary;
+        if (!sum || typeof S === 'undefined' || !S) return after && after();
+        const nm = i => (i === this.playerIndex ? `<b>${TX('du')}</b>` : `<b>${escHtml(this.summaryName(i))}</b>`);
+        const city = n => (n === 1 ? TX('eine Stadt') : TX('%s Städte', n));
+        const wonder = k => { const w = typeof WONDER_BY_KEY !== 'undefined' && WONDER_BY_KEY[k]; return escHtml(w ? (typeof T === 'function' ? T(w.n) : w.n) : k); };
+        const alerts = [];
+        for (const l of sum.lost) alerts.push(l.by === -1 ? `⚔ ${TX('Du hast %s verloren.', city(l.n))}` : `⚔ ${TX('%s hat dir %s abgenommen.', nm(l.by), city(l.n))}`);
+        for (const g of sum.gained) alerts.push(`🏰 ${TX('Du hast %s von %s erobert.', city(g.n), nm(g.from))}`);
+        for (const p of sum.players) if (p.out) alerts.push(`☠ ${TX('%s ist ausgeschieden.', nm(p.pi))}`);
+        for (const w of sum.wonders) alerts.push(`🏛 ${TX('%s baut %s.', nm(w.pi), wonder(w.k))}`);
+        const diff = d => (d > 0 ? `<span class="mp-sum-up">+${d}</span>` : d < 0 ? `<span class="mp-sum-down">−${-d}</span>` : '');
+        const score = i => { try { return victoryScore(S, i).total; } catch (_) { return '–'; } };
+        const rows = sum.players.map(p => {
+            const sp = S.players[p.pi];
+            const cities = S.cities.filter(c => c.owner === p.pi).length;
+            const techs = Object.keys(sp.techs || {}).filter(k => sp.techs[k]).length;
+            const col = typeof civOf === 'function' ? civOf(sp).color : '#999';
+            return `<tr${p.pi === this.playerIndex ? ' class="mp-sum-me"' : ''}>
+                <td><span class="mp-pl-dot" style="display:inline-block;vertical-align:middle;background:${escHtml(col)}"></span> ${p.pi === this.playerIndex ? TX('Du') : escHtml(this.summaryName(p.pi))}</td>
+                <td class="mp-sum-num">${score(p.pi)} ${diff(p.ds)}</td><td class="mp-sum-num">${cities} ${diff(p.dc)}</td>
+                <td class="mp-sum-num">${techs} ${diff(p.dt)}</td><td class="mp-sum-num">${diff(p.da) || '·'}</td></tr>`;
+        }).join('');
+        const span = sum.since === sum.round ? TX('Runde %s', sum.round) : TX('Runde %s bis %s', sum.since, sum.round);
+        modal(TX('Seit deinem letzten Zug'), `
+            <p class="sub">${span}</p>
+            ${alerts.length ? `<ul class="mp-sum-alerts">${alerts.map(a => `<li>${a}</li>`).join('')}</ul>` : `<p>${TX('Keine Eroberungen, keine Wunder – die anderen haben ausgebaut.')}</p>`}
+            <div style="overflow-x:auto"><table class="tbl mp-sum-table">
+              <tr><th>${TX('Reich')}</th><th class="mp-sum-num">${TX('Punkte')}</th><th class="mp-sum-num">${TX('Städte')}</th><th class="mp-sum-num">${TX('Technologien')}</th><th class="mp-sum-num">${TX('Armeen')}</th></tr>
+              ${rows}</table></div>
+            <details class="mp-sum-log"><summary>${TX('Alle Ereignisse (%s)', sum.log.length)}</summary>
+              <div>${typeof logHtml === 'function' ? logHtml(sum.log) : ''}</div></details>
+            <label class="row mp-sum-auto"><span>${TX('Bei jedem Zug automatisch zeigen')}</span>
+              <input type="checkbox" id="mp-sum-auto" ${this.summaryAuto() ? 'checked' : ''}></label>
+            <button class="btn wide primary" id="mp-sum-go">${TX('Weiter')}</button>`);
+        $('mp-sum-auto').onchange = e => { try { localStorage.setItem('hochciv.summary.auto', e.target.checked ? '1' : '0'); } catch (_) { } };
+        // however the popup is closed (button, ✕, outside), the turn goes on
+        this._afterSummary = after || null;
+        $('mp-sum-go').onclick = () => closeModal();
+    },
+    drawSummaryButton: function () {
+        const btn = $('mp-summary-btn');
+        if (btn) btn.hidden = !(this.active && !this.spectator && this.summary && typeof S !== 'undefined' && S && !S.over);
+    },
+
+    // ── Turn timer (live games, host setting "Zeit pro Zug") ──────────────────
+    /** `turn` from the server: { total, left } in ms (left null: no clock now), or null without a limit. */
+    setTurnClock: function (turn) {
+        const was = this.turnClock;
+        this.turnClock = turn && !this.asyncId ? { total: turn.total, deadline: turn.left == null ? null : Date.now() + turn.left } : null;
+        // warn once per turn, also when the deadline is corrected by a later update
+        if (this.turnClock && was && was.deadline && this.turnClock.deadline) this.turnClock.warned = was.warned;
+        if (this.turnClock && !this._clockTimer) this._clockTimer = setInterval(() => this.drawTurnClock(), 250);
+        if (!this.turnClock && this._clockTimer) { clearInterval(this._clockTimer); this._clockTimer = null; }
+        this.drawTurnClock();
+    },
+    drawTurnClock: function () {
+        const el = $('mp-turn-clock');
+        if (!el) return;
+        const tc = this.turnClock;
+        if (!this.active || !tc || !tc.deadline || typeof S === 'undefined' || !S || S.over) { el.hidden = true; return; }
+        const left = Math.max(0, tc.deadline - Date.now());
+        const sec = Math.ceil(left / 1000);
+        el.hidden = false;
+        el.classList.toggle('mp-clock-low', sec <= 30);
+        el.textContent = `⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+        if (sec <= 30 && sec > 0 && !tc.warned && this.isMyTurn() && tc.total > 30000) {
+            tc.warned = true;
+            toast(TX('Noch 30 Sekunden für deinen Zug!'));
+        }
+    },
+    /** Banner while the KI plays our seat, with the button to take it back. */
+    drawAfkBanner: function () {
+        const el = $('mp-afk-banner');
+        if (el) el.hidden = !(this.active && this.isAfk() && typeof S !== 'undefined' && S && !S.over);
+    },
+    reclaimSeat: function () {
+        this.socket.emit('turn:reclaim', {}, res => {
+            if (res && res.error) return toast(TXS(res.error));
+            MP.lastTurnKey = null;            // if it is our turn right now, it starts for us
+            toast(TX('Willkommen zurück – du spielst wieder selbst.'));
+        });
     },
 
 
@@ -484,9 +741,10 @@ const MP = {
         }
     },
 
-    showAuthModal: function () {
+    /** The login dialog; `mfa`: only the second factor is missing (after Google/Discord, ?oauth=mfa). */
+    showAuthModal: function (mfa) {
         if (typeof modal === 'function') {
-            modal(TX('Anmelden'), '<iframe src="/client/index.html?modal=true" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>');
+            modal(TX('Anmelden'), `<iframe src="/client/index.html?modal=true${mfa ? '&mfa=1' : ''}" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>`);
             document.getElementById('overlay').classList.add('wide');
         }
     },
@@ -518,6 +776,8 @@ const MP = {
             if (mode === 'menu') {
                 h = `
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">${TX('Neues Spiel hosten (Server)')}</button>
+          ${typeof MATCH !== 'undefined' ? `<button class="btn wide" style="margin-bottom:10px" onclick="MATCH.start()" ${this.user ? '' : 'disabled'}>🔥 ${TX('Gewertetes Spiel suchen')}</button>
+          ${this.user ? '' : `<p class="sub" style="margin:-4px 0 10px">${TX('Für gewertete Spiele musst du angemeldet sein.')}</p>`}` : ''}
           <button class="btn wide" onclick="MP.setMode('public-list')">${TX('Öffentliche Lobbys suchen')}</button>
           <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">${TX('Privatem Spiel beitreten')}</button>
         `;
@@ -528,6 +788,7 @@ const MP = {
           <label class="row"><span>${TX('Passwort')}</span><input type="number" id="mp-p" style="width:100px"></label>
           <label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${savedName}"></label>
           <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">${TX('Beitreten')}</button>
+          <button class="btn wide ghost" onclick="MP.watch($('mp-c').value.trim(), $('mp-p').value.trim(), $('mp-n').value.trim())">${TX('Zuschauen')}</button>
         `;
             } else if (mode === 'host') {
                 const savedName = localStorage.getItem('mp-name') || 'Host';
@@ -556,15 +817,22 @@ const MP = {
                                 c.innerHTML = `<p class="sub">${TX('Keine öffentlichen Lobbys gefunden.')}</p>`;
                                 return;
                             }
+                            // lobbies to join, and running games to watch (spectator mode)
                             c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
-                                list.map(l => `
+                                list.map(l => {
+                                    const running = l.status && l.status !== 'lobby';
+                                    const info = running
+                                        ? (l.round ? TX('Läuft · Runde %s', escHtml(l.round)) : TX('Läuft')) + (l.spectators ? ` · 👁 ${escHtml(l.spectators)}` : '')
+                                        : TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers));
+                                    const btn = running
+                                        ? `<button class="btn small" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, ($('mp-pln') || {}).value)">${TX('Zuschauen')}</button>`
+                                        : `<button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>`;
+                                    return `
                                 <tr style="border-bottom:1px solid #ccc;">
-                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers))}</small></td>
-                                    <td style="padding: 8px 4px; text-align:right;">
-                                        <button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>
-                                    </td>
-                                </tr>
-                            `).join('') + '</table>';
+                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${info}</small></td>
+                                    <td style="padding: 8px 4px; text-align:right;">${btn}</td>
+                                </tr>`;
+                                }).join('') + '</table>';
                         })
                         .catch(() => {
                             const c = $('mp-pl-container');
@@ -574,6 +842,16 @@ const MP = {
 
                 fetchList();
                 this._publicListTimer = setInterval(fetchList, 5000);
+            } else if (mode === 'watching') {
+                // spectator of a live game that has not started yet
+                h = `
+          <h3>${TX('Du schaust zu')} <span class="sub" style="float:right">${TX('Code')}: <b>${escHtml(this.joinCode)}</b></span></h3>
+          <p>${TX('Das Spiel beginnt, sobald der Host es startet – du siehst es dann von Anfang an.')}</p>
+          <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
+            ${this.players.map(p => `<tr><td><b>${escHtml(p.name)}</b> ${p.index === this.hostIndex ? `(${TX('Host')})` : ''}</td><td>${p.connected ? TX('Verbunden') : TX('Wartet')}</td></tr>`).join('')}
+          </table>
+          <button class="btn wide ghost" onclick="location.reload()">${TX('Zuschauen beenden')}</button>
+        `;
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 const cnt = this.lobbyCounts();
@@ -662,6 +940,12 @@ const MP = {
                   ${KI_LEVELS.map(d => `<option value="${d.k}" ${this.kiLevel(this.gameConfig.difficulty) === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
                 </select>
               </label>
+              <label class="row"><span>${TX('Zeit pro Zug')}</span>
+                <select id="mp-set-turntime" onchange="MP.updateLobbyConfig()">
+                  ${this.TURN_TIMES.map(s => `<option value="${s}" ${(this.gameConfig.turnTime || 0) === s ? 'selected' : ''}>${s ? TX('%s Min.', s / 60) : TX('Unbegrenzt')}</option>`).join('')}
+                </select>
+              </label>
+              ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
                 <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('min 2 H-Spieler, KI auf schwer')})</small></span>
                 <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
@@ -702,6 +986,7 @@ const MP = {
             playerCount: $('mp-set-total') ? +$('mp-set-total').value : undefined,
             kiCount: $('mp-set-ki') ? +$('mp-set-ki').value : undefined,
             randomCivs: !!($('mp-set-random') && $('mp-set-random').checked),
+            turnTime: $('mp-set-turntime') ? +$('mp-set-turntime').value : 0,
             noKi: false,
         };
         // a map with fewer empires: keep the numbers within what it allows
@@ -769,12 +1054,12 @@ const MP = {
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
+                this.spectator = false;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
-                const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+                this.showCred();
 
                 if (ack.status === 'playing' || ack.status === 'draft') {
                     toast(TX('Spiel läuft, lade Zustand...'));
@@ -787,6 +1072,47 @@ const MP = {
             console.error(e);
             toast(TX('Server nicht erreichbar: %s', e.message));
         }
+    },
+
+    /** Spectator mode: watch a live game (or its lobby) with code and password. */
+    watch: async function (joinCode, password, name) {
+        if (!joinCode || !password) return toast(TX('Bitte Code und Passwort eingeben.'));
+        name = (name || localStorage.getItem('mp-name') || TX('Zuschauer')).trim();
+        try {
+            toast(TX('Verbinde...'));
+            const res = await fetch(`${this.serverUrl}/api/sessions/watch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ joinCode, password, viewer: { name, clientId: this.getClientId() } })
+            });
+            const data = await res.json();
+            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
+            this.sessionId = data.sessionId;
+            this.joinCode = joinCode.toUpperCase();
+            this.password = password;
+            await this.connect();
+            this.socket.emit('session:connect', { sessionId: this.sessionId, clientId: this.getClientId(), password }, ack => {
+                if (ack.error) return toast(TXS(ack.error));
+                this.enterSession(ack);
+            });
+        } catch (e) {
+            console.error(e);
+            toast(TX('Server nicht erreichbar: %s', e.message));
+        }
+    },
+    /** After session:connect: take over the lobby state (players, settings, host, our seat or spectator). */
+    enterSession: function (ack) {
+        this.active = true;
+        this.spectator = !!ack.spectator;
+        this.lobbyIndex = this.spectator ? null : ack.playerIndex;
+        if (this.spectator) this.playerIndex = -1;
+        this.players = ack.players;
+        this.gameConfig = ack.gameConfig || {};
+        this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
+        this.spectatorCount = ack.spectators || 0;
+        this.showCred();
+        if (ack.status === 'lobby') this.setMode(this.spectator ? 'watching' : 'waiting');
+        else toast(TX('Spiel läuft, lade Zustand...'));
     },
 
     joinPublic: async function (joinCode, password) {
@@ -823,12 +1149,12 @@ const MP = {
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
 
                 this.active = true;
+                this.spectator = false;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || {};
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
-                const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+                this.showCred();
 
                 if (ack.status === 'playing' || ack.status === 'draft') {
                     toast(TX('Spiel läuft, lade Zustand...'));
@@ -887,12 +1213,12 @@ const MP = {
                 if (ack.error) return toast(TXS(ack.error));
                 if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
                 this.active = true;
+                this.spectator = false;
                 this.players = ack.players;
                 this.gameConfig = ack.gameConfig || config;
                 this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
 
-                const credBox = $('mp-cred-box');
-                if (credBox) credBox.textContent = `Code: ${this.joinCode}  PW: ${this.password}`;
+                this.showCred();
 
                 this.setMode('waiting');
             });
@@ -977,55 +1303,22 @@ window.addEventListener('DOMContentLoaded', () => {
             80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
             100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
         }
-        #mp-persistent-log-container {
-            position: fixed; right: 10px; top: 60px; width: 320px;
-            background: rgba(255,255,240,0.95); pointer-events: auto;
-            border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; display: none; color: #333; overflow: hidden;
-            transition: width 0.2s, height 0.2s, border-radius 0.2s;
-        }
-        #mp-persistent-log-container.mp-log-minimized {
-            width: 44px !important;
-            height: 44px !important;
-            border-radius: 50% !important;
-            border: none !important;
-            background: #a89f91 !important;
-            cursor: pointer !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            padding: 0 !important;
-        }
-        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-header,
-        #mp-persistent-log-container.mp-log-minimized #mp-persistent-log-content {
-            display: none !important;
-        }
-        #mp-persistent-log-container.mp-log-minimized::before {
-            content: "📝";
-            font-size: 20px;
-        }
-        #mp-persistent-log-header {
-            background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
-        }
-        #mp-persistent-log-content {
-            max-height: 40vh; overflow-y: auto; padding: 10px; display: block;
-        }
-        #mp-persistent-log-content .logline { margin-bottom: 4px; }
-        #mp-persistent-log-content .rolls { padding-left: 10px; opacity: 0.8; font-size: 12px; }
+        /* collapsed panels (player list, chat in client/chat.js): a labelled pill */
+        .mp-log-minimized::before { color: #fff; font-weight: bold; font-size: 13px; white-space: nowrap; }
         #mp-players-container {
             position: fixed; left: 10px; top: 60px; width: 240px;
             background: rgba(255,255,240,0.95); pointer-events: auto;
-            border: 2px solid #a89f91; border-radius: 6px; z-index: 50;
+            border: 2px solid #a89f91; border-radius: 6px; z-index: 29;   /* above map, bar and sheet (≤ 26), below the game's dialogs (30) */
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); font-size: 13px; color: #333; overflow: hidden;
             transition: width 0.2s, height 0.2s, border-radius 0.2s;
         }
         #mp-players-container.mp-log-minimized {
-            width: 44px !important; height: 44px !important; border-radius: 50% !important;
+            width: auto !important; height: 34px !important; border-radius: 17px !important; padding: 0 12px !important;
             border: none !important; background: #a89f91 !important; cursor: pointer !important;
-            display: flex !important; justify-content: center !important; align-items: center !important; padding: 0 !important;
+            display: flex !important; justify-content: center !important; align-items: center !important;
         }
         #mp-players-container.mp-log-minimized > * { display: none !important; }
-        #mp-players-container.mp-log-minimized::before { content: "👥"; font-size: 20px; }
+        #mp-players-container.mp-log-minimized::before { content: "👥 " var(--mp-lbl-players, "Spieler"); }
         #mp-players-container[style*="display: none"] { display: none !important; }
         #mp-players-header {
             background:#a89f91; color:white; padding:6px 10px; cursor:pointer; font-weight:bold; display:flex; justify-content:space-between; align-items:center; user-select:none;
@@ -1039,36 +1332,42 @@ window.addEventListener('DOMContentLoaded', () => {
         .mp-pl-civ { grid-column: 2 / -1; font-size: 11px; color: #6f6551; }
         .mp-pl-tag { font-size: 10px; padding: 1px 5px; border-radius: 8px; background: #e4dbbe; color: #6f6551; }
         .mp-pl-tag.off { background: #f1d6cf; color: #9d3b2f; }
+        /* Turn timer: countdown in the HUD, banner while the KI plays an absent player's seat */
+        #mp-turn-clock { font-family: monospace; font-weight: bold; padding: 4px 10px; margin-left: 6px; }
+        #mp-cred-wrapper { min-width: 0; }
+        #mp-cred-wrapper .res { white-space: nowrap; }
+        @media (max-width: 1000px) {
+            .mp-cred-lbl { display: none; }
+            #mp-cred-box { font-size: 13px !important; }
+            #mp-cred-wrapper .res { padding: 4px 6px !important; }
+        }
+        #mp-turn-clock.mp-clock-low { background: #9d3b2f; color: #fff; }
+        #mp-afk-banner {
+            position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1001;
+            background: #fffbe8; color: #333; border: 2px solid #9d3b2f; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; gap: 10px; align-items: center;
+            /* % of the body: the game turns the body on phones held upright (html.turn) */
+            width: max-content; max-width: calc(100% - 32px); box-sizing: border-box; font-size: 14px;
+        }
+        #mp-afk-banner[hidden] { display: none; }
+        /* "Since your last turn" */
+        #mp-summary-btn { cursor: pointer; margin-left: 6px; padding: 4px 8px; font-size: 15px; border: none; }
+        #mp-summary-btn[hidden] { display: none; }
+        .mp-sum-alerts { padding-left: 18px; margin: 6px 0 10px; }
+        .mp-sum-alerts li { margin: 3px 0; }
+        .mp-sum-table td, .mp-sum-table th { white-space: nowrap; }
+        .mp-sum-num { text-align: right; font-variant-numeric: tabular-nums; }
+        .mp-sum-me td { font-weight: 700; }
+        .mp-sum-up { color: #2e6b34; font-size: 12px; }
+        .mp-sum-down { color: #9d3b2f; font-size: 12px; }
+        .mp-sum-log { margin: 10px 0; }
+        .mp-sum-log > div { max-height: 40vh; overflow-y: auto; font-size: 13px; }
+        .mp-sum-auto { margin: 8px 0; }
+        #mp-afk-banner .btn { width: auto; margin: 0; white-space: nowrap; flex: 0 0 auto; }
     `;
     document.head.appendChild(style);
 
-    const pLog = document.createElement('div');
-    pLog.id = 'mp-persistent-log-container';
-    pLog.innerHTML = `
-        <div id="mp-persistent-log-header">
-            <span id="mp-log-title">${TX('Spiel-Log')}</span>
-            <span id="mp-log-toggle-icon" style="font-size: 16px;">✖</span>
-        </div>
-        <div id="mp-persistent-log-content"></div>
-    `;
-    document.body.appendChild(pLog);
-
-    document.getElementById('mp-persistent-log-header').addEventListener('click', (e) => {
-        const plc = document.getElementById('mp-persistent-log-container');
-        plc.classList.add('mp-log-minimized');
-        e.stopPropagation(); // prevent container click from firing immediately
-    });
-
-    document.getElementById('mp-persistent-log-container').addEventListener('click', (e) => {
-        const plc = document.getElementById('mp-persistent-log-container');
-        if (plc.classList.contains('mp-log-minimized')) {
-            plc.classList.remove('mp-log-minimized');
-            const pl = document.getElementById('mp-persistent-log-content');
-            if (pl) pl.scrollTop = pl.scrollHeight;
-        }
-    });
-
-    // Player list: collapsible like the game log, names open the player profile
+    // Player list: collapsible to a pill, names open the player profile
     const pList = document.createElement('div');
     pList.id = 'mp-players-container';
     pList.style.display = 'none';
@@ -1082,6 +1381,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(pList);
     const setPlayersOpen = open => {
         pList.classList.toggle('mp-log-minimized', !open);
+        if (open) MP.fitPanels(pList);
         try { localStorage.setItem('mp-players-open', open ? '1' : '0'); } catch (_) { }
     };
     let playersOpen = true;
@@ -1112,9 +1412,19 @@ window.addEventListener('DOMContentLoaded', () => {
             <i style="font-style:normal; margin-right:4px;">🌐</i> 
             <b id="mp-cred-box" style="font-family:monospace; font-size:14px;"></b>
           </span>
+          <span class="res" id="mp-turn-clock" title="${TX('Zeit für diesen Zug')}" hidden></span>
+          <button type="button" class="res" id="mp-summary-btn" title="${TX('Seit deinem letzten Zug')}" hidden onclick="event.stopPropagation(); MP.showSummary()">📋</button>
         `;
         headerHud.insertBefore(wrap, document.querySelector('.hud-res'));
     }
+
+    // Turn timer: shown while the KI plays our seat because we missed our turns
+    const afk = document.createElement('div');
+    afk.id = 'mp-afk-banner';
+    afk.hidden = true;
+    afk.innerHTML = `<span id="mp-afk-text">${TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.')}</span>
+        <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>`;
+    document.body.appendChild(afk);
 });
 
 // --- Monkey Patch redraw() to fix army reference sync bug ---
@@ -1133,14 +1443,46 @@ if (originalRedraw) {
     };
 }
 
+// ── Monkey Patch closeModal(): after "since your last turn", the turn goes on ──
+// The popup comes before the game's turn-start dialogs (food, free pick …). However it is
+// closed – "Weiter", ✕ or a tap beside it – those follow.
+const originalCloseModal = window.closeModal;
+if (originalCloseModal) {
+    window.closeModal = function () {
+        const r = originalCloseModal.apply(this, arguments);
+        const after = MP._afterSummary;
+        if (after) { MP._afterSummary = null; setTimeout(after, 0); }
+        return r;
+    };
+}
+
+// ── Monkey Patch saveGame(): the local single-player save is not ours ──────────
+// The game saves S as its local game ('hochciv.save') on every redraw. A multiplayer game (live,
+// Rundenspiel, watching, replay) would overwrite the player's own local game with it – and
+// "Weiterspielen" in the menu would then open the multiplayer state as a local game.
+const originalSaveGame = window.saveGame;
+if (originalSaveGame) {
+    window.saveGame = function () {
+        if (MP.active) return;
+        return originalSaveGame.apply(this, arguments);
+    };
+}
+
 // ── Monkey Patch gameOver(): player names (with profile links) under the engine's result ──
 const originalGameOver = window.gameOver;
 if (originalGameOver) {
     window.gameOver = function () {
         const r = originalGameOver.apply(this, arguments);
         if (MP.active) {
+            // "Zurück zum Menü" deletes the local game ('hochciv.save') – here it only leaves
+            const menu = $('go-menu');
+            if (menu) menu.onclick = () => { location.href = location.pathname; };
             MP.addGameOverPlayers();
+            MP.addRematch();
+            if (MP.lastStats && typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
+            if (MP.lastRecord && typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(MP.lastRecord);
             MP.updatePlayerList();
+            MP.setTurnClock(null);
         }
         return r;
     };
@@ -1155,7 +1497,7 @@ if (originalRunBots) {
     window.runBots = function () {
         if (MP.active) {
             if (typeof S !== 'undefined' && S && S.over) return gameOver();
-            if (S && S.cur === MP.playerIndex) return humanTurnStart();
+            if (MP.isMyTurn()) return humanTurnStart();
             MP.syncTurnBlocker();
             return redraw();
         }
@@ -1166,10 +1508,13 @@ const originalHumanTurnStart = window.humanTurnStart;
 if (originalHumanTurnStart) {
     window.humanTurnStart = function () {
         // Only open the turn-start dialogs (food, free pick …) for the player whose turn it is.
-        if (MP.active && typeof S !== 'undefined' && S && !S.over && S.cur !== MP.playerIndex) {
+        if (MP.active && typeof S !== 'undefined' && S && !S.over && !MP.isMyTurn()) {
             MP.syncTurnBlocker();
             return redraw();
         }
+        // "Since your last turn" pops up first; the game's turn-start dialogs follow when it closes
+        const self = this, args = arguments;
+        if (MP.active && MP.summaryBeforeTurn(() => originalHumanTurnStart.apply(self, args))) return redraw();
         return originalHumanTurnStart.apply(this, arguments);
     };
 }
@@ -1225,7 +1570,8 @@ if (originalDraftChoose) {
 // ── Monkey Patch Engine Actions ─────────────────────────────────────────────
 // The game shows its screens for the player who looks at them (viewer in ui.js) – here that is
 // always the own empire, also during other players' turns (e.g. the tech tree).
-if (typeof viewerHook !== 'undefined') viewerHook = () => (MP.active && Number.isInteger(MP.playerIndex) ? MP.playerIndex : null);
+// Spectators (playerIndex -1) see the screens of the player on turn, as in a local game.
+if (typeof viewerHook !== 'undefined') viewerHook = () => (MP.active && Number.isInteger(MP.playerIndex) && MP.playerIndex >= 0 ? MP.playerIndex : null);
 // A game without that (v83, only for Rundenspiele started on it) would show the tree of the
 // player on turn – there "Forschen" stays blocked while it is not your turn (CSS below).
 else document.documentElement.classList.add('mp-no-viewer');
@@ -1255,6 +1601,7 @@ for (const [fnName, makePayload] of Object.entries(ACTIONS)) {
     if (!orig) continue; // safety check
     window[fnName] = function (state, ...args) {
         if (MP.active) {
+            if (MP.spectator) return TX('Du schaust nur zu.');
             const pi = fnName === 'moveArmy' ? args[0].owner : args[0];
             if (pi !== MP.playerIndex) return TX('Du bist nicht am Zug (oder nicht deine Armee).');
 
@@ -1279,7 +1626,8 @@ const patchTurnButton = setInterval(() => {
         aEnd.onclick = () => {
             if (MP.active) {
                 if (!S || S.over) return;
-                if (MP.playerIndex !== S.cur) return toast(TX('Du bist nicht am Zug!'));
+                if (MP.spectator) return toast(TX('Du schaust nur zu.'));
+                if (!MP.isMyTurn()) return toast(TX('Du bist nicht am Zug!'));
                 if (typeof ui !== 'undefined' && ui.botLock) return;
                 // Hard block from ui.js (v80+): an army still standing in a city prevents
                 // ending the turn – the server rejects it too.
@@ -1491,6 +1839,7 @@ const ASYNC = {
             ${section(TX('Warten auf andere'), waiting, TX('Keine.'))}
             ${section(TX('Einladungen'), d.invites, TX('Keine offenen Einladungen.'))}
             ${section(TX('Offene Spiele'), d.open, TX('Keine öffentlichen Spiele mit freiem Platz.'))}
+            ${(d.watch || []).length ? section(TX('Laufende öffentliche Spiele – zuschauen'), d.watch, '') : ''}
             ${takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15), '') : ''}
             <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="#" onclick="MP.showAccountModal(); return false;">${TX('Spielhistorie')}</a>`)}</p>
             <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
@@ -1517,6 +1866,7 @@ const ASYNC = {
         const member = g.mySlot != null;
         const btns = [];
         if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">${TX('Öffnen')}</button>`);
+        else if (g.status === 'playing' && !g.freeSeats.length) btns.push(`<button class="btn small" onclick="ASYNC.open('${g.id}')">${TX('Zuschauen')}</button>`);
         else btns.push(`<button class="btn small primary" onclick="ASYNC.showJoin('${g.id}')">${TX('Beitreten')}</button>`);
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
@@ -1803,6 +2153,7 @@ const ASYNC = {
     enter: function (view) {
         MP.active = true;
         MP.asyncId = view.id;
+        MP.spectator = view.mySlot == null;          // a public game opened to watch
         MP.sessionId = null;
         MP.renderLobby = null;
         MP.lobbyIndex = view.mySlot;
@@ -1810,7 +2161,7 @@ const ASYNC = {
         this.view = null;
         this.placing = false;
         const credBox = $('mp-cred-box');
-        if (credBox) credBox.textContent = TX('Rundenspiel %s · Liste', view.joinCode);
+        if (credBox) credBox.textContent = view.mySlot == null ? `👁 ${TX('Zuschauer')} · ${TX('Liste')}` : TX('Rundenspiel %s · Liste', view.joinCode);
         this.apply(view);
     },
 
@@ -1819,6 +2170,7 @@ const ASYNC = {
         if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
         MP.asyncId = null;
         MP.active = false;
+        MP.spectator = false;
         this.view = null;
         this.placing = false;
         document.body.classList.remove('mp-waiting');
@@ -1831,9 +2183,11 @@ const ASYNC = {
     apply: function (view) {
         const prev = this.view;
         this.view = view;
+        MP.lastStats = view.stats || null;            // a finished game: its statistics (client/stats.js)
+        MP.lastRecord = view.record || null;          // … and its stored match with the replay (client/replay.js)
         MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
         const toastEl = document.querySelector('.mp-waiting-toast');
-        if (toastEl) toastEl.textContent = view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
+        if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
 
         if (view.status === 'cancelled') {
             toast(TX('Das Rundenspiel wurde abgebrochen.'));
@@ -1858,6 +2212,7 @@ const ASYNC = {
         this.placing = false;
         const fresh = !prev || !['playing', 'finished'].includes(prev.status) || !$('screen-game').classList.contains('show');
         MP.playerIndex = view.myIndex;
+        MP.takeSummary(view.summary);                 // "since your last turn" – needs our index
         if (fresh) {
             closeModal();
             if (typeof draftState !== 'undefined') draftState = null;
@@ -1868,8 +2223,7 @@ const ASYNC = {
             MP.syncTurnBlocker();
             startGameScreen();
             MP.updateHudDelayed();
-            MP.updatePersistentLog();
-            MP.updatePlayerList();
+                MP.updatePlayerList();
             if (S.cur === MP.playerIndex && !S.over) MP.animDeinZug();
         } else {
             MP.applyState(view.state);
@@ -1935,17 +2289,26 @@ MP.drawLegalFooter = function () {
 MP.applyLang = function () {
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
     set('mp-live-btn', TX('Multiplayer'));
-    set('mp-log-title', TX('Spiel-Log'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
     const wait = document.querySelector('.mp-waiting-toast');
     if (wait && !MP.asyncId) wait.textContent = TX('Warte auf deinen Zug...');
     const cred = document.querySelector('#mp-cred-wrapper .res');
     if (cred) cred.title = TX('Lobby Zugangsdaten');
+    set('mp-afk-text', TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.'));
+    set('mp-afk-btn', TX('Ich bin zurück'));
+    const clock = $('mp-turn-clock');
+    if (clock) clock.title = TX('Zeit für diesen Zug');
+    const sumBtn = $('mp-summary-btn');
+    if (sumBtn) sumBtn.title = TX('Seit deinem letzten Zug');
     document.documentElement.style.setProperty('--mp-on-turn', JSON.stringify(' ◂ ' + TX('am Zug')));
+    [['--mp-lbl-players', 'Spieler'], ['--mp-lbl-chat', 'Chat']]
+        .forEach(([v, t]) => document.documentElement.style.setProperty(v, JSON.stringify(TX(t))));
+    if (this.joinCode) this.showCred();
     this.drawLegalFooter();
     if ($('mp-main-auth-container') && $('mp-main-auth-container').innerHTML) this.drawMainMenuAuth();
     ASYNC.drawBadge();
+    if (typeof CHAT !== 'undefined') CHAT.applyLang();
 };
 const originalSwitchLang = window.switchLang;
 if (originalSwitchLang) {
@@ -1974,18 +2337,21 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!MP.asyncId) return;
         ASYNC.close(); show('screen-menu'); ASYNC.showList();
     });
-    // In-game menu (☰) of a Rundenspiel: "Zurück zum Hauptmenü" instead of "Spiel beenden"
-    // (which would wipe the local single-player save). Deferred so ui.js has built the modal.
+    // In-game menu (☰) of a multiplayer game: "Zurück zum Hauptmenü" instead of "Spiel beenden"
+    // (which would wipe the local single-player save). A Rundenspiel goes on without us, a live
+    // game, a watched game or a replay is left. Deferred so ui.js has built the modal.
     const gMenu = $('g-menu');
     if (gMenu) gMenu.addEventListener('click', () => setTimeout(() => {
-        if (!MP.asyncId) return;
+        if (!MP.active) return;
         const quit = $('mm-quit');
         if (!quit || $('mm-async-menu')) return;
         const btn = document.createElement('button');
         btn.className = 'btn wide primary';
         btn.id = 'mm-async-menu';
         btn.textContent = TX('Zurück zum Hauptmenü');
-        btn.onclick = () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); };
+        btn.onclick = MP.asyncId
+            ? () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); }
+            : () => { location.href = location.pathname; };
         quit.parentNode.insertBefore(btn, quit);
         quit.remove();
     }, 0));
@@ -1994,7 +2360,11 @@ window.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(location.search);
         // Back from Google/Discord: the server redirects here with ?oauth=<result>
         const oauth = params.get('oauth');
-        if (oauth) {
+        if (oauth === 'mfa') {
+            // Google/Discord proved the account; its second factor is still missing
+            history.replaceState(null, '', location.pathname);
+            MP.showAuthModal(true);
+        } else if (oauth) {
             history.replaceState(null, '', location.pathname);
             const OAUTH_MESSAGES = {
                 ok: MP.user ? TX('Angemeldet als %s.', MP.user.username) : TX('Anmeldung erfolgreich.'),
@@ -2011,11 +2381,15 @@ window.addEventListener('DOMContentLoaded', () => {
             if (MP.renderMainMenuAuth) MP.renderMainMenuAuth();
         }
         const id = params.get('async');
-        if (id) {
+        const replay = params.get('replay');
+        if (replay && typeof REPLAY !== 'undefined') {
+            history.replaceState(null, '', location.pathname);
+            REPLAY.open(replay);
+        } else if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
         } else if (OLD_VERSIONS.includes(APP_VERSION_HERE)) {
-            location.replace('/');           // /v88/, /v87/, /v83/ only open running Rundenspiele of that version
+            location.replace('/');           // /v88/, /v87/, /v83/ only open Rundenspiele and replays of that version
         }
     });
 
@@ -2040,3 +2414,5 @@ window.addEventListener('DOMContentLoaded', () => {
     `;
     document.head.appendChild(style);
 });
+// A turned phone or a smaller window: open panels may now cover each other
+window.addEventListener('resize', () => MP.fitPanels(MP._lastPanel));

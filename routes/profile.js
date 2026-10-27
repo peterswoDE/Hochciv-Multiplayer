@@ -38,6 +38,8 @@ function gameEntry(g, userId) {
         id: g.id,
         matchDate: g.matchDate,
         rounds: g.durationRounds,
+        hasStats: !!g.get('hasStats'),        // statistics over the rounds (GET /api/games/:id)
+        hasReplay: !!g.get('hasReplay'),      // replay (GET /api/games/:id/replay)
         async: g.participants.some(p => p.async),
         ranked: g.participants.some(p => p.mmrShift != null),
         won: !!me.isWinner && me.dbUserId === userId,
@@ -71,6 +73,11 @@ router.get('/:userId', limit, async (req, res) => {
         const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: user.id }]))}::jsonb`;
         const { count, rows } = await Game.findAndCountAll({
             where: sequelize.literal(`(${has('dbUserId')} OR ${has('replacedUserId')})`),
+            // the statistics themselves are loaded per match when opened
+            attributes: { exclude: ['stats'], include: [
+                [sequelize.literal('"stats" IS NOT NULL'), 'hasStats'],
+                [sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay'],
+            ] },
             order: [['matchDate', 'DESC']],
             offset,
             limit: PAGE,

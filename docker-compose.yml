@@ -34,6 +34,7 @@ services:
       - BASE_URL=${BASE_URL:-}
       - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:-password123}@hochciv-db:5432/${POSTGRES_DB:-hochciv}
       # E-mail (activation, password reset, 2FA codes, turn notifications)
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
@@ -47,7 +48,9 @@ services:
 
 networks:
   nginx:
+    # The Docker network of the reverse proxy (PROXY_NETWORK in .env, default "nginx").
     external: true
+    name: ${PROXY_NETWORK:-nginx}
   internal:
 
 volumes:

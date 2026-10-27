@@ -22,7 +22,7 @@ const errors = [];
 window.addEventListener('error', e => errors.push(e.message));
 // Im Browser teilen sich <script>-Tags den globalen Gültigkeitsbereich; eval nicht.
 // Deshalb alles zusammen auswerten und einen Zugriffspunkt für den Test anhängen.
-const src = ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/tutorial.js', 'js/ui.js']
+const src = ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/tutorial.js', 'js/firstgame.js', 'js/ui.js']
   .map(f => fs.readFileSync(__dirname + '/' + f, 'utf8')).join('\n');
 window.eval(src + '\n;window.__get = n => eval(n); window.__set = (n, v) => eval(n + "=v");'
   + '\n;window.__runAuto = i => { TUT_STEPS[i].auto(); redraw(); };');
@@ -44,6 +44,7 @@ const AUTO = p => p.kind === 'bot' || p.kind === 'ki';
 // Das Auto-Weiterschalten im Tutorial läuft in der App über setTimeout. Im Test
 // wird die Verzögerung auf 0 gesetzt, damit es synchron und damit prüfbar abläuft.
 SET('TUT_AUTO_MS', 0);
+SET('FG_AUTO_MS', 0);                     // ebenso im Ersten Spiel (v92)
 // Ebenso das Nachspielen der Kämpfe am Zugende (v90): ohne Wartezeit läuft der Zugwechsel
 // wie bisher synchron durch. Der Schritt „v90" schaltet es eigens ein.
 SET('COMBAT_MS', 0);
@@ -4288,6 +4289,287 @@ step('Technologiebogen: im fremden Zug das eigene Reich, nur zum Ansehen', () =>
     if (/nicht am Zug/.test($('ov-title').textContent)) throw new Error('eigener Zug als fremd markiert');
     G('closeModal')();
   } finally { G('__set')('viewerHook', null); G('show')('screen-menu'); }
+});
+
+/* ------------------------------------------------------------------ Erstes Spiel (v92, umgebaut v93) */
+const FG = () => G('S').fg;
+const fgId = () => G('fgSchritt')().id;
+const panelText = () => $('tut-body').textContent.replace(/\s+/g, ' ');
+// Seite vor der Partie: Weg antippen (die Seite liegt als Fenster über dem Menü bzw. dem Spielende)
+const fgSeiteWahl = pfad => {
+  if (!$('overlay').classList.contains('show') || !$('ov-body').querySelector('.fg-seite')) throw new Error('keine Seite vor der Partie');
+  $('ov-body').querySelector(`[data-pfad="${pfad}"]`).onclick();
+};
+// Spielt mit den Musterlösungen bis zum Schritt `ziel` – das Zugende über den echten Knopf
+// (samt Nachfrage) und das Bot-Blatt über „Weiter", wie ein Mensch es täte
+function fgSpieleBis(ziel) {
+  const echt = G('fgTestZug');
+  SET('fgTestZug', () => {
+    $('a-end').onclick();
+    if (G('ui').fg && G('ui').fg.frage) $('a-end').onclick();
+    let n = 0;
+    while (G('ui').botLock && n++ < 4) $('bot-next').onclick();
+  });
+  try {
+    for (let n = 0; n < 120; n++) {
+      if (G('ui').botLock) { $('bot-next').onclick(); continue; }
+      const st = G('fgSchritt')();
+      if (!st || st.id === ziel || st.ende) return st && st.id;
+      if (st.fertig()) { G('fgNachholen')(); G('redraw')(); continue; }
+      st.loesung();
+      G('redraw')();
+    }
+  } finally { SET('fgTestZug', echt); }
+  return 'abbruch';
+}
+step('v92: Menü – „Erstes Spiel" rot ganz oben, „Neues Spiel" wie die übrigen', () => {
+  G('show')('screen-menu');
+  const knoepfe = [...$('screen-menu').querySelectorAll('.menu-actions .btn')];
+  if (knoepfe[0].id !== 'm-first') throw new Error('oben steht ' + knoepfe[0].id);
+  if (!$('m-first').classList.contains('primary')) throw new Error('„Erstes Spiel" ist nicht rot');
+  const rot = knoepfe.filter(b => b.classList.contains('primary')).map(b => b.id);
+  if (rot.join() !== 'm-first') throw new Error('rot sind: ' + rot.join());
+  if ($('m-first').textContent.trim() !== 'Erstes Spiel') throw new Error('Text: ' + $('m-first').textContent);
+  G('switchLang')('en');
+  const en = $('m-first').textContent.trim();
+  G('switchLang')('de');
+  if (en !== 'First game') throw new Error('englisch: ' + en);
+  console.log('       ' + knoepfe.filter(b => !b.hidden).map(b => b.id + (b.classList.contains('primary') ? ' (rot)' : '')).join(', '));
+});
+step('v93: Erstes Spiel – erst die Seite (Steinzeit, mehrere Wege), dann gleich die Wahl', () => {
+  window.localStorage.removeItem('hochciv.fg');
+  const vorher = G('S');
+  $('m-first').onclick();
+  if (G('S') !== vorher || $('screen-game').classList.contains('show')) throw new Error('Partie schon gestartet');
+  const txt = $('ov-body').textContent.replace(/\s+/g, ' ');
+  if ($('ov-title').textContent !== 'Erstes Spiel' || !/einzige Stadt in der Steinzeit/.test(txt) || !/Zeiten überdauert/.test(txt) ||
+    !/mehr als einen Weg zum Sieg/.test(txt)) throw new Error('Seite: ' + txt.slice(0, 160));
+  const wege = [...$('ov-body').querySelectorAll('[data-pfad]')].map(b => b.dataset.pfad);
+  if (wege.join() !== 'militaer,wirtschaft,wissenschaft') throw new Error('Wege: ' + wege.join());
+  if ($('ov-body').querySelector('.fg-ja')) throw new Error('schon abgehakt');
+  // Schließen ändert nichts: zurück im Menü, keine Partie
+  G('closeModal')();
+  if ($('screen-game').classList.contains('show')) throw new Error('nach dem Schließen läuft eine Partie');
+  $('m-first').onclick();
+  fgSeiteWahl('militaer');
+  console.log('       „' + txt.slice(0, 95) + '…"');
+});
+step('v92: Erstes Spiel – Start, Ziel, Tipp, Ablehnung, Hauptstadt antippen', () => {
+  const S = G('S');
+  if (!$('screen-game').classList.contains('show') || $('tut-panel').hidden) throw new Error('kein Spiel mit Panel');
+  if ($('overlay').classList.contains('show')) throw new Error('die Seite steht noch');
+  if (!window.document.body.classList.contains('fg')) throw new Error('body.fg fehlt');
+  if (S.players.map(p => p.civ + ':' + p.kind).join() !== 'griechenland:human,england:ki') throw new Error('Aufstellung');
+  if (S.fg.pfad !== 'militaer' || !/Militärsieg · Runde 1/i.test($('tut-panel').querySelector('.tut-sub').textContent)) throw new Error('Weg im Kopf: ' + $('tut-panel').querySelector('.tut-sub').textContent);
+  if (fgId() !== 'hauptstadt' || !/Ziel: Tippe deine Hauptstadt an/.test(panelText()) || !/Dein Weg: Militärsieg/.test(panelText())) throw new Error('Schritt 1: ' + panelText());
+  if (!$('tut-prev').hidden || !/Tipp anzeigen/.test($('tut-next').textContent) || $('tut-next').disabled) throw new Error('Leiste');
+  // Erst etwas anderes versuchen: der Bogen geht auf, Forschen wird abgelehnt – mit Grund
+  $('a-tech').onclick();
+  const mathe = $('ov-body').querySelector('[data-tech="mathematik"]');
+  mathe.onclick();
+  if (S.players[0].techs.mathematik) throw new Error('Mathematik trotz Schiene erforscht');
+  if (!/Eins nach dem anderen/.test($('toast').textContent)) throw new Error('Meldung: ' + $('toast').textContent);
+  G('closeModal')();
+  // Tipp: Text, goldene Umrandung, Knopf danach aus
+  $('tut-next').onclick();
+  const cap = G('capitalOf')(S, 0);
+  if (!/So geht es/.test(panelText()) || !$('tut-next').disabled) throw new Error('Tipp nicht offen');
+  if (!G('fgHighlight')().some(h => h[0] === cap.r && h[1] === cap.c)) throw new Error('Hauptstadt nicht markiert');
+  G('tapHex')(cap.r, cap.c);
+  if (fgId() !== 'faehigkeit') throw new Error('nicht weiter: ' + fgId());
+  if (!$('sheet').classList.contains('open')) throw new Error('Stadtblatt zu (soll stehen bleiben)');
+  if (!$('tut-body').querySelector('.fg-gut') || !/sechs Felder/.test(panelText())) throw new Error('keine Rückmeldung');
+  $('a-abil').onclick();
+  if (fgId() !== 'gratis') throw new Error('Fähigkeiten: ' + fgId());
+  console.log('       „' + $('toast').textContent + '" · Schritt 3: ' + $('tut-title').textContent);
+});
+step('v93: Erstes Spiel – kostenlos forschen, dann der Würfel: blasse Kacheln antippen', () => {
+  const S = G('S');
+  G('closeSheet')();
+  $('a-tech').onclick();
+  $('ov-body').querySelector('[data-tech="rad"]').onclick();
+  if (S.players[0].techs.rad || !/kostet 2/.test($('toast').textContent)) throw new Error('Rad: ' + $('toast').textContent);
+  // vor dem Würfel-Schritt: eine blasse Kachel erklärt sich, zählt aber noch nicht
+  $('ov-body').querySelector('[data-blass="astronomie"]').onclick();
+  if (!/gibt es in dieser Partie nicht/.test($('toast').textContent) || S.fg.flags.blass) throw new Error('zu früh: ' + $('toast').textContent);
+  $('ov-body').querySelector('[data-tech="mathematik"]').onclick();
+  $('ov-body').querySelector('[data-tech="taktik"]').onclick();
+  // Ohne Pause (FG_AUTO_MS = 0) schließt das Weiterschalten den Bogen, bevor der Knopf ihn neu
+  // zeichnet – in der App kommt das Schließen 0,9 s später (Chromium-Prüfung).
+  G('closeModal')();
+  if (fgId() !== 'wuerfel') throw new Error('nach dem Forschen: ' + fgId());
+  if (!/Mittelalter in Forschung und Militär/.test(panelText()) || !/Forschung: 2 von 4 · Militär: 1 von 3/.test(panelText())) throw new Error('Würfel: ' + panelText());
+  $('tut-next').onclick();                                      // Tipp: die durchgefallenen leuchten
+  $('a-tech').onclick();
+  const gold = [...$('ov-body').querySelectorAll('.fg-hl')].map(b => b.dataset.blass).filter(Boolean).sort();
+  if (gold.join() !== 'alchemie,buchdruck,burgenbau,schiesspulver') throw new Error('golden: ' + gold.join());
+  if ($('ov-body').querySelector('[data-blass="papier"]') || !$('ov-body').querySelector('[data-tech="rad"]')) throw new Error('Kacheln falsch');
+  // noch nicht ausgewürfelt (Produktion, Mittelalter): erklärt, zählt nicht
+  $('ov-body').querySelector('[data-blass="segeln"]').onclick();
+  if (!/noch nicht ausgewürfelt/.test($('toast').textContent) || fgId() !== 'wuerfel') throw new Error('Segeln: ' + $('toast').textContent);
+  const w = G('fgWurf')(0, 'alchemie');
+  $('ov-body').querySelector('[data-blass="alchemie"]').onclick();
+  if (!new RegExp(`Alchemie gibt es in dieser Partie nicht: Der Würfel zeigte ${w}`).test($('toast').textContent)) throw new Error('Alchemie: ' + $('toast').textContent);
+  if (fgId() !== 'gruenden1' || $('overlay').classList.contains('show')) throw new Error('nicht weiter: ' + fgId());
+  if (!/Alchemie ist durchgefallen: Der Würfel zeigte \d/.test(panelText()) || !/50 %/.test(panelText())) throw new Error('Rückmeldung: ' + panelText());
+  console.log('       „' + $('toast').textContent + '"');
+});
+step('v92: Erstes Spiel – gründen, wachsen, Zugende, Englands Zug', () => {
+  const S = G('S');
+  $('a-found').onclick();
+  G('tapHex')(5, 6);
+  $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
+  if (G('cityAt')(S, 5, 6) || !/4 🌾/.test($('toast').textContent)) throw new Error('falscher Platz: ' + $('toast').textContent);
+  G('tapHex')(5, 5);
+  $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
+  if (!G('cityAt')(S, 5, 5) || fgId() !== 'wachsen1') throw new Error('gründen: ' + fgId());
+  const cap = G('capitalOf')(S, 0);
+  G('tapHex')(cap.r, cap.c);
+  $('sheet-body').querySelector('.opt[data-label="Bevölkerung wachsen"]').onclick();
+  if (fgId() !== 'zug1') throw new Error('wachsen: ' + fgId());
+  $('a-end').onclick();
+  if (!G('ui').botLock || !/England ist am Zug/.test($('tut-title').textContent)) throw new Error('Englands Zug: ' + $('tut-title').textContent);
+  $('bot-next').onclick();
+  if (S.round !== 2 || fgId() !== 'wachsen2' || !/in Runde 1 waren es 1, 4 und 4/.test(panelText())) throw new Error('Runde 2: ' + panelText());
+  console.log('       Runde 2 · ' + panelText().slice(0, 90));
+});
+step('v92: Erstes Spiel – alle Städte wachsen, Handelsroute, dritte Stadt, belagert', () => {
+  const S = G('S');
+  $('a-abil').onclick();
+  $('sheet-body').querySelector('.opt[data-label="Alle Städte wachsen"]').onclick();
+  if (fgId() !== 'strasse') throw new Error('wachsen: ' + fgId());
+  if (!/gut für deinen Angriff/.test(panelText())) throw new Error('Militärweg führt nicht: ' + panelText());
+  $('a-tech').onclick();
+  $('ov-body').querySelector('[data-tech="rad"]').onclick();
+  G('closeModal')();
+  G('tapHex')(4, 2);
+  $('sheet-body').querySelector('.opt[data-label="Straße bauen"]').onclick();
+  if (G('roadLevel')(S, 4, 2) || !/nicht zwischen/.test($('toast').textContent)) throw new Error('Straße abseits: ' + $('toast').textContent);
+  for (const [r, c] of [[5, 3], [5, 4]]) { G('tapHex')(r, c); $('sheet-body').querySelector('.opt[data-label="Straße bauen"]').onclick(); }
+  if (fgId() !== 'gruenden2') throw new Error('Handelsroute: ' + fgId());
+  $('a-found').onclick(); G('tapHex')(2, 3);
+  $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
+  if (fgId() !== 'zug2') throw new Error('dritte Stadt: ' + fgId());
+  $('a-end').onclick(); $('bot-next').onclick();
+  if (fgId() !== 'belagert' || !/Angriff 3 gegen Verteidigung 2/.test(panelText())) throw new Error('belagert: ' + panelText());
+  // Zugende geht nicht, solange die Stadt fiele
+  $('a-end').onclick();
+  if (S.round !== 3 || S.cur !== 0 || !/Die Stadt fiele/.test($('toast').textContent)) throw new Error('Zugende: ' + $('toast').textContent);
+  const stadt = G('cityAt')(S, 5, 5);
+  G('tapHex')(5, 5);
+  $('sheet-body').querySelector('.opt[data-label="Armee bauen"]').onclick();
+  $('sheet-body').querySelector('.opt[data-label="Armee hier bewegen"]').onclick();
+  G('tapHex')(4, 4);
+  if (!G('ui').army || !/direkt neben/.test($('toast').textContent)) throw new Error('Zug weg: ' + $('toast').textContent);
+  G('tapHex')(4, 6);
+  if (!G('armyAt')(S, 4, 6)) throw new Error('Armee nicht auf 4/6');
+  if (!/Verteidigung 2 · Englands Angriff 3/.test(panelText())) throw new Error('Stand: ' + panelText());
+  $('a-power').onclick();
+  $('sheet-body').querySelector('[data-n="1"]').onclick();
+  if (fgId() !== 'rest3') throw new Error('Macht: ' + fgId() + ' ' + G('defenseValue')(S, stadt));
+  console.log('       ' + panelText().slice(0, 100));
+});
+step('v93: Erstes Spiel – Runde 3 vom Weg geführt, Nachfrage beim Zugende, Flanke, Militärsieg', () => {
+  const S = G('S');
+  if (!/Ziel: Erforsche Belagerungsmaschinen/.test(panelText())) throw new Error('Runde 3, Militär: ' + panelText());
+  $('a-tech').onclick();
+  $('ov-body').querySelector('[data-tech="schrift"]').onclick();
+  if (S.players[0].techs.schrift || !/Erst Belagerungsmaschinen/.test($('toast').textContent)) throw new Error('Schrift: ' + $('toast').textContent);
+  G('closeModal')();
+  $('a-end').onclick();
+  if (S.cur !== 0 || !/Belagerungsmaschinen noch nicht erforscht/.test($('toast').textContent)) throw new Error('keine Nachfrage: ' + $('toast').textContent);
+  $('a-end').onclick();
+  $('bot-next').onclick();
+  if (S.round !== 4 || fgId() !== 'flanke') throw new Error('Runde 4: ' + fgId());
+  if (fgSpieleBis('m_belagern') !== 'm_belagern') throw new Error('bis zum Militärweg: ' + fgId());
+  fgSpieleBis('ende');
+  if (!S.over || !/^Militärsieg/.test(S.over.how) || fgId() !== 'ende') throw new Error('kein Militärsieg: ' + (S.over && S.over.how));
+  if ($('ov-title').textContent !== 'Spielende' || !/Gewonnen!/.test($('ov-body').textContent)) throw new Error('Spielende: ' + $('ov-body').textContent.slice(0, 80));
+  if (!$('ov-body').querySelector('[data-fg="anders"]') || !/Zum Menü/.test($('tut-next').textContent)) throw new Error('Knöpfe am Ende');
+  if (JSON.parse(window.localStorage.getItem('hochciv.fg')).geschafft.join() !== 'militaer') throw new Error('nicht gemerkt');
+  console.log('       ' + S.over.how + ' in Runde ' + S.round);
+});
+step('v93: Erstes Spiel – anderer Weg: die Seite wieder (Militär abgehakt), Wirtschaft, dann Forschung', () => {
+  $('ov-body').querySelector('[data-fg="anders"]').onclick();
+  if (!$('ov-body').querySelector('.fg-seite [data-pfad="militaer"] .fg-ja')) throw new Error('Militärweg nicht abgehakt');
+  fgSeiteWahl('wirtschaft');
+  let S = G('S');
+  if (S.round !== 1 || S.over || fgId() !== 'hauptstadt' || S.fg.pfad !== 'wirtschaft') throw new Error('keine neue Partie: ' + fgId());
+  fgSpieleBis('rest3');
+  if (!/Ziel: Erforsche Keramik/.test(panelText())) throw new Error('Runde 3, Wirtschaft: ' + panelText());
+  fgSpieleBis('ende');
+  S = G('S');
+  if (!S.over || !/^Wirtschaftssieg/.test(S.over.how)) throw new Error('kein Wirtschaftssieg: ' + (S.over && S.over.how));
+  $('ov-body').querySelector('[data-fg="anders"]').onclick();
+  fgSeiteWahl('wissenschaft');
+  fgSpieleBis('rest4');
+  // die Musterlösung hat Papier schon in Runde 3 mitgenommen (billig) – dann sagt das Ziel das
+  if (!/Ziel: (Erforsche Papier|Gib aus, was noch geht – Papier hast du schon)/.test(panelText())) throw new Error('Runde 4, Forschung: ' + panelText());
+  fgSpieleBis('ende');
+  S = G('S');
+  if (!S.over || !/^Forschungssieg/.test(S.over.how)) throw new Error('kein Forschungssieg: ' + (S.over && S.over.how));
+  const gemerkt = JSON.parse(window.localStorage.getItem('hochciv.fg')).geschafft.join();
+  if (gemerkt !== 'militaer,wirtschaft,wissenschaft') throw new Error('gemerkt: ' + gemerkt);
+  console.log('       Wirtschaft, Forschung: ' + S.over.how + ' in Runde ' + S.round + ' · gemerkt: ' + gemerkt);
+});
+step('v92: Erstes Spiel – fortsetzen, Englisch, beenden (England spielt als KI weiter)', () => {
+  G('closeModal')();
+  $('m-first').onclick();
+  fgSeiteWahl('militaer');
+  fgSpieleBis('belagert');
+  G('saveGame')();
+  G('show')('screen-menu');
+  G('endTutorialPanel')();
+  $('m-continue').hidden = false;
+  $('m-continue').onclick();
+  if (fgId() !== 'belagert' || $('tut-panel').hidden || !G('ui').fg) throw new Error('nicht fortgesetzt: ' + (G('S').fg && fgId()));
+  G('switchLang')('en');
+  const en = $('tut-title').textContent + ' · ' + $('tut-panel').querySelector('.tut-sub').textContent + ' · ' + panelText().slice(0, 60);
+  if (!/Under siege!/.test(en) || !/Military victory · round 3/i.test(en) || G('missingStrings')().length) throw new Error('englisch: ' + en + ' ' + G('missingStrings')().join(' | '));
+  G('switchLang')('de');
+  $('tut-quit').onclick();
+  $('fg-aus').onclick();
+  const S = G('S');
+  if (S.fg || G('ui').fg || !$('tut-panel').hidden) throw new Error('nicht beendet');
+  const r = S.round;
+  // jetzt ohne Schienen: Zugende geht, England zieht als KI
+  $('a-end').onclick();
+  if (G('ui').botLock) $('bot-next').onclick();
+  if (G('S').round !== r + 1) throw new Error('Zug ging nicht weiter: Runde ' + G('S').round);
+  console.log('       ' + en + ' · beendet, Runde ' + G('S').round + ' ohne Führung');
+});
+step('v93: Spielstand von v92 ohne Weg – das Panel fragt zuerst, dann geht es weiter', () => {
+  G('closeModal')();
+  $('m-first').onclick();
+  fgSeiteWahl('wirtschaft');
+  fgSpieleBis('w_theologie');
+  const S = G('S');
+  S.fg.pfad = null; S.fg.schritt = 'wahl'; S.fg.v = 1; S.fg.wahl = '{}';    // so sah es in v92 vor der Wahl aus
+  G('saveGame')();
+  G('show')('screen-menu');
+  G('endTutorialPanel')();
+  $('m-continue').hidden = false;
+  $('m-continue').onclick();
+  const knoepfe = [...$('tut-body').querySelectorAll('[data-pfad]')].map(b => b.dataset.pfad).join();
+  if (knoepfe !== 'militaer,wirtschaft,wissenschaft' || !/Wähle deinen Weg/.test(panelText())) throw new Error('keine Wahl im Panel: ' + panelText());
+  $('a-end').onclick();
+  if (!/Wähle deinen Weg/.test($('toast').textContent) || G('S').round !== 5) throw new Error('Zugende ohne Weg: ' + $('toast').textContent);
+  $('tut-body').querySelector('[data-pfad="wirtschaft"]').onclick();
+  if (G('S').fg.pfad !== 'wirtschaft' || fgId() !== 'w_theologie' || 'wahl' in G('S').fg) throw new Error('nach der Wahl: ' + fgId());
+  console.log('       ' + $('tut-title').textContent + ' · ' + panelText().slice(0, 70));
+  G('closeModal')();
+});
+step('v92: das klassische Tutorial hat sein Panel wieder ganz', () => {
+  G('tutorialStart')();
+  if (window.document.body.classList.contains('fg')) throw new Error('body.fg blieb');
+  if ($('tut-prev').hidden || $('tut-quit').textContent !== 'Tutorial beenden' || !$('tut-next').classList.contains('primary'))
+    throw new Error('Panel des Tutorials: ' + [$('tut-prev').hidden, $('tut-quit').textContent, $('tut-next').className].join(' | '));
+  if (!/Weiter ›|Fertig/.test($('tut-next').textContent)) throw new Error('Weiter: ' + $('tut-next').textContent);
+  G('techModal')();
+  if ($('ov-body').querySelector('[data-blass]') || !$('ov-body').querySelector('.tech.locked[disabled]'))
+    throw new Error('blasse Kacheln antippbar außerhalb des Ersten Spiels');
+  G('closeModal')();
+  G('tutorialQuit')();
 });
 
 step('kein abgefangener Fehler im Zugablauf', () => {

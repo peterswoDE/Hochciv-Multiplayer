@@ -45,7 +45,19 @@ router.post('/sessions/join', lobbyLimit, (req, res) => {
     res.json(result);
 });
 
-// ── GET /api/public-sessions — list all public sessions ─────────────────────
+// ── POST /api/sessions/watch — watch with code + password (spectator) ───────
+router.post('/sessions/watch', lobbyLimit, (req, res) => {
+    const { joinCode, password, viewer } = req.body || {};
+    if (typeof joinCode !== 'string' || typeof password !== 'string' || !joinCode || !password || !viewer
+        || typeof viewer.name !== 'string' || typeof viewer.clientId !== 'string' || !viewer.clientId) {
+        return res.status(400).json({ error: 'joinCode, password, viewer.name und viewer.clientId sind erforderlich.' });
+    }
+    const result = sessions.addSpectator(joinCode, password, viewer);
+    if (typeof result === 'string') return res.status(400).json({ error: result });
+    res.json(result);
+});
+
+// ── GET /api/public-sessions — public lobbies and running public games ──────
 router.get('/public-sessions', (req, res) => {
     res.json(sessions.getPublicSessions());
 });

@@ -4,6 +4,8 @@ Authoritative multiplayer backend for **Hochciv**, built with Node.js, Express, 
 
 ## Features
 
+Planned and in-progress features for the multiplayer experience are tracked in [TASKS.md](TASKS.md).
+
 * **Live multiplayer:** Lobbies with a 6-character join code and a 6-digit password, public lobby list, 2 to 8 empires – as many as the map allows (fixed maps and the standard Marathon 4, the tile map 8, custom maps as many as they have start points). The host sets the number of empires and how many of them the KI plays; free human seats are filled with the KI at the start. Further settings: map (including custom maps and their codes), random nations for everyone, KI level, events, wonders and ranked mode.
 * **Server-side rules:** Every move is checked and applied by the real Hochciv engine on the server; clients only display the state.
 * **Discord Activity:** Play inside Discord voice channels and DMs. Everyone in the call lands in the same lobby automatically.
@@ -12,6 +14,14 @@ Authoritative multiplayer backend for **Hochciv**, built with Node.js, Express, 
 * **Accounts:** Registration with e-mail activation, password reset, Google and Discord login, two-factor authentication (authenticator app, passkeys, e-mail code), MMR ranking and match history.
 * **Admin panel:** Server status, maintenance mode, registration switch, lobby and user management, OAuth configuration.
 * **Reconnects:** Players who lose their connection or reload the page are put back into their seat.
+* **In-game chat:** In live games and Rundenspiele: text messages, quick emotes and map pings (📍, then tap a hex, and it pulses on every screen). A Rundenspiel keeps its last 200 messages with the game and shows unread messages when it is opened again. Texts need an account; guests can send emotes and pings. Tapping another player's message lets you report it to the admins (with the game's chat history, reviewed in the account tab *Meldungen*), block the player (accounts only, kept with your account, listed under the chat and on the account page) or mute a guest for the running game. A word filter (`obscenity` plus German lists and the admins' own words) stops texts with bad language: they are not sent but reported, and the sender can't write texts for 5 minutes – after a second time, for the rest of the game. The server limits each sender to 5 messages in 10 seconds.
+* **Spectator mode:** *Zuschauen* with code and password, or from the public list, which also shows running public games. Spectators see the board, the log and the chat, but can't act or write; the player list shows how many are watching (up to 20). In the Discord Activity, whoever joins a running game or a full lobby watches. Public Rundenspiele can be watched from the Rundenspiele list.
+* **Ranked matchmaking:** *🔥 Gewertetes Spiel suchen* in the multiplayer menu (logged in) puts a player in a queue that pairs players by MMR (±100, growing by 50 every 15 seconds). Four players who fit start at once; two or three once the one waiting longest has waited 20 seconds. Everyone confirms within 20 seconds, then the server creates the lobby and starts a ranked game: original map, random nations, 3 minutes per turn, free seats up to four empires played by the KI at its hardest level. Whoever doesn't confirm leaves the queue; the others keep their place.
+* **"Since your last turn":** When a player's turn begins, a pop-up shows what happened since their previous turn: cities taken or gained, empires out, wonders built, every empire's score, cities, techs and armies with their changes, and all events from the log. The game's own turn-start dialogs follow when it closes. It can be reopened from the HUD (📋) or switched off. In Rundenspiele the "your turn" e-mail and push message carry a short version.
+* **Post-game statistics:** The end screen of live games and Rundenspiele has *📊 Statistik*: each empire's score over the rounds (lines in the nation colours with their own marker shapes, legend, end labels and a crosshair tooltip), key moments (wonders, conquered cities, empires out, a new leader, the biggest jump) and the numbers as a table. The statistics are stored with the match (`GET /api/games/:id`), and the player profile shows the chart for any match opened there.
+* **Replays:** Every finished live game and Rundenspiel can be watched again turn by turn: *▶ Wiederholung ansehen* on the end screen and in the player profile, or the link `/?replay=<match id>`. A timeline steps through turns and rounds or plays them, and older matches open in the game version they were played with. The game states after every turn are stored compressed (about 15 KB per game) and deleted after 180 days (`REPLAY_KEEP_DAYS`).
+* **Rematch (live games):** On the end screen the host can start a *Revanche*. Everyone still connected goes back to the same lobby (same code and settings, everyone's own choice of nation) and can start the next game from there.
+* **Turn timer (live games):** The host sets the time per turn: no limit (default), or 1 to 10 minutes. A countdown runs in the HUD. When the time is up, the KI finishes the turn. After three missed turns in a row, the KI keeps playing the seat until the player clicks *Ich bin zurück*.
 
 ## How it works
 
@@ -66,6 +76,7 @@ The production setup uses the pre-built image `peterswode/hochciv-multiplayer` b
    ```bash
    docker network create nginx
    ```
+   If your proxy is already in a network with another name (e.g. `proxy`), skip this and set `PROXY_NETWORK=proxy` in `.env`.
 3. Put `docker-compose.yml` into a folder, copy `.env.template` next to it as `.env` and fill it in (see below). At least `SESSION_SECRET` and `BASE_URL` must be set.
 4. Start:
    ```bash
@@ -87,6 +98,8 @@ After changing `.env`, run `docker compose up -d` again – a plain `restart` do
 | `BASE_URL` | **yes** for OAuth/passkeys | Public URL, scheme and host only, e.g. `https://hochciv.example` – no path, no trailing characters. Used for OAuth callbacks, links in e-mails and as the passkey origin. A malformed value stops the server at startup. Without it, OAuth redirects to `http://localhost:3000` and fails. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
+| `ALLOWED_ORIGINS` | no | Further web origins (comma-separated, e.g. `https://second.example`) whose pages may use a visitor's login. By default only this site (the request's host or `BASE_URL`) and the Discord Activity may connect a socket or send changing API requests – see *Security notes*. |
+| `PROXY_NETWORK` | no | Docker network of the reverse proxy (default `nginx`). |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
 
 ### Google / Discord login
@@ -158,7 +171,7 @@ Staging runs on the production server next to production, with its own container
    * `POSTGRES_PASSWORD`: its own value.
    * SMTP: optional; leave `SMTP_HOST` empty to only log mails. Leave `FCM_SERVICE_ACCOUNT` empty unless you test push.
 3. Start: `docker compose -f docker-compose.staging.yml up -d`.
-4. Proxy the subdomain to `hochciv-multiplayer-staging:3000` – see the staging block in `nginx-example.conf`.
+4. Proxy the subdomain to `hochciv-multiplayer-staging:3000` with WebSocket support – see the staging block in `nginx-example.conf`, or in Nginx Proxy Manager add a proxy host for it with *Websockets Support* on. `PROXY_NETWORK` must be the same network as production's.
 5. Register an account on staging and make it superadmin: `docker exec hochciv-multiplayer-staging node elevate.js <your-username> superadmin`.
 6. Google / Discord login on staging: add `https://staging.hochciv.de/api/auth/google/callback` and `…/api/auth/discord/callback` as additional redirect URLs to the same OAuth apps, and enter client ID and secret in the staging admin panel (the staging database is separate).
 
@@ -223,3 +236,7 @@ You need a PostgreSQL database (`DATABASE_URL=postgres://user:pass@host:5432/db`
 * Use a unique `SESSION_SECRET` and database password per installation.
 * The game code in `HochCiv/` runs on your server and in your players' browsers – review changes to it like server code.
 * Only superadmins can grant admin rights or change OAuth settings; admins manage normal users only.
+* **Origin check** (`utils/origin.js`): Socket.IO connections and changing API requests (POST, PUT, PATCH, DELETE) from a web page are only accepted from this site, the Discord Activity (`*.discordsays.com`) and `ALLOWED_ORIGINS`. The login cookie is `SameSite=Lax`, which other sites never get – but a page of the same site (e.g. `staging.hochciv.de` next to `hochciv.de`) would, and CORS doesn't cover WebSockets. Requests without an `Origin` header (the Android app's native code, scripts) pass.
+* **Second factor everywhere:** an account with 2FA (authenticator app, passkey, e-mail code) is asked for it after the password and after Google/Discord too (`/?oauth=mfa` opens the dialog; the Android app forwards the same reason). The first factor counts for 10 minutes.
+* **Authenticator codes** are limited per account: after 5 wrong codes in a row, no code is accepted for 15 minutes (login and re-confirmation). E-mail codes are burnt after 5 wrong tries.
+* **A ban** logs the account out everywhere, closes its open game connections and takes it off its live seats (the seat plays on as a guest's).

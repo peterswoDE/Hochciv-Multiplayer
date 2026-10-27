@@ -500,6 +500,44 @@ html.w-side .tut-scroll{min-height:0}
 .tut-nav .btn.primary{flex:1}
 .tut-count{font-size:12px;color:var(--ink-soft);min-width:34px;text-align:center}
 
+/* Erstes Spiel (v92): dasselbe Panel. Oben die Rückmeldung zum letzten Ziel, unten das
+   neue Ziel samt Stand; der Tipp kommt erst auf Wunsch. Was der Tipp meint, leuchtet
+   golden – Felder auf der Karte (tutHl), Knöpfe in Leiste, Blatt und Technologiebogen. */
+.fg-gut{background:#e7efd9;border:1px solid #bccd9c;border-radius:9px;padding:8px 10px;
+  margin:0 0 9px;font-size:13px;line-height:1.45}
+.fg-gut>b:first-child{color:#3f7a2f;margin-right:2px}
+.fg-tipp{background:#f2e5cf;border:1px dashed #c9a96a;border-radius:9px;padding:8px 10px;
+  margin:0 0 10px;font-size:13px;line-height:1.45}
+.fg-tipp>b:first-child{display:block;font-family:var(--serif);font-size:12px;letter-spacing:.04em;
+  text-transform:uppercase;color:#9a6a12;margin-bottom:3px}
+/* Das Ziel steht im Textbereich: dieselbe Zeile wie die Aufgabe des Tutorials, ohne deren Rand */
+#tut-body .fg-ziel{margin:0 0 10px}
+.fg-stand{display:block;margin-top:5px;font-size:13px;color:var(--ink-soft)}
+.tut-task .fg-stand b{color:var(--ink)}
+.fg-ja{color:#3f7a2f;font-weight:700}
+.tut-task .fg-nein{color:var(--red);font-weight:700}
+.fg-wahl{display:grid;gap:8px;margin:6px 0 4px}
+.fg-wahl .btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
+  padding:11px 13px;margin:0}
+.fg-wahl .btn>span{font-weight:600}
+.fg-wahl .btn small{font-size:12px;line-height:1.35;color:var(--ink-soft);font-weight:400}
+#tut-body .btn.wide{margin-top:8px}
+body.fg .tut-nav .btn.small{flex:1}
+/* Umriss statt Schatten: Kacheln und Knöpfe haben eigene Schatten, ein Umriss kommt keinem
+   davon in die Quere (und folgt den runden Ecken). */
+.fg-hl{outline:3px solid #e0b23a;outline-offset:2px;animation:fgPuls 1.4s ease-in-out infinite}
+@keyframes fgPuls{50%{outline-color:rgba(224,178,58,.3)}}
+@media (prefers-reduced-motion:reduce){.fg-hl{animation:none}}
+/* v93: blasse Kacheln sind im Ersten Spiel antippbar (warum blass?); meint der Tipp eine,
+   tritt sie hervor – sonst ginge der goldene Rand in der Blässe unter. */
+.tech.locked[data-blass]{cursor:pointer}
+.tech.locked.fg-hl{opacity:.6}
+/* v93: die Seite vor dem Ersten Spiel – wer man ist, worum es geht, und die Wahl des Wegs */
+.fg-seite p{margin:0 0 10px;line-height:1.5}
+.fg-auftakt{font-family:var(--serif);font-size:19px;line-height:1.4}
+.fg-seite .fg-wahl{margin:4px 0 12px}
+.fg-seite .hint{margin:0;font-size:13px;color:var(--ink-soft)}
+
 /* Technologieliste in den Kurzregeln */
 .rule-field{font-family:var(--serif);font-size:15px;font-weight:600;margin:16px 0 2px}
 .rule-age{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:8px 0 2px}

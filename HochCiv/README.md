@@ -27,6 +27,7 @@ sonst behalten installierte Geräte die alte Fassung.
 | **Macht** | Macht kaufen. Solange das Blatt offen ist, tragen Städte und Armeen **Ringe** aus **einem Teilstück je Punkt**: in der Farbe des Besitzers seine Verteidigung bzw. sein Machtwert, in fremder Farbe Angreifer bzw. Flankierer – Verteidigung 1 gegen Angriff 2 sind drei Stücke, eines gegen zwei. Überwiegt ein fremder Anteil, läuft die Belagerung bzw. fällt die Armee; Käufe verschieben die Ringe sofort. Über 60 Punkte zeigt der Ring nur noch den Anteil, bei 0 Punkten bleibt er leer |
 | Bevölkerung wachsen | zwei Knöpfe, wenn Verbundwerkstoffe ein Gratis-Wachstum erlaubt: „Kostenlos wachsen" und der bezahlte „Bevölkerung wachsen". Für alle Städte auf einmal: **Fähigkeiten**. Je Stadt und Runde einmal bezahlt, mit **Keramik** und seit v89 mit der **Dampfmaschine** je einmal mehr (beide: dreimal), dazu einmal kostenlos mit Verbundwerkstoffen |
 | Blätter antippen (v89) | Ein Knopf in einem Blatt reagiert erst **0,4 s nach dem Öffnen oder Neuzeichnen** des Blatts. Sonst traf ein Doppeltipp, was nach einer Aktion an die Stelle gerückt war – nach der Freien Forschung etwa „Alle Städte wachsen". Denselben Knopf gleich wieder zu tippen (zweimal „+1 Macht", noch einmal wachsen) geht sofort, „Weiter" im Blatt eines Bot- oder KI-Zugs auch |
+| **Erstes Spiel** (v92, v93) | Der rote Knopf ganz oben im Menü: erst eine Seite (eine Stadt in der Steinzeit, mehrere Wege zum Sieg) mit der Wahl des Wegs, dann eine ganze Partie bis zum Sieg, 1 gegen 1 gegen England, mit **Zielen** statt Erklärtexten und **💡 Tipp anzeigen**, wenn man festhängt. Alles bleibt antippbar; was den Verlauf verlassen würde, wird mit einem Satz abgelehnt. Siehe unten |
 | Tutorial | Geführtes Übungsspiel in der normalen Oberfläche: 24 Schritte mit Erklärpanel unter der Karte, 15 davon mit Aufgabe und genauem Klickweg. Läuft auf Schienen (nur der vorgesehene Schritt ist möglich) und deterministisch. „Fertig" gibt das Spiel frei, es läuft weiter. |
 | Einstellungen | Im Hauptmenü: die Erweiterungsmodule **Ereignisse** und **Weltwunder** zuschalten. Ab Werk sind beide aus und fehlen im Aufbau ganz; eingeschaltet steht dort wieder das Häkchen und entscheidet je Partie. Dazu **Kosten ohne Umtausch anzeigen** (ab Werk aus, siehe Kosten) |
 | Kosten (v82) | Jeder Knopf zeigt, was **tatsächlich** abgeht: fehlt Nahrung oder Wissenschaft, steht dort auch der Rest in Münzen (bzw. was sonst einspringt) – Gründen für 10 Nahrung mit 8 im Vorrat zeigt **8🌾 4🪙**. Reicht es gar nicht oder wird nichts umgetauscht, steht der Preis selbst da. Im Technologiebogen gilt das für die Kacheln, die man gerade erforschen kann; die Karte im Gründungsmodus zeigt weiter den Preis (zum Vergleichen). Mit **Kosten ohne Umtausch anzeigen** in den Einstellungen wie bis v81 überall nur der Preis |
@@ -207,7 +208,62 @@ Platz, jede Zivilisation einmal.
   deshalb die Werte ohne (kein griechischer Rabatt, keine Gratisarmee).
 * „Nochmal spielen" führt wieder in den Draft, mit neuer Karte.
 
+## Erstes Spiel (v92, umgebaut in v93)
+
+Der **rote Knopf ganz oben** im Menü („Neues Spiel" sieht seitdem aus wie die Knöpfe darunter).
+Eine ganze Partie bis zum Sieg, 1 gegen 1 auf einer kleinen Karte (10 × 13): **Griechenland**
+(du) gegen **England**. Statt Erklärtexten nennt jeder Schritt ein **Ziel** – „Gründe eine Stadt
+dort, wo sie dir am meisten 🌾 Nahrung bringt" –, den Weg findet man selbst. Wer festhängt, tippt
+**💡 Tipp anzeigen**: Dann steht der Weg unter dem Ziel, und Feld und Knopf leuchten golden. Wo es
+etwas zu rechnen gibt, steht der Stand gleich dabei (etwa „Verteidigung 2 · Englands Angriff 3 ✗").
+Ist das Ziel erreicht, geht es von selbst weiter, und oben steht ein Satz, warum es wichtig war.
+
+* **Zuerst eine Seite (v93):** Du führst eine einzige Stadt in der Steinzeit, dein Ziel ist eine
+  Zivilisation, die die Zeiten überdauert – und weil es viele Wege zu einem blühenden Reich gibt,
+  gibt es mehrere Wege zum Sieg. Gleich darunter die Wahl: **Militärsieg** (Englands Hauptstadt
+  zwei Züge hintereinander schlagen), **Wirtschaftssieg** (mehr als 3/4 der Weltbevölkerung am
+  Rundenende, mit Theologie 7/10) oder **Forschungssieg** (die Singularität). Wer die Seite
+  schließt, ist wieder im Menü. Gewonnene Wege hakt sie ab (das Gerät merkt sie sich).
+* **Runde 1–4 lehren allen dasselbe (17 Schritte), aber vom Weg geführt:** Hauptstadt und
+  Umland · die eigene Fähigkeit · alles erforschen, was nichts kostet · **der Würfel im
+  Technologiebogen** (v93): eine Technologie finden, die es in dieser Partie nicht gibt – blasse
+  Kacheln lassen sich antippen und sagen, warum sie blass sind (durchgefallen, mit der Augenzahl
+  aus dem Protokoll, oder noch nicht ausgewürfelt); danach die Regel: je Technologie ein Würfel,
+  4–6 = es gibt sie, also 50 % · die Stadt mit der meisten Nahrung, später die mit der meisten
+  Wissenschaft – beide Rätsel haben genau eine Lösung · wachsen (Münzen springen ein) · Zug beenden
+  und Englands Zug lesen · alle Städte wachsen · Rad und Handelsroute · **belagert werden** und die
+  Stadt mit Armee und Macht halten · **flankieren** mit Taktik. In Runde 3 und 4 geht es je um die
+  Technologie, die den Weg voranbringt – Militär: Belagerungsmaschinen, dann Eisenverarbeitung;
+  Wirtschaft: Keramik, dann Demokratie (öffnet die Theologie); Forschung: Schrift, dann Papier
+  (öffnet die Industrialisierung) –, danach wird ausgegeben, was noch geht. Auch Lage und Tipps
+  sprechen vom Weg („auf Straßen ziehen Armeen doppelt so weit – gut für deinen Angriff").
+* **Ab Runde 5 die Schritte des Wegs:** belagern und erobern · Theologie und die Mehrheit ·
+  Wissenschaftliche Methode, in jedem Feld die Moderne, die Singularität. Mit der Musterlösung
+  fällt der Sieg jeweils in Runde 6. Danach: **Anderen Weg ausprobieren** (die Seite wieder, eine
+  neue Partie).
+* **Technologien ab dem Mittelalter (v93):** fest für diese Partie und wie gewürfelt – in jedem
+  Feld und Zeitalter fehlt etwa die Hälfte (24 von 46), nie alle; was Ziele und Tipps nennen, ist
+  dabei. Die Würfel im Protokoll passen dazu (4–6 verfügbar, 1–3 nicht).
+* **Auf Schienen, ohne gesperrte Knöpfe:** Abgelehnt wird mit einem Satz, warum – eine Stadt am
+  schlechteren Platz, Forschen, während die Stadt belagert ist, eine Armee, die nicht mehr
+  zurückkäme, Macht, bevor die Armee steht, in Runde 3 und 4 andere Forschung vor der des Wegs,
+  ein Sieg auf einem anderen Weg als dem gewählten (zu viel Bevölkerung, die Singularität,
+  Englands andere Stadt). Wo ein Ziel mehrere Lösungen hat, zählt jede, die die Regel erfüllt.
+  Gespielt wird nach den echten Regeln.
+* **England** zieht nach einem festen Drehbuch, nach den Regeln für Menschen (es bezahlt alles):
+  zweite Stadt, in Runde 2 Belagerungsmaschinen und eine Armee neben deiner neuen Stadt, in Runde 3
+  der zweite Angriff, ab Runde 4 Verteidigung der Hauptstadt mit Armee und Macht, ab Runde 5
+  wachsen seine Städte wieder.
+* Gespeichert wird wie bei jeder Partie: **Spiel fortsetzen** macht mit Führung weiter (ein
+  Spielstand von v92 vor der Wahl fragt im Panel zuerst nach dem Weg). **Beenden** im Panel lässt
+  die Partie ohne Führung weiterlaufen, England spielt dann als KI.
+
+Die Schritte stehen in `js/firstgame.js` (`FG_STEPS`), jeder mit Ziel, Tipp, Schienen und einer
+Musterlösung, mit der `test.js` alle drei Wege bis zum Sieg spielt.
+
 ## Tutorial
+
+Das klassische Tutorial (Russland gegen drei Bots, alter Techtree) bleibt vorerst im Menü.
 
 Beim Öffnen kommt eine Frage: **schon Erfahrung mit Spielen wie Civilization?**
 
@@ -317,6 +373,8 @@ js/engine.js          Regeln: Einkommen, Aktionen, Kampf, Sieg
 js/bots.js            Bot-Züge nach den Bot-Regeln
 js/ki.js              KI-Züge nach den Regeln für Menschen
 js/marathon.js        Marathon: Kartengenerator, Hauptstädte, Draft, Draftwahl der KI
+js/tutorial.js        Tutorial (Russland gegen drei Bots, feste Würfel, Schienen)
+js/firstgame.js       Erstes Spiel: Seite vor der Partie, Karte, Würfel, Englands Drehbuch, Ziele, Tipps, Schienen, Panel
 js/ui.js              Karte, Gesten, Aktionsblätter, Editor
 sw.js                 Offline-Cache
 ANNAHMEN.md           wo die Regeln offen sind und wie hier entschieden wurde

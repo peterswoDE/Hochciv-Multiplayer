@@ -17,6 +17,7 @@ const { sequelize, User } = require('./models');
 const { Op } = require('sequelize');
 const { refreshOAuthStrategies } = require('./utils/oauth');
 const { str } = require('./utils/auth');
+const { checkOrigin, allowSocket } = require('./utils/origin');
 
 // ── Passport Configuration ──────────────────────────────────────────────────
 passport.use(new LocalStrategy(
@@ -81,6 +82,8 @@ if (process.env.NODE_ENV === 'production') {
 const pgPool = new pg.Pool({ connectionString: dbUrl });
 
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
+// Changing requests only from this site's pages (utils/origin.js): staging is the same site
+app.use(checkOrigin);
 app.use(express.json({ limit: '20kb' }));
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -118,6 +121,8 @@ app.use(passport.session());
 // Initialize ORM
 sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
+    // the admins' words for the chat filter (utils/profanity.js)
+    require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`
         CREATE TABLE IF NOT EXISTS "session" (
           "sid" varchar NOT NULL COLLATE "default",
@@ -149,6 +154,10 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/mfa', mfaRoutes);
 // Public player profiles (client/profile.js)
 app.use('/api/profile', require('./routes/profile'));
+// Finished matches with their statistics and replays (routes/games.js); old replays are deleted
+app.use('/api/games', require('./routes/games'));
+require('./utils/replay').startCleanup();
+require('./utils/reports').startCleanup();
 // Asynchronous games ("Rundenspiele", play by turn)
 app.use('/api/async', require('./routes/async'));
 // Push notifications of the Android app
@@ -215,6 +224,8 @@ const io = new Server(server, {
         methods: ['GET', 'POST'],
         credentials: true
     },
+    // CORS doesn't cover WebSockets: only this site's pages may connect (utils/origin.js)
+    allowRequest: allowSocket,
 });
 
 app.locals.io = io;
@@ -224,6 +235,8 @@ io.engine.use(passport.session());
 
 registerGame(io);
 registerAsync(io);
+// Ranked matchmaking (sockets/match.js)
+require('./sockets/match')(io);
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

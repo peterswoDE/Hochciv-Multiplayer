@@ -92,6 +92,12 @@
             <div id="hcp-body"></div></div>`;
         document.body.appendChild(overlay);
         overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+        // A match opened: its statistics over the rounds (client/stats.js), loaded once.
+        // 'toggle' does not bubble – caught on the way down.
+        overlay.addEventListener('toggle', e => {
+            const chart = e.target.open && e.target.querySelector && e.target.querySelector('.hcp-chart:empty');
+            if (chart) STATS.loadInto(chart, chart.dataset.game);
+        }, true);
         overlay.querySelector('#hcp-close').onclick = close;
         overlay.querySelector('#hcp-back').onclick = () => { stack.pop(); load(stack[stack.length - 1]); };
         document.addEventListener('keydown', e => {
@@ -171,6 +177,8 @@
               <tr><th>${tx('Spieler')}</th><th>${tx('Nation')}</th><th class="hcp-num">${tx('Bev.')}</th><th class="hcp-num">${tx('Wunder')}</th>
                   <th class="hcp-num">${tx('Techs')}</th><th class="hcp-num">${tx('Punkte')}</th><th class="hcp-num">MMR Δ</th></tr>
               ${rows}</table></div>
+            ${g.hasReplay ? `<p class="hcp-replay"><a href="/?replay=${esc(g.id)}" target="_blank" rel="noopener">▶ ${tx('Wiederholung ansehen')}</a></p>` : ''}
+            ${g.hasStats && typeof STATS !== 'undefined' ? `<div class="hcp-chart" data-game="${esc(g.id)}"></div>` : ''}
           </details>`;
     }
 

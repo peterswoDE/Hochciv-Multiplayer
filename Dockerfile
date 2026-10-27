@@ -1,12 +1,12 @@
 # Discord Activity bridge: bundle activity/bridge.js with the Embedded App SDK (dev dependencies)
-FROM node:20-slim AS activity
+FROM node:24-slim AS activity
 WORKDIR /build
 COPY package*.json ./
 RUN npm ci
 COPY activity ./activity
 RUN node activity/build.js
 
-FROM node:20-slim
+FROM node:24-slim
 
 WORKDIR /app
 

@@ -42,12 +42,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Load History
         loadHistory();
+        loadBlocked();
 
         // Admin mode
         if (data.role === 'admin' || data.role === 'superadmin') {
             document.querySelectorAll('.admin-tab').forEach(el => el.style.display = 'block');
             loadAdminData();
             setInterval(loadAdminData, 10000); // refresh every 10s
+            loadReportCount();
+            setInterval(loadReportCount, 60000);
         }
 
         // Super Admin mode — show OAuth settings tab
@@ -806,6 +809,188 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         loadAdminData();
     };
+
+    // --- Blocked players (chat, utils/reports.js) ---
+    async function loadBlocked() {
+        const ul = document.getElementById('blocked-list');
+        try {
+            const res = await fetch('/api/account/blocks');
+            const data = await res.json();
+            renderBlocked(data.list || []);
+        } catch (_) {
+            ul.innerHTML = `<li>${tx('Fehler beim Laden.')}</li>`;
+        }
+    }
+    function renderBlocked(list) {
+        const ul = document.getElementById('blocked-list');
+        ul.innerHTML = list.length ? list.map(b => `<li><span><strong>${esc(b.name)}</strong>
+            <small style="color:#888;">${b.at ? new Date(b.at).toLocaleDateString(HC_I18N.locale()) : ''}</small></span>
+            <button class="btn small" data-unblock="${esc(b.key)}">${tx('Entblocken')}</button></li>`).join('')
+            : `<li style="color:#666;">${tx('Du hast niemanden blockiert.')}</li>`;
+    }
+    document.getElementById('blocked-list').addEventListener('click', async e => {
+        const btn = e.target.closest('[data-unblock]');
+        if (!btn) return;
+        btn.disabled = true;
+        const res = await fetch('/api/account/blocks/' + encodeURIComponent(btn.dataset.unblock), { method: 'DELETE' }).catch(() => null);
+        if (res && res.ok) renderBlocked((await res.json()).list || []);
+        else { btn.disabled = false; alert(tx('Netzwerkfehler.')); }
+    });
+
+    // --- Admin: chat reports (routes/admin.js /reports) ---
+    let adminReports = [];
+    const fmtTime = t => new Date(t).toLocaleString(HC_I18N.locale(), { dateStyle: 'short', timeStyle: 'short' });
+    const chatText = m => (m.kind === 'emote' ? m.emote : m.text);
+
+    async function loadReportCount() {
+        try {
+            const res = await fetch('/api/admin/reports?status=open&offset=0');
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('admin-reports-badge').textContent = data.open ? String(data.open) : '';
+        } catch (_) { }
+    }
+
+    async function loadAdminReports(more) {
+        const box = document.getElementById('admin-reports-list');
+        const status = document.getElementById('admin-reports-status').value;
+        if (!more) adminReports = [];
+        try {
+            const res = await fetch(`/api/admin/reports?status=${status}&offset=${adminReports.length}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            adminReports = adminReports.concat(data.reports);
+            document.getElementById('admin-reports-total').textContent = `(${data.total})`;
+            document.getElementById('admin-reports-badge').textContent = data.open ? String(data.open) : '';
+            document.getElementById('btn-admin-reports-more').style.display = adminReports.length < data.total ? 'inline-block' : 'none';
+            box.innerHTML = adminReports.map(renderReport).join('')
+                || `<p style="color:#666;">${status === 'open' ? tx('Keine offenen Meldungen.') : tx('Noch keine erledigten Meldungen.')}</p>`;
+            box.querySelectorAll('.report-chat').forEach(el => {
+                const hit = el.querySelector('.reported');
+                if (hit) el.scrollTop = hit.offsetTop - el.clientHeight / 2;
+            });
+        } catch (err) {
+            box.innerHTML = `<p style="color:red;">${tx('Fehler beim Laden.')}</p>`;
+        }
+    }
+
+    function renderReport(r, i) {
+        const acc = r.reportedAccount;
+        const where = r.source === 'async' ? tx('Rundenspiel') : tx('Live-Spiel');
+        const chat = (r.context || []).map(m => {
+            const cls = m.id === r.message.id ? 'reported' : (m.name === r.reportedName ? 'by-reported' : '');
+            return `<div class="${cls}"><time>${fmtTime(m.t)}</time><strong>${esc(m.name)}</strong> ${esc(chatText(m))}</div>`;
+        }).join('');
+        const statusTxt = { resolved: tx('Erledigt'), dismissed: tx('Verworfen') }[r.status];
+        const closed = r.status !== 'open'
+            ? `<p class="report-meta">${esc(statusTxt)} ${tx('von %s', esc(r.handledBy || '?'))}, ${r.handledAt ? fmtTime(r.handledAt) : ''}${r.note ? ' – ' + esc(r.note) : ''}</p>` : '';
+        const ban = acc && !acc.isBanned
+            ? `<button class="btn small" onclick="reportAction(${i}, 'ban')">${tx('Konto sperren')}</button>`
+            : (acc && acc.isBanned ? `<span class="badge banned">${tx('Gesperrt')}</span>` : '');
+        const actions = r.status === 'open'
+            ? `<input type="text" id="report-note-${i}" maxlength="1000" placeholder="${tx('Notiz (freiwillig)')}">
+               <button class="btn small btn-primary" onclick="reportAction(${i}, 'resolved')">${tx('Erledigt')}</button>
+               <button class="btn small" onclick="reportAction(${i}, 'dismissed')">${tx('Verwerfen')}</button>${ban}`
+            : `<button class="btn small" onclick="reportAction(${i}, 'open')">${tx('Wieder öffnen')}</button>${ban}`;
+        return `<div class="report-card">
+            <div class="report-head">
+                <strong>${esc(r.reportedName)}</strong>${acc ? '' : ` <small>${tx('(Gast)')}</small>`}
+                <span class="report-meta">${tx('gemeldet von %s', esc(r.reporterName))} · ${fmtTime(r.createdAt)} · ${esc(where)}</span>
+            </div>
+            <div><strong>${tx('Nachricht:')}</strong> ${esc(chatText(r.message))}</div>
+            ${r.reason ? `<div><strong>${tx('Grund:')}</strong> ${esc(r.reason)}</div>` : ''}
+            ${r.auto ? `<div><strong>${tx('Gefunden:')}</strong> ${esc((r.matches || []).join(', '))} · ${esc(r.penalty === 'game'
+                ? tx('Folge: keine Texte mehr in diesem Spiel (2. Verstoß)') : tx('Folge: 5 Minuten keine Texte'))}</div>` : ''}
+            <div class="report-chat">${chat}</div>
+            ${closed}
+            <div class="report-actions">${actions}</div>
+        </div>`;
+    }
+
+    window.reportAction = async (i, action) => {
+        const r = adminReports[i];
+        if (!r) return;
+        if (action === 'ban') {
+            if (!r.reportedAccount) return;
+            await window.adminAction('user', r.reportedAccount.id, 'ban');
+            return loadAdminReports(false);
+        }
+        const note = document.getElementById(`report-note-${i}`);
+        const res = await fetch(`/api/admin/reports/${encodeURIComponent(r.id)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: action, note: note ? note.value : undefined }),
+        }).catch(() => null);
+        if (!res || !res.ok) {
+            const err = res ? await res.json().catch(() => ({})) : {};
+            return alert(tx('Fehler: %s', err.error ? txs(err.error) : tx('Unbekannt')));
+        }
+        loadAdminReports(false);
+    };
+
+    document.querySelector('[data-target="tab-admin-reports"]').addEventListener('click', () => { loadAdminReports(false); loadAdminWords(); });
+
+    // --- Admin: the chat word filter (routes/admin.js /words) ---
+    function renderAdminWords(list) {
+        const tbody = document.querySelector('#table-admin-words tbody');
+        tbody.innerHTML = list.length ? list.map(w => `<tr>
+            <td><strong>${esc(w.word)}</strong></td>
+            <td>${w.kind === 'allow' ? tx('Erlauben') : tx('Sperren')}</td>
+            <td>${w.kind === 'allow' ? '–' : (w.match === 'part' ? tx('auch als Wortteil') : tx('nur als ganzes Wort'))}</td>
+            <td>${esc(w.addedBy || '')}</td>
+            <td><button class="btn small" data-word="${esc(w.id)}" title="${tx('Entfernen')}">✕</button></td>
+        </tr>`).join('') : `<tr><td colspan="5">${tx('Noch keine eigenen Wörter – es gelten die eingebauten Listen.')}</td></tr>`;
+    }
+    async function loadAdminWords() {
+        try {
+            const res = await fetch('/api/admin/words');
+            if (res.ok) renderAdminWords((await res.json()).list || []);
+        } catch (_) { }
+    }
+    const wordMsg = (text, okay) => {
+        const el = document.getElementById('msg-admin-word');
+        el.textContent = text;
+        el.style.color = okay ? 'green' : 'red';
+    };
+    document.getElementById('admin-word-kind').addEventListener('change', e => {
+        document.getElementById('admin-word-match').disabled = e.target.value === 'allow';
+    });
+    document.getElementById('form-admin-word').addEventListener('submit', async e => {
+        e.preventDefault();
+        const input = document.getElementById('admin-word');
+        const res = await fetch('/api/admin/words', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: input.value, kind: document.getElementById('admin-word-kind').value, match: document.getElementById('admin-word-match').value }),
+        }).catch(() => null);
+        const data = res ? await res.json().catch(() => ({})) : {};
+        if (!res || !res.ok) return wordMsg(data.error ? txs(data.error) : tx('Netzwerkfehler.'), false);
+        input.value = '';
+        wordMsg(tx('Gespeichert. Der Filter gilt sofort.'), true);
+        renderAdminWords(data.list || []);
+    });
+    document.querySelector('#table-admin-words tbody').addEventListener('click', async e => {
+        const btn = e.target.closest('[data-word]');
+        if (!btn) return;
+        const res = await fetch('/api/admin/words/' + encodeURIComponent(btn.dataset.word), { method: 'DELETE' }).catch(() => null);
+        if (res && res.ok) renderAdminWords((await res.json()).list || []);
+    });
+    document.getElementById('form-admin-wordcheck').addEventListener('submit', async e => {
+        e.preventDefault();
+        const out = document.getElementById('msg-admin-wordcheck');
+        const res = await fetch('/api/admin/words/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: document.getElementById('admin-wordcheck').value }),
+        }).catch(() => null);
+        const data = res && res.ok ? await res.json() : null;
+        if (!data) { out.textContent = tx('Netzwerkfehler.'); out.style.color = 'red'; return; }
+        out.textContent = data.words.length ? tx('Würde gesperrt: %s', data.words.join(', ')) : tx('Kein Treffer – der Text würde gesendet.');
+        out.style.color = data.words.length ? 'var(--red)' : 'green';
+    });
+    document.getElementById('admin-reports-status').addEventListener('change', () => loadAdminReports(false));
+    document.getElementById('btn-admin-reports-reload').addEventListener('click', () => loadAdminReports(false));
+    document.getElementById('btn-admin-reports-more').addEventListener('click', () => loadAdminReports(true));
 
     // --- OAuth Config (Super Admin) ---
     async function loadOAuthConfig() {
