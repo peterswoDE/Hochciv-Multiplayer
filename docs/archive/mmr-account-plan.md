@@ -1,3 +1,7 @@
+[← Documentation](../README.md)
+
+> **Historical document.** This is the original plan for accounts and MMR, kept for reference. The implementation differs in places; the current behaviour is described in [Points and MMR](../reference/ranking.md), [Database](../reference/database.md) and [REST API](../reference/rest-api.md).
+
 # Complete Plan: MMR & Account System Integration
 
 ## Overview
