@@ -20,8 +20,12 @@ const TUT_SEED = 20250817;
    und siedeln sichtbar, Griechenland belagert die Grenzstadt, und die Belagerung bricht am
    Ende, wenn der Spieler Mauern, Burgenbau und Macht genommen hat. */
 const TUT_DICE = [3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2];
-function tutNextDie() {
-  if (typeof ui === 'undefined' || !ui || !ui.tut) return null;
+/* `ctx` (v92): wofür gewürfelt wird – nur das Erste Spiel liest es (fgNextDie in
+   js/firstgame.js), dieses Tutorial nimmt weiter seine feste Folge. */
+function tutNextDie(ctx) {
+  if (typeof ui === 'undefined' || !ui) return null;
+  if (ui.fg) return typeof fgNextDie === 'function' ? fgNextDie(ctx) : null;
+  if (!ui.tut) return null;
   // Ein Schritt kann die nächsten Würfe vorgeben (dice), damit z. B. die Technologie des
   // nächsten Zeitalters wirklich ausgewürfelt wird und nicht heimlich gesetzt werden muss.
   if (ui.tut.pre && ui.tut.pre.length) return ui.tut.pre.shift();
@@ -158,7 +162,7 @@ const TUT_STEPS = [
   },
   {
     t: T('Forschung und Technologien'),
-    html: () => T('<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben links in der Kachel.</p>'),
+    html: () => T('<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben rechts in der Kachel.</p>'),
     kurz: () => T('<p>Der Technologiebaum ist <b>zufällig</b>: jede Technologie steht in einer Partie nur mit 50 % Wahrscheinlichkeit zur Verfügung. Ausgewürfelt wird immer beim Erreichen eines neuen Zeitalters. Planen kannst du also nur grob.</p>'),
     task: T('Öffne <b>Forschen</b> und forsche <b>Schrift</b>.'),
     // Papier steht in Forschung/Mittelalter an erster Stelle – dieser Wurf ist gesetzt,
@@ -596,6 +600,7 @@ function tutorialSetup(opts) {
 function tutorialStart(opts) {
   tutorialSetup(opts);
   $('tut-panel').hidden = false;
+  document.body.classList.remove('fg');
   document.body.classList.add('tut');
   tutEnter();
   startGameScreen();
@@ -618,9 +623,14 @@ function renderTutPanel() {
   if (st.task) task.innerHTML = `<b>${T('Deine Aufgabe:')}</b> ` + tutTaskText(st);
   $('tut-count').textContent = `${ui.tut.i + 1}/${tutList().length}`;
   $('tut-bar-fill').style.width = Math.round(((ui.tut.i + 1) / tutList().length) * 100) + '%';
+  // Das Panel teilt sich das Tutorial mit dem Ersten Spiel (v92) – dessen Kopf und Leiste zurück
+  $('tut-panel').querySelector('.tut-sub').textContent = '';
+  $('tut-quit').textContent = T('Tutorial beenden');
+  $('tut-prev').hidden = false;
+  $('tut-next').classList.add('primary');
   $('tut-prev').disabled = ui.tut.i === 0;
   $('tut-next').disabled = !done;
-  $('tut-next').textContent = last ? 'Fertig' : 'Weiter ›';
+  $('tut-next').textContent = last ? T('Fertig') : T('Weiter ›');
   tutMaybeAdvance();
 }
 function tutMove(d) {
