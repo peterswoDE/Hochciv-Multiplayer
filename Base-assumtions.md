@@ -13,7 +13,7 @@ We utilize two distinct Docker configurations:
 
 ## Branching
 - `development` is the integration branch; it is deployed automatically to the staging server.
-- `main` is production. It only receives PRs from `development` after the change was tested on staging (hotfixes excepted, see README.md).
+- `main` is production. It only receives PRs from `development` after the change was tested on staging (hotfixes excepted, see [docs/development/release-flow.md](docs/development/release-flow.md)).
 - New branches are created from `origin/development`, and their PRs target `development`.
 
 ## Finalize
@@ -23,3 +23,6 @@ We utilize two distinct Docker configurations:
 - Always push the changes to the repository after testing.
 - Always run `git add .` and `git commit -m "<commit message>"` and `git push` to push the changes to the repository.
 - If you get instructed to create a new feature, always create a new branch for it from `origin/development`, push it to the repository and open a PR into `development`.
+
+## Documentation
+- The documentation lives in [docs/](docs/README.md). A change that alters behaviour, configuration, the API or the release process updates the page that covers it.
