@@ -11,10 +11,14 @@ function nextRand(S) {
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
-function d6(S, why) {
+/* `ctx` (v92): wofür gewürfelt wird, als Daten – { pi, tech } bei der Verfügbarkeit einer
+   Technologie, { pi, pick } beim Auswürfeln, wenn nichts verfügbar wurde. Nur das Erste Spiel
+   liest es (tutNextDie): dort fallen die Würfe so, wie die geführte Partie es braucht. Das
+   Protokoll zeigt sie wie jeden anderen Wurf. */
+function d6(S, why, ctx) {
   // Im Tutorial kommen die Würfe aus einer festen Folge (tutNextDie), damit die Partie –
   // inklusive aller Bot-Entscheidungen – bei jedem Durchlauf identisch abläuft.
-  let v = (typeof tutNextDie === 'function') ? tutNextDie() : null;
+  let v = (typeof tutNextDie === 'function') ? tutNextDie(ctx) : null;
   if (!v) v = 1 + Math.floor(nextRand(S) * 6);
   log(S, 'roll', '🎲 ' + v + (why ? ' — ' + why : ''));
   return v;
@@ -403,12 +407,12 @@ function rollAvailability(S, pi, field, age) {
   let any = false;
   for (const t of list) {
     if (p.avail[t.k] || p.techs[t.k]) { any = true; continue; }
-    const v = d6(S, T('Verfügbarkeit %s%s', t.n, bonus ? ' (+' + bonus + ')' : '')) + bonus;
+    const v = d6(S, T('Verfügbarkeit %s%s', t.n, bonus ? ' (+' + bonus + ')' : ''), { pi, tech: t.k, bonus }) + bonus;
     if (v >= 4) { p.avail[t.k] = true; any = true; }
   }
   if (!any) {   // "Falls danach keine Technologie verfügbar ist, eine auswürfeln die verfügbar ist"
     let idx = 0;
-    do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length)); } while (idx > list.length);
+    do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length), { pi, pick: list.map(t => t.k) }); } while (idx > list.length);
     p.avail[list[idx - 1].k] = true;
   }
   log(S, 'info', T('%s: verfügbar in %s (%s):', civOf(p).n, FIELDS[field], AGES[age]) +

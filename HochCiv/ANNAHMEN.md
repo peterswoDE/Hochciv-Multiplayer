@@ -4903,3 +4903,281 @@ vergeben; ohne KI wartet die Partie auf alle (bei Zeitablauf spielt, wer da ist,
 Karte das zulässt, sonst wird abgebrochen). Ein Rundenspiel beginnt sofort mit dem Zug des
 Hosts nur, wenn die Plätze schon feststehen (Nationen ausgelost, oder alle vier Nationen
 einer festen Karte) – sonst, sobald alle da sind.
+
+## Erstes Spiel (v92)
+
+**Wunsch des Autors (26.10.):** eine neue Fassung des Tutorials, die möglichst viel vom Spiel
+abdeckt, weniger Text, mehr selbst machen und selbst herausfinden, geführt und nicht zu
+entgleisen, nach den aktuellen Regeln. Ein neuer **roter Knopf „Erstes Spiel" ganz oben** im
+Menü, „Neues Spiel" danach wie die übrigen Knöpfe; das Tutorial bleibt vorerst. Auf Rückfrage
+entschieden: **eine ganze Partie bis zum Sieg**, **1 gegen 1 auf kleiner Karte**, **der Spieler
+wählt den Weg zum Sieg** (bis zur Mitte geführt, dann Militär, Wirtschaft oder Forschung, jeder
+wieder auf Schienen), **erst das Ziel, der Tipp auf Wunsch** (der Tipp zeigt, wo man tippen
+muss, und hebt es hervor).
+
+Umgesetzt in `js/firstgame.js`; das Panel ist das des Tutorials (`#tut-panel`), ein Haken in
+`d6` (`tutNextDie(ctx)` → `fgNextDie`) und wenige Haken in `js/ui.js` (`fgDarf` vor jeder
+Aktion, `fgZugendeOk` am Zugende, `fgGegnerZug` in `runBots`, `fgSpielende` in `gameOver`,
+`fgFortsetzen` beim Fortsetzen und Laden). Die Regeln selbst sind unverändert.
+
+### Aufbau
+
+* **Griechenland (Mensch) gegen England**, Duell (Schwellen 3/4, Theologie 7/10), Platzfolge,
+  Griechenland beginnt, ohne Erweiterungen, im heutigen Techtree. Griechenland wegen seiner
+  Fähigkeit: Technologien kosten weniger, in Runde 1 sind zwei davon kostenlos – ein Ziel, das
+  man ohne Erklärung lösen kann („alles, was nichts kostet").
+* **Die Karte** (10 × 13, `FG_ROWS`) ist so gebaut, dass beide Gründungsrätsel **genau eine
+  Lösung** haben: in Runde 1 bringt nur 5/5 die meiste Nahrung (+5), in Runde 2 nur 2/3 die
+  meiste Wissenschaft (+6) – jeweils unter den bezahlbaren Plätzen, gerechnet mit `settleGain`
+  wie im Gründungsblatt. Gleichstand würde die Schiene nicht brechen (jeder beste Platz gilt).
+* **Verfügbarkeit der Technologien:** gewürfelt wird wie immer, die Würfel fallen aber so, wie
+  die Partie es braucht (`fgNextDie`, über den Anlass des Wurfs `ctx` – nicht über eine feste
+  Folge, deshalb reproduzierbar auch nach dem Neuladen und unabhängig von der Reihenfolge, in
+  der man forscht). Griechenland hat in der Antike Schrift, Mathematik, Rad, Keramik,
+  Landwirtschaft, Taktik, Belagerungsmaschinen, Eisenverarbeitung und Demokratie – kostenlos
+  sind damit genau Mathematik und Taktik, und der Bogen zeigt blasse Kacheln. Ab dem
+  Mittelalter ist für Griechenland alles verfügbar: Kein Weg zum Sieg soll an einem Wurf
+  scheitern. England hat in der Antike Schrift, Landwirtschaft, Belagerungsmaschinen, Keramik,
+  Navigation. Jeder Wurf steht im Protokoll.
+* **England zieht nach einem Drehbuch** (`fgGegnerZug`), als Spielerart „KI": es bezahlt alles
+  nach den Regeln für Menschen. Runde 1 zweite Stadt (6/8) und Wachstum. Runde 2
+  Belagerungsmaschinen, eine Armee aus der Stadt, die der neuen griechischen am nächsten
+  liegt, auf ein Feld daneben (5/6) – sie greift am Zugende an und gewinnt (3 gegen 2,
+  Belagerung 1/2; reichte es nicht, kaufte England Macht nach). Runde 3 wachsen beide Städte,
+  die Armee greift noch einmal an. Ab Runde 4 verteidigt England: eine Armee neben der
+  Hauptstadt auf der von Griechenland abgewandten Seite, der Rest in Macht. **Ab Runde 5
+  wachsen Englands Städte wieder** (vor der Macht) – sonst hätte der gemeinsame Teil den
+  Wirtschaftssieg schon fast erledigt (gemessen: Griechenland 11 Bevölkerung gegen 5 zu
+  Beginn von Runde 5). Gibt man das Erste Spiel auf, spielt England als gewöhnliche KI (Stufe
+  leicht).
+
+### Ablauf
+
+17 gemeinsame Schritte, dann 2 (Militär), 2 (Wirtschaft) oder 4 (Forschung), dazu „Gewonnen".
+Runde 1: Hauptstadt antippen · Fähigkeit finden · alles Kostenlose erforschen · Stadt mit der
+meisten Nahrung · Hauptstadt wachsen · Zug beenden. Runde 2: beide Städte wachsen · Rad und
+Straße (Handelsroute) · Stadt mit der meisten Wissenschaft · Zug beenden. Runde 3: belagert –
+eine Armee neben die Stadt, Verteidigung mindestens so hoch wie Englands Angriff · den Rest
+ausgeben · Zug beenden (die Stadt hält). Runde 4: die englische Armee flankieren (zwei Armeen,
+Taktik, mehr Macht) · Einkommen steigern · Zug beenden. Runde 5: die Wahl.
+
+* **Militär:** Englands Hauptstadt am Ende eines Zugs schlagen (Belagerung 1/2), dann noch
+  einmal. Bricht die Belagerung, geht es zurück zum ersten Schritt des Wegs.
+* **Wirtschaft:** Theologie (über Demokratie), dann am Ende einer Runde mehr als 7/10.
+* **Forschung:** Wissenschaftliche Methode, in jedem Feld eine Technologie der Moderne, die
+  Singularität (105), dann das Rundenende abwarten.
+
+Mit den Musterlösungen fällt der Sieg in **Runde 6** (Militär), **Runde 6** (Wirtschaft) und
+**Runde 7** (Forschung). Nach dem Sieg geht es auf Wunsch **zurück an den Anfang von Runde 5**
+(Schnappschuss beim Betreten der Wahl, `S.fg.wahl`); geschaffte Wege sind abgehakt.
+
+### Ziel, Stand, Tipp, Rückmeldung
+
+Jeder Schritt hat ein **Ziel** in einem Satz, das sagt, *was* zu erreichen ist, nicht *wie*
+(„Gründe eine Stadt dort, wo sie dir am meisten 🌾 Nahrung bringt"). Wo gerechnet wird, steht
+der **Stand** dabei und läuft mit („Verteidigung 2 · Englands Angriff 3 ✗", „Neben ihr: 1/2 ·
+Macht 0 gegen 0 ✗", „Du: 14 von 20 (70 %) · nötig: mehr als 70 %"). **💡 Tipp anzeigen** nennt
+den Weg und markiert golden, was gemeint ist – Felder auf der Karte, Knöpfe in Leiste, Blatt
+und Technologiebogen. Ist das Ziel erreicht, geht es nach 0,9 s weiter (nach dem Zugende sofort),
+offene Blätter schließen dabei (außer wo man gerade etwas anschaut); oben steht dann ein Satz,
+**warum** das wichtig war. Ein „Weiter"-Knopf ist nicht nötig. Englands Zug liest man im
+Bot-Blatt; das Panel sagt in der Zeit nur „England ist am Zug".
+
+Ausgelegt: Das Ziel steht im Textbereich direkt unter dem Titel, der Tipp gleich darunter –
+nicht in der Aufgabenzeile über der Leiste wie im Tutorial. Auf dem Telefon ist das Panel klein,
+und ein Tipp weiter unten schob das Ziel aus dem Bild (in Chromium gesehen).
+
+### Schienen ohne Sperren
+
+Nichts ist ausgegraut. Jede Aktion fragt vorher `fgVeto` (Oberfläche: `fgDarf`/`fgErlaubt`);
+abgelehnt wird mit einem Satz, warum. Ein Schritt nennt die Aktionsarten, die zu seinem Ziel
+gehören; für alles andere heißt es „Eins nach dem anderen – jetzt: …". Abgelehnt wird außerdem:
+
+* ein schlechterer Platz für die Stadt (mit dem, was er brächte),
+* Forschung außer dem Rad, Straßen abseits des Wegs zwischen den beiden Städten,
+* belagert: eine zweite Armee, eine Armee aus einer Stadt, von der sie die bedrohte Stadt in
+  diesem Zug nicht mehr erreicht, Züge, die nicht neben der Stadt enden, **Macht, bevor eine
+  Armee daneben steht** (sonst konnten die Münzen für die Armee fehlen – eine Sackgasse),
+* Gegenangriff: eine dritte Armee, Züge, die nicht neben der englischen Armee enden oder neben
+  einer Stadt Englands (dort griffe die Armee von selbst mit an), Macht, bevor beide Armeen
+  stehen (aus demselben Grund),
+* **Zugende**, solange die belagerte Stadt fiele bzw. die englische Armee noch stünde (beides
+  wäre nicht umkehrbar); beim „alles ausgeben" und auf den Wegen dagegen nur eine Nachfrage
+  („Du könntest noch forschen und wachsen. Nochmal tippen zum Beenden."),
+* **jeder Sieg auf einem anderen Weg als dem gewählten:** Wachsen, Gründen, Theologie und
+  Vereinte Nationen, wenn Griechenland damit mehr als die Schwelle der Weltbevölkerung hätte
+  (vor der Wahl und auf Militär- und Forschungsweg); die Singularität außer auf dem
+  Forschungsweg; auf Wirtschafts- und Forschungsweg bleiben die Armeen stehen (auch
+  Raketentechnik nicht, solange eine stehende Armee damit eine Stadt Englands erreichte); auf
+  dem Militärweg kein Feld, von dem aus eine Armee Englands *andere* Stadt angriffe. Gefunden mit
+  zufälligem Spiel: Fiel die andere Stadt zuerst, hatte Griechenland am Rundenende mehr als 3/4
+  der Weltbevölkerung, und das Spiel endete wirtschaftlich, bevor die Hauptstadt fiel; ebenso
+  kam ein langsamer Militärweg an die Singularität heran.
+
+Wo ein Ziel mehrere Lösungen hat, zählt jede, die die Regel erfüllt: Die Stadt hält auch, wenn
+man sie wachsen lässt statt Macht zu kaufen; flankiert wird mit jeder Stellung, die `canFlank`
+annimmt (mit Burgenbau zählt die Stadt mit).
+
+### Was sonst geändert ist
+
+* **Menü:** „Erstes Spiel" rot ganz oben, „Neues Spiel" nicht mehr rot.
+* **Tutorial:** unverändert bis auf zwei Fehler, die beim Teilen des Panels auffielen: „Weiter ›"
+  und „Fertig" standen auf Englisch deutsch da (jetzt über `T()`), und der Forschungsschritt
+  sagte „Kosten oben links in der Kachel" – sie stehen rechts (deutsch und englisch berichtigt).
+* `tutNextDie` bekommt den Anlass des Wurfs mit (`ctx`); das Tutorial liest ihn nicht.
+
+### Abgesichert
+
+`test.js`, „Erstes Spiel (v92)": Aufbau (Karte, Plätze, Reiche, Antike, Würfel nur mit
+`ui.fg`), beide Rätsel eindeutig, jeder Weg mit der Musterlösung zum Sieg **auf diesem Weg**
+(Runde 6/6/7) und zweimal gespielt gleich, Englands Drehbuch (Belagerung 1/2 in Runde 2, gebrochen
+in Runde 3, Verteidigung ab Runde 4), die Schienen einzeln (Ablehnungen samt ihren Sätzen,
+Freigaben, Zugende hart oder mit Nachfrage, die Wege), anderer Weg nach dem Sieg, Fortsetzen
+aus dem Spielstand mit gleichem Verlauf, alle Texte englisch (jeder Schritt jedes Wegs gezeichnet,
+dazu jeder `T('…')`-Satz im Quelltext gegen `UI_EN`), und **zufälliges Spiel**: vor jeder
+Musterlösung acht zufällige Aktionen, die die Schienen erlauben – jeder Weg endet trotzdem mit
+seinem Sieg (je zwei Startwerte; in der Entwicklung 123 Läufe mit zwölf Aktionen je Schritt).
+`smoke.js`, „v92: …" (8 Schritte): Menü, Start und Tipp, Ablehnungen im Bogen, beim Gründen, an
+der Straße, beim Ziehen und am Zugende, Englands Blatt, Fähigkeiten → alle Städte wachsen,
+Armee bauen, ziehen, Macht, Nachfrage am Zugende, Wahl, alle drei Wege bis zum Sieg über
+„Anderen Weg ausprobieren", Fortsetzen, Englisch, Beenden (England zieht dann als KI), danach
+das Tutorial mit seinem eigenen Panel.
+Gegenproben (je eine Stelle absichtlich falsch, 22 Stück): jeder Platz erlaubt, Schwelle aus,
+Würfel frei, England ohne Armee, Militärweg ohne Reichweitensperre, Macht vor der Armee, Zugende
+frei, Singularität auf allen Wegen, Armeen auf den friedlichen Wegen frei, Gegenangriff neben
+Englands Stadt, kein Schnappschuss, eine englische Fassung fehlt (fiel zuerst nicht auf – nur
+eine Ablehnung, die der Durchlauf nicht traf; deshalb prüft `test.js` jetzt jeden Satz im
+Quelltext) – `test.js` schlägt bei jeder an; in der Oberfläche Zugende ohne Schiene, England als
+gewöhnliche KI, das normale Spielende, Hauptstadt antippen ohne Prüfung, Tipp ohne Markierung,
+Fortsetzen ohne Führung, Blattknöpfe ohne Schiene, „Neues Spiel" weiter rot, Tutorial-Panel nicht
+zurückgesetzt – `smoke.js` schlägt bei jeder an.
+In Chromium (`index.html` und Einzeldatei; iPad quer, iPad hochkant gedreht, Telefon quer und
+hochkant gedreht, deutsch und englisch): Menü, Start, Tipp mit goldener Hauptstadt, Ablehnung im
+Bogen, Gründungsmodus mit Tipp, belagert mit Stand, Gegenangriff, Wahl, Militärweg bis „Gewonnen"
+mit Spielende; nach dem Forschen schließt der Bogen nach 0,9 s, das Panel zeigt die Rückmeldung.
+
+## Erstes Spiel: Seite vor der Partie, Weg von Anfang an, der Würfel im Bogen (v93)
+
+**Wünsche des Autors (26.10., abends):** Das Erste Spiel beginnt mit einer Seite, die kurz sagt,
+dass man eine einzige Stadt in der Steinzeit führt und eine Zivilisation aufbauen will, die die
+Zeiten überdauert, dass es verschiedene Wege zu einem blühenden Reich gibt und deshalb
+verschiedene Wege zum Sieg – und gleich danach wählt man einen der drei. Dann beginnt die
+Partie auf Schienen (gern je nach Wahl verschieden). In den späteren Zeitaltern sollen nicht
+immer alle Technologien da sein, und das Erste Spiel soll die 50-%-Verfügbarkeit erklären. Auf
+Rückfrage entschieden: **die Verfügbarkeit fest, etwa die Hälfte fehlt** (jedes Mal gleich, alle
+Tipps passen immer) und **gemeinsame Grundlagen, vom Weg geführt** (alle lernen gründen,
+wachsen, forschen, Handelsroute, verteidigen, flankieren; Ziele, Tipps und Schienen richten sich
+ab Runde 1 nach dem Weg).
+
+### Die Seite vor der Partie
+
+„Erstes Spiel" öffnet ein Fenster über dem Menü (`fgSeite`): „Du führst eine einzige Stadt in
+der Steinzeit. Dein Ziel: eine Zivilisation, die die Zeiten überdauert. Es gibt viele Wege zu
+einem blühenden Reich – und deshalb mehr als einen Weg zum Sieg. Welchen gehst du?" Darunter die
+drei Wege als Knöpfe (mit ihrer Bedingung in einem Satz) und eine Zeile, wer gegen wen spielt.
+Ein Weg startet die Partie (`fgStart(pfad)` → `fgSetup(pfad)`). Ausgelegt:
+
+* **Ein Fenster, kein eigener Bildschirm:** Wer es schließt, ist wieder im Menü – angefangen ist
+  noch nichts, also auch nichts, das entgleisen könnte.
+* **Gewonnene Wege hakt die Seite ab.** Das Gerät merkt sie sich (`hochciv.fg`, unabhängig vom
+  Spielstand); „Anderen Weg ausprobieren" nach dem Sieg zeigt die Seite wieder und beginnt eine
+  **neue Partie**. Der Schnappschuss von Runde 5 (v92) entfällt: Der Weg prägt jetzt schon die
+  ersten Runden, ein anderer Weg ab Runde 5 wäre nicht mehr derselbe Anfang.
+* Der Kopf des Panels nennt den Weg: „Militärsieg · Runde 3".
+
+### Der Weg führt durch den gemeinsamen Teil
+
+Die 17 gemeinsamen Schritte (Runde 1–4) bleiben für alle dieselben Lektionen; der Weg ändert,
+was sie sagen und worauf sie zielen (`fgJe`):
+
+* **Runde 3 und 4:** Statt „gib aus, was noch geht" heißt das Ziel „Erforsche X – und gib aus,
+  was dann noch geht" (`fgRestSchritt`, `fgRestTech`). X bringt den Weg voran: Militär
+  **Belagerungsmaschinen**, dann **Eisenverarbeitung** (Macht für 4 statt 5); Wirtschaft
+  **Keramik** (zweimal wachsen), dann **Demokratie** (öffnet das Mittelalter in Spezial, wo die
+  Theologie liegt); Forschung **Schrift**, dann **Papier** (öffnet die Industrialisierung in der
+  Forschung). Andere Forschung lehnt die Schiene ab, solange X bezahlbar ist („Erst
+  Belagerungsmaschinen – das bringt dich deinem Sieg näher."); das Zugende fragt einmal nach,
+  gesperrt wird es nicht – X könnte unbezahlbar geworden sein. Die Rückmeldung nach Runde 4 nennt
+  bei Wirtschaft und Forschung, was im neu geöffneten Zeitalter ausgewürfelt wurde.
+* **Lage und Tipps** sprechen vom Weg: der erste Schritt nennt ihn, die Nahrungsstadt erklärt,
+  wozu Bevölkerung dem Weg dient (verteidigen, die Mehrheit, mitforschen), die Handelsroute auf
+  dem Militärweg den doppelten Zug auf Straßen, die Wissenschaftsstadt, wofür der Weg
+  Wissenschaft braucht.
+* **Der Wirtschaftsweg darf die Schwelle jederzeit reißen** – das ist sein Sieg (vorher lehnte
+  die Schiene das vor der Wahl ab). Vor dem Ende von Runde 4 reicht es nicht; `test.js` prüft mit
+  zufälligem Spiel, dass keine Lektion des gemeinsamen Teils ausfällt (in der Entwicklung 255
+  Läufe mit 6 bis 25 Zufallsaktionen je Schritt, alle drei Wege).
+* Mit den Musterlösungen fällt der Sieg jetzt auf allen drei Wegen in **Runde 6** (Forschung
+  vorher Runde 7: Schrift und Papier kommen schon in Runde 3 und 4).
+
+### Der Würfel im Bogen (die 50 %)
+
+Neuer Schritt gleich nach dem kostenlosen Forschen: Mathematik und Taktik haben das Mittelalter
+in Forschung und Militär geöffnet, dabei wurde gewürfelt. **Ziel: „Finde eine Technologie, die
+es in dieser Partie nicht gibt."** Dafür lassen sich im Ersten Spiel blasse Kacheln antippen
+(sonst sind sie gesperrt – außerhalb des Ersten Spiels bleibt das so): Eine durchgefallene sagt
+„Alchemie gibt es in dieser Partie nicht: Der Würfel zeigte 3, nötig war 4, 5 oder 6." – mit der
+Augenzahl, die auch im Protokoll steht –, eine aus einem Feld, das noch nicht offen ist, „…
+ist noch nicht ausgewürfelt: Das Zeitalter öffnet sich in Produktion mit deiner ersten
+Technologie des Zeitalters davor." Gezählt wird nur eine durchgefallene, und nur in diesem
+Schritt. Der Stand zählt mit („Im Mittelalter verfügbar – Forschung: 2 von 4 · Militär: 1 von
+3"), der Tipp lässt die durchgefallenen Kacheln golden leuchten. Die Rückmeldung danach ist die
+Regel: Für jede Technologie eines neuen Zeitalters fällt ein Würfel, **bei 4, 5 oder 6 gibt es
+sie – eine Chance von 50 %**; fällt in einem Feld keine, wird eine ausgelost; so fehlt in jedem
+Zeitalter ungefähr die Hälfte. (Philosophie gibt +1 auf diese Würfe – im Ersten Spiel gibt es
+sie nicht, die Rückmeldung lässt sie deshalb weg.)
+
+### Technologien ab dem Mittelalter: fest, etwa die Hälfte
+
+`FG_SPAETER` (v92: für Griechenland alles). Für Griechenland 24 von 46, in jedem Feld und
+Zeitalter mindestens eine und nie alle (Militär im Mittelalter nur Stahl). Ausgewählt nach zwei
+Regeln: **Was ein Ziel oder Tipp nennt, ist dabei** (Papier, Universitätswesen, Biologie,
+Wissenschaftliche Methode, Theologie) und je Feld führt ein Weg bis in die Moderne
+(Forschungssieg); **was das Erste Spiel nicht erklärt, fehlt** – Schießpulver (Kontrollzone),
+Kundschafterei, Spionage, Internet (Kopieren), Kolonialismus, Eisenbahn, Raketentechnik,
+Atomwaffen. Der Tipp „Bis in die Moderne" nennt Elektrizität deshalb nicht mehr. Englands
+spätere Zeitalter: jede zweite Technologie nach einer festen Prüfsumme (`fgZahl`) – England
+forscht im Drehbuch nur Belagerungsmaschinen.
+
+Die **Würfel** passen zum Ergebnis und streuen wie echte: 4, 5 oder 6 für verfügbar, 1, 2 oder 3
+für nicht (mit Philosophie-Bonus höchstens 2), je Technologie fest (`fgWurf`). Bis v92 zeigte
+das Protokoll nur Sechsen und Einsen – das sah nach dem aus, was es war.
+
+### Spielstände von v92
+
+Ein Erstes Spiel von v92 kann noch ohne Weg sein (die Wahl kam in Runde 5) oder auf dem Schritt
+„wahl" stehen, den es nicht mehr gibt. Beim Fortsetzen zeigt das Panel dann zuerst die drei
+Wege; bis einer gewählt ist, lehnt die Schiene alles ab („Wähle deinen Weg zum Sieg."). Danach
+geht es weiter – vom Schritt „wahl" mit dem ersten Schritt des Wegs (`fgWaehle`). Der alte
+Schnappschuss wird dabei gelöscht.
+
+### Abgesichert (v93)
+
+`test.js`, „Erstes Spiel": 17 gemeinsame Schritte samt Würfel, keine Wahl mehr in Runde 5, der
+Weg steht vor Runde 1 fest; ohne Weg geht nichts. Spätere Zeitalter: 24 von 46, in jedem Feld und
+Zeitalter mindestens eine und nie alle, alles Genannte da, nichts Unerklärtes; die Augen passen
+zum Ergebnis und kommen alle sechs vor; auch was die drei Partien tatsächlich auswürfeln, steht in
+`FG_SPAETER`. Der Würfel-Schritt: welche Felder offen sind, welche Kacheln durchfielen, der Stand,
+die Texte der blassen Kacheln (Augenzahl wie im Protokoll), dass nur eine durchgefallene zählt,
+die Rückmeldung mit den 50 %. Jeder Weg siegt in Runde 6 und hat alle gemeinsamen Schritte
+gesehen; Runde 3/4 je Weg mit der richtigen Technologie samt Schiene und Nachfrage; Wirtschaft
+darf die Schwelle reißen, Militär nicht; Spielstand von v92 in Runde 5; zufälliges Spiel ohne
+ausgefallene Lektion. `smoke.js`: die Seite (Text, drei Wege, Schließen ändert nichts), Weg im
+Kopf, blasse Kacheln im Bogen (vor dem Schritt nur erklärt, golden mit dem Tipp, „noch nicht
+ausgewürfelt", durchgefallen mit Wurf → weiter), Runde 3 vom Weg geführt, alle drei Wege über
+„Anderen Weg ausprobieren" mit Haken auf der Seite und im Gerät gemerkt, Englisch mit Weg im
+Kopf, Spielstand von v92 ohne Weg, im klassischen Tutorial bleiben blasse Kacheln gesperrt.
+Gegenproben (je eine Stelle absichtlich falsch, 22 Stück): ab dem Mittelalter alles verfügbar,
+Würfel nur 6 und 1, jede blasse Kachel zählt, Würfel-Schritt fehlt, Runde 3/4 ohne Vorrang, der
+Weg führt nicht (überall Schrift/Papier), Wirtschaftsweg an der Schwelle gesperrt, falsche
+Augenzahl an der Kachel, Rückmeldung nennt alle statt der ausgewürfelten, v92-Stand springt nicht
+weiter, eine englische Fassung fehlt, der Weg wird nicht gesetzt, ohne Weg ist alles frei, blasse
+Kachel zählt auch vor dem Schritt (fiel zuerst nur `smoke.js` auf – jetzt prüft es auch `test.js`)
+– `test.js` schlägt bei jeder an; keine Seite vor der Partie, blasse Kacheln überall antippbar,
+blasse Kacheln ohne Knopf, gewonnener Weg nicht gemerkt, Kopf ohne Weg, „Anderen Weg" ohne
+Seite, v92-Stand ohne Wahl im Panel, Tipp markiert keine blasse Kachel – `smoke.js` schlägt bei
+jeder an.
+In Chromium (Einzeldatei; iPad quer und hochkant, Telefon quer und hochkant, dazu englisch):
+Seite vor der Partie, Start mit Weg im Kopf, Würfel-Schritt mit goldenen blassen Kacheln, „noch
+nicht ausgewürfelt", durchgefallen mit Toast und Rückmeldung, Runde 3/4 vom Weg geführt, alle drei
+Wege bis „Gewonnen", danach die Seite mit Haken – ohne Seitenfehler.

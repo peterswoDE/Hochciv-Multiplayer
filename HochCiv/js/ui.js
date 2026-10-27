@@ -19,6 +19,7 @@ function modal(title, html) {
   $('overlay').classList.remove('wide');
   $('overlay').classList.add('show');
   lockBar();
+  if (ui && ui.fg && typeof fgMarkUi === 'function') fgMarkUi();   // Erstes Spiel: offener Tipp
 }
 function closeModal() {
   $('overlay').classList.remove('show'); $('overlay').classList.remove('wide'); lockBar();
@@ -72,6 +73,7 @@ function sheet(html, opts) {
   if (typeof ui !== 'undefined' && ui && ui.tut) tutGateSheet(null, null);
   lockBar();
   if (machtAus && S) redraw();
+  if (ui && ui.fg && typeof fgMarkUi === 'function') fgMarkUi();   // Erstes Spiel: offener Tipp
 }
 function closeSheet() {
   if (ui.botLock) return;
@@ -653,7 +655,7 @@ function redraw() {
   // zwischendurch (etwa aus dem Tutorial) zeigte sonst schon den Stand nach allen Kämpfen.
   if (ui.combat && ui.combat.i < ui.combat.kaempfe.length) combatDraw();
   else drawMap($('map'), S.map, {
-    state: S, sel: ui.sel, highlight, tutHl: ui.tut ? tutHighlight() : null,
+    state: S, sel: ui.sel, highlight, tutHl: ui.tut ? tutHighlight() : ui.fg ? fgHighlight() : null,
     turn: isAuto(p) ? -1 : S.cur,
     // Erträge je Feld nur im Gründungsmodus – den gibt es nur im eigenen Zug (v87)
     yields: gruenden ? S.cur : null,
@@ -691,7 +693,7 @@ function redraw() {
     const bar = tutAllow().bar;
     TUT_BAR.forEach(id => $(id).disabled = !human || (bar ? !bar.includes(id) : true));
     renderTutPanel();
-  }
+  } else if (ui.fg) fgRenderPanel();     // Erstes Spiel (v92): Ziel, Stand, Tipp – keine Sperren
   // Zahl an „Fähigkeiten" (v87): wie viele ARTEN kostenloser Aktionen offen sind
   // (freeActions) – nur, solange man den Knopf drücken kann; im Zug eines Bots oder der KI
   // wäre es deren Zahl
@@ -730,17 +732,30 @@ function endFoundMode() {
 
 /* Beim Start eines normalen Spiels darf kein Tutorial-Panel stehen bleiben. */
 function endTutorialPanel() {
+  if (ui && ui.fg && ui.fg.timer) clearTimeout(ui.fg.timer);
   ui = { sel: null, army: null, mode: null, botTimer: null };
   const panel = $('tut-panel');
   if (panel) panel.hidden = true;
-  document.body.classList.remove('tut');
+  document.body.classList.remove('tut', 'fg');
+  document.querySelectorAll('.fg-hl').forEach(el => el.classList.remove('fg-hl'));
 }
+/* Erstes Spiel (v92): Jede Aktion fragt vorher die Schienen (fgErlaubt in js/firstgame.js).
+   Abgelehnt wird mit einem Satz, warum – gesperrt wird nichts. Ohne Erstes Spiel: immer frei. */
+const fgDarf = a => !ui || !ui.fg || typeof fgErlaubt !== 'function' || fgErlaubt(a);
+// Welche Aktion ein Knopf im Aktionsblatt auslöst – nach seinem deutschen Schlüssel
+const FG_AKTION = {
+  'Kostenlos wachsen': 'wachsen', 'Bevölkerung wachsen': 'wachsen', 'Weltwunder bauen': 'wunder',
+  'Armee bauen': 'armee', 'Bevölkerung opfern': 'opfern', 'Armee hier bewegen': 'waehlen',
+  'Diese Armee bewegen': 'waehlen', 'Feld kaufen': 'feld', 'Atomschlag auf dieses Feld': 'atom',
+  'Straße bauen': 'strasse', 'Eisenbahn bauen': 'strasse',
+};
 function tapHex(r, c) {
   if (ui.combat) return endCombat();    // ein Tipp auf die Karte überspringt das Nachspiel (v90)
   if (S.over || isAuto(P(S))) return;
   ui.powerView = false;                 // ein Feld antippen beendet die Machtansicht
   if (ui.army) {
     if (ui.tut && !tutMoveOk(r, c)) return toast(T('Im Tutorial: ziehe die Armee auf das goldene Feld.'));
+    if (ui.fg && armyReach(S, ui.army).has(key(r, c)) && !fgDarf({ art: 'ziehen', army: ui.army, r, c })) return;
     const army = ui.army;
     const e = moveArmy(S, army, r, c);
     if (e) { toast(e); } else {
@@ -815,6 +830,7 @@ function foundSheet(r, c) {
     `<span class="cost">${cost === Infinity ? '—' : costText({ food: cost }, cost + '🌾')}</span></button>`);
   if (ui.tut) tutGateSheet(r, c);
   $(id).onclick = () => {
+    if (!fgDarf({ art: 'gruenden', r, c })) return;
     const e = foundCity(S, pi, r, c);
     if (e) return toast(e);
     ui.mode = null;
@@ -837,7 +853,9 @@ function openTile(r, c) {
     rows.push(`<button class="opt" id="${id}" data-label="${label}" ${off ? 'disabled' : ''}>` +
       `<span>${T(label)}${sub ? `<small>${sub}</small>` : ''}</span>` +
       `<span class="cost">${cost || ''}</span></button>`);
-    handlers.push([id, fn]);
+    // Erstes Spiel: erst die Schienen fragen (v92)
+    const aktion = { art: FG_AKTION[label] || label, r, c, city, army, mode: label === 'Kostenlos wachsen' ? 'free' : 'paid' };
+    handlers.push([id, () => { if (fgDarf(aktion)) fn(); }]);
   };
   /* Fast jede Aktion im Aktionsblatt endet gleich: Fehler melden oder neu zeichnen,
      danach dasselbe Feld wieder öffnen – dann stehen die Preise und Zustände frisch
@@ -856,6 +874,7 @@ function openTile(r, c) {
       ? `<p class="sub">${T('Hier ließe sich eine Stadt gründen – über „Stadt gründen" in der Leiste.')}</p>` : '');
 
   if (city) {
+    if (ui.fg && typeof fgSieht === 'function') fgSieht('stadt', city);
     const owner = civOf(S.players[city.owner]);
     const wl = (S.wonders || []).filter(w => w.cityId === city.id);
     head = `<h3>${owner.n}${city.cap ? ' · ' + T('Hauptstadt') : ''}</h3>
@@ -1049,8 +1068,11 @@ function techBoardHTML(S, pi, opts) {
         // Rein grafisch – der Kostenwert steht ohnehin schon in der Kachel.
         const state = owned ? 'owned'
           : avail ? (plain ? 'avail' : affordable ? 'avail afford' : 'avail costly') : 'locked';
+        /* Erstes Spiel (v93): blasse Kacheln lassen sich antippen und sagen, warum sie blass
+           sind – durchgefallen (mit dem Wurf) oder noch nicht ausgewürfelt (fgBlass). */
+        const blass = !plain && state === 'locked' && pi === S.cur && typeof ui !== 'undefined' && ui && ui.fg;
         grid += `<button class="tech ${state}${dead ? ' obsolete' : ''}"
-          ${can ? `data-tech="${t.k}"` : 'disabled'}><span class="c">${owned ? '✓' : avail && !plain ? costText({ sci: cost }, String(cost)) : cost}</span>
+          ${can ? `data-tech="${t.k}"` : blass ? `data-blass="${t.k}"` : 'disabled'}><span class="c">${owned ? '✓' : avail && !plain ? costText({ sci: cost }, String(cost)) : cost}</span>
           <b>${t.n}</b><span class="eff">${eff}</span>${ownerMarks(S, t.k, pi)}</button>`;
       }
       grid += '</div>';
@@ -1104,10 +1126,13 @@ function techModal() {
   if (ui.tut) tutGateTechs();
   $('ov-body').querySelectorAll('[data-tech]').forEach(b => b.onclick = () => {
     if (viewer() !== S.cur) return;
+    if (!fgDarf({ art: 'forschen', k: b.dataset.tech })) return;
     const e = doResearch(S, S.cur, b.dataset.tech);
     if (e) return toast(e);
     redraw(); if (S.over) { closeModal(); gameOver(); } else techModal();
   });
+  // Erstes Spiel: blasse Kachel → warum blass (Würfel)
+  $('ov-body').querySelectorAll('[data-blass]').forEach(b => b.onclick = () => { if (typeof fgBlass === 'function') fgBlass(b.dataset.blass); });
 }
 function powerSheet() {
   endFoundMode();
@@ -1129,6 +1154,7 @@ function powerSheet() {
   sheet(h, { power: true });
   if (!ui.powerView) { ui.powerView = true; redraw(); }
   $('sheet-body').querySelectorAll('[data-n]').forEach(b => b.onclick = () => {
+    if (!fgDarf({ art: 'macht', n: +b.dataset.n })) return;
     const e = buyPower(S, S.cur, +b.dataset.n);
     if (e) toast(e);
     redraw(); powerSheet();             // die Ringe zeigen gleich den neuen Machtwert
@@ -1154,6 +1180,7 @@ function powerSheet() {
 function abilSheet(oben) {
   if (!S || S.over || isAuto(P(S))) return;
   endFoundMode();
+  if (ui.fg && typeof fgSieht === 'function') fgSieht('faehigkeiten');
   const pi = S.cur, p = P(S);
   const rows = [], handlers = [];
   // label = deutscher Schlüssel (data-label, wie btn in openTile), titel = was dasteht
@@ -1161,7 +1188,12 @@ function abilSheet(oben) {
     const id = 'f' + (handlers.length + 1) + Math.random().toString(36).slice(2, 6);
     rows.push(`<button class="opt${frei ? ' free' : ''}" id="${id}" data-label="${label}" data-act="${act}" ${off ? 'disabled' : ''}>` +
       `<span>${titel}${sub ? `<small>${sub}</small>` : ''}</span><span class="cost">${cost || ''}</span></button>`);
-    handlers.push([id, fn]);
+    // Erstes Spiel: erst die Schienen fragen (v92) – die Art steht im Aktionsschlüssel
+    const teil = act.split(':');
+    const aktion = teil[0] === 'wachsen' ? { art: 'wachsen', alle: true, mode: teil[1] === 'gratis' ? 'free' : 'paid' }
+      : teil[0] === 'opfern' ? { art: 'opfern', alle: true }
+        : teil[0] === 'kopie' ? { art: 'kopieren', k: teil[2] } : { art: 'gratis', k: teil[1] };
+    handlers.push([id, () => { if (fgDarf(aktion)) fn(); }]);
   };
   const kopf = t => rows.push(`<h4 class="abil-h">${t}</h4>`);
   const notiz = t => rows.push(`<p class="sub abil-note">${t}</p>`);
@@ -1431,6 +1463,8 @@ function endHumanTurn() {
   // ganz – da hilft kein Bestätigen, der Zustand ist schlicht ungültig.
   const stop = blockingIssues(S, S.cur);
   if (stop.length) { toast(stop[0]); return; }
+  // Erstes Spiel (v92): Zugende gehört zum Schritt – abgelehnt oder einmal nachgefragt
+  if (ui.fg && typeof fgZugendeOk === 'function' && !fgZugendeOk()) return;
   const warn = pendingWarnings(S, S.cur);
   if (warn.length && !ui.confirmedEnd) {
     ui.confirmedEnd = true;
@@ -1471,7 +1505,11 @@ function runBots() {
   const kaempfe = [];
   if (!done) {
     S.autoPlayed = { cur: S.cur, round: S.round, seq: sinceSeq };
-    sicher(p.kind === 'ki' ? 'KI-Zug' : 'Bot-Zug', () => { if (p.kind === 'ki') kiTurn(S, S.cur); else botTurn(S, S.cur); });
+    // Im Ersten Spiel (v92) zieht England nach seinem Drehbuch, sonst die KI bzw. der Bot
+    sicher(p.kind === 'ki' ? 'KI-Zug' : 'Bot-Zug', () => {
+      if (S.fg && typeof fgGegnerZug === 'function') fgGegnerZug(S);
+      else if (p.kind === 'ki') kiTurn(S, S.cur); else botTurn(S, S.cur);
+    });
     sicher('Kampf', () => finishTurn(S, kaempfe));    // Kampf des Bots bzw. der KI, einmal pro Zug
   }
   // Gespeichert wird gleich (der Zug ist gezogen, S.autoPlayed steht), gezeichnet erst nach
@@ -1630,6 +1668,7 @@ function startFromRecipe(rec) {
 }
 
 function gameOver() {
+  if (S.fg && typeof fgSpielende === 'function') return fgSpielende();   // Erstes Spiel (v92)
   const o = S.over, w = o.winner;
   const namen = (o.winners || [w]).map(i => civOf(S.players[i]).n).join(T(' und '));
   const titel = o.shared ? T('%s gewinnen gemeinsam.', namen) : T('%s gewinnt.', namen);
@@ -2942,18 +2981,22 @@ function boot() {
   bootTexts();
 
   $('m-new').onclick = () => { show('screen-setup'); setupScreen(); };
+  // Erstes Spiel (v92): eine ganze Partie mit Zielen und Tipps, ganz oben im Menü
+  $('m-first').onclick = () => fgStart();
   $('m-options').onclick = () => { show('screen-options'); optionsScreen(); };
   // Tutorial: geführtes Übungsspiel in der normalen Oberfläche
   $('m-tutorial').onclick = tutorialAsk;
-  $('tut-prev').onclick = () => tutMove(-1);
-  $('tut-next').onclick = () => tutMove(1);
-  $('tut-quit').onclick = () => tutorialQuit();
+  // Das Panel teilen sich Tutorial und Erstes Spiel (dort: Tipp, Beenden)
+  $('tut-prev').onclick = () => { if (!ui.fg) tutMove(-1); };
+  $('tut-next').onclick = () => { if (ui.fg) fgNavKnopf(); else tutMove(1); };
+  $('tut-quit').onclick = () => { if (ui.fg) fgBeenden(); else tutorialQuit(); };
   $('m-editor').onclick = () => { editMap = null; show('screen-editor'); editorScreen(); };
   $('m-rules').onclick = () => rulesModal();
   // migrateState: Spielstände von vor v82 behalten ihren Techtree (S.altTree → S.oldTree)
-  $('m-continue').onclick = () => { endTutorialPanel(); S = migrateState(load('hochciv.save')); startGameScreen(); };
+  // Ein Erstes Spiel geht mit Führung weiter (fgFortsetzen liest S.fg)
+  $('m-continue').onclick = () => { endTutorialPanel(); S = migrateState(load('hochciv.save')); fgFortsetzen(); startGameScreen(); };
   $('m-load').onclick = () => upload(txt => {
-    try { endTutorialPanel(); S = migrateState(JSON.parse(txt)); saveGame(); startGameScreen(); toast(T('Spielstand geladen')); }
+    try { endTutorialPanel(); S = migrateState(JSON.parse(txt)); fgFortsetzen(); saveGame(); startGameScreen(); toast(T('Spielstand geladen')); }
     catch { toast(T('Datei nicht lesbar')); }
   });
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => show('screen-menu'));
