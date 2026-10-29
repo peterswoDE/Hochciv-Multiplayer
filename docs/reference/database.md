@@ -44,7 +44,7 @@ Relations: a `User` has many `Passkey`, `TotpToken` and `DeviceToken` rows (devi
 
 ## `games`
 
-One row per finished match: `id` (UUID, used in `/api/games/:id` and `/?replay=`), `version` (game version), `durationRounds`, `matchDate`, `winnerUsername`, `participants` (JSON: per seat name, account, nation, points, MMR change, KI/replaced flags) and `stats` (score over the rounds, key moments).
+One row per finished match: `id` (UUID, used in `/api/games/:id` and `/?replay=`), `version` (game version), `durationRounds`, `matchDate`, `winnerUsername`, `participants` (JSON: per seat name, account, nation, points, MMR change, KI/replaced flags), `stats` (score over the rounds, key moments) and `facts` (for the overall statistics, `utils/facts.js`: per empire nation, ability, turn position, won, cities, population, score, wonders and the round of each technology; anonymous, computed from the replay right after the match and for older matches at server start).
 
 ## `async_games`
 

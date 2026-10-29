@@ -14,6 +14,9 @@ const profanity = require('../utils/profanity');
 const { detachUser } = require('../utils/detachUser');
 const engine = require('../engine-adapter');
 const { engineVersionOf } = require('../async/logic');
+const GameStats = require('../utils/gamestats');
+const Facts = require('../utils/facts');
+const { query: statsQuery } = require('./stats');
 
 const ROLES = ['user', 'admin', 'superadmin'];
 const isPrivileged = role => role === 'admin' || role === 'superadmin';
@@ -283,6 +286,40 @@ router.get('/games', async (req, res) => {
         res.json({ total: count, offset, pageSize: GAMES_PAGE, finished: rows });
     } catch (err) {
         console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+/* --- Overall statistics (F13): the public numbers (GET /api/stats) plus matches per version,
+   KI levels and where the facts come from; the raw facts as a download; recomputing them. --- */
+router.get('/stats', async (req, res) => {
+    try {
+        res.json(await GameStats.overall(statsQuery(req.query), true));
+    } catch (err) {
+        console.error('[Stats] Admin', err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.get('/stats/export', async (req, res) => {
+    try {
+        const rows = await GameStats.rows();
+        res.set('Content-Disposition', `attachment; filename="hochciv-stats-${new Date().toISOString().slice(0, 10)}.json"`);
+        res.json(rows.map(x => ({ id: x.id, date: x.date, version: x.ver, facts: x.f })));
+    } catch (err) {
+        console.error('[Stats] Export', err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Facts are computed once per match; after a change to utils/facts.js they can be rebuilt
+router.post('/stats/recompute', isSuperAdmin, async (req, res) => {
+    try {
+        const [count] = await Game.update({ facts: null }, { where: {} });
+        Facts.backfill().catch(err => console.error('[Facts] Recompute failed:', err));
+        res.json({ success: true, games: count });
+    } catch (err) {
+        console.error('[Stats] Recompute', err);
         res.status(500).json({ error: 'Serverfehler' });
     }
 });

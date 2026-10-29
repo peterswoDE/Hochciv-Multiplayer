@@ -204,6 +204,8 @@
                     style="display:none; color: var(--red);">Laufende Spiele</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-games"
                     style="display:none; color: var(--red);">Spiele</button>
+                <button class="nav-tab admin-tab" data-target="tab-admin-stats"
+                    style="display:none; color: var(--red);">Statistiken</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-users"
                     style="display:none; color: var(--red);">User</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-reports"
@@ -441,6 +443,12 @@
                 </div>
             </div>
 
+            <!-- Admin Statistics Tab: the public overall statistics plus admin detail (client/gamestats.js) -->
+            <div id="tab-admin-stats" class="tab-content">
+                <h2 style="font-family: Georgia, serif; color: var(--red);">Statistiken</h2>
+                <div id="admin-stats-body"></div>
+            </div>
+
             <!-- Admin Games Tab -->
             <div id="tab-admin-games" class="tab-content">
                 <h2 style="font-family: Georgia, serif; color: var(--red);">Spiele-Übersicht</h2>
@@ -666,6 +674,7 @@
     <script src="i18n.js"></script>
     <script src="passkey.js"></script>
     <script src="profile.js"></script>
+    <script src="gamestats.js"></script>
     <script src="account.js"></script>
 </body>
 

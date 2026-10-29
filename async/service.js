@@ -17,6 +17,7 @@ const { finalPoints } = require('../utils/score');
 const chatLib = require('../utils/chat');
 const reports = require('../utils/reports');
 const Stats = require('../utils/stats');
+const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 
@@ -264,6 +265,7 @@ async function processResult(g) {
         } catch (err) {
             console.error(`[Async] Replay failed for ${g.id}:`, err);
         }
+        Facts.storeLater(game.id);                     // overall statistics (utils/facts.js), from the replay
         g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })),
             gameId: game.id, replay };
     } catch (err) {

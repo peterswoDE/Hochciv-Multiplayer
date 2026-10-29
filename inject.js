@@ -1,7 +1,7 @@
 /**
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
- *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the Discord Activity bridge and the
+ *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the Discord Activity bridge and the
  *     mobile layer (client/mobile) to index.html,
  *   • points mp.js at this server.
  * Each step checks on its own, so an already patched public/ is brought up to date.
@@ -24,6 +24,8 @@ const MP = '<script src="js/mp.js"></script>';
 const CHAT = '<script src="/client/chat.js"></script>';
 // Post-game statistics (after mp.js)
 const STATS = '<script src="/client/stats.js"></script>';
+// Overall statistics over all matches (menu button "Statistiken", mp.js)
+const GAMESTATS = '<script src="/client/gamestats.js"></script>';
 // Replay viewer, ?replay=<id> (after mp.js)
 const REPLAY = '<script src="/client/replay.js"></script>';
 // Ranked matchmaking (after mp.js)
@@ -38,7 +40,7 @@ if (fs.existsSync(htmlPath)) {
     let html = fs.readFileSync(htmlPath, 'utf8');
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, I18N, PROFILE, MP, CHAT, STATS, REPLAY, MATCH, ACTIVITY, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, PROFILE, MP, CHAT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MOBILE_JS].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     fs.writeFileSync(htmlPath, html, 'utf8');
 }
