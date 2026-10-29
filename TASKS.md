@@ -1,6 +1,6 @@
 # Tasks: multiplayer experience
 
-The features that were approved to improve the multiplayer experience, and how far each one is. **This file reflects the `development` branch.** Every feature PR updates its section here (status, what was built, tests), next to the feature list in README.md.
+The features that were approved to improve the multiplayer experience, and how far each one is. **This file reflects the `development` branch.** Every feature PR updates its section here (status, what was built, tests), next to the feature list in [docs/overview/features.md](docs/overview/features.md).
 
 Process (see Base-assumtions.md): one branch per feature from `origin/development`, PR into `development` (staging), tested locally with `docker-compose.local.yml` first. The game in `HochCiv/` is never changed. Everything goes through `mp.js` and the server.
 

@@ -354,7 +354,7 @@ function applyWonderEffect(S, pi, city, w) {
          Warteschlange über Züge hinweg bestehen bleibt. */
       p.freeArmies = (p.freeArmies || 0) + 2;
       p.freeArmyCity = city ? city.id : null;
-      log(S, 'act', `${civOf(p).n}: Der Koloss stellt zwei kostenlose Armeen.`);
+      log(S, 'act', `${civOf(p).n}: Der Koloss stellt zwei kostenlose Armeen.`, 'sonst');
       spawnFreeArmies(S, pi);
       break;
     }
@@ -364,7 +364,7 @@ function applyWonderEffect(S, pi, city, w) {
       break;
     case 'pentagon':
       p.power += 15;
-      log(S, 'act', T('%s: +15 Macht (Das Pentagon).', civOf(p).n));
+      log(S, 'act', T('%s: +15 Macht (Das Pentagon).', civOf(p).n), 'sonst');     // geschenkt, nicht gekauft
       break;
     case 'taj':
       p.doubleIncome = S.round + 1;
@@ -476,7 +476,7 @@ function claimOrphanWonders(S, pi, city) {
   const list = S.wonders.filter(w => w.cityId == null && w.r === city.r && w.c === city.c);
   if (!list.length) return;
   list.forEach(w => { w.owner = pi; w.cityId = city.id; });
-  log(S, 'act', T('%s übernimmt %s freistehende(s) Weltwunder.', civOf(S.players[pi]).n, list.length));
+  log(S, 'act', T('%s übernimmt %s freistehende(s) Weltwunder.', civOf(S.players[pi]).n, list.length), 'sonst');
   if (list.some(w => w.lvl === 3)) S.players[pi].cultureWin = S.round;
 }
 /* Kultursieg: zu Beginn des nächsten eigenen Zuges nach dem Bau – sofern das
