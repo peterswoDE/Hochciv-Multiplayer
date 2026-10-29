@@ -80,35 +80,35 @@ const DATA_EN = {
     papier: ['Paper', 'Grassland: +1 science'],
     alchemie: ['Alchemy', '1:1 science → coins'],
     buchdruck: ['Printing', 'River: +1 science'],
-    universitaet: ['Universities', 'Per population: +1 science'],
+    universitaet: ['Universities', 'Per population: +2 science'],
     wiss_methode: ['Scientific method', 'Tech costs −2/−4/−6/−8/−10 (by age)'],
     chemie: ['Chemistry', 'Mountains: +1 science'],
-    elektrizitaet: ['Electricity', 'Forest: +1 science'],
-    biologie: ['Biology', 'Grassland: +1 science'],
+    elektrizitaet: ['Electricity', 'Forest: +2 science'],
+    biologie: ['Biology', 'Grassland: +2 science'],
     computertechnik: ['Computing', '1:1 coins → science'],
     gentechnik: ['Genetic engineering', 'One food per four science; also feeds 1:1'],
     raumfahrt: ['Spaceflight', 'One free technology with every wonder built'],
-    ki: ['Artificial intelligence', 'Forest: +1 science'],
+    ki: ['Artificial intelligence', 'Forest: +3 science'],
     landwirtschaft: ['Agriculture', 'Grassland: +1 food'],
     fischerei: ['Fishing', 'Sea: +1 food'],
     rad: ['The wheel', 'Roads'],
-    keramik: ['Pottery', 'Grow population twice per round'],
+    keramik: ['Pottery', 'One extra growth per city'],
     bewaesserung: ['Irrigation', 'Mountains: +1 food'],
-    segeln: ['Sailing', 'Sea: +1 food'],
+    segeln: ['Sailing', 'Sea: +2 food'],
     muehlentechnik: ['Mills', 'River: +1 coin'],
     baukraene: ['Cranes', 'Wonders cost 2/4/6/8/… less'],
     gilden: ['Guilds', '1:1 coins → food'],
-    dampfmaschine: ['Steam engine', 'No coin cost for population growth'],
+    dampfmaschine: ['Steam engine', 'No coin cost for population growth; one extra growth per city'],
     eisenbahn: ['Railway', 'Railways'],
     kunstduenger: ['Fertiliser', 'Forest: +1 food'],
     fliessband: ['Assembly line', 'Per population: +1 coin'],
     verbundwerkstoffe: ['Composites', 'One extra free growth per city'],
-    gruene_revolution: ['Green revolution', 'Grassland: +1 coin'],
-    containerlogistik: ['Container shipping', 'Sea: +1 coin'],
-    robotik: ['Robotics', 'Per population: +1 coin'],
+    gruene_revolution: ['Green revolution', 'Grassland: +1 food, +1 coin'],
+    containerlogistik: ['Container shipping', 'Sea: +2 food, +1 coin'],
+    robotik: ['Robotics', 'Per population: +2 coins'],
     taktik: ['Tactics', 'Flanking from any two positions'],
     eisenverarbeitung: ['Ironworking', '4 coins = 1 power'],
-    belagerung: ['Siege engines', '+5 attack against cities'],
+    belagerung: ['Siege engines', '+3 attack against cities'],
     stadtmauern: ['City walls', 'Cities have +5 defence'],
     burgenbau: ['Castles', 'Cities contain an immobile army'],
     stahl: ['Steel', 'Power loss = 1/3'],
@@ -302,8 +302,8 @@ const UI_EN = {
 
   /* --- Menü */
   'für 1–4 Spieler*innen': 'for 1–4 players',
-  'Ne Runde Civilization? Auf dem Tablet, ohne Bleistift und Radiergummi.':
-    'A round of Civilization? On the tablet, without pencil and eraser.',
+  'Ne Runde Civ? Auf dem Tablet, ohne Bleistift und Radiergummi.':
+    'A round of Civ? On the tablet, without pencil and eraser.',
   'Neues Spiel': 'New game',
   'Spiel fortsetzen': 'Continue game',
   'Tutorial – geführtes Übungsspiel': 'Tutorial – guided practice game',
@@ -580,7 +580,6 @@ const UI_EN = {
   'Städte am Meer': 'Cities by the sea',
   'Handelsrouten': 'Trade routes',
   'Wallfahrt': 'Pilgrimage',
-  'Bürokratie ×2': 'Bureaucracy ×2',
   'Mit Bürokratie zählt das doppelt.': 'With Bureaucracy this counts double.',
   'Unbekanntes Wunder.': 'Unknown wonder.',
   'Universität von Oxford': 'University of Oxford',
@@ -677,6 +676,15 @@ const UI_EN = {
     'Barbarians are besieging %s city/cities.',
   'Belagerung %s/2':
     'Siege %s/2',
+  /* --- Kampf nachspielen (v90) */
+  '%s Kämpfe – Tippen auf die Karte überspringt': '%s fights – tap the map to skip',
+  'Flanke': 'Flank',
+  'Stadt': 'City',
+  'Armee zerstört': 'army destroyed',
+  'hält': 'holds',
+  'Stadt zerstört': 'city destroyed',
+  'erobert': 'captured',
+  'Belagerung gebrochen': 'siege broken',
   'Bev.':
     'Pop.',
   'Bevölkerung':
@@ -1068,6 +1076,8 @@ const UI_EN = {
     'Events (expansion)',
   'Feld':
     'Tile',
+  'Ertragstechnologien schließen die billigeren ihres Feldes auf demselben Gelände (bzw. je Bevölkerung) ein – sie setzen den Bonus, statt ihn zu erhöhen: Mathematik gibt Wald +1 Wissenschaft, Elektrizität +2, Künstliche Intelligenz +3, und mit allen dreien bleibt es bei +3. Technologien verschiedener Felder addieren sich, etwa Papier und Landwirtschaft auf Grasland.':
+    'Yield technologies include the cheaper ones of their field on the same terrain (or per population) – they set the bonus instead of raising it: Mathematics gives forest +1 science, Electricity +2, Artificial intelligence +3, and with all three it stays at +3. Technologies of different fields add up, such as Paper and Agriculture on grassland.',
   'Geländeerträge je Feld':
     'Terrain yields per tile',
   'Grund':
@@ -1210,8 +1220,8 @@ const UI_EN = {
     '<p>Armies move <b>3 tiles</b>, never across sea (until a technology changes that), never onto cities and never onto other armies. Later the ironclad and the air force raise the range, and so do roads and railways.</p> <p><b>Why that golden tile?</b> It sits on the edge of your empire facing Greece. There the army stands guard: it helps defend the city next to it and, later with <b>gunpowder</b>, can block the way through.</p> <p><b>How to move:</b> Your army is still <i>inside</i> the city where you built it. Tap the city → <b>Move army here</b> → then tap the golden target tile. Once an army stands on open ground, the button reads <b>Move this army</b>. Reachable tiles are highlighted.</p>',
   '<p>Auch die 12 Nahrung sollen nicht verfallen. Eine vierte Stadt kostet <b>9 Nahrung</b> – 6 Basiskosten bei drei bestehenden Städten plus Weg. Teuer, aber es ist die einzige Ausgabe, die dauerhaft etwas zurückgibt.</p> <p><b>Warum dieses Feld?</b> Ringsum liegen 4 × Grasland, 1 × Gebirge, 1 × Meer, das bringt <b>+7 🔬, +4 🌾, +3 🪙</b> je Runde. Es liegt südlich deiner Hauptstadt, also im Rücken – weg von der griechischen Grenze, wo gerade gekämpft wird. </p> <div class="tut-key"><b>Merke</b> Vier Städte sind fast immer besser als zwei große: jede bringt eigene Felder, wächst billiger und verteilt das Risiko. Die Basiskosten steigen zwar (1/3/6/10), aber sie sind einmalig – der Ertrag bleibt.</div>':
     '<p>The 12 food should not go to waste either. A fourth city costs <b>9 food</b> – 6 base cost with three existing cities plus the distance. Expensive, but it is the only spending that keeps paying you back.</p> <p><b>Why this tile?</b> Around it lie 4 × grassland, 1 × mountains, 1 × sea, which brings <b>+7 🔬, +4 🌾, +3 🪙</b> per round. It lies south of your capital, so at your back – away from the Greek border where the fighting is.</p> <div class="tut-key"><b>Remember</b> Four cities are almost always better than two large ones: each brings its own tiles, grows more cheaply and spreads the risk. The base cost does rise (1/3/6/10), but it is a one-off – the yield stays.</div>',
-  '<p>Bots ziehen ihre Armeen nach festen Prioritäten – und <b>die eigene Hauptstadt steht ganz oben</b>, noch vor „eine begonnene Belagerung zu Ende bringen". Wer eine Armee neben ihre Hauptstadt stellt, zwingt sie zum Rückzug.</p> <p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+5 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>8 statt 3</b> an – mehr als die 3, die dort stehen. Am Ende deines Zuges gewinnst du den Kampf, und Griechenlands Hauptstadt steht bei <b>Zug 1 von 2</b>: noch ein Erfolg, und sie gehört dir. Genau das zwingt den Bot, seine Armeen zurückzuholen, statt deine Stadt zu Ende zu belagern.</p> <p>Dein Vorrat geht dabei genau auf – übrig bleiben <b>1 Wissenschaft</b> und <b>4 Münzen</b>, beides brauchst du gleich noch.</p> <p><b>So kaufst du</b> Macht: unten auf <b>Macht</b> → die Menge antippen.</p> <div class="tut-key"><b>Merke</b> Angriff ist oft die billigere Verteidigung. Eine Armee an der richtigen Stelle bindet zwei gegnerische – und kostet dich weniger, als deren Angriff aufzuwiegen. Bots verteidigen ihre Hauptstadt, sobald dort ein erster Angriff durchkam; eine Armee, die bloß danebensteht, beeindruckt sie nicht.</div>':
-    '<p>Bots move their armies by fixed priorities – and <b>their own capital comes first</b>, even before “finish a siege you have started”. Whoever puts an army next to their capital forces them to pull back.</p> <p>To threaten the Greek capital you have to beat its <b>defence value of 3</b>. The following three steps do that:</p> <div class="tut-calc"> <div><span>research <b>siege engines</b> (+5 attack against cities)</span><b>2 🔬</b></div> <div><span>buy <b>3 power</b> (instead of 4)</span><b>12 🪙</b></div> <div><span>move the army onto the <b>golden tile</b> beside it</span><b>3 movement</b></div> </div> <p>After that your army attacks with <b>8 instead of 3</b> – more than the 3 standing there. At the end of your turn you win the fight and Greece’s capital sits at <b>turn 1 of 2</b>: one more success and it is yours. That is exactly what forces the bot to call its armies back instead of finishing the siege of your city.</p> <p>Your stock works out exactly – what is left is <b>1 science</b> and <b>4 coins</b>, and you need both in a moment.</p> <p><b>How to buy</b> power: <b>Power</b> at the bottom → tap the amount.</p> <div class="tut-key"><b>Remember</b> Attacking is often the cheaper defence. An army in the right place ties down two enemy ones – and costs you less than outweighing their attack. Bots defend their capital as soon as a first attack has landed there; an army merely standing nearby does not impress them.</div>',
+  '<p>Bots ziehen ihre Armeen nach festen Prioritäten – und <b>die eigene Hauptstadt steht ganz oben</b>, noch vor „eine begonnene Belagerung zu Ende bringen". Wer eine Armee neben ihre Hauptstadt stellt, zwingt sie zum Rückzug.</p> <p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+3 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>6 statt 3</b> an – mehr als die 3, die dort stehen. Am Ende deines Zuges gewinnst du den Kampf, und Griechenlands Hauptstadt steht bei <b>Zug 1 von 2</b>: noch ein Erfolg, und sie gehört dir. Genau das zwingt den Bot, seine Armeen zurückzuholen, statt deine Stadt zu Ende zu belagern.</p> <p>Dein Vorrat geht dabei genau auf – übrig bleiben <b>1 Wissenschaft</b> und <b>4 Münzen</b>, beides brauchst du gleich noch.</p> <p><b>So kaufst du</b> Macht: unten auf <b>Macht</b> → die Menge antippen.</p> <div class="tut-key"><b>Merke</b> Angriff ist oft die billigere Verteidigung. Eine Armee an der richtigen Stelle bindet zwei gegnerische – und kostet dich weniger, als deren Angriff aufzuwiegen. Bots verteidigen ihre Hauptstadt, sobald dort ein erster Angriff durchkam; eine Armee, die bloß danebensteht, beeindruckt sie nicht.</div>':
+    '<p>Bots move their armies by fixed priorities – and <b>their own capital comes first</b>, even before “finish a siege you have started”. Whoever puts an army next to their capital forces them to pull back.</p> <p>To threaten the Greek capital you have to beat its <b>defence value of 3</b>. The following three steps do that:</p> <div class="tut-calc"> <div><span>research <b>siege engines</b> (+3 attack against cities)</span><b>2 🔬</b></div> <div><span>buy <b>3 power</b> (instead of 4)</span><b>12 🪙</b></div> <div><span>move the army onto the <b>golden tile</b> beside it</span><b>3 movement</b></div> </div> <p>After that your army attacks with <b>6 instead of 3</b> – more than the 3 standing there. At the end of your turn you win the fight and Greece’s capital sits at <b>turn 1 of 2</b>: one more success and it is yours. That is exactly what forces the bot to call its armies back instead of finishing the siege of your city.</p> <p>Your stock works out exactly – what is left is <b>1 science</b> and <b>4 coins</b>, and you need both in a moment.</p> <p><b>How to buy</b> power: <b>Power</b> at the bottom → tap the amount.</p> <div class="tut-key"><b>Remember</b> Attacking is often the cheaper defence. An army in the right place ties down two enemy ones – and costs you less than outweighing their attack. Bots defend their capital as soon as a first attack has landed there; an army merely standing nearby does not impress them.</div>',
   '<p>Das Tutorial ist durch – und dieses Spiel läuft einfach weiter, jetzt ohne Einschränkungen. Du stehst in Runde 4 mit 4 Städten, 7 Bevölkerung und 9 Technologien.</p> <p>Der nächste sinnvolle Schritt: weiter wachsen, Nahrungstechnologien nachziehen und in jedem Feld ein Zeitalter aufschließen – die Singularität braucht am Ende eine Moderne-Technologie in allen vier.</p> <p><b>Was das Tutorial nicht gezeigt hat</b>, aber im Spiel steckt: gegnerische Armeen <b>flankieren</b> und zerstören (zwei eigene Armeen gegenüberliegend, mit <b>Taktik</b> von zwei beliebigen Seiten) · <b>Eisenbahn</b> statt Straße: eine durchgehende Bahn verdoppelt den Handelsroutenbonus auf +2 · Technologien mit eigenen Aktionen: <b>Sklaverei</b> (Bevölkerung gegen Münzen opfern), <b>Spionage</b>, <b>Kundschafterei</b> und <b>Internet</b> (fremde Technologien kopieren), <b>Kolonialismus</b> (Felder kaufen), <b>Atomwaffen</b> (alle Armeen auf einem Feld und ringsum entfernen) · und Reichsfähigkeiten, die du im Aufbau umstellen kannst.</p> <p>Zwei Dinge helfen immer: <b>Protokoll</b> zeigt jeden Würfelwurf, <b>Regeln &amp; Technologien</b> im Menü listet alle Technologien mit ihrer Wirkung.</p>':
     '<p>The tutorial is done – and this game simply carries on, now without restrictions. You stand in round 4 with 4 cities, 7 population and 9 technologies.</p> <p>The next sensible step: keep growing, catch up on food technologies and open up an age in every field – in the end the Singularity needs a Modern Age technology in all four.</p> <p><b>What the tutorial did not show</b> but is in the game: <b>flanking</b> and destroying enemy armies (two of your armies opposite each other, with <b>tactics</b> from any two sides) · <b>railways</b> instead of roads: an unbroken railway doubles the trade route bonus to +2 · technologies with actions of their own: <b>slavery</b> (sacrifice population for coins), <b>espionage</b>, <b>scouting</b> and <b>Internet</b> (copy other empires’ technologies), <b>colonialism</b> (buy tiles), <b>nuclear weapons</b> (remove all armies on a tile and around it) · and the empire abilities you can switch in setup.</p> <p>Two things always help: the <b>log</b> shows every die roll, <b>Rules &amp; technologies</b> in the menu lists every technology with its effect.</p>',
   '<p>Dein Einkommen liegt jetzt bei <b>6 🔬, 9 🌾, 10 🪙</b> – in Runde 1 waren es 1, 5 und 3.</p> <p>Drei Dinge greifen zusammen: die zweite Stadt brachte sechs neue Felder, die Hauptstadt hat 2 Bevölkerung, und <b>Schrift</b> erhöht deren Wissenschaft. Genau dieser Effekt entscheidet die Partie, nicht unbedingt die Armeen.</p> <p>Faustregel: die wichtigsten <b>Geländeverbesserungen</b> und <b>viele Städte</b> in Kombination – eines ohne das andere bringt wenig.</p>':
@@ -1234,8 +1244,8 @@ const UI_EN = {
     '<p>On its own turn Greece moved an army next to your city and has already attacked once – the log says “turn 1/2”. City and army are outlined in gold.</p> <p><b>Attack value</b> = the power value per attacking army, several add up: <b>5</b> (for bots that is their total population).<br> <b>Defence value</b> = 1 per city population plus the power value of your adjacent armies: <b>1</b>.</p> <p>The attack is higher. If it is higher <b>two turns in a row</b>, you lose the city and 2 population. The log then says “turn 1/2” – that is your warning, you have exactly one round.</p>',
   '<p>Hochzeivilization ist ein Spiel, bei dem vier Zivilisationen ihr Reich von der Antike in die Moderne führen. Alle Reiche beginnen mit nur einer einzigen Stadt, werden aber schon bald expandieren, ihre Bevölkerung vergrößern, neue Technologien erforschen und Armeen bauen. Eine Zivilisation gewinnt durch wirtschaftliche, militärische oder Technologische Vorherrschaft. Wie genau das im Detail funktioniert, wird später erklärt.</p> <p>Du spielst <b>Russland</b>, die anderen drei Reiche übernehmen Bots auf dem höchsten Schwierigkeitsgrad „David".</p> <p>Golden umrandet ist deine <b>Hauptstadt</b>: Der Kreis ist die Stadt, die Zahl darin ihre Bevölkerung – in der Farbe des Reichs, dem sie gehört. Die Linie um die Felder darum ist die Reichsgrenze. <p>Gezogen wird immer in derselben Reihenfolge: <b>Russland (grün) → Griechenland (blau) → England (rot) → Wikingerreich (lila)</b>. Wo die Runde beginnt, hängt vom Startspieler ab, hier bist das du.</p> <p class="tut-note">Im Tutorial sind nur die Schritte dieser Beispielpartie möglich – so bleibt alles nachvollziehbar. „Tutorial beenden" gibt alles frei.</p>':
     '<p>Hochzeivilization is a game in which four civilisations lead their empire from Antiquity into the Modern Age. Every empire starts with a single city, but will soon expand, grow its population, research new technologies and build armies. A civilisation wins through economic, military or technological supremacy. Exactly how that works in detail is explained later.</p> <p>You play <b>Russia</b>, the other three empires are run by bots on the highest difficulty, “David”.</p> <p>Outlined in gold is your <b>capital</b>: the circle is the city, the number in it its population – in the colour of the empire it belongs to. The line around the tiles is the border of your empire. <p>Turn order is always the same: <b>Russia (green) → Greece (blue) → England (red) → Vikings (purple)</b>. Where the round begins depends on the starting player, which here is you.</p> <p class="tut-note">In the tutorial only the steps of this example game are possible – that keeps everything comprehensible. “End tutorial” releases everything.</p>',
-  '<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben links in der Kachel.</p>':
-    '<p>Unlike other games, Hochzeivilization uses a dynamic technology tree: every technology is only available in a given game with a <b>50 % probability</b>.</p> <p><b>How to research:</b> <b>Research</b> at the bottom → tap the <b>writing</b> tile in the sheet. The sheet shows the cost at the top left of each tile.</p>',
+  '<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben rechts in der Kachel.</p>':
+    '<p>Unlike other games, Hochzeivilization uses a dynamic technology tree: every technology is only available in a given game with a <b>50 % probability</b>.</p> <p><b>How to research:</b> <b>Research</b> at the bottom → tap the <b>writing</b> tile in the sheet. The sheet shows the cost at the top right of each tile.</p>',
   '<p>Jede Stadt darf einmal pro Runde wachsen. Die Hauptstadt kostet 2 Nahrung und 2 Münzen, die jüngere Stadt nur jeweils 1. Kleine Städte wachsen billiger.</p> <p><b>Warum beide?</b> Nahrung und Münzen verfallen sonst. Und weil die Kosten mit der Größe steigen, ist es effizienter, viele kleine Städte gleichmäßig zu vergrößern als eine große.</p>':
     '<p>Every city may grow once per round. The capital costs 2 food and 2 coins, the younger city only 1 each. Small cities grow more cheaply.</p> <p><b>Why both?</b> Otherwise food and coins expire. And because the cost rises with size, it is more efficient to grow many small cities evenly than one big one.</p>',
   '<p>Macht ist der Angriffswert <i>jeder</i> deiner Armeen und zählt zur Verteidigung benachbarter eigener Städte. Ein Punkt kostet dank Eisenverarbeitung <b>4 statt 5 Münzen</b>; du hast 16. Der Haken: zu Beginn jedes Zuges <b>halbiert</b> sich deine Macht (aufgerundet).</p> <p><b>Die naheliegende Rechnung.</b> Kauf dir 4 Macht, dann steht deine belagerte Stadt bei:</p> <div class="tut-calc"> <div><span>Bevölkerung der Stadt</span><b>1</b></div> <div><span>Stadtmauern</span><b>+5</b></div> <div><span>Burgenbau (virtuelle Armee = dein Machtwert)</span><b>+4</b></div> <div><span>deine Armee daneben</span><b>+4</b></div> <div class="sum"><span>Verteidigung</span><b>14</b></div> </div> <p>Das sieht solide aus – <b>6</b> stehen ohne den Kauf schon da.</p> <p><b>Und jetzt die Gegenrechnung.</b> Griechenland hat gerade <b>5</b> Machtwert – bei Bots ist das ihre Gesamtbevölkerung. Mit einer zweiten Armee, für die es jede Runde würfelt, stünde der Angriff bei <b>10</b>. Das reicht gegen 14 noch nicht.</p> <p><b>Aber der Bot steht nicht still.</b> Er würfelt jede Runde für <i>jede</i> seiner 3 Städte auf Wachstum und einmal aufs Siedeln. Läuft das gut, wächst seine Bevölkerung – und damit sein Machtwert – schon im nächsten Zug so:</p> <div class="tut-calc"> <div><span>Machtwert jetzt</span><b>5</b></div> <div><span>3 Städte wachsen je 1</span><b>+3</b></div> <div><span>eine neue Stadt gegründet</span><b>+1</b></div> <div class="sum"><span>Machtwert dann</span><b>9</b></div> <div><span>× 2 Armeen</span><b>18</b></div> </div> <div class="tut-key"><b>Merke</b> 18 gegen 14: deine vier Münzen wären verbrannt und die Stadt eine Runde später trotzdem weg. Gegen einen Gegner, der jede Runde wächst, ist reine Verteidigung ein Wettrennen, das du verlierst – seine Zahlen steigen von allein, deine nur, wenn du zahlst. <b>Kauf hier nichts.</b> Der nächste Schritt zeigt den billigeren Weg.</div>':
@@ -1315,20 +1325,20 @@ const UI_EN = {
     '<p>Greece has attacked your city. This is how combat works:</p><p><b>At the end of every turn</b> all of your own armies attack automatically. They attack cities on adjacent tiles. If the attack succeeds in <b>two consecutive turns of the attacker</b>, the city is captured. For that the <b>attack value must be higher than the defence value</b>.</p><p>The <b>attack value</b> against a city is the combined power of all armies attacking it. The <b>defence value</b> is the city population plus the power of all defending armies.</p>',
   '<p><b>Stadtmauern</b> geben jeder Stadt +5 Verteidigung, <b>Burgenbau</b> stellt eine unbewegliche Armee hinein, die deinen Machtwert auf die Stadt legt.</p>':
     '<p><b>City walls</b> give every city +5 defence, <b>castles</b> put an immobile army into it that projects your power value onto the city.</p>',
-  '<p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+5 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>8 statt 3</b> an – mehr als die 3, die dort stehen.</p><p>Ein Gegenangriff auf die <b>Hauptstadt</b> ist dabei besonders lohnend: wer eine gegnerische Hauptstadt erobert, <b>gewinnt das Spiel sofort</b>. Genau deshalb ziehen Bots ihre Armeen zur eigenen Hauptstadt zurück, statt deine Stadt zu Ende zu belagern.</p>':
-    '<p>To threaten the Greek capital you have to beat its <b>defence value of 3</b>. These three steps do it:</p> <div class="tut-calc"> <div><span>research <b>siege engines</b> (+5 attack against cities)</span><b>2 🔬</b></div> <div><span>buy <b>3 power</b> (instead of 4)</span><b>12 🪙</b></div> <div><span>move your army onto the <b>golden tile</b> beside it</span><b>3 movement</b></div> </div> <p>After that your army attacks with <b>8 instead of 3</b> – more than the 3 standing there.</p><p>A counter-attack on the <b>capital</b> is especially worthwhile: capturing an enemy capital <b>wins the game immediately</b>. That is exactly why bots pull their armies back to their own capital instead of finishing the siege of your city.</p>',
+  '<p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+3 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>6 statt 3</b> an – mehr als die 3, die dort stehen.</p><p>Ein Gegenangriff auf die <b>Hauptstadt</b> ist dabei besonders lohnend: wer eine gegnerische Hauptstadt erobert, <b>gewinnt das Spiel sofort</b>. Genau deshalb ziehen Bots ihre Armeen zur eigenen Hauptstadt zurück, statt deine Stadt zu Ende zu belagern.</p>':
+    '<p>To threaten the Greek capital you have to beat its <b>defence value of 3</b>. These three steps do it:</p> <div class="tut-calc"> <div><span>research <b>siege engines</b> (+3 attack against cities)</span><b>2 🔬</b></div> <div><span>buy <b>3 power</b> (instead of 4)</span><b>12 🪙</b></div> <div><span>move your army onto the <b>golden tile</b> beside it</span><b>3 movement</b></div> </div> <p>After that your army attacks with <b>6 instead of 3</b> – more than the 3 standing there.</p><p>A counter-attack on the <b>capital</b> is especially worthwhile: capturing an enemy capital <b>wins the game immediately</b>. That is exactly why bots pull their armies back to their own capital instead of finishing the siege of your city.</p>',
   '<p>Übrige Wissenschaft verfällt – das Rad kostet genau 1 und erlaubt Straßen.</p>':
     '<p>Leftover science expires – the wheel costs exactly 1 and allows roads.</p>',
   '<p>Eine Straße kostet 1 Münze. Der eigentliche Gewinn sind <b>Handelsrouten</b>: jede Stadt, die über einen durchgehenden Weg an der Hauptstadt hängt, bringt <b>+1 auf alle drei Erträge</b> – über durchgehende Eisenbahn +2.</p><p>Straßen und Eisenbahn <b>senken außerdem die Bewegungskosten</b> auf diesen Feldern, deine Armeen kommen darüber also weiter.</p>':
     '<p>A road costs 1 coin. The real gain are <b>trade routes</b>: every city connected to the capital by an unbroken path brings <b>+1 to all three yields</b> – over unbroken railway +2.</p><p>Roads and railways also <b>lower the movement cost</b> on those tiles, so your armies get further across them.</p>',
   '<p>Beende den Zug: die Griechen rufen ihre Armeen zur eigenen Hauptstadt zurück, die Belagerung läuft ins Leere.</p>':
     '<p>End the turn: the Greeks call their armies back to their own capital and the siege comes to nothing.</p>',
-  '<p><b>Militärsieg</b> – eine gegnerische Hauptstadt erobern. Er ist der einzige Sieg, der <b>sofort</b> endet.</p><p><b>Wirtschaftssieg</b> – mehr als zwei Drittel der Weltbevölkerung am Ende einer Runde (im Duell 3/4). Der Stand steht oben in der Kopfzeile.</p><p><b>Forschungssieg</b> – die <b>Singularität</b>: 100 Wissenschaft und in jedem der vier Felder mindestens eine Technologie der Moderne.</p><div class="tut-key"><b>Merke</b> Außer dem Militärsieg endet keiner sofort: Den Forschungssieg <b>meldest du an</b>, die Runde wird zu Ende gespielt; den Wirtschaftssieg prüft das Spiel erst am Rundenende. Erfüllen mehrere in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>. Bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung später wieder wegfällt.</div>':
-    '<p><b>Military victory</b> – capture an enemy capital. It is the only victory that ends the game <b>immediately</b>.</p><p><b>Economic victory</b> – more than two thirds of the world population at the end of a round (3/4 in a duel). The current figure is in the header.</p><p><b>Research victory</b> – the <b>Singularity</b>: 100 science and at least one Modern Age technology in each of the four fields.</p><div class="tut-key"><b>Remember</b> Apart from the military victory none of them ends the game at once: a research victory is <b>claimed</b> and the round is played out; the economic victory is only checked at the end of the round. If several claim in the same round, <b>points decide: population + wonders + technologies</b>. On a tie the human wins over the bot. A claim stays valid even if the condition later falls away.</div>',
+  '<p><b>Militärsieg</b> – eine gegnerische Hauptstadt erobern. Er ist der einzige Sieg, der <b>sofort</b> endet.</p><p><b>Wirtschaftssieg</b> – mehr als zwei Drittel der Weltbevölkerung am Ende einer Runde (im Duell 3/4). Der Stand steht oben in der Kopfzeile.</p><p><b>Forschungssieg</b> – die <b>Singularität</b>: 120 Wissenschaft und in jedem der vier Felder mindestens eine Technologie der Moderne.</p><div class="tut-key"><b>Merke</b> Außer dem Militärsieg endet keiner sofort: Den Forschungssieg <b>meldest du an</b>, die Runde wird zu Ende gespielt; den Wirtschaftssieg prüft das Spiel erst am Rundenende. Erfüllen mehrere in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>. Bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung später wieder wegfällt.</div>':
+    '<p><b>Military victory</b> – capture an enemy capital. It is the only victory that ends the game <b>immediately</b>.</p><p><b>Economic victory</b> – more than two thirds of the world population at the end of a round (3/4 in a duel). The current figure is in the header.</p><p><b>Research victory</b> – the <b>Singularity</b>: 120 science and at least one Modern Age technology in each of the four fields.</p><div class="tut-key"><b>Remember</b> Apart from the military victory none of them ends the game at once: a research victory is <b>claimed</b> and the round is played out; the economic victory is only checked at the end of the round. If several claim in the same round, <b>points decide: population + wonders + technologies</b>. On a tie the human wins over the bot. A claim stays valid even if the condition later falls away.</div>',
   '<p>Das Tutorial ist durch, die Partie läuft ohne Einschränkungen weiter.</p><p>Nicht gezeigt, aber vorhanden: Armeen <b>flankieren</b> und zerstören, <b>Eisenbahnen</b> (Handelsroute +2), Technologien mit eigenen Aktionen (Sklaverei, Spionage, Internet, Kolonialismus, Atomwaffen). <b>Regeln &amp; Technologien</b> im Menü listet alles auf.</p>':
     '<p>The tutorial is done, the game carries on without restrictions.</p><p>Not shown but present: <b>flanking</b> and destroying armies, <b>railways</b> (trade route +2), technologies with actions of their own (slavery, espionage, Internet, colonialism, nuclear weapons). <b>Rules &amp; technologies</b> in the menu lists everything.</p>',
-  '<p><b>Militärsieg</b> – erobere eine gegnerische Hauptstadt: dafür musst du zwei Züge in Folge stärker sein. Es ist der Weg, auf dem Bots einem Menschen meist am gefährlichsten werden – und der einzige Sieg, der das Spiel <b>sofort</b> beendet.</p><p><b>Wirtschaftssieg</b> – hältst du am Ende einer Runde mehr als zwei Drittel der Weltbevölkerung, hast du gewonnen. Oben links neben der Runde steht der aktuelle Stand: gerade 7 von 33. Um hier eine echte Chance zu haben, braucht es meist vier bis sechs Städte plus einige der Technologien <b>Töpferei</b>, <b>Verbundwerkstoffe</b>, <b>Theologie</b> oder <b>Vereinte Nationen</b>.</p><p><b>Forschungssieg</b> – erforsche die <b>Singularität</b>: 100 Wissenschaft, mit der wissenschaftlichen Methode 90. Sie verlangt in jedem der <b>vier Felder mindestens eine Technologie der Moderne</b>. Für ein Reich, das früh auf Multiplikatoren gegangen ist, ist das oft der kürzeste Weg.</p><div class="tut-key"><b>Merke</b> Nur der Militärsieg endet sofort. Den Forschungssieg <b>meldest du an</b>, und die Runde wird zu Ende gespielt – die anderen bekommen also noch ihren Zug, und ein Militärsieg in diesem Fenster schlägt deinen Anspruch. Den Wirtschaftssieg prüft das Spiel erst am Ende der Runde, wenn alle gleich oft gezogen haben. Erfüllen mehrere Reiche in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>, bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung danach wieder wegfällt.</div>':
-    '<p><b>Military victory</b> – capture an enemy capital: for that you have to be stronger two turns in a row. This is the road on which bots are usually most dangerous to a human player – and the only victory that ends the game <b>immediately</b>.</p><p><b>Economic victory</b> – if you hold more than two thirds of the world population at the end of a round, you win. Top left, next to the round counter, you can always see the current figure: right now 7 of 33. To have a realistic chance here you usually need four to six cities plus some of the technologies <b>pottery</b>, <b>composites</b>, <b>theology</b> or <b>United Nations</b>.</p><p><b>Research victory</b> – research the <b>Singularity</b>: 100 science, 90 with the scientific method. It requires <b>at least one Modern Age technology in each of the four fields</b>. For an empire that went for multipliers early, this is often the shortest road.</p><div class="tut-key"><b>Remember</b> Only the military victory ends the game at once. A research victory is <b>claimed</b> and the round is played out – the others still get their turn, and a military victory in that window beats your claim. The economic victory is only checked at the end of the round, when everyone has had the same number of turns. If several empires meet a condition in the same round, <b>points decide: population + wonders + technologies</b>, and on a tie the human wins over the bot. A claim stays valid even if the condition falls away afterwards.</div>',
+  '<p><b>Militärsieg</b> – erobere eine gegnerische Hauptstadt: dafür musst du zwei Züge in Folge stärker sein. Es ist der Weg, auf dem Bots einem Menschen meist am gefährlichsten werden – und der einzige Sieg, der das Spiel <b>sofort</b> beendet.</p><p><b>Wirtschaftssieg</b> – hältst du am Ende einer Runde mehr als zwei Drittel der Weltbevölkerung, hast du gewonnen. Oben links neben der Runde steht der aktuelle Stand: gerade 7 von 33. Um hier eine echte Chance zu haben, braucht es meist vier bis sechs Städte plus einige der Technologien <b>Töpferei</b>, <b>Verbundwerkstoffe</b>, <b>Theologie</b> oder <b>Vereinte Nationen</b>.</p><p><b>Forschungssieg</b> – erforsche die <b>Singularität</b>: 120 Wissenschaft, mit der wissenschaftlichen Methode 110. Sie verlangt in jedem der <b>vier Felder mindestens eine Technologie der Moderne</b>. Für ein Reich, das früh auf Multiplikatoren gegangen ist, ist das oft der kürzeste Weg.</p><div class="tut-key"><b>Merke</b> Nur der Militärsieg endet sofort. Den Forschungssieg <b>meldest du an</b>, und die Runde wird zu Ende gespielt – die anderen bekommen also noch ihren Zug, und ein Militärsieg in diesem Fenster schlägt deinen Anspruch. Den Wirtschaftssieg prüft das Spiel erst am Ende der Runde, wenn alle gleich oft gezogen haben. Erfüllen mehrere Reiche in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>, bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung danach wieder wegfällt.</div>':
+    '<p><b>Military victory</b> – capture an enemy capital: for that you have to be stronger two turns in a row. This is the road on which bots are usually most dangerous to a human player – and the only victory that ends the game <b>immediately</b>.</p><p><b>Economic victory</b> – if you hold more than two thirds of the world population at the end of a round, you win. Top left, next to the round counter, you can always see the current figure: right now 7 of 33. To have a realistic chance here you usually need four to six cities plus some of the technologies <b>pottery</b>, <b>composites</b>, <b>theology</b> or <b>United Nations</b>.</p><p><b>Research victory</b> – research the <b>Singularity</b>: 120 science, 110 with the scientific method. It requires <b>at least one Modern Age technology in each of the four fields</b>. For an empire that went for multipliers early, this is often the shortest road.</p><div class="tut-key"><b>Remember</b> Only the military victory ends the game at once. A research victory is <b>claimed</b> and the round is played out – the others still get their turn, and a military victory in that window beats your claim. The economic victory is only checked at the end of the round, when everyone has had the same number of turns. If several empires meet a condition in the same round, <b>points decide: population + wonders + technologies</b>, and on a tie the human wins over the bot. A claim stays valid even if the condition falls away afterwards.</div>',
   'Das ausführliche Tutorial in 29 Schritten.':
     'The full tutorial in 29 steps.',
   'Dieselben Schritte, aber nur die Eigenheiten dieses Spiels: Sieg, Kampf, Ressourcen, Zufall im Technologiebaum.':
@@ -1410,6 +1420,295 @@ const UI_EN = {
   'Größe': 'Size',
   'Exportieren': 'Export',
   'Importieren': 'Import',
+
+  /* --- Erstes Spiel (v92): Menü, Panel, Schienen */
+  'Erstes Spiel': 'First game',
+  'Erstes Spiel · Runde %s': 'First game · round %s',
+  'Beenden': 'Quit',
+  'Ziel:': 'Goal:',
+  'Tipp anzeigen': 'Show hint',
+  'So geht es': 'How to',
+  'Zum Menü': 'To the menu',
+  'Gewonnen!': 'Victory!',
+  'England ist am Zug': 'England\'s turn',
+  'Im Blatt steht, was England tut.': 'The sheet shows what England does.',
+  'Lies, was England getan hat, und tippe dann auf Weiter.': 'Read what England did, then tap Continue.',
+  'nichts': 'nothing',
+  'forschen': 'research',
+  'wachsen': 'grow',
+  'Eins nach dem anderen – jetzt: %s': 'One thing at a time – now: %s',
+  'Du könntest noch %s.': 'You could still %s.',
+  'Nochmal tippen zum Beenden.': 'Tap again to end the turn.',
+  'Damit hättest du mehr als %s der Weltbevölkerung – das wäre ein Wirtschaftssieg. Diesmal gewinnst du anders.':
+    'That would give you more than %s of the world population – an economic victory. This time you win another way.',
+  'Diesmal gewinnst du friedlich – deine Armeen bleiben, wo sie sind.':
+    'This time you win peacefully – your armies stay where they are.',
+  'Diesmal geht es um Englands Hauptstadt – seine andere Stadt lässt du in Ruhe.':
+    'This time it is about England\'s capital – leave its other city alone.',
+  'Mit Raketentechnik griffe eine deiner Armeen Englands andere Stadt an – zieh sie erst weg.':
+    'With Rocketry one of your armies would attack England\'s other city – move it away first.',
+  'Mit Raketentechnik griffen deine Armeen Englands Städte an – diesmal gewinnst du friedlich.':
+    'With Rocketry your armies would attack England\'s cities – this time you win peacefully.',
+  'Die Singularität wartet – diesmal gewinnst du anders.': 'The Singularity can wait – this time you win another way.',
+  'Hier brächte die Stadt %s 🌾 – es gibt einen Platz mit mehr.': 'Here the city would bring %s 🌾 – there is a spot with more.',
+  'Hier brächte die Stadt %s 🔬 – es gibt einen Platz mit mehr.': 'Here the city would bring %s 🔬 – there is a spot with more.',
+  'Erstes Spiel: England zieht nach einem festen Drehbuch, die Technologien sind für diese Partie festgelegt.':
+    'First game: England follows a fixed script, the technologies are set for this game.',
+  'Erstes Spiel: Weg gewählt – %s.': 'First game: path chosen – %s.',
+  'Militärsieg': 'Military victory',
+  'Wirtschaftssieg': 'Economic victory',
+  'Forschungssieg': 'Research victory',
+  'Anderen Weg ausprobieren': 'Try another path',
+  'Erstes Spiel beenden?': 'Quit the first game?',
+  'Die Partie läuft dann ohne Führung weiter, England spielt als KI.':
+    'The game then continues without guidance, England plays as the AI.',
+  'Weiterspielen': 'Keep playing',
+  'Erstes Spiel beenden': 'Quit first game',
+  'Erstes Spiel beendet – die Partie läuft weiter.': 'First game ended – the game continues.',
+  'Du hast dein erstes Spiel gewonnen: %s.': 'You have won your first game: %s.',
+  'Du kennst jetzt alles, was eine Partie braucht: gründen, wachsen, forschen samt Würfel, Handelsrouten, Armeen, Macht, Belagern und Flankieren – und einen der drei Wege zum Sieg.':
+    'You now know everything a game needs: founding, growing, research and its dice, trade routes, armies, power, sieges and flanking – and one of the three paths to victory.',
+  '%s · Runde %s': '%s · round %s',
+  /* --- Erstes Spiel (v93): die Seite vor der Partie */
+  'Du führst eine einzige Stadt in der Steinzeit. Dein Ziel: eine Zivilisation, die die Zeiten überdauert.':
+    'You lead a single city in the Stone Age. Your goal: a civilization that stands the test of time.',
+  'Es gibt viele Wege zu einem blühenden Reich – und deshalb mehr als einen Weg zum Sieg. Welchen gehst du?':
+    'There are many ways to build a prosperous civilization – and so more than one way to win. Which one will you take?',
+  'Du spielst Griechenland gegen England, 1 gegen 1 auf einer kleinen Karte. Jeder Schritt nennt ein Ziel – wer festhängt, holt sich einen Tipp.':
+    'You play Greece against England, one on one on a small map. Every step names a goal – if you get stuck, ask for a hint.',
+  'Dein Weg: <b>Militärsieg</b> – erobere Englands Hauptstadt.': 'Your path: <b>military victory</b> – conquer England\'s capital.',
+  'Dein Weg: <b>Wirtschaftssieg</b> – am Ende einer Runde mehr als %s der Weltbevölkerung.':
+    'Your path: <b>economic victory</b> – more than %s of the world population at the end of a round.',
+  'Dein Weg: <b>Forschungssieg</b> – erforsche die Singularität.': 'Your path: <b>research victory</b> – research the Singularity.',
+  'Noch nicht vorgekommen: Eisenbahn, Kontrollzonen, Kopieren von Technologien und die Erweiterungen Ereignisse und Weltwunder (Einstellungen). Alles steht unter <b>Regeln &amp; Technologien</b>.':
+    'Not covered yet: railways, zones of control, copying technologies and the expansions events and world wonders (Settings). Everything is listed under <b>Rules &amp; technologies</b>.',
+
+  /* --- Erstes Spiel: Titel der Schritte */
+  'Dein Reich': 'Your empire',
+  'Was Griechenland kann': 'What Greece can do',
+  'Kostenlos forschen': 'Research for free',
+  'Eine zweite Stadt': 'A second city',
+  'Wachsen': 'Growing',
+  'Runde 2': 'Round 2',
+  'Handelsroute': 'Trade route',
+  'Belagert!': 'Under siege!',
+  'Ausgewürfelt': 'Decided by the dice',
+  'Nichts verschenken': 'Waste nothing',
+  'Hält die Stadt?': 'Will the city hold?',
+  'Gegenangriff': 'Counterattack',
+  'Den Sieg vorbereiten': 'Preparing your victory',
+  'Wie willst du gewinnen?': 'How do you want to win?',
+  'Noch einmal': 'Once more',
+  'Die Mehrheit': 'The majority',
+  'Bis in die Moderne': 'Into the Modern Age',
+  'Die Singularität': 'The Singularity',
+  'Fast geschafft': 'Almost there',
+
+  /* --- Erstes Spiel: Runde 1 */
+  'Du spielst <b>Griechenland</b> (blau) gegen <b>England</b> (rot), ihr zieht abwechselnd, du fängst an.':
+    'You play <b>Greece</b> (blue) against <b>England</b> (red); you take turns, and you go first.',
+  'Tippe deine Hauptstadt an.': 'Tap your capital.',
+  'Sie ist jetzt golden umrandet: der blaue Kreis links. Die Zahl darin ist ihre Bevölkerung.':
+    'It now has a golden outline: the blue circle on the left. The number in it is its population.',
+  'Eine Stadt erntet die <b>sechs Felder um sich herum</b> – das Feld unter ihr bringt nichts. Was du hast, steht oben: 🔬 Wissenschaft, 🌾 Nahrung, 🪙 Münzen und ⚔︎ Macht.':
+    'A city harvests the <b>six tiles around it</b> – the tile beneath it yields nothing. What you have is shown at the top: 🔬 science, 🌾 food, 🪙 coins and ⚔︎ power.',
+  'Jedes Reich hat eine eigene Fähigkeit.': 'Every empire has an ability of its own.',
+  'Finde heraus, was Griechenland besonders gut kann.': 'Find out what Greece is especially good at.',
+  'Unten in der Leiste: <b>Fähigkeiten</b>.': 'In the bar at the bottom: <b>Abilities</b>.',
+  'Griechenland forscht günstiger: Jede Technologie kostet 1 weniger in der Antike, 2 im Mittelalter, 3 in der Industrialisierung und 4 in der Moderne (die Singularität 5).':
+    'Greece researches cheaply: every technology costs 1 less in Antiquity, 2 in the Middle Ages, 3 in the Industrial Age and 4 in the Modern Age (the Singularity 5).',
+  'Technologien kosten 🔬 Wissenschaft und wirken für den Rest des Spiels.':
+    'Technologies cost 🔬 science and work for the rest of the game.',
+  'Erforsche alle Technologien, die dich nichts kosten.': 'Research every technology that costs you nothing.',
+  'Noch %s übrig.': '%s left.',
+  'Alle erforscht.': 'All researched.',
+  'Unten auf <b>Forschen</b>. Oben rechts in jeder Kachel steht ihr Preis – such die Nullen.':
+    '<b>Research</b> at the bottom. Each tile shows its price in the top right corner – look for the zeros.',
+  'Diese kostet %s 🔬 – gesucht sind die kostenlosen.': 'This one costs %s 🔬 – you are looking for the free ones.',
+  'Technologien wirken sofort und für immer: Mathematik bringt dir ab jetzt +1 🔬 je Wald. Und beide haben etwas geöffnet …':
+    'Technologies work at once and for good: Mathematics now brings you +1 🔬 per forest. And both have opened something …',
+  'Ein Zeitalter öffnet sich mit deiner ersten Technologie des Zeitalters davor im selben Feld – eben das <b>Mittelalter</b> in %s. Dabei wurde gewürfelt.':
+    'An age opens with your first technology of the age before it in the same field – just now the <b>Middle Ages</b> in %s. The dice were rolled for it.',
+  'Ein Zeitalter öffnet sich mit deiner ersten Technologie des Zeitalters davor im selben Feld. Dabei wird gewürfelt.':
+    'An age opens with your first technology of the age before it in the same field. The dice are rolled for it.',
+  'Finde eine Technologie, die es in dieser Partie nicht gibt.': 'Find a technology that does not exist in this game.',
+  '%s: %s von %s': '%s: %s of %s',
+  'Im %s verfügbar – %s': 'Available in the %s – %s',
+  '<b>Forschen</b> öffnet den Bogen. Tippe im Mittelalter eine blasse Kachel an – in Forschung oder Militär. Blass heißt: gibt es nicht, oder noch nicht.':
+    '<b>Research</b> opens the board. Tap a faded tile in the Middle Ages – in Research or Military. Faded means: does not exist, or not yet.',
+  '%s ist durchgefallen: Der Würfel zeigte %s.': '%s did not make it: the die showed %s.',
+  'Für jede Technologie eines neuen Zeitalters fällt ein Würfel: Bei <b>4, 5 oder 6</b> gibt es sie in dieser Partie – eine Chance von <b>50 %</b>. Fällt in einem Feld keine, wird eine ausgelost. So fehlt in jedem Zeitalter ungefähr die Hälfte – plane mit dem, was du bekommst. Alle Würfe stehen im Protokoll.':
+    'Every technology of a newly opened age gets a die: on a <b>4, 5 or 6</b> it exists in this game – a <b>50 %</b> chance. If none in a field makes it, one is drawn by lot. So about half of every age is missing – plan with what you get. All rolls are in the log.',
+  '%s gibt es in dieser Partie nicht: Der Würfel zeigte %s, nötig war 4, 5 oder 6.':
+    '%s does not exist in this game: the die showed %s, it needed a 4, 5 or 6.',
+  '%s ist noch nicht ausgewürfelt: Das Zeitalter öffnet sich in %s mit deiner ersten Technologie des Zeitalters davor.':
+    '%s has not been rolled yet: its age opens in %s with your first technology of the age before.',
+  'Mehr Städte heißt mehr Felder – Ausbreitung ist der Kern des Spiels.':
+    'More cities mean more tiles – expansion is the heart of the game.',
+  'Nahrung lässt Städte wachsen – und Bevölkerung verteidigt sie.': 'Food makes cities grow – and population defends them.',
+  'Nahrung lässt Städte wachsen – und auf Bevölkerung kommt es dir an.': 'Food makes cities grow – and population is what you are after.',
+  'Nahrung lässt Städte wachsen – und jede Bevölkerung forscht mit: +1 🔬.': 'Food makes cities grow – and every population point researches too: +1 🔬.',
+  'Gründe eine Stadt dort, wo sie dir am meisten 🌾 Nahrung bringt.': 'Found a city where it brings you the most 🌾 food.',
+  'Tippe unten auf <b>Stadt gründen</b>: Jedes mögliche Feld zeigt dann seinen Preis. Tippst du ein Feld an, steht im Blatt sein Ertrag beim Siedeln. Gesucht ist das golden umrandete Feld.':
+    'Tap <b>Found city</b> at the bottom: every possible tile then shows its price. Tap a tile and the sheet shows its yield when settling. You are looking for the tile with the golden outline.',
+  'Eine Stadt kostet 🌾: die zweite <b>1</b>, die dritte 3, die vierte 6 … – plus <b>1 je Feld</b> Weg von der Hauptstadt.':
+    'A city costs 🌾: the second <b>1</b>, the third 3, the fourth 6 … – plus <b>1 per tile</b> of path from the capital.',
+  'Was am Zugende übrig ist, verfällt – nur ⚔︎ Macht bleibt.':
+    'Whatever is left at the end of the turn is lost – only ⚔︎ power stays.',
+  'Lass deine Hauptstadt wachsen.': 'Let your capital grow.',
+  'Hauptstadt antippen → <b>Bevölkerung wachsen</b>.': 'Tap the capital → <b>Grow population</b>.',
+  'Diesmal die Hauptstadt – neue Städte wachsen erst ab der nächsten Runde.':
+    'This time the capital – new cities only grow from next round on.',
+  'Wachsen kostet je vorhandener Bevölkerung 1 🌾 und 1 🪙. Fehlt Nahrung oder Wissenschaft, springen Münzen ein: <b>2 🪙 für 1</b>.':
+    'Growing costs 1 🌾 and 1 🪙 per existing population. If food or science runs short, coins step in: <b>2 🪙 for 1</b>.',
+  'Dann ist England dran. Ein Blatt zeigt, was es getan hat – mit <b>Weiter</b> kommst du zurück.':
+    'Then it is England\'s turn. A sheet shows what it did – <b>Continue</b> brings you back.',
+  'Beende deinen Zug.': 'End your turn.',
+  'Unten rechts: <b>Zug beenden</b>.': 'Bottom right: <b>End turn</b>.',
+
+  /* --- Erstes Spiel: Runde 2 */
+  'Dein Einkommen: <b>%s 🔬 %s 🌾 %s 🪙</b> – in Runde 1 waren es %s, %s und %s.':
+    'Your income: <b>%s 🔬 %s 🌾 %s 🪙</b> – in round 1 it was %s, %s and %s.',
+  'Lass beide Städte wachsen.': 'Let both cities grow.',
+  'Jede Stadt antippen – oder einmal für alle: <b>Fähigkeiten</b> → <b>Alle Städte wachsen</b>.':
+    'Tap each city – or once for all: <b>Abilities</b> → <b>Grow all cities</b>.',
+  'Kleine Städte wachsen billiger: Die neue kostete nur 1 🌾 und 1 🪙.':
+    'Small cities grow cheaper: the new one cost only 1 🌾 and 1 🪙.',
+  'Hängt eine Stadt über Straßen an der Hauptstadt, bringt sie jede Runde <b>+1 🔬 🌾 🪙</b> extra.':
+    'A city connected to the capital by roads brings <b>+1 🔬 🌾 🪙</b> extra every round.',
+  'Verbinde deine beiden Städte mit Straßen.': 'Connect your two cities with roads.',
+  'Straßen gibt es erst mit dem <b>Rad</b> (Forschen). Dann die golden umrandeten Felder antippen → <b>Straße bauen</b>.':
+    'Roads need <b>The wheel</b> (Research). Then tap the tiles with the golden outline → <b>Build road</b>.',
+  'Jetzt nur, was die Straße braucht.': 'Right now only what the road needs.',
+  'Diese Straße läge nicht zwischen deinen Städten.': 'This road would not lie between your cities.',
+  'Die Handelsroute steht. Auf Straßen ziehen Armeen außerdem doppelt so weit.':
+    'The trade route is up. On roads, armies also move twice as far.',
+  'Und auf Straßen ziehen Armeen doppelt so weit – gut für deinen Angriff.': 'And on roads armies move twice as far – good for your attack.',
+  'Wissenschaft brauchst du auch im Krieg: Belagerungsmaschinen kosten 🔬.': 'You need science in war too: siege engines cost 🔬.',
+  'Wissenschaft brauchst du auch fürs Wachsen: Keramik und Theologie kosten 🔬.': 'You need science for growing too: Pottery and Theology cost 🔬.',
+  'Wissenschaft ist dein Weg zum Sieg – jede Quelle zählt.': 'Science is your path to victory – every source counts.',
+  'Gründe eine Stadt dort, wo sie dir am meisten 🔬 Wissenschaft bringt.': 'Found a city where it brings you the most 🔬 science.',
+  '<b>Stadt gründen</b>, dann Felder antippen und den Ertrag beim Siedeln vergleichen – Gebirge bringt 🔬. Gesucht ist das golden umrandete Feld.':
+    '<b>Found city</b>, then tap tiles and compare the yield when settling – mountains bring 🔬. You are looking for the tile with the golden outline.',
+  'Die dritte Stadt kostete 3 und den Weg. Jede weitere wird teurer – aber jede bringt neue Felder.':
+    'The third city cost 3 plus the path. Each further one costs more – but each brings new tiles.',
+  'Alles ausgegeben.': 'Everything spent.',
+  'Übrig: %s – das verfällt.': 'Left over: %s – it will be lost.',
+
+  /* --- Erstes Spiel: Runde 3 und 4 */
+  'England hat eine Armee neben deine Stadt gestellt und angegriffen: <b>Angriff %s gegen Verteidigung %s</b>. Belagerung 1 von 2 – gewinnt England noch einmal, fällt die Stadt.':
+    'England has put an army next to your city and attacked: <b>attack %s against defense %s</b>. Siege 1 of 2 – if England wins once more, the city falls.',
+  'Eine englische Armee steht neben deiner Stadt.': 'An English army stands next to your city.',
+  'Stell eine Armee neben die Stadt: Ihre Verteidigung muss mindestens so hoch sein wie Englands Angriff.':
+    'Put an army next to the city: its defense must be at least as high as England\'s attack.',
+  'Verteidigung <b>%s</b> · Englands Angriff <b>%s</b>': 'Defense <b>%s</b> · England\'s attack <b>%s</b>',
+  'Stadt antippen → <b>Armee bauen</b>: Sie muss die Stadt im selben Zug verlassen. Dann <b>Macht</b> kaufen. Verteidigung = Bevölkerung + deine Macht für jede eigene Armee daneben.':
+    'Tap the city → <b>Build army</b>: it has to leave the city in the same turn. Then buy <b>Power</b>. Defense = population + your power for each of your armies next to it.',
+  'Eine Armee reicht hier.': 'One army is enough here.',
+  'Von dort käme die Armee in diesem Zug nicht zur bedrohten Stadt.':
+    'From there the army would not reach the threatened city this turn.',
+  'Zieh die Armee direkt neben die bedrohte Stadt.': 'Move the army right next to the threatened city.',
+  'Macht wirkt über Armeen – stell erst eine neben die Stadt.': 'Power works through armies – first put one next to the city.',
+  'Die Stadt fiele: Verteidigung %s gegen Angriff %s.': 'The city would fall: defense %s against attack %s.',
+  'Macht zählt für <b>jede</b> deiner Armeen – und halbiert sich zu Beginn jedes deiner Züge. Kauf sie, wenn du sie brauchst.':
+    'Power counts for <b>each</b> of your armies – and halves at the start of each of your turns. Buy it when you need it.',
+  'Übrig: %s.': 'Left over: %s.',
+  'Erforsche %s – und gib aus, was dann noch geht.': 'Research %s – and spend whatever is still possible.',
+  'Gib aus, was noch geht – %s hast du schon.': 'Spend whatever is still possible – you already have %s.',
+  'Geht noch: %s': 'Still possible: %s',
+  'Nichts mehr.': 'Nothing left.',
+  'Erst %s – das bringt dich deinem Sieg näher.': 'First %s – that brings you closer to victory.',
+  'Du hast %s noch nicht erforscht.': 'You have not researched %s yet.',
+  '<b>Belagerungsmaschinen</b> (Militär) geben jeder Armee +3 Angriff gegen Städte – ohne sie fällt kaum eine Hauptstadt.':
+    '<b>Siege engines</b> (Military) give every army +3 attack against cities – without them hardly any capital falls.',
+  '<b>Keramik</b> (Produktion): Jede Stadt kann zweimal pro Runde wachsen.': '<b>Pottery</b> (Production): every city can grow twice per round.',
+  '<b>Schrift</b> (Forschung): +1 🔬 je Bevölkerung – jede Runde.': '<b>Writing</b> (Research): +1 🔬 per population – every round.',
+  'Fehlt 🔬, zahlen Münzen 2:1. Danach wachsen, bis nichts mehr geht.': 'If 🔬 runs short, coins pay 2:1. Then grow until nothing is left.',
+  'Mit Belagerungsmaschinen greift jede deiner Armeen Städte mit 3 mehr an.': 'With siege engines each of your armies attacks cities with 3 more.',
+  'Mit Keramik wächst jede Stadt bis zu zweimal pro Runde.': 'With Pottery every city grows up to twice per round.',
+  'Schrift zahlt sich jede Runde aus – mit jeder Bevölkerung mehr.': 'Writing pays off every round – more with every population point.',
+  'Was übrig bleibt, verfällt am Zugende.': 'Whatever is left over is lost at the end of the turn.',
+  'England greift am Ende seines Zugs wieder an – du siehst den Kampf.': 'England attacks again at the end of its turn – you will see the fight.',
+  'Die englische Armee ist schon fort.': 'The English army is already gone.',
+  'Deine Stadt hat gehalten (Angriff %s, Verteidigung %s), die Belagerung ist gebrochen. Die englische Armee steht aber noch da.':
+    'Your city held (attack %s, defense %s), the siege is broken. But the English army is still there.',
+  'Die englische Armee steht noch neben deiner Stadt.': 'The English army is still next to your city.',
+  'Zerstöre die englische Armee: zwei deiner Armeen daneben und mehr ⚔︎ Macht als England.':
+    'Destroy the English army: two of your armies next to it and more ⚔︎ power than England.',
+  'Neben ihr: <b>%s/2</b> · Macht <b>%s</b> gegen <b>%s</b>': 'Next to it: <b>%s/2</b> · power <b>%s</b> against <b>%s</b>',
+  'Dank <b>Taktik</b> aus Runde 1 reichen zwei beliebige Seiten. Baue eine zweite Armee, stell sie daneben und kauf Macht – deine hat sich zu Zugbeginn halbiert.':
+    'Thanks to <b>Tactics</b> from round 1, any two sides will do. Build a second army, put it next to it and buy power – yours was halved at the start of the turn.',
+  'Zwei Armeen reichen.': 'Two armies are enough.',
+  'Von dort käme die Armee in diesem Zug nicht zur englischen.': 'From there the army would not reach the English one this turn.',
+  'Zieh die Armee direkt neben die englische.': 'Move the army right next to the English one.',
+  'Nicht neben Englands Stadt – hier geht es nur um die Armee.': 'Not next to England\'s city – this is only about the army.',
+  'Erst beide Armeen in Stellung – sonst fehlen dir womöglich die Münzen für die zweite.':
+    'First get both armies into position – otherwise you may lack the coins for the second one.',
+  'Die englische Armee stünde noch – und griffe wieder an.': 'The English army would still be standing – and would attack again.',
+  'Flankiert wird am Ende deines Zugs – dann ist die Armee weg. Städte lassen sich nicht flankieren, die muss man belagern.':
+    'Flanking happens at the end of your turn – then the army is gone. Cities cannot be flanked, they have to be besieged.',
+  '<b>Eisenverarbeitung</b> (Militär): Macht kostet dann 4 🪙 statt 5 – und Macht entscheidet jeden Kampf.':
+    '<b>Ironworking</b> (Military): power then costs 4 🪙 instead of 5 – and power decides every fight.',
+  '<b>Demokratie</b> (Spezial) öffnet das Mittelalter in Spezial – dort liegt die <b>Theologie</b>, die deine Siegschwelle senkt.':
+    '<b>Democracy</b> (Special) opens the Middle Ages in Special – that is where <b>Theology</b> lies, which lowers your victory threshold.',
+  '<b>Papier</b> (Forschung, Mittelalter): +1 🔬 je Grasland – und es öffnet die Industrialisierung in der Forschung.':
+    '<b>Paper</b> (Research, Middle Ages): +1 🔬 per grassland – and it opens the Industrial Age in Research.',
+  'Jede Münze bringt dir jetzt mehr Macht.': 'Every coin now buys you more power.',
+  'Neu ausgewürfelt – %s, %s: %s. Der Rest fehlt in dieser Partie.': 'Newly rolled – %s, %s: %s. The rest is missing in this game.',
+  'Am Ende deines Zugs wird flankiert.': 'Flanking happens at the end of your turn.',
+
+  /* --- Erstes Spiel: die drei Wege (Wahl auf der Seite vor der Partie; im Panel nur für
+     Spielstände von v92 ohne Weg) */
+  'Wähle deinen Weg zum Sieg.': 'Choose your path to victory.',
+  'Erobere Englands Hauptstadt – das Spiel endet sofort.': 'Conquer England\'s capital – the game ends at once.',
+  'Eine Stadt fällt, wenn dein Angriff in <b>zwei deiner Züge hintereinander</b> höher ist als ihre Verteidigung. Fällt die Hauptstadt, ist das Spiel sofort vorbei.':
+    'A city falls when your attack is higher than its defense in <b>two of your turns in a row</b>. If the capital falls, the game is over at once.',
+  'Im letzten Zug reichte es nicht: Angriff %s, Verteidigung %s.': 'Last turn it was not enough: attack %s, defense %s.',
+  'Belagere Englands Hauptstadt: Am Ende deines Zugs muss dein Angriff höher sein als ihre Verteidigung.':
+    'Besiege England\'s capital: at the end of your turn, your attack must be higher than its defense.',
+  'Angriff <b>%s</b> · Verteidigung <b>%s</b>': 'Attack <b>%s</b> · defense <b>%s</b>',
+  'Dein Angriff reicht noch nicht: Angriff %s, Verteidigung %s.': 'Your attack is not enough yet: attack %s, defense %s.',
+  '<b>Belagerungsmaschinen</b> geben +3 Angriff gegen Städte, und jede Armee neben der Stadt greift mit an. Verteidigung: Bevölkerung + Englands Macht für jede englische Armee daneben.':
+    '<b>Siege engines</b> give +3 attack against cities, and every army next to the city joins the attack. Defense: population + England\'s power for each English army next to it.',
+  'Belagerung 1 von 2. Noch ein Zug, und die Stadt gehört dir.': 'Siege 1 of 2. One more turn and the city is yours.',
+  'England hat nachgerüstet – und deine Macht hat sich halbiert.': 'England has rearmed – and your power has halved.',
+  'Sei am Ende dieses Zugs wieder stärker als Englands Hauptstadt.': 'Be stronger than England\'s capital again at the end of this turn.',
+  'Angriff je Armee = deine Macht + 3 (Belagerungsmaschinen).': 'Attack per army = your power + 3 (siege engines).',
+  'Angriff je Armee = deine Macht – mit Belagerungsmaschinen 3 mehr.': 'Attack per army = your power – 3 more with siege engines.',
+  'Kauf Macht, bis dein Angriff höher ist als die Verteidigung – oder hol eine zweite Armee dazu.':
+    'Buy power until your attack is higher than the defense – or bring in a second army.',
+  'Am Ende einer Runde brauchst du <b>mehr als %s</b> der Weltbevölkerung – im Duell. Mit <b>Theologie</b> reichen mehr als %s.':
+    'At the end of a round you need <b>more than %s</b> of the world population – in a duel. With <b>Theology</b>, more than %s will do.',
+  'Erforsche Theologie.': 'Research Theology.',
+  'Theologie liegt im Feld Spezial im Mittelalter. Dieses Zeitalter öffnet sich mit einer Technologie der Antike im selben Feld: <b>Demokratie</b>.':
+    'Theology is in the Special field, Middle Ages. That age opens with a technology of Antiquity in the same field: <b>Democracy</b>.',
+  'Jetzt reichen dir mehr als %s. Deinen Anteil zeigt die Kopfzeile.': 'Now more than %s will do. The header shows your share.',
+  'Jede Stadt, die wächst oder neu entsteht, bringt dir Bevölkerung. Geprüft wird am Ende jeder Runde, nach Englands Zug.':
+    'Every city that grows or is founded brings you population. It is checked at the end of every round, after England\'s turn.',
+  'Hab am Ende einer Runde mehr als %s der Weltbevölkerung.': 'Have more than %s of the world population at the end of a round.',
+  'Du: <b>%s von %s</b> (%s %) · nötig: mehr als %s %': 'You: <b>%s of %s</b> (%s %) · needed: more than %s %',
+  'Lass alle Städte wachsen (<b>Fähigkeiten</b> → <b>Alle Städte wachsen</b>) und gründe neue. Mit <b>Keramik</b> wächst jede Stadt zweimal pro Runde. Wird Nahrung knapp: <b>Landwirtschaft</b>.':
+    'Let all cities grow (<b>Abilities</b> → <b>Grow all cities</b>) and found new ones. With <b>Pottery</b> every city grows twice per round. If food gets short: <b>Agriculture</b>.',
+  'Die <b>Singularität</b> kostet dich %s 🔬 – bezahlt in einem einzigen Zug – und verlangt in <b>jedem der vier Felder</b> eine Technologie der Moderne.':
+    'The <b>Singularity</b> costs you %s 🔬 – paid in a single turn – and requires a technology of the Modern Age in <b>each of the four fields</b>.',
+  'Mach Forschung billiger: Erforsche die Wissenschaftliche Methode.': 'Make research cheaper: research the Scientific method.',
+  'Sie liegt in Forschung, Industrialisierung. Dieses Zeitalter öffnet sich mit einer Forschungstechnologie des Mittelalters, etwa <b>Papier</b>. Danach kostet jede Technologie 2 bis 10 weniger.':
+    'It is in Research, Industrial Age. That age opens with a research technology of the Middle Ages, such as <b>Paper</b>. After that every technology costs 2 to 10 less.',
+  'Ab jetzt ist jede Technologie billiger – die Singularität kostet nur noch %s 🔬.':
+    'From now on every technology is cheaper – the Singularity costs only %s 🔬.',
+  'Jedes Zeitalter öffnet das nächste im selben Feld. Je mehr 🔬 du einnimmst, desto schneller geht es.':
+    'Each age opens the next one in the same field. The more 🔬 you earn, the faster it goes.',
+  'Erforsche in jedem der vier Felder eine Technologie der Moderne.': 'Research a technology of the Modern Age in each of the four fields.',
+  'Erst das Einkommen: <b>Universitätswesen</b> (+2 🔬 je Bevölkerung), <b>Biologie</b> (+2 🔬 je Grasland), neue Städte bei Gebirge und Wald. Dann in jedem Feld Zeitalter für Zeitalter weiter.':
+    'Income first: <b>Universities</b> (+2 🔬 per population), <b>Biology</b> (+2 🔬 per grassland), new cities near mountains and forest. Then age by age in every field.',
+  'Alle vier Felder haben die Moderne erreicht.': 'All four fields have reached the Modern Age.',
+  'Sparen geht nicht – Wissenschaft verfällt am Zugende. Reicht es nicht, steigere dein Einkommen und versuch es nächste Runde.':
+    'Saving up does not work – science is lost at the end of the turn. If it is not enough, raise your income and try next round.',
+  'Erforsche die Singularität.': 'Research the Singularity.',
+  'Verfügbar: <b>%s</b> von <b>%s</b> 🔬': 'Available: <b>%s</b> of <b>%s</b> 🔬',
+  'Sie steht ganz unten im Technologiebogen. Münzen zählen 2:1 mit.': 'It is at the very bottom of the technology board. Coins count 2:1.',
+  'Angemeldet! Ein Forschungssieg zählt erst am Ende der Runde – England zieht noch einmal.':
+    'Claimed! A research victory only counts at the end of the round – England moves once more.',
 };
 const MISSING = new Set();
 /* Übersetzt einen deutschen Satz. Platzhalter `%s` werden der Reihe nach ersetzt. */

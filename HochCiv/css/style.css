@@ -117,6 +117,24 @@ html.w-narrow .hud-res{gap:4px}
 html.w-narrow .hud-res .res{min-width:0;padding:3px 6px 2px}
 html.w-narrow .hud-res .res u{display:none}
 html.w-narrow .hud-res .res b{font-size:18px}
+/* Laufender Vorrat beim Nachspielen von KI- und Bot-Zügen (v96): was eine Szene ausgibt oder
+   bekommt, erscheint als Marke unter dem Kästchen – „−10" rot, „+7" grün – und vergeht mit der
+   Szene (animVorrat). Unter dem Kästchen, nicht darüber: oben ist der Bildschirmrand. */
+.hud-res .res{position:relative;overflow:visible}
+.res-delta{position:absolute;left:50%;top:calc(100% + 3px);z-index:40;pointer-events:none;
+  padding:2px 8px 3px;border-radius:10px;font:700 14px/1.1 var(--sans);letter-spacing:.01em;
+  color:#fdf7e8;white-space:nowrap;box-shadow:0 1px 0 rgba(0,0,0,.12),0 3px 8px rgba(60,48,20,.25);
+  transform:translateX(-50%);animation:res-delta 1.35s ease-out both}
+.res-delta.minus{background:var(--red)}
+.res-delta.plus{background:#56713f}
+.res-delta.still{animation:none}
+@keyframes res-delta{
+  0%{opacity:0;transform:translate(-50%,-6px) scale(.8)}
+  14%{opacity:1;transform:translate(-50%,0) scale(1.06)}
+  24%{transform:translate(-50%,0) scale(1)}
+  78%{opacity:1;transform:translate(-50%,3px)}
+  100%{opacity:0;transform:translate(-50%,8px)}
+}
 
 /* Karte und Tutorialpanel teilen sich die Fläche zwischen Kopf- und Aktionsleiste.
    Hochkant/schmal untereinander, quer nebeneinander (siehe unten). */
@@ -408,6 +426,12 @@ html.w-side body.tut .toast.show{transform:none}
 .toast.unten,html.w-side body.tut .toast.unten{left:50%;right:auto;top:auto;bottom:calc(11px + var(--safe-b));
   transform:translateX(-50%) translateY(18px);max-width:86%}
 .toast.unten.show,html.w-side body.tut .toast.unten.show{transform:translateX(-50%)}
+/* v94: der Satz zur Szene eines KI- oder Bot-Zugs – zwei Zeilen: was geschieht (mit einem
+   Punkt in der Farbe des Reichs), darunter klein, dass ein Tipp überspringt, und die wievielte */
+.toast.anim b{display:block;font-weight:600}
+.toast.anim small{display:block;font-size:11px;opacity:.72;margin-top:2px}
+.toast.anim .anim-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;
+  vertical-align:0;box-shadow:0 0 0 2px var(--paper)}
 
 /* Die folgenden Klassen setzt syncLayout() auf <html>. Bewusst keine Media Queries:
    im gedrehten Hochformat (html.turn) misst eine Media Query den ungedrehten Viewport

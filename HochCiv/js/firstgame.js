@@ -394,7 +394,11 @@ function fgNurHauptstadt(a) {
   return fgKeineSingularitaet(a);
 }
 const fgZugVorbei = runde => (S.round > runde || (S.round === runde && S.cur !== FG_ICH));
-const fgWiederDran = runde => S.round >= runde && S.cur === FG_ICH && !(typeof ui !== 'undefined' && ui && ui.botLock);
+const fgWiederDran = runde => S.round >= runde && S.cur === FG_ICH && !(typeof ui !== 'undefined' && ui && (ui.botLock || ui.anim));
+/* Werden Englands Züge auf der Karte nachgespielt (v94, js/anim.js) oder – Animationen „Keine" –
+   als Blatt mit „Weiter" gezeigt? Danach richten sich die Sätze dazu. Ohne Oberfläche (test.js):
+   wie das Blatt. */
+const fgAnimAn = () => typeof animAn === 'function' && animAn();
 // Ein Ziel-Weg ist geschafft, sobald das Spiel vorbei ist (Sieg)
 const fgSieg = () => !!S.over;
 
@@ -505,7 +509,8 @@ const FG_STEPS = [
   },
   {
     id: 'zug1', runde: 1, t: 'Zug beenden', zug: true, sofort: true,
-    info: () => T('Dann ist England dran. Ein Blatt zeigt, was es getan hat – mit <b>Weiter</b> kommst du zurück.'),
+    info: () => fgAnimAn() ? T('Dann ist England dran – auf der Karte siehst du, was es tut. Alles steht auch im Protokoll.')
+      : T('Dann ist England dran. Ein Blatt zeigt, was es getan hat – mit <b>Weiter</b> kommst du zurück.'),
     ziel: () => T('Beende deinen Zug.'),
     tipp: () => T('Unten rechts: <b>Zug beenden</b>.'),
     leiste: ['#a-end'],
@@ -1365,11 +1370,13 @@ function fgRenderPanel() {
   const teile = [];
   const gut = S.fg.gut && FG_BY_ID[S.fg.gut] && FG_BY_ID[S.fg.gut].gut;
   if (gut && !england) teile.push(`<div class="fg-gut"><b>✓</b> ${gut()}</div>`);
-  const ziel = england ? T('Lies, was England getan hat, und tippe dann auf Weiter.') : st.ziel ? st.ziel() : '';
+  const ziel = england ? (fgAnimAn() ? T('Schau auf der Karte zu, was England tut.') : T('Lies, was England getan hat, und tippe dann auf Weiter.'))
+    : st.ziel ? st.ziel() : '';
   const stand = !england && st.stand ? st.stand() : '';
   if (ziel) teile.push(`<p class="tut-task fg-ziel"><b>${T('Ziel:')}</b> ${ziel}${stand ? `<span class="fg-stand">${stand}</span>` : ''}</p>`);
   if (!england && S.fg.tipp === st.id && st.tipp) teile.push(`<div class="fg-tipp"><b>💡 ${T('So geht es')}</b>${st.tipp()}</div>`);
-  const info = england ? T('Im Blatt steht, was England tut.') : st.info ? st.info() : '';
+  const info = england ? (fgAnimAn() ? T('Ein Tipp auf die Karte überspringt. Alles steht auch im Protokoll.') : T('Im Blatt steht, was England tut.'))
+    : st.info ? st.info() : '';
   if (info) teile.push(`<p>${info}</p>`);
   if (st.ende) teile.push(fgEndeKnoepfe());
   $('tut-body').innerHTML = teile.join('');
@@ -1397,13 +1404,13 @@ function fgPruefe() {
   const st = fgSchritt();
   if (!st) return;
   if (st.zurueck && st.zurueck()) { fgNachholen(); return redraw(); }
-  if (!st.fertig() || ui.botLock || ui.combat || ui.fg.timer) return;
+  if (!st.fertig() || ui.botLock || ui.combat || ui.anim || ui.fg.timer) return;
   const id = st.id;
   const go = () => {
     ui.fg.timer = null;
     if (!fgAn() || S.fg.schritt !== id) return;
     const jetzt = fgSchritt();
-    if (!jetzt.fertig() || ui.botLock || ui.combat) return;
+    if (!jetzt.fertig() || ui.botLock || ui.combat || ui.anim) return;
     if (!jetzt.lassen && !S.over) { closeSheet(); closeModal(); }
     fgVor();
     redraw();

@@ -14,6 +14,11 @@
         Vorteil des Startspielers heraus; dazu die Siege getrennt nach Startspieler
    node tools_ki.js selbst  [n] [reiche=2] [stufe=schwer] [events] [wonders]
         KI gegen KI, dazu: in welcher Runde und wie die Partien enden
+   node tools_ki.js methode [n] [reiche=2] [stufe=schwer] [events] [wonders]
+        v96: die Wissenschaftliche Methode zuerst gegen die Reihenfolge bis v95, gepaart wie
+        „stufen" (jeder Startwert zweimal, die Fassungen tauschen die Plätze; zu viert zwei
+        gegen zwei, abwechselnd) – dazu, wie viel Wissenschaft jede Fassung in die Forschung
+        steckt und wie viele Technologien sie bis Runde 4 hat
    node tools_ki.js vorstoss [n] [reiche=4] [runde=4] [armeen=3] [macht=4] [art=allin] [stufe=schwer]
         Abwehr: alle spielen als KI bis zur Runde, dann wird ein Platz zum Menschen – seine
         Armeen stehen einen Zug vor der nächsten KI-Hauptstadt, mit dieser Macht. Die KI
@@ -52,16 +57,18 @@ const flag = k => args.includes(k);
    Flanken zuerst liefen (damals verglich der Haken mit „erst die Städte"). */
 if (flag('reihenfolge') || flag('kampflaenge')) {
   const echt = combatPhase;
+  // Macht wie in der Regel (seit v94) einmal für die ganze Phase – verglichen wird nur die Reihenfolge
   const anderePhase = (S, pi) => {
+    const macht = S.players.map((_, i) => powerOf(S, i));
     const spots = flankSpotsOf(S, pi);
     for (const enemy of S.armies.slice())
-      if (enemy.owner !== pi && canFlank(S, pi, enemy, spots) && powerOf(S, pi) > powerOf(S, enemy.owner))
+      if (enemy.owner !== pi && canFlank(S, pi, enemy, spots) && macht[pi] > macht[enemy.owner])
         S.armies = S.armies.filter(a => a !== enemy);
     for (const city of S.cities.slice()) {
       if (city.owner === pi) continue;
       const sk = pi + '|' + city.id, atk = attackersOn(S, pi, city);
       if (!atk.length) { delete S.sieges[sk]; continue; }
-      if (attackValue(S, pi, atk.length) > defenseValue(S, city)) {
+      if (attackValue(S, pi, atk.length, macht[pi]) > defenseValue(S, city, macht[city.owner])) {
         S.sieges[sk] = (S.sieges[sk] || 0) + 1;
         if (S.sieges[sk] >= 2) captureCity(S, pi, city);
       } else S.sieges[sk] = 0;
@@ -106,7 +113,8 @@ const CIVK = CIVS.map(c => c.k);
 
 /* Aufbau wie im Spiel: Plättchenplan, Vorabwurf, jeder Platz legt (KI selbst, Bots
    zufällig), dann newGame mit Karte, Verfügbarkeiten und Wunderstapel. */
-function partie(players, seed, start) {
+// `vorbereiten(S)`: Messhaken (v96), läuft gleich nach newGame – etwa um Plätze zu markieren
+function partie(players, seed, start, vorbereiten) {
   const cfg = {
     seed, players, duel: players.length === 2, events: flag('events'), eventMode: 'hard',
     wonders: flag('wonders'), startPlayer: start, oldTree: flag('alterbaum'),
@@ -121,6 +129,7 @@ function partie(players, seed, start) {
   });
   Object.assign(cfg, { map: tileMap(plan), avail: setup.avail, wpool: setup.wpool });
   const S = newGame(cfg);
+  if (vorbereiten) vorbereiten(S);
   const zeiten = [], fehler = [];
   let guard = 0;
   while (!S.over && guard++ < 400) {
@@ -303,6 +312,59 @@ if (modus === 'duell') {
   bericht(`KI gegen KI (${stufe}), ${n} Reiche`, l, (S, i) => 'Platz ' + S.players[i].slot);
   console.log('   ' + Object.entries(nachRunde).sort((a, b) => +a[0].split('Runde ')[1] - +b[0].split('Runde ')[1])
     .map(([k, v]) => `${k}: ${v}`).join(' · '));
+} else if (modus === 'methode') {
+  /* v96 (Anweisung des Autors): die KI erforscht die Wissenschaftliche Methode vor den übrigen
+     Technologien eines Zugs (kiMethodeZuerst, dazu neu planen, sobald eine Forschung sie verfügbar
+     macht – kiMethodeOffen). Die Fassung bis v95 bekommt beide Haken abgeschaltet: dann plant
+     kiPlan Zeichen für Zeichen wie bis v95 (einmal nachgeprüft: zwölf Partien mit allen Stufen,
+     dieselben Protokolle wie der Planer von v95; test.js prüft die Gegenprobe in zwei Lagen).
+     Markiert wird je Platz. */
+  const n = +opt('reiche', 2), stufe = opt('stufe', 'schwer'), l = [];
+  const zuerst = kiMethodeZuerst, offen = kiMethodeOffen;
+  kiMethodeZuerst = function (S, pi) { return S.players[pi].methodeAlt ? null : zuerst.apply(this, arguments); };
+  kiMethodeOffen = function (S, pi) { return S.players[pi].methodeAlt ? false : offen.apply(this, arguments); };
+  // Wissenschaft in der Forschung je Fassung (nur auf dem echten Spielstand) und Technologien nach Runde 4
+  const forschung = { alt: 0, neu: 0 }, techs4 = { alt: [], neu: [] };
+  const dr = doResearch;
+  doResearch = function (X, pi) {
+    const b = X.players[pi].res.sci, r = dr.apply(this, arguments);
+    if (!X.kiSim && !r) forschung[X.players[pi].methodeAlt ? 'alt' : 'neu'] += b - X.players[pi].res.sci;
+    return r;
+  };
+  const et = endTurn;
+  endTurn = function (X) {
+    const r0 = X.round, out = et.apply(this, arguments);
+    if (r0 === 4 && X.round === 5) X.players.forEach(p => techs4[p.methodeAlt ? 'alt' : 'neu'].push(Object.keys(p.techs).filter(k => p.techs[k]).length));
+    return out;
+  };
+  for (let g = 0; g < N; g++) for (const tausch of [false, true]) {
+    const players = [];
+    for (let i = 0; i < n; i++) players.push(kiSitz(CIVK[(g + i) % 4], stufe, g, i));
+    l.push(partie(players, 13000 + g, g % n, S => S.players.forEach(p => { p.methodeAlt = (p.slot % 2 === 0) === tausch; })));
+  }
+  bericht(`Methode zuerst (v96) gegen die Reihenfolge bis v95, ${n} Reiche, KI ${stufe}, gepaart`, l,
+    (S, i) => S.players[i].methodeAlt ? 'bis v95' : 'v96');
+  const t = {};
+  for (const { S } of l) {
+    if (!S.over) continue;
+    const st = S.players[S.startIdx].methodeAlt ? 'bis v95' : 'v96', ws = S.over.winners || [S.over.winner];
+    const x = t[st] || (t[st] = { n: 0, w: 0 });
+    x.n++;
+    if (ws.some(w => (S.players[w].methodeAlt ? 'bis v95' : 'v96') === st)) x.w++;
+  }
+  const mittel = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN;
+  // Standardfehler des Unterschieds der Mittel (Reiche als unabhängig gezählt – grob)
+  const se = (a, b) => {
+    const v = x => { const m = mittel(x); return x.reduce((s, y) => s + (y - m) ** 2, 0) / Math.max(1, x.length - 1); };
+    return Math.sqrt(v(a) / a.length + v(b) / b.length);
+  };
+  const siegeNeu = l.filter(({ S }) => S.over && (S.over.winners || [S.over.winner]).some(w => !S.players[w].methodeAlt)).length;
+  const z = (siegeNeu - l.length / 2) / Math.sqrt(l.length / 4);
+  console.log('   ' + Object.entries(t).map(([k, v]) => `beginnt ${k}, gewinnt ${k} ${v.w}/${v.n}`).join(' · ') +
+    ` · Siege v96 ${(100 * siegeNeu / l.length).toFixed(1)} % (z = ${z.toFixed(2)})` +
+    ` · Wissenschaft in Forschung: v96 ${forschung.neu}, bis v95 ${forschung.alt}` +
+    ` · Technologien nach Runde 4: v96 ${mittel(techs4.neu).toFixed(2)}, bis v95 ${mittel(techs4.alt).toFixed(2)}` +
+    ` (Unterschied ${(mittel(techs4.neu) - mittel(techs4.alt)).toFixed(2)} ± ${se(techs4.neu, techs4.alt).toFixed(2)})`);
 } else {
   console.log('Unbekannter Modus. Siehe Kopf der Datei.');
   process.exit(1);

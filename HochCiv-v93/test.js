@@ -1,6 +1,6 @@
 /* Prüft die Regelmaschine gegen die Beispiele aus dem Regelheft. */
 const fs = require('fs'), vm = require('vm');
-for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/tutorial.js'])
+for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/tutorial.js', 'js/firstgame.js'])
   vm.runInThisContext(fs.readFileSync(__dirname + '/' + f, 'utf8'));
 
 let fails = 0;
@@ -89,6 +89,98 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   tiles.split('').forEach(t => { const y = tileYield(S, 0, t); sum[0] += y[0]; sum[1] += y[1]; sum[2] += y[2]; });
   const py = cityPopYield(S, 0), pop = 4;
   eq([sum[0] + py[0] * pop, sum[1] + py[1] * pop, sum[2] + py[2] * pop], [25, 29, 13], 'Kampfbeispiel: Einkommen');
+}
+
+/* --- Ertragstechnologien (v88, Anweisung des Autors): innerhalb eines Feldes schließt die
+   teurere die billigeren auf demselben Ziel (Geländeart oder je Bevölkerung) ein – sie setzt
+   den Bonus, statt ihn zu erhöhen. Verschiedene Felder addieren sich. */
+{
+  const y = (techs, t) => tileYield(mk('griechenland', techs), 0, t);
+  const py = techs => cityPopYield(mk('griechenland', techs), 0);
+  // Die Beispiele des Autors (Wald hat 1 Münze Grundertrag, Meer auch)
+  eq([['mathematik'], ['elektrizitaet'], ['ki'], ['mathematik', 'elektrizitaet', 'ki'], ['mathematik', 'ki']]
+    .map(ts => y(ts, 'W')), [[1, 0, 1], [2, 0, 1], [3, 0, 1], [3, 0, 1], [3, 0, 1]],
+    'Wald: Mathematik +1, Elektrizität +2, KI +3 Wissenschaft – mit allen dreien weiter +3');
+  eq([y(['containerlogistik'], 'M'), y(['fischerei', 'segeln', 'containerlogistik'], 'M')], [[0, 2, 2], [0, 2, 2]],
+    'Containerlogistik setzt das Meer auf +2 Nahrung und +1 Münze, allein wie mit Fischerei und Segeln');
+  eq([y(['fischerei'], 'M'), y(['segeln'], 'M'), y(['segeln', 'fischerei'], 'M')], [[0, 1, 1], [0, 2, 1], [0, 2, 1]],
+    'Meer: Fischerei +1 Nahrung, Segeln +2 (auch mit Fischerei)');
+  eq(y(['containerlogistik', 'astronomie'], 'M'), [1, 2, 2], 'verschiedene Felder addieren sich: Astronomie (Forschung) kommt dazu');
+  eq([y(['gruene_revolution'], 'G'), y(['landwirtschaft', 'gruene_revolution'], 'G'), y(['biologie', 'gruene_revolution'], 'G'),
+    y(['papier', 'biologie', 'landwirtschaft'], 'G')], [[0, 2, 1], [0, 2, 1], [2, 2, 1], [2, 2, 0]],
+    'Grasland: Grüne Revolution +1 Nahrung +1 Münze, Biologie +2 Wissenschaft, die beiden Ketten addieren sich');
+  eq([py(['universitaet']), py(['schrift', 'universitaet']), py(['robotik']), py(['fliessband', 'robotik']),
+    py(['schrift', 'robotik'])], [[3, -1, 1], [3, -1, 1], [1, -1, 3], [1, -1, 3], [2, -1, 3]],
+    'je Bevölkerung: Universitätswesen +2 Wissenschaft, Robotik +2 Münzen, auch ohne Schrift bzw. Fließband');
+  eq([y(['chemie', 'bewaesserung'], 'B'), y(['buchdruck', 'muehlentechnik'], 'F'), y(['kunstduenger', 'ki'], 'W')],
+    [[2, 1, 1], [1, 1, 2], [3, 1, 1]], 'Einzelglieder: Gebirge, Fluss, Kunstdünger neben der Waldkette');
+  // Was nicht aus Technologien kommt, addiert sich wie bisher
+  eq(tileYield(mkA('russland', 'basis', ['ki', 'kunstduenger']), 0, 'W'), [3, 2, 1], 'Taiga (Russland) kommt zu Kunstdünger und KI dazu');
+  // Wer eine Kette ganz hat, steht wie bis v87, als jede Technologie ihren Zuwachs addierte
+  const keys = Object.keys(YIELD_TECHS);
+  const alle = mk('griechenland', keys);
+  eq(['G', 'W', 'B', 'F', 'M', 'I'].map(t => tileYield(alle, 0, t)).concat([cityPopYield(alle, 0)]),
+    [[2, 2, 1], [3, 1, 1], [2, 1, 1], [1, 1, 2], [1, 2, 2], [1, 1, 1], [3, -1, 3]],
+    'alle Ertragstechnologien: dieselben Erträge wie bis v87 (Insel ohne Technologie)');
+  eq(keys.filter(k => !TECH_BY_KEY[k]), [], 'jede Ertragstechnologie gibt es');
+  // Die Ketten: je Ziel und Feld, nach Grundkosten, jedes Glied mit der Summe bis zu sich
+  const kette = on => (YIELD_CHAINS[on] || []).map(ch => ch.map(g => g.k + ' ' + g.y.join('/')));
+  eq(kette('W'), [['mathematik 1/0/0', 'elektrizitaet 2/0/0', 'ki 3/0/0'], ['kunstduenger 0/1/0']], 'Ketten im Wald');
+  eq(kette('M'), [['astronomie 1/0/0'], ['fischerei 0/1/0', 'segeln 0/2/0', 'containerlogistik 0/2/1']], 'Ketten im Meer');
+  eq(kette('G'), [['papier 1/0/0', 'biologie 2/0/0'], ['landwirtschaft 0/1/0', 'gruene_revolution 0/1/1']], 'Ketten im Grasland');
+  eq(kette('pop'), [['schrift 1/0/0', 'universitaet 2/0/0'], ['fliessband 0/0/1', 'robotik 0/0/2']], 'Ketten je Bevölkerung');
+  eq([kette('B'), kette('F'), kette('I')], [[['chemie 1/0/0'], ['bewaesserung 0/1/0']], [['buchdruck 1/0/0'], ['muehlentechnik 0/0/1']], []],
+    'Gebirge und Fluss: ein Glied je Feld, Insel keins');
+  const glieder = Object.values(YIELD_CHAINS).flat();
+  eq(glieder.flat().map(g => g.k).sort(), keys.slice().sort(), 'jede Ertragstechnologie steht in genau einer Kette');
+  eq(glieder.filter(ch => new Set(ch.map(g => TECH_BY_KEY[g.k].f)).size !== 1).length, 0, 'eine Kette bleibt in ihrem Feld');
+  // Sortiert wird nach t.c – im alten Techtree (Tutorial) und im Marathon muss es dieselbe Reihe sein
+  const reihe = (X, ch) => ch.map(g => TECH_BY_KEY[g.k]).sort((a, b) => techBase(X, a) - techBase(X, b)).map(t => t.k).join();
+  eq([null, { oldTree: true }, { marathon: true }].map(X => glieder.filter(ch => reihe(X, ch) !== ch.map(g => g.k).join()).length),
+    [0, 0, 0], 'Reihenfolge jeder Kette: Standard, alter Techtree und Marathon gleich');
+  /* Gegenprobe ohne YIELD_CHAINS: je Ziel und Feld zählt jeder Zuwachs bis zur teuersten
+     erforschten Technologie, dazu der Grundertrag – über zufällige Techstände. */
+  const ref = (owned, on) => {
+    const out = (on === 'pop' ? CITY_YIELD : TERRAIN[on].yield).slice();
+    for (let f = 0; f < 4; f++) {
+      const feld = TECHS.filter(t => YIELD_TECHS[t.k] && YIELD_TECHS[t.k].on === on && t.f === f);
+      const top = Math.max(-1, ...feld.filter(t => owned.includes(t.k)).map(t => t.c));
+      for (const t of feld) if (t.c <= top) YIELD_TECHS[t.k].y.forEach((n, i) => { out[i] += n; });
+    }
+    return out;
+  };
+  let zufall = 4711, n = 0;
+  const rnd = () => (zufall = (zufall * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const R = mk('griechenland'), abw = [];
+  for (let k = 0; k < 400; k++) {
+    const owned = keys.filter(() => rnd() < 0.45);
+    R.players[0].techs = {}; owned.forEach(t => { R.players[0].techs[t] = true; });
+    for (const on of ['G', 'W', 'B', 'F', 'M', 'I', 'pop']) {
+      n++;
+      const got = on === 'pop' ? cityPopYield(R, 0) : tileYield(R, 0, on);
+      if (JSON.stringify(got) !== JSON.stringify(ref(owned, on))) abw.push(on + ':' + owned.join('+'));
+    }
+  }
+  eq([abw.slice(0, 2), n], [[], 2800], 'Gegenprobe: 400 zufällige Techstände × 7 Ziele wie nach der Regel gerechnet');
+  // Die Techtexte nennen die Summe, die ihr Glied setzt – deutsch und englisch. Seit v89 ohne
+  // „(inkl. …)" (Anweisung des Autors); die Regel steht im Regelbogen.
+  const ZIEL = { de: { G: 'Grasland', W: 'Wald', B: 'Gebirge', F: 'Fluss', M: 'Meer', pop: 'Je Bevölkerung' },
+    en: { G: 'Grassland', W: 'Forest', B: 'Mountains', F: 'River', M: 'Sea', pop: 'Per population' } };
+  const ART = { de: [['Wissenschaft', 'Wissenschaft'], ['Nahrung', 'Nahrung'], ['Münze', 'Münzen']],
+    en: [['science', 'science'], ['food', 'food'], ['coin', 'coins']] };
+  const de = k => DATA_DE ? DATA_DE.tech[k] : [TECH_BY_KEY[k].n, TECH_BY_KEY[k].e];
+  const tx = (lang, k) => lang === 'de' ? de(k) : DATA_EN.tech[k];
+  const soll = (lang, on, ch, i) => ZIEL[lang][on] + ': ' +
+    ch[i].y.map((v, j) => v ? `+${v} ${ART[lang][j][v > 1 ? 1 : 0]}` : '').filter(Boolean).join(', ');
+  const falsch = [];
+  for (const on of Object.keys(YIELD_CHAINS)) for (const ch of YIELD_CHAINS[on]) ch.forEach((g, i) => {
+    for (const lang of ['de', 'en']) if (tx(lang, g.k)[1] !== soll(lang, on, ch, i)) falsch.push(`${lang}:${g.k} „${tx(lang, g.k)[1]}" statt „${soll(lang, on, ch, i)}"`);
+  });
+  eq(falsch, [], 'jeder Ertragstext (deutsch und englisch) nennt die Summe, die sein Glied setzt');
+  eq(de('ki')[1], 'Wald: +3 Wissenschaft', 'so liest sich das: Künstliche Intelligenz');
+  eq(DATA_EN.tech.containerlogistik[1], 'Sea: +2 food, +1 coin', '… und Containerlogistik englisch');
+  eq(TECHS.filter(t => /inkl\.|incl\./.test(de(t.k)[1] + ' ' + DATA_EN.tech[t.k][1])).map(t => t.k), [],
+    'kein Techtext sagt mehr „inkl." bzw. „incl." (v89)');
 }
 
 /* --- Griechische Technologiekosten aus dem Beispiel
@@ -223,7 +315,9 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 /* --- Bürokratie (v86, Anweisung des Autors): verdoppelt auch Handelsrouten, Ökologie und den
    Nahrungsposten der Gentechnik – „sie gehören eigentlich zur Hauptstadt". Wallfahrt und
    Seemacht nicht (nicht genannt). Bei einer Revolution produziert die Hauptstadt selbst
-   nichts; die drei Posten laufen weiter, verdoppelt (Auslegung, ANNAHMEN v86). */
+   nichts; die drei Posten laufen weiter, verdoppelt (Auslegung, ANNAHMEN v86).
+   Seit v88 (Anweisung des Autors) sagt die Übersicht nicht mehr dazu, dass die Bürokratie
+   mitgerechnet ist – keine Zeile trägt mehr `note`, der Name bleibt der Name. */
 {
   const zeile = (X, n) => (incomeBreakdown(X, 0).extra || []).find(e => e.name === n);
   const summeGehtAuf = X => {
@@ -240,10 +334,10 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     X.roads[key(nb[0], nb[1])] = stufe;
     return X;
   };
-  const route = (techs, stufe) => { const z = zeile(mitRoute(techs, stufe), 'Handelsrouten'); return z && [z.y, z.note]; };
-  eq(route([], 1), [[1, 1, 1], null], 'Handelsroute über Straße: +1');
-  eq(route(['buerokratie'], 1), [[2, 2, 2], 'Bürokratie ×2'], 'mit Bürokratie +2, und die Zeile sagt warum');
-  eq(route(['buerokratie'], 2), [[4, 4, 4], 'Bürokratie ×2'], 'über Eisenbahn mit Bürokratie +4');
+  const route = (techs, stufe) => { const z = zeile(mitRoute(techs, stufe), 'Handelsrouten'); return z && [z.y, 'note' in z]; };
+  eq(route([], 1), [[1, 1, 1], false], 'Handelsroute über Straße: +1');
+  eq(route(['buerokratie'], 1), [[2, 2, 2], false], 'mit Bürokratie +2 – ohne Zusatz am Namen (v88)');
+  eq(route(['buerokratie'], 2), [[4, 4, 4], false], 'über Eisenbahn mit Bürokratie +4');
   eq(summeGehtAuf(mitRoute(['buerokratie'], 2)), true, 'Zeilen und Summe gehen auf (Handelsroute, Bürokratie)');
   {
     // Revolution: Hauptstadt still, die Handelsroute bleibt – verdoppelt
@@ -261,7 +355,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     eq(b.total[0], 2 * a.total[0], 'eine Stadt: Bürokratie verdoppelt die Wissenschaft');
     eq([g(ohne).y[1], g(mit).y[1]], [Math.floor(a.total[0] / GENE_SCI_PER_FOOD), 2 * Math.floor(b.total[0] / GENE_SCI_PER_FOOD)],
       'Gentechnik: Bürokratie verdoppelt den Posten zusätzlich');
-    eq([g(ohne).note, g(mit).note], [null, 'Bürokratie ×2'], 'die Zeile sagt es');
+    eq(['note' in g(ohne), 'note' in g(mit)], [false, false], 'die Zeile sagt es nicht (v88)');
     eq(summeGehtAuf(mit), true, 'Zeilen und Summe gehen auf (Gentechnik, Bürokratie)');
   }
   // Nicht genannt, nicht verdoppelt: Wallfahrt und Seemacht
@@ -316,9 +410,127 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(attackValue(S, 0, 2), 14, 'zwei Armeen greifen mit 14 an (7 je Armee)');
   eq(attackValue(S, 0, 3), 21, 'drei Armeen mit 21');
   S.players[0].techs.belagerung = true;
-  eq(attackValue(S, 0, 2), 24, 'Belagerungsmaschinen: (7+5) je Armee');
+  eq(attackValue(S, 0, 2), 20, 'Belagerungsmaschinen: (7+3) je Armee (v88; bis v87 +5)');
   S.players[0].techs.dynamit = true;
-  eq(attackValue(S, 0, 2), 48, 'Dynamit verdoppelt danach');
+  eq(attackValue(S, 0, 2), 40, 'Dynamit verdoppelt danach');
+  // Die KI rechnet mit demselben Wert, und die Texte nennen ihn (v88)
+  eq([kiAttackPer(S, 0, 7), SIEGE_BONUS], [20, 3], 'KI: (7+3)·2 je Armee mit Dynamit');
+  const de = DATA_DE ? DATA_DE.tech.belagerung[1] : TECH_BY_KEY.belagerung.e;
+  eq([de, DATA_EN.tech.belagerung[1]], [`+${SIEGE_BONUS} Angriff gegen Städte`, `+${SIEGE_BONUS} attack against cities`],
+    'Techtext nennt den Bonus, deutsch und englisch');
+  /* Das Tutorial rechnet ihn vor: Belagerungsmaschinen und 3 Macht gegen Verteidigung 3. Die
+     Zahlen stehen fest im Text (deutsch in tutorial.js, englisch in i18n.js) – hier gebunden. */
+  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
+  const enTut = Object.entries(UI_EN).filter(([k]) => /Belagerungsmaschinen<\/b> forschen \(/.test(k)).map(([, v]) => v);
+  eq([[...tut.matchAll(/Belagerungsmaschinen<\/b> forschen \(\+(\d+) Angriff gegen Städte\)/g)].map(m => +m[1]),
+    [...tut.matchAll(/greift deine Armee mit <b>(\d+) statt 3<\/b>/g)].map(m => +m[1])],
+    [[SIEGE_BONUS, SIEGE_BONUS], [3 + SIEGE_BONUS, 3 + SIEGE_BONUS]], 'Tutorial (deutsch, lang und kurz): +3, also 6 statt 3');
+  eq([enTut.length, enTut.every(v => v.includes(`(+${SIEGE_BONUS} attack against cities)`) &&
+    v.includes(`<b>${3 + SIEGE_BONUS} instead of 3</b>`))], [2, true], 'Tutorial (englisch): dieselben Zahlen');
+}
+
+/* --- Kampfphase (v91, Anweisung des Autors): erst die Städte, dann wird flankiert – wie bis
+   v89. v90 hatte es umgedreht, und dann fielen Städte, die verteidigt waren. Eine Armee an ihrer
+   Stadt verteidigt diese also mit, auch wenn sie im selben Zug noch weggeflankt wird. Dazu die
+   Einträge für das Nachspielen (`rec`, seit v90): Art, Feld, Werte, Ausgang, beteiligte Felder,
+   Stand davor – in der Reihenfolge, in der gerechnet wird. */
+{
+  // Englands Hauptstadt C, daneben Englands Armee E; Griechenland flankiert E von G1 und G2
+  // (gegenüber), G1 steht zugleich an C. Griechenland Macht 5, England 3, C mit 3 Bevölkerung:
+  // Verteidigung mit E 3 + 3 = 6 ≥ 5 – die Stadt hält; danach fällt E (5 > 3).
+  const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 9 });
+  const C = capitalOf(S, 1); C.pop = 3;
+  const frei = (r, c) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c);
+  let lage = null;
+  for (const [er, ec] of neighbors(C.r, C.c)) {
+    if (lage || !frei(er, ec)) continue;
+    for (const [g1r, g1c] of neighbors(er, ec)) {
+      if (lage || !frei(g1r, g1c) || hexDistance(g1r, g1c, C.r, C.c) !== 1) continue;
+      const g2 = neighbors(er, ec).find(([r, c]) => frei(r, c) && hexDistance(r, c, C.r, C.c) === 2 &&
+        hexOpposite(er, ec, g1r, g1c, r, c));
+      if (g2) lage = { E: [er, ec], G1: [g1r, g1c], G2: g2 };
+    }
+  }
+  eq(!!lage, true, 'Stellung gefunden: Armee an der Stadt, von zwei Seiten flankierbar');
+  const E = { id: 951, owner: 1, r: lage.E[0], c: lage.E[1], mp: 0, born: 0 };
+  S.armies.push(E,
+    { id: 952, owner: 0, r: lage.G1[0], c: lage.G1[1], mp: 0, born: 0 },
+    { id: 953, owner: 0, r: lage.G2[0], c: lage.G2[1], mp: 0, born: 0 });
+  S.players[0].power = 5; S.players[1].power = 3;
+  eq([defenseValue(S, C), attackValue(S, 0, attackersOn(S, 0, C).length)], [6, 5],
+    'vor dem Kampf: Verteidigung 6 (mit der Armee), Angriff 5');
+  const kopie = (mitArmee, belagerung) => {
+    const X = JSON.parse(JSON.stringify(Object.assign({}, S, { log: [] })));
+    if (mitArmee && !X.armies.some(a => a.id === 951)) X.armies.push(Object.assign({}, E));
+    X.sieges = belagerung ? { ['0|' + C.id]: belagerung } : {};
+    X.cur = 0;
+    return X;
+  };
+  S.cur = 0;
+  const rec = [], seq = S.logSeq;
+  finishTurn(S, rec);
+  eq([S.armies.includes(E), S.sieges['0|' + C.id] || 0], [false, 0],
+    'erst die Stadt: sie hält (5 ≤ 6, die Armee verteidigt mit) – dann wird die Armee weggeflankt (5 > 3)');
+  eq(logSince(S, seq).filter(l => l.c === 'fight').map(l => /flankiert/.test(l.m) ? 'flanke' : 'stadt'),
+    ['flanke'], 'im Protokoll nur die Flanke (eine Stadt, die ohne laufende Belagerung hält, steht dort nicht)');
+  eq(rec.map(e => [e.art, e.pi, e.gegner, e.r, e.c, e.a, e.d, e.sieg]),
+    [['stadt', 0, 1, C.r, C.c, 5, 6, false], ['flanke', 0, 1, E.r, E.c, 5, 3, true]], 'zwei Einträge: Stadt, dann Flanke');
+  eq([rec[0].von.map(String), rec[1].von.map(String).sort(), rec[0].zug || 0, !!rec[0].genommen, !!rec[0].gebrochen],
+    [[String(lage.G1)], [lage.G1, lage.G2].map(String).sort(), 0, false, false], 'beteiligte Felder und Ausgang');
+  eq([rec[0].snap.armies.some(a => a.id === 951), rec[1].snap.armies.some(a => a.id === 951)], [true, true],
+    'Stand davor: bei der Stadt und bei der Flanke steht die Armee noch');
+  eq(rec[0].snap.cities.find(x => x.id === C.id).pop, 3, '… und die Stadt mit ihrer Bevölkerung davor');
+  // Was der Autor ausschließen will: läuft die Belagerung schon (1/2), hält die verteidigte Stadt
+  // trotzdem – die Belagerung bricht ab, auch wenn ihre Armee danach weggeflankt wird.
+  {
+    const W = kopie(true, 1), r = [];
+    finishTurn(W, r);
+    eq([W.cities.find(x => x.id === C.id).owner, W.sieges['0|' + C.id], W.armies.some(a => a.id === 951), r[0].art, r[0].gebrochen],
+      [1, 0, false, 'stadt', true], 'Belagerung 1/2 und Armee an der Stadt: die Stadt hält, die Belagerung bricht, dann fällt die Armee');
+  }
+  // Zweiter Treffer ohne verteidigende Armee: erobert (3 − 2 = 1 bleibt) bzw. zerstört (bei 2)
+  const nochmal = pop => {
+    const X = kopie(false, 1);
+    X.cities.find(x => x.id === C.id).pop = pop;
+    const r = []; finishTurn(X, r);
+    const e = r.find(x => x.art === 'stadt');
+    return [e.zug, e.genommen, e.zerstoert];
+  };
+  eq([nochmal(3), nochmal(2)], [[2, true, false], [2, true, true]], 'zweiter Treffer: erobert bzw. zerstört');
+  // Ohne `rec` dasselbe Ergebnis (KI, Bots, Tests rechnen so)
+  const Y = kopie(true, 0);
+  finishTurn(Y);
+  eq([Y.armies.some(a => a.id === 951), Y.sieges['0|' + C.id] || 0], [false, 0], 'ohne Aufzeichnung derselbe Ausgang');
+  // Eine Flanke, für die die Macht nicht reicht, ist auch ein Kampf – sie hält
+  const Z = kopie(true, 0); Z.players[0].power = 3;
+  const rz = []; finishTurn(Z, rz);
+  const fz = rz.find(e => e.art === 'flanke');
+  eq([rz.map(e => e.art), fz.a, fz.d, fz.sieg, Z.armies.some(a => a.id === 951)], [['stadt', 'flanke'], 3, 3, false, true],
+    'Flanke 3 gegen 3: ein Kampf nach der Stadt, die Armee hält (Gleichstand hält)');
+}
+
+/* --- Zugfolge nach Plätzen (v90, Anweisung des Autors): mit cfg.seatOrder ziehen die Reiche in
+   der Reihenfolge der Plätze, ohne bleibt es bei Russland → Griechenland → England → Wikinger. */
+{
+  const plaetze = [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }, { civ: 'russland', kind: 'bot' }];
+  // Plättchenkarte (nur dort sitzt eine Zivilisation doppelt): Hauptstädte nach Platz
+  const plan = tilePlan(plaetze.map(p => p.civ), 21), rnd = mapRng(22);
+  plan.seats.forEach(st => botPlaceSeat(plan, st, rnd));
+  const map = tileMap(plan);
+  const A = newGame({ seed: 3, map, players: plaetze.map(p => Object.assign({}, p)), seatOrder: true, startPlayer: 1 });
+  eq(A.players.map(p => [p.civ, p.slot]), [['russland', 0], ['griechenland', 1], ['russland', 2]], 'nach Plätzen: 1, 2, 3');
+  const folge = [];
+  for (let i = 0; i < 4; i++) { folge.push(A.players[A.cur].slot); A.cur = (A.cur + 1) % A.players.length; }
+  eq([A.startIdx, folge], [1, [1, 2, 0, 1]], 'ab dem Startspieler (Platz 2): 2 → 3 → 1 → 2');
+  const B = newGame({ seed: 3, map, players: plaetze.map(p => Object.assign({}, p)), startPlayer: 1 });
+  eq(B.players.map(p => [p.civ, p.slot]), [['russland', 0], ['russland', 2], ['griechenland', 1]],
+    'ohne Schalter nach Zivilisation (bis v89 überall): Platz 1, Platz 3, Platz 2');
+  eq(B.players[B.startIdx].slot, 1, '… der Startspieler bleibt der Platz, nicht die Zivilisation');
+  eq(A.players.map((p, i) => { const c = capitalOf(A, i); const e = map.capitals[p.slot]; return c.r === e.r && c.c === e.c; }),
+    [true, true, true], 'jede Hauptstadt steht auf dem Startfeld ihres Platzes');
+  const vier = CIVS.map(c => ({ civ: c.k, kind: 'bot' }));
+  eq(newGame({ seed: 3, map: MAP_ORIGINAL, players: vier }).players.map(p => p.civ), ORDER.slice(),
+    'klassisch: Russland → Griechenland → England → Wikinger');
 }
 
 /* ==================================================== Bot-Armeeprioritäten
@@ -775,11 +987,26 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 
 /* === Regeln der Hauptvariante (vormals v2) === */
 
-/* Singularität kostet 100 */
+/* Singularität kostet 120 (seit v88, Anweisung des Autors; bis v87 100) */
 {
   const S = mk('griechenland');
-  eq(SINGULARITY.c, 100, 'Singularität-Grundkosten 100');
-  eq(techCost(S, 0, SINGULARITY), 95, 'griechischer Rabatt auch auf Singularität');
+  eq(SINGULARITY.c, 120, 'Singularität-Grundkosten 120');
+  eq(techCost(S, 0, SINGULARITY), 115, 'griechischer Rabatt auch auf Singularität');
+  /* Das Tutorial (Russland, alter Techtree) nennt die Kosten fest im Text: ohne und mit der
+     Wissenschaftlichen Methode. Hier an die Regel gebunden, deutsch und englisch. */
+  const T0 = newGame({ seed: 7, oldTree: true, players: [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }] });
+  const ohne = techCost(T0, 0, SINGULARITY);
+  T0.players[0].techs.wiss_methode = true;
+  const mit = techCost(T0, 0, SINGULARITY);
+  eq([T0.oldTree, ohne, mit], [true, 120, 110], 'Tutorial: Singularität 120, mit der Methode 110');
+  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
+  eq([[...tut.matchAll(/<b>Singularität<\/b>: (\d+) Wissenschaft/g)].map(m => +m[1]),
+    [...tut.matchAll(/mit der wissenschaftlichen Methode (\d+)\./g)].map(m => +m[1])],
+    [[ohne, ohne], [mit]], 'Tutorialtexte (lang und kurz) nennen dieselben Kosten');
+  const en = Object.values(UI_EN).join('\n');
+  eq([[...en.matchAll(/<b>Singularity<\/b>: (\d+) science/g)].map(m => +m[1]),
+    [...en.matchAll(/, (\d+) with the scientific method\./g)].map(m => +m[1])],
+    [[ohne, ohne], [mit]], '… englisch ebenso');
 }
 
 /* Griechenland hat keinen Würfelbonus mehr, der Kostenrabatt bleibt */
@@ -860,6 +1087,41 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(growCity(T, 0, t, 'paid'), null, 'und nochmal bezahlt');
   eq(typeof growCity(T, 0, t, 'paid'), 'string', 'ein vierter Schritt wird abgelehnt');
   eq(t.pop, 6, 'auch so drei Schritte');
+}
+
+/* Dampfmaschine (v89, Anweisung des Autors): wie Keramik ein bezahlter Wachstumsschritt mehr
+   je Stadt und Runde, dazu wie bisher keine Münzkosten. Alle drei Wachstumstechnologien
+   zusammen: 3 bezahlte und 1 kostenloser Schritt. */
+{
+  const S = mk('griechenland', ['dampfmaschine', 'gentechnik']);
+  const c = capitalOf(S, 0); c.pop = 3; c.grown = 0; c.freeUsed = 0; c.born = 0;
+  S.players[0].res = { sci: 0, food: 999, coins: 999 };
+  eq(growLimits(S, 0), { max: 2, paid: 2, free: 0 }, 'Dampfmaschine allein: zwei bezahlte Schritte');
+  eq(growPrice(S, 0, c), { food: 3, coins: 0 }, '… ohne Münzkosten wie bisher');
+  eq([growCity(S, 0, c, 'paid'), growCity(S, 0, c, 'paid')], [null, null], 'zweimal bezahlt gewachsen');
+  eq(canGrowPaid(S, 0, c), 'Diese Runde schon gewachsen.', 'ein dritter bezahlter Schritt nicht');
+  eq([c.pop, S.players[0].res.coins, S.players[0].res.food], [5, 999, 999 - 3 - 4], '3 → 5, nur Nahrung bezahlt');
+  const A = mk('griechenland', ['keramik', 'dampfmaschine', 'verbundwerkstoffe', 'gentechnik']);
+  const a = capitalOf(A, 0); a.pop = 2; a.grown = 0; a.freeUsed = 0; a.born = 0;
+  A.players[0].res = { sci: 0, food: 999, coins: 999 };
+  eq(growLimits(A, 0), { max: 4, paid: 3, free: 1 }, 'Keramik + Dampfmaschine + Verbundwerkstoffe: 3 bezahlt + 1 gratis');
+  eq([growCity(A, 0, a, 'paid'), growCity(A, 0, a, 'free'), growCity(A, 0, a, 'paid'), growCity(A, 0, a, 'paid')],
+    [null, null, null, null], 'vier Schritte in einer Runde, der kostenlose dazwischen');
+  eq([a.pop, canGrow(A, 0, a)], [6, 'Diese Runde schon gewachsen.'], '2 → 6, ein fünfter nicht');
+  eq(growLimits(mk('griechenland', ['keramik', 'dampfmaschine']), 0), { max: 3, paid: 3, free: 0 }, 'Keramik + Dampfmaschine: drei bezahlte');
+  // „Alle Städte wachsen" folgt von selbst: ein Schritt je Tipp, jetzt bis zu drei bezahlte
+  const B = mk('griechenland', ['keramik', 'dampfmaschine', 'gentechnik']);
+  capitalOf(B, 0).born = 0;
+  B.players[0].res = { sci: 0, food: 999, coins: 999 };
+  eq([1, 2, 3, 4].map(() => growAll(B, 0, 'paid').done), [1, 1, 1, 0], 'Sammelaktion: dreimal je ein Schritt, dann nicht mehr');
+  // Texte: Keramik und Dampfmaschine nennen den zusätzlichen Schritt gleich, deutsch und englisch
+  eq([TECH_BY_KEY.keramik.e, TECH_BY_KEY.dampfmaschine.e],
+    ['1× zusätzliches Wachstum pro Stadt', 'Keine Münzkosten für Bevölkerungswachstum; 1× zusätzliches Wachstum pro Stadt'],
+    'Texte deutsch: Keramik im Wortlaut der Dampfmaschine');
+  eq([DATA_EN.tech.keramik[1], DATA_EN.tech.dampfmaschine[1]],
+    ['One extra growth per city', 'No coin cost for population growth; one extra growth per city'], 'englisch ebenso');
+  eq(TECHS.filter(t => /1× zusätzliches Wachstum pro Stadt/.test(t.e)).map(t => t.k).sort(), GROW_EXTRA_PAID.slice().sort(),
+    'genau die Technologien, deren Text den Schritt nennt, geben ihn (GROW_EXTRA_PAID)');
 }
 
 /* nur Verbundwerkstoffe: normales Wachstum + 1x gratis = max 2 */
@@ -1278,7 +1540,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 
 /* Tech-Labels und Sortierung nach Kosten */
 {
-  eq(TECH_BY_KEY.keramik.e, 'Bevölkerung 2× pro Runde wachsen lassen', 'Keramik hat ein eigenständiges Label');
+  eq(TECH_BY_KEY.keramik.e, '1× zusätzliches Wachstum pro Stadt', 'Keramik hat ein eigenständiges Label (seit v89 im Wortlaut der Dampfmaschine)');
   eq(TECH_BY_KEY.verbundwerkstoffe.e, '1× zusätzliches, kostenloses Wachstum pro Stadt', 'Verbundwerkstoffe zeigt das Gratis-Wachstum');
   const prod = techsIn(1, 0).map(t => t.c);
   eq(prod, prod.slice().sort((a, b) => a - b), 'Techs sind nach Kosten sortiert');
@@ -2951,7 +3213,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const k4 = ['mathematik', 'papier', 'chemie', 'computertechnik'].map(k => TECH_BY_KEY[k]);
   eq(k4.map(t => techCost(M, 0, t)), k4.map((t, i) => techCost(N, 0, t) * [2, 3, 4, 5][i]),
     'Marathon: Antike ×2, Mittelalter ×3, Industrialisierung ×4, Moderne ×5');
-  eq([techCost(M, 0, SINGULARITY), techCost(N, 0, SINGULARITY)], [300, 100], 'Singularität 300 (v84; v83: 250)');
+  eq([techCost(M, 0, SINGULARITY), techCost(N, 0, SINGULARITY)], [300, 120], 'Singularität 300 (v84; v83: 250), normal 120 (v88)');
   const gr = M.players.findIndex(p => p.civ === 'griechenland');
   M.players[gr].drafted = ['griechenland:basis', 'russland:basis'];
   eq(techCost(M, gr, TECH_BY_KEY.papier), 6 * 3 - 4, 'Rabatte ziehen danach ab, im Marathon doppelt (v85: Papier 18 − 2 × 2)');
@@ -3528,8 +3790,8 @@ const duellKarte = (civA, civB, seed) => {
     const n = spiel(false, 'basis'), m = spiel(true, 'basis');
     eq([techCost(n.S, n.gr, papier), techCost(m.S, m.gr, papier)], [6 - 2, 18 - 4],
       'Günstige Forschung: Papier normal 6 − 2, im Marathon 18 − 4 (doppelt)');
-    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [100 - 5, 300 - 10],
-      'Singularität: normal 100 − 5, im Marathon 300 − 10');
+    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [120 - 5, 300 - 10],
+      'Singularität: normal 120 − 5, im Marathon 300 − 10');
     eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6, 18], 'ohne die Fähigkeit kein Rabatt');
     [n, m].forEach(x => { x.S.players[x.ru].techs.wiss_methode = true; x.S.players[x.gr].techs.wiss_methode = true; });
     eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6 - 4, 18 - 8],
@@ -3538,8 +3800,8 @@ const duellKarte = (civA, civB, seed) => {
     eq([techCost(n.S, n.gr, chemie), techCost(m.S, m.gr, chemie)],
       [Math.max(0, ch(n) - 3 - 6), Math.max(0, ch(m) - 6 - 12)],
       `beides zusammen, Chemie: normal ${ch(n)} − 3 − 6, im Marathon ${ch(m)} − 6 − 12`);
-    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [100 - 5 - 10, 300 - 10 - 20],
-      'Singularität mit beidem: normal 85, im Marathon 270');
+    eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [120 - 5 - 10, 300 - 10 - 20],
+      'Singularität mit beidem: normal 105, im Marathon 270');
     // Texte: Bogen, Draft und HUD lesen abilEffect, der Techbaum techEffect
     const ab = abilById('griechenland:basis'), gt = abilById('griechenland:gratistech');
     eq(abilEffect(ab, m.S), 'Techs 2/4/6/8/10 günstiger (je Zeitalter, im Marathon doppelt)', 'Fähigkeitstext im Marathon');
@@ -3964,8 +4226,8 @@ const duellKarte = (civA, civB, seed) => {
   add('himeji', 2);
   eq(powerPrice(S, 0), 4, 'Burg Himeji senkt den Machtpreis um 1');
   add('kreml', 3);
-  eq(techCost(S, 0, SINGULARITY), 145, 'Kreml: Singularität +50 (100+50−5 Rabatt)');
-  eq(techCost(S, 1, SINGULARITY), 150, 'der Kreml verteuert Singularität für alle');
+  eq(techCost(S, 0, SINGULARITY), 165, 'Kreml: Singularität +50 (120+50−5 Rabatt)');
+  eq(techCost(S, 1, SINGULARITY), 170, 'der Kreml verteuert Singularität für alle');
   add('zeus', 1);
   eq(powerOf(S, 0), 3, 'Zeusstatue: +3 Macht');
 }
@@ -4868,6 +5130,371 @@ function tutRun() {
   eq(!!S.over, true, 'Partie mit menschlichem Spieler endet (' + (S.over ? S.over.how : 'offen') + ')');
   console.log('       Runde ' + S.round + ', Bevölkerung ' + S.players.map((p, i) => popOf(S, i)).join('/'));
 }
+
+/* ==================================================== Erstes Spiel (v92, umgebaut v93)
+   Eine ganze Partie mit Zielen, Tipps und Schienen (js/firstgame.js). Geprüft wird: der
+   Aufbau (Karte, Würfel, Schritte), dass in den späteren Zeitaltern etwa die Hälfte fehlt,
+   dass die beiden Gründungsrätsel genau eine Lösung haben, dass jeder Weg mit der
+   Musterlösung zum Sieg führt – und zwar auf diesem Weg –, dass die Schienen ablehnen, was
+   den Verlauf verlassen würde, und dass sie auch zufälliges Spiel aushalten, ohne dass eine
+   Lektion übersprungen wird. Die Oberfläche (Seite vor der Partie, blasse Kacheln) fährt
+   smoke.js.
+   ACHTUNG: fgSetup schreibt die globalen S und ui (wie tutorialSetup) – am Ende wird ui
+   zurückgesetzt, sonst griffen die Würfel des Ersten Spiels (fgNextDie) in spätere Partien. */
+// Spielt bis zum Ende oder bis zum Schritt `bis` (dort wird angehalten, bevor er gelöst wird)
+function fgLauf(pfad, opts) {
+  const o = opts || {};
+  if (!o.weiter) fgSetup(pfad);
+  const spur = [];
+  let guard = 0;
+  while (guard++ < 400) {
+    const st = fgSchritt();
+    if (!st || st.ende || st.id === o.bis) break;
+    if (st.fertig()) { fgVor(); continue; }
+    if (o.zufall) { o.zufall(st); fgNachholen(); if (fgSchritt() !== st) continue; }
+    spur.push(st.id + '@' + S.round);
+    st.loesung();
+    fgNachholen();
+  }
+  return spur;
+}
+const fgStand = () => JSON.stringify([S.round, S.over && S.over.how, S.cities, S.armies, S.players.map(p => [p.techs, p.power, p.res])]);
+const FG_GEMEINSAM = FG_STEPS.filter(st => !st.pfad && !st.ende).map(st => st.id);
+{
+  const ids = FG_STEPS.map(st => st.id);
+  eq(new Set(ids).size, ids.length, 'Erstes Spiel: jeder Schritt hat eine eigene id');
+  eq(FG_STEPS.every(st => st.t && typeof st.fertig === 'function'), true, 'jeder Schritt hat Titel und Zielprüfung');
+  eq(FG_STEPS.filter(st => !st.ende).every(st => typeof st.ziel === 'function' && typeof st.loesung === 'function'), true,
+    'jeder Schritt nennt ein Ziel und hat eine Musterlösung');
+  eq(FG_STEPS.filter(st => !st.ende).every(st => typeof st.tipp === 'function'), true, 'und einen Tipp auf Wunsch');
+  eq([FG_GEMEINSAM.length, ...FG_WEGE.map(p => FG_STEPS.filter(st => st.pfad === p).length)], [17, 2, 2, 4],
+    '17 gemeinsame Schritte (Runde 1–4 samt Würfel), dann 2 / 2 / 4 je Weg');
+  eq([FG_GEMEINSAM[0], FG_GEMEINSAM.indexOf('wuerfel') === FG_GEMEINSAM.indexOf('gratis') + 1, FG_STEPS.some(st => st.wahl)],
+    ['hauptstadt', true, false], 'v93: keine Wahl mehr in Runde 5 – der Würfel kommt gleich nach dem kostenlosen Forschen');
+  // Würfel nur im Ersten Spiel: ohne ui.fg bleibt es beim echten Wurf
+  ui = { sel: null, army: null, mode: null, botTimer: null };
+  eq(tutNextDie({ pi: 0, tech: 'schrift' }), null, 'ohne Erstes Spiel lenkt tutNextDie keinen Wurf');
+}
+{
+  fgSetup('militaer');
+  eq([S.map.rows.length, S.map.rows[0].length, S.duel], [10, 13, true], 'Erstes Spiel: Karte 10 × 13, Duell');
+  eq(S.players.map(p => p.civ + ':' + p.kind + ':' + p.ability), ['griechenland:human:basis', 'england:ki:basis'],
+    'Griechenland (Mensch) gegen England (Spielerart KI, nach Drehbuch)');
+  eq(S.cities.map(c => [c.owner, c.r, c.c, c.pop]), [[0, 5, 2, 1], [1, 3, 9, 1]], 'Hauptstädte 5/2 und 3/9');
+  eq([S.cur, S.ev, S.wo, S.oldTree], [FG_ICH, null, false, false], 'Griechenland beginnt, ohne Erweiterungen, im heutigen Techtree');
+  eq([S.fg.pfad, S.fg.schritt], ['militaer', 'hauptstadt'], 'v93: der Weg steht schon vor der ersten Runde fest');
+  eq(TECHS.filter(t => t.age === 0 && S.players[0].avail[t.k]).map(t => t.k).sort(), FG_ANTIKE[FG_ICH].slice().sort(),
+    'Griechenlands Antike: genau die vorgesehenen Technologien');
+  eq(fgGratis().map(t => t.k).sort(), ['mathematik', 'taktik'], 'in Runde 1 kostenlos: Mathematik und Taktik');
+  eq(S.log.filter(l => l.c === 'roll' && /Verfügbarkeit/.test(l.m)).length > 10, true, 'die Würfe stehen trotzdem im Protokoll');
+  fgSetup();
+  eq([S.fg.pfad, /Weg/.test(fgVeto({ art: 'forschen', k: 'mathematik' }) || ''), /Weg/.test(fgZugendeRegel() || '')],
+    [null, true, true], 'ohne Weg (Spielstand von v92) geht nichts, bis er gewählt ist');
+}
+/* Spätere Zeitalter (v93, Anweisung des Autors: „nicht immer alle"): fest, aber wie gewürfelt –
+   etwa die Hälfte, in keinem Feld alle, in keinem keine; alles, was Ziele und Tipps nennen,
+   ist dabei. Die Augen passen zum Ergebnis (4–6 / 1–3) und streuen. */
+{
+  const spaet = TECHS.filter(t => t.age > 0 && techActive({ wo: false }, t));
+  const da = spaet.filter(t => fgVerfuegbar(FG_ICH, t.k));
+  eq([da.length, spaet.length, da.length / spaet.length > 0.4 && da.length / spaet.length < 0.6], [24, 46, true],
+    'Griechenland ab dem Mittelalter: 24 von 46 verfügbar – etwa die Hälfte');
+  const zellen = [];
+  for (let f = 0; f < 4; f++) for (let a = 1; a < 4; a++) {
+    const l = spaet.filter(t => t.f === f && t.age === a), n = l.filter(t => fgVerfuegbar(FG_ICH, t.k)).length;
+    if (!(n >= 1 && n < l.length)) zellen.push(`${FIELDS[f]}/${AGES[a]}: ${n} von ${l.length}`);
+  }
+  eq(zellen, [], 'in jedem Feld und Zeitalter mindestens eine, aber nie alle');
+  const genannt = ['papier', 'universitaet', 'biologie', 'wiss_methode', 'theologie'];
+  eq(genannt.filter(k => !fgVerfuegbar(FG_ICH, k)), [], 'was Ziele und Tipps nennen, gibt es');
+  eq(['schiesspulver', 'kundschafterei', 'spionage', 'internet', 'kolonialismus', 'eisenbahn', 'raketentechnik', 'atomwaffen']
+    .filter(k => fgVerfuegbar(FG_ICH, k)), [], 'was das Erste Spiel nicht erklärt, gibt es nicht');
+  const alle = TECHS.flatMap(t => [FG_ICH, FG_ER].map(pi => [pi, t.k]));
+  eq(alle.filter(([pi, k]) => (fgWurf(pi, k) >= 4) !== fgVerfuegbar(pi, k) || fgWurf(pi, k) < 1 || fgWurf(pi, k) > 6), [],
+    'die Augen passen zum Ergebnis: 4–6 verfügbar, 1–3 nicht');
+  eq([new Set(alle.filter(([pi, k]) => fgVerfuegbar(pi, k)).map(([pi, k]) => fgWurf(pi, k))).size,
+    new Set(alle.filter(([pi, k]) => !fgVerfuegbar(pi, k)).map(([pi, k]) => fgWurf(pi, k))).size], [3, 3],
+  'und streuen wie echte Würfe (alle sechs Augen kommen vor)');
+  eq(fgWurf(FG_ICH, 'alchemie', 1) <= 2, true, 'mit Philosophie-Bonus fällt eine nicht verfügbare höchstens auf 2');
+}
+/* Der Würfel im Bogen (Schritt „wuerfel"): Mathematik und Taktik haben das Mittelalter in
+   Forschung und Militär geöffnet – eine blasse Kachel dort ist durchgefallen und sagt das;
+   eine aus einem Feld, das noch nicht offen ist, sagt „noch nicht ausgewürfelt". */
+{
+  fgLauf('wissenschaft', { bis: 'gratis' });
+  fgSieht('blass', 'astronomie');
+  eq(S.fg.flags.blass || null, null, 'eine blasse Kachel vor dem Würfel-Schritt zählt noch nicht');
+  fgLauf('wissenschaft', { bis: 'wuerfel', weiter: true });
+  eq(fgOffeneFelder(1), [0, 2], 'nach dem kostenlosen Forschen ist das Mittelalter in Forschung und Militär offen');
+  eq(fgDurchgefallen(1).map(t => t.k).sort(), ['alchemie', 'buchdruck', 'burgenbau', 'schiesspulver'],
+    'durchgefallen: Alchemie, Buchdruck, Burgenbau, Schießpulver');
+  eq(/Forschung: 2 von 4 · Militär: 1 von 3/.test(fgSchritt().stand()), true, 'der Stand zählt nach: ' + fgSchritt().stand());
+  eq(/Eins nach dem anderen/.test(fgVeto({ art: 'forschen', k: 'rad' }) || ''), true, 'beim Würfel wird nicht geforscht');
+  const nein = fgBlassText('alchemie'), noch = fgBlassText('segeln');
+  eq([new RegExp(`Würfel zeigte ${fgWurf(FG_ICH, 'alchemie')}`).test(nein), fgWurf(FG_ICH, 'alchemie') <= 3, /noch nicht ausgewürfelt/.test(noch)],
+    [true, true, true], 'blasse Kachel: durchgefallen mit der Augenzahl des Protokolls – oder noch nicht ausgewürfelt');
+  eq(S.log.some(l => l.c === 'roll' && l.m.includes(`🎲 ${fgWurf(FG_ICH, 'alchemie')} — Verfügbarkeit Alchemie`)), true,
+    'dieselbe Zahl steht im Protokoll');
+  fgSieht('blass', 'segeln');
+  fgSieht('blass', 'papier');
+  eq(fgSchritt().fertig(), false, 'noch nicht Ausgewürfeltes oder Verfügbares zählt nicht');
+  fgSieht('blass', 'buchdruck');
+  eq([fgSchritt().fertig(), S.fg.flags.blass], [true, 'buchdruck'], 'eine durchgefallene Kachel – Ziel erreicht');
+  fgVor();
+  const gut = FG_BY_ID[S.fg.gut].gut();
+  eq([/Buchdruck ist durchgefallen/.test(gut), /50 %/.test(gut), /4, 5 oder 6/.test(gut)], [true, true, true],
+    'die Rückmeldung nennt die Kachel und die 50 %');
+}
+/* Die beiden Gründungsrätsel haben genau eine Lösung: Runde 1 der beste Nahrungsplatz,
+   Runde 2 der beste Wissenschaftsplatz (unter den bezahlbaren). */
+{
+  fgLauf('militaer', { bis: 'gruenden1' });
+  const n = fgBestePlaetze('food');
+  eq([n.list, n.best], [[[5, 5]], 5], 'Runde 1: genau ein Feld bringt die meiste Nahrung (5/5, +5)');
+  fgLauf('militaer', { bis: 'gruenden2', weiter: true });
+  const w = fgBestePlaetze('sci');
+  eq([w.list, w.best], [[[2, 3]], 6], 'Runde 2: genau ein Feld bringt die meiste Wissenschaft (2/3, +6)');
+  eq(fgWegFelder(), [[5, 3], [5, 4]], 'die Straße gehört auf die beiden Felder zwischen den Städten');
+}
+/* Jeder Weg mit der Musterlösung: Sieg auf diesem Weg, in dieser Runde – zweimal gespielt
+   genau gleich (die Würfel hängen nur am Anlass, nicht an der Reihenfolge). */
+for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft', /^Wirtschaftssieg/, 6], ['wissenschaft', /^Forschungssieg/, 6]]) {
+  const spur = fgLauf(pfad);
+  eq([S.over && S.over.winner, art.test(S.over && S.over.how), S.round], [FG_ICH, true, runde],
+    `Erstes Spiel, ${pfad}: Sieg auf diesem Weg in Runde ${runde} (${S.over && S.over.how})`);
+  eq([fgSchritt().id, FG_GEMEINSAM.filter(id => !S.fg.betreten[id])], ['ende', []], `${pfad}: alle gemeinsamen Schritte gesehen, dann „Gewonnen"`);
+  const stand = fgStand();
+  const spur2 = fgLauf(pfad);
+  eq([spur2.join(' '), fgStand()], [spur.join(' '), stand], `${pfad}: ein zweiter Durchgang verläuft genau gleich`);
+  // in keinem Zeitalter alle: auch was die Partie tatsächlich ausgewürfelt hat
+  const g = S.players[FG_ICH];
+  eq(TECHS.filter(t => t.age > 0 && g.avail[t.k] && !FG_SPAETER.includes(t.k)).map(t => t.k), [],
+    `${pfad}: verfügbar wurde nur, was FG_SPAETER vorsieht`);
+}
+// Der Weg führt durch den gemeinsamen Teil: Runde 3 und 4 je eine eigene Technologie
+{
+  const runden = {};
+  for (const pfad of FG_WEGE) {
+    fgLauf(pfad, { bis: 'zug4' });
+    runden[pfad] = [fgRestTech(3), fgRestTech(4)].map(k => k + (has(S.players[FG_ICH], k) ? '✓' : ''));
+  }
+  eq(runden, { militaer: ['belagerung✓', 'eisenverarbeitung✓'], wirtschaft: ['keramik✓', 'demokratie✓'], wissenschaft: ['schrift✓', 'papier✓'] },
+    'Runde 3/4: Belagerungsmaschinen und Eisenverarbeitung · Keramik und Demokratie · Schrift und Papier');
+  fgLauf('wissenschaft', { bis: 'zug4' });
+  eq(/Neu ausgewürfelt – Forschung, Industrialisierung: Biologie, Wissenschaftliche Methode\./.test(FG_BY_ID.rest4.gut()), true,
+    'Forschung, Runde 4: die Rückmeldung nennt, was in der Industrialisierung ausgewürfelt wurde');
+}
+// Englands Drehbuch im gemeinsamen Teil: Belagerung in Runde 2, die Stadt hält in Runde 3
+{
+  fgLauf('militaer', { bis: 'belagert' });
+  const ziel = fgStadt2(), e = fgErArmee();
+  eq([!!e, e && hexDistance(e.r, e.c, ziel.r, ziel.c), S.sieges['1|' + ziel.id], S.fg.angriff && [S.fg.angriff.a, S.fg.angriff.d]],
+    [true, 1, 1, [3, 2]], 'Runde 2: Englands Armee steht neben der neuen Stadt und siegt 3 : 2 – Belagerung 1/2');
+  fgLauf('militaer', { bis: 'flanke', weiter: true });
+  eq([S.sieges['1|' + ziel.id] || 0, S.fg.angriff.runde, S.fg.angriff.a <= S.fg.angriff.d, ziel.owner], [0, 3, true, FG_ICH],
+    'Runde 3: die Stadt hält, die Belagerung ist gebrochen');
+  fgLauf('militaer', { bis: 'm_belagern', weiter: true });
+  eq([!!fgErArmee(), armiesOf(S, FG_ER).every(a => hexDistance(a.r, a.c, 3, 9) === 1), powerOf(S, FG_ER) > 0], [false, true, true],
+    'Runde 4: die Armee ist flankiert, England verteidigt sich mit einer Armee an der Hauptstadt und Macht');
+}
+/* Schienen im gemeinsamen Teil: falscher Schritt, falscher Platz, falsche Straße, Armeen und
+   Macht in der falschen Reihenfolge, Zugende zur falschen Zeit. */
+{
+  fgSetup('militaer');
+  const nein = (a, muster, was) => { const v = fgVeto(a); eq(!!v && muster.test(v), true, was + ` (${v})`); };
+  const ja = (a, was) => eq(fgVeto(a), null, was);
+  nein({ art: 'forschen', k: 'mathematik' }, /Eins nach dem anderen/, 'Schritt 1: Forschen ist noch nicht dran');
+  eq(typeof fgZugendeRegel(), 'string', 'Schritt 1: der Zug kann noch nicht enden');
+  fgLauf('militaer', { bis: 'gratis', weiter: true });
+  nein({ art: 'forschen', k: 'rad' }, /kostet 2/, 'kostenlos forschen: das Rad kostet etwas');
+  ja({ art: 'forschen', k: 'mathematik' }, 'kostenlos forschen: Mathematik geht');
+  fgLauf('militaer', { bis: 'gruenden1', weiter: true });
+  nein({ art: 'gruenden', r: 5, c: 6 }, /4 🌾/, 'gründen: 5/6 brächte nur +4 Nahrung');
+  ja({ art: 'gruenden', r: 5, c: 5 }, 'gründen: 5/5 ist der beste Platz');
+  nein({ art: 'wachsen', city: fgCap(), mode: 'paid' }, /Eins nach dem anderen/, 'gründen: Wachsen kommt danach');
+  fgLauf('militaer', { bis: 'strasse', weiter: true });
+  nein({ art: 'forschen', k: 'schrift' }, /Straße braucht/, 'Handelsroute: nur das Rad');
+  nein({ art: 'strasse', r: 4, c: 2 }, /nicht zwischen/, 'Handelsroute: keine Straße abseits des Wegs');
+  ja({ art: 'strasse', r: 5, c: 3 }, 'Handelsroute: 5/3 liegt auf dem Weg');
+  fgLauf('militaer', { bis: 'belagert', weiter: true });
+  const ziel = fgStadt2();
+  nein({ art: 'macht', n: 1 }, /Macht wirkt über Armeen/, 'belagert: erst die Armee, dann die Macht');
+  eq(/Die Stadt fiele/.test(fgZugendeRegel()), true, 'belagert: der Zug endet nicht, solange die Stadt fiele');
+  nein({ art: 'forschen', k: 'schrift' }, /Eins nach dem anderen/, 'belagert: erst die Stadt schützen');
+  buildArmy(S, FG_ICH, ziel);
+  const armee = armyAt(S, ziel.r, ziel.c);
+  nein({ art: 'armee', city: fgCap() }, /Eine Armee reicht/, 'belagert: eine zweite Armee ist nicht nötig');
+  nein({ art: 'ziehen', army: armee, r: 4, c: 4 }, /direkt neben/, 'belagert: die Armee gehört neben die Stadt');
+  ja({ art: 'ziehen', army: armee, r: 4, c: 6 }, 'belagert: 4/6 liegt neben der Stadt');
+  moveArmy(S, armee, 4, 6);
+  ja({ art: 'macht', n: 1 }, 'belagert: jetzt wirkt Macht');
+  buyPower(S, FG_ICH, 1);
+  eq(fgGehalten(), true, 'belagert: Verteidigung 3 gegen Angriff 3 – die Stadt hält');
+  fgNachholen();
+  eq(fgSchritt().id, 'rest3', 'Ziel erreicht – weiter zum nächsten Schritt');
+  // Runde 3 auf dem Militärweg: erst die Belagerungsmaschinen
+  nein({ art: 'forschen', k: 'schrift' }, /Erst Belagerungsmaschinen/, 'Runde 3, Militär: erst Belagerungsmaschinen');
+  ja({ art: 'forschen', k: 'belagerung' }, 'Runde 3, Militär: Belagerungsmaschinen gehen');
+  const r3 = fgZugendeRegel();
+  eq(!!(r3 && r3.frage && /Belagerungsmaschinen noch nicht/.test(r3.frage)), true, 'Zugende fragt erst nach (' + (r3 && r3.frage) + ')');
+  doResearch(S, FG_ICH, 'belagerung');
+  ja({ art: 'forschen', k: 'schrift' }, 'danach ist die übrige Forschung frei');
+  const r3b = fgZugendeRegel();
+  eq(!!(r3b && r3b.frage && /forschen/.test(r3b.frage)), true, 'nichts verschenken: Zugende fragt erst nach (' + (r3b && r3b.frage) + ')');
+  nein({ art: 'ziehen', army: armee, r: 4, c: 5 }, /Eins nach dem anderen/, 'nichts verschenken: die Armee bleibt stehen');
+  fgLauf('militaer', { bis: 'flanke', weiter: true });
+  nein({ art: 'macht', n: 1 }, /Erst beide Armeen/, 'Gegenangriff: erst beide Armeen in Stellung');
+  eq(/stünde noch/.test(fgZugendeRegel()), true, 'Gegenangriff: der Zug endet nicht, solange die Armee steht');
+  buildArmy(S, FG_ICH, ziel);
+  const zwei = armyAt(S, ziel.r, ziel.c);
+  nein({ art: 'ziehen', army: zwei, r: 5, c: 7 }, /Englands Stadt/, 'Gegenangriff: nicht neben Englands Stadt');
+  nein({ art: 'ziehen', army: zwei, r: 4, c: 5 }, /neben die englische/, 'Gegenangriff: neben die englische Armee');
+  ja({ art: 'ziehen', army: zwei, r: 4, c: 7 }, 'Gegenangriff: 4/7 liegt neben ihr');
+  nein({ art: 'armee', city: fgCap() }, /Zwei Armeen reichen/, 'Gegenangriff: keine dritte Armee');
+  // Wirtschaftssieg auf einem anderen Weg: würde Wachsen die Schwelle reißen, lehnt die Schiene ab
+  const alt = citiesOf(S, FG_ER).map(c => c.pop);
+  citiesOf(S, FG_ER).forEach(c => { c.pop = 1; });
+  const v = fgSchwellenVeto({ art: 'wachsen', city: fgCap(), mode: 'paid' });
+  eq(/Wirtschaftssieg.*anders/.test(v || ''), true, 'Militärweg: kein Wirtschaftssieg durch Wachsen (' + v + ')');
+  S.fg.pfad = 'wirtschaft';
+  eq(fgSchwellenVeto({ art: 'wachsen', city: fgCap(), mode: 'paid' }), null, 'Wirtschaftsweg: die Schwelle zu reißen ist das Ziel – jederzeit');
+  citiesOf(S, FG_ER).forEach((c, i) => { c.pop = alt[i]; });
+}
+// Runde 3 auf den anderen Wegen: Keramik bzw. Schrift zuerst
+{
+  for (const [pfad, k, n] of [['wirtschaft', 'keramik', 'Keramik'], ['wissenschaft', 'schrift', 'Schrift']]) {
+    fgLauf(pfad, { bis: 'rest3' });
+    eq([fgSchritt().id, new RegExp('Erst ' + n).test(fgVeto({ art: 'forschen', k: k === 'keramik' ? 'schrift' : 'keramik' }) || ''), fgVeto({ art: 'forschen', k })],
+      ['rest3', true, null], `Runde 3, ${pfad}: erst ${n}`);
+  }
+}
+// Schienen auf den Wegen
+{
+  fgLauf('militaer', { bis: 'm_belagern' });
+  const a = armiesOf(S, FG_ICH)[0];
+  eq(/andere Stadt/.test(fgVeto({ art: 'ziehen', army: a, r: 6, c: 7 }) || ''), true, 'Militärweg: kein Feld vor Englands anderer Stadt');
+  eq(/Singularität/.test(fgVeto({ art: 'forschen', k: 'singularitaet' }) || ''), true, 'Militärweg: keine Singularität');
+  eq(fgZugendeRegel() && !!fgZugendeRegel().frage, true, 'Militärweg: reicht der Angriff nicht, fragt das Zugende nach');
+  fgLauf('wirtschaft', { bis: 'w_wachsen' });
+  const b = armiesOf(S, FG_ICH)[0];
+  eq(/friedlich/.test(fgVeto({ art: 'ziehen', army: b, r: b.r - 1, c: b.c }) || ''), true, 'Wirtschaftsweg: Armeen bleiben stehen');
+  eq(/friedlich/.test(fgVeto({ art: 'armee', city: fgCap() }) || ''), true, 'Wirtschaftsweg: keine neuen Armeen');
+  eq(fgSchwellenVeto({ art: 'wachsen', alle: true, mode: 'paid' }), null, 'Wirtschaftsweg: Wachsen über die Schwelle ist das Ziel');
+  fgLauf('wissenschaft', { bis: 's_moderne' });
+  eq(fgVeto({ art: 'forschen', k: 'singularitaet' }), null, 'Forschungsweg: die Singularität ist frei');
+  eq(/Raketentechnik/.test(fgFriedlich({ art: 'forschen', k: 'raketentechnik' }) || ''), true,
+    'Forschungsweg: Raketentechnik nicht, solange eine Armee damit Englands Stadt erreichte');
+}
+/* Alle Texte auf Englisch: jeder Schritt jedes Wegs einmal gezeichnet (Titel, Ziel, Stand,
+   Lage, Tipp, Rückmeldung) – keine Lücke im Wörterbuch. Dazu die Ablehnungen und die Texte
+   der Seite vor der Partie und der blassen Kacheln. */
+{
+  setLang('en', { quiet: true });
+  clearMissing();
+  const alle = st => [st.t && T(st.t), ...['ziel', 'stand', 'info', 'tipp', 'gut'].map(k => st[k] && st[k]())];
+  for (const pfad of FG_WEGE) {
+    fgSetup(pfad);
+    let guard = 0;
+    while (guard++ < 200) {
+      const st = fgSchritt();
+      alle(st);
+      if (st.ende) { fgEndeText(); break; }
+      if (st.fertig()) { fgVor(); continue; }
+      st.loesung(); fgNachholen();
+    }
+  }
+  fgSetup('militaer');
+  fgVeto({ art: 'forschen', k: 'rad' });
+  fgSchwellenVeto({ art: 'wachsen', city: fgCap() });
+  fgFriedlich({ art: 'ziehen' }); fgNurHauptstadt({ art: 'forschen', k: 'singularitaet' });
+  fgNochWasText(['forschen', 'wachsen']); fgRest();
+  fgWahlHtml([]); fgBlassText('alchemie'); fgBlassText('segeln'); fgWegSatz();
+  const fehlt = missingStrings();
+  setLang('de', { quiet: true });
+  clearMissing();
+  eq(fehlt, [], 'Erstes Spiel: alle Texte haben eine englische Fassung');
+}
+// Und vom Quelltext her: jeder Satz in T('…') und jeder Titel hat einen Eintrag in UI_EN –
+// auch Ablehnungen, die der Durchlauf oben nicht trifft
+{
+  const quelle = fs.readFileSync(__dirname + '/js/firstgame.js', 'utf8');
+  const saetze = [...new Set([...quelle.matchAll(/\bT\('((?:[^'\\]|\\.)*)'/g), ...quelle.matchAll(/\bt: '((?:[^'\\]|\\.)*)'/g)]
+    .map(m => m[1].replace(/\\'/g, "'")))];
+  const fehlt = saetze.filter(k => !Object.prototype.hasOwnProperty.call(UI_EN, k));
+  eq([saetze.length > 150, fehlt], [true, []], `Erstes Spiel: jeder Satz im Quelltext hat eine englische Fassung (${saetze.length})`);
+}
+/* Spielstand von v92, der Weg noch nicht gewählt: in Runde 5 auf dem alten Schritt „wahl"
+   (den es nicht mehr gibt) – nach der Wahl geht es mit dem ersten Schritt des Wegs weiter. */
+{
+  fgLauf('wirtschaft', { bis: 'w_theologie' });
+  S.fg.pfad = null; S.fg.schritt = 'wahl'; S.fg.v = 1; S.fg.wahl = '{}';
+  const v92 = JSON.stringify(S);
+  S = migrateState(JSON.parse(v92));
+  ui = { sel: null, army: null, mode: null, botTimer: null, fg: { timer: null } };
+  eq([fgSchritt(), /Weg/.test(fgZugendeRegel() || '')], [null, true], 'v92-Stand in Runde 5: erst die Wahl');
+  eq([fgWaehle('wirtschaft'), fgWaehle('militaer'), S.fg.pfad, S.fg.schritt, 'wahl' in S.fg], [true, false, 'wirtschaft', 'w_theologie', false],
+    'gewählt: weiter mit Theologie, ein zweites Mal wählen geht nicht, der alte Schnappschuss ist weg');
+  fgLauf('wirtschaft', { weiter: true });
+  eq(/^Wirtschaftssieg/.test(S.over && S.over.how), true, 'und von dort zum Wirtschaftssieg');
+}
+// Fortsetzen: ein gespeicherter Stand mitten im Ersten Spiel läuft genauso weiter
+{
+  fgLauf('wissenschaft', { bis: 'flanke' });
+  const kopie = JSON.stringify(S);
+  fgLauf('wissenschaft', { weiter: true });
+  const ziel = fgStand();
+  S = migrateState(JSON.parse(kopie));
+  ui = { sel: null, army: null, mode: null, botTimer: null, fg: { timer: null } };
+  fgLauf('wissenschaft', { weiter: true });
+  eq(fgStand(), ziel, 'Erstes Spiel aus dem Spielstand fortgesetzt: derselbe Verlauf bis zum Sieg');
+}
+/* Zufall gegen die Schienen: vor jeder Musterlösung erst einige zufällige, von den Schienen
+   erlaubte Aktionen. Die Partie muss trotzdem auf dem gewählten Weg gewonnen werden – und
+   keine Lektion des gemeinsamen Teils darf dabei übersprungen werden (Wirtschaft: die
+   Schwelle ist frei, der Sieg kommt trotzdem nicht vor dem Ende von Runde 4). */
+{
+  let zahl = 1;
+  const rnd = () => { zahl = (zahl * 1103515245 + 12345) & 0x7fffffff; return zahl / 0x7fffffff; };
+  const kandidaten = () => {
+    const out = [], G = FG_ICH;
+    for (const t of researchable(S, G)) out.push([{ art: 'forschen', k: t.k }, () => doResearch(S, G, t.k)]);
+    for (let r = 0; r < S.map.rows.length; r++) for (let c = 0; c < S.map.rows[r].length; c++) {
+      if (!canFound(S, G, r, c)) out.push([{ art: 'gruenden', r, c }, () => foundCity(S, G, r, c)]);
+      if (canBuildRoads(S.players[G]) && !cityAt(S, r, c) && roadTarget(S, G, r, c) === 1 && rnd() < 0.15)
+        out.push([{ art: 'strasse', r, c }, () => buildRoad(S, G, r, c, 1)]);
+    }
+    for (const city of citiesOf(S, G)) {
+      out.push([{ art: 'wachsen', city, mode: 'paid' }, () => growCity(S, G, city, 'paid')]);
+      out.push([{ art: 'armee', city }, () => buildArmy(S, G, city)]);
+    }
+    for (const a of armiesOf(S, G)) for (const k of armyReach(S, a).keys()) {
+      const [r, c] = unkey(k);
+      out.push([{ art: 'ziehen', army: a, r, c }, () => moveArmy(S, a, r, c)]);
+    }
+    out.push([{ art: 'macht', n: 1 }, () => buyPower(S, G, 1)]);
+    return out;
+  };
+  const zufall = () => {
+    for (let i = 0; i < 8; i++) {
+      const k = kandidaten();
+      const [a, fn] = k[Math.floor(rnd() * k.length)];
+      if (!fgVeto(a)) fn();
+    }
+  };
+  const fehler = [];
+  for (const pfad of FG_WEGE) for (const start of [3, 7]) {
+    zahl = start * 7919;
+    try {
+      fgLauf(pfad, { zufall });
+      const art = { militaer: /^Militär/, wirtschaft: /^Wirtschaft/, wissenschaft: /^Forschung/ }[pfad];
+      if (!S.over || S.over.winner !== FG_ICH || !art.test(S.over.how)) fehler.push(`${pfad}/${start}: ${S.over ? S.over.how : 'offen'}`);
+      const fehlt = FG_GEMEINSAM.filter(id => !S.fg.betreten[id]);
+      if (fehlt.length) fehler.push(`${pfad}/${start}: übersprungen ${fehlt.join(',')}`);
+    } catch (e) { fehler.push(`${pfad}/${start}: ${e.message}`); }
+  }
+  eq(fehler, [], 'zufällige Aktionen zwischen den Schritten: jeder Weg endet mit seinem Sieg, keine Lektion fällt aus');
+}
+ui = { sel: null, army: null, mode: null, botTimer: null };
 
 /* ==================================================== Plättchenkarten
    Zufallskarten aus Dreiecken zu 15 Feldern: Vorrat, Formen, Legeregeln, Karte. */
@@ -5802,7 +6429,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
      die Flaggen direkt aus LANGS, ohne T(). Die Zahl darf sinken, nicht steigen. */
   {
     const norm = x => x.replace(/\s+/g, ' ');
-    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'ui', 'tutorial']
+    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'ui', 'tutorial', 'firstgame']
       .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8'))
       .concat(fs.readFileSync(__dirname + '/index.html', 'utf8')).join('\n');
     const heu = norm(quellen);

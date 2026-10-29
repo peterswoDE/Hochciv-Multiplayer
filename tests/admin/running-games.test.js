@@ -7,7 +7,7 @@
  *   node tests/admin/running-games.test.js [http://localhost:3000]
  *
  * Starts a live game (lobby → game:start over Socket.IO, as the game page does), stores
- * Rundenspiele on v83 (no version recorded), v87, v88 and the current version plus a finished
+ * Rundenspiele on v83 (no version recorded), v88, v93 and the current version plus a finished
  * one, then logs in as a test admin and reads the tab: the counts per version, the live game
  * and the Rundenspiele with their versions. A normal user gets 403. Test accounts, games and
  * the lobby are removed afterwards.
@@ -56,7 +56,7 @@ function makeRundenspiele(host) {
             data: { engine: eng, config: {}, seats: [{ slot: 0, userId: '${host.id}', name: '${host.name}', civ: 'england', kind: 'human' },
                 { slot: 1, name: 'KI', civ: 'wikinger', kind: 'ki' }], meta: { waitingFor: '${host.name}' } },
         });
-        Promise.all([mk('TV83', null, 'playing'), mk('TV87', 'v87', 'playing'), mk('TV88', 'v88', 'draft'),
+        Promise.all([mk('TV83', null, 'playing'), mk('TV93', 'v93', 'playing'), mk('TV88', 'v88', 'draft'),
             mk('TCUR', engine.version(), 'setup'), mk('TFIN', engine.version(), 'finished')])
             .then(gs => { console.log(JSON.stringify({ current: engine.version(), ids: gs.map(g => g.id) })); process.exit(0); })`);
     return JSON.parse(out.split('\n').pop());
@@ -115,7 +115,7 @@ function makeRundenspiele(host) {
         ok(versions.length && versions[0][0].startsWith(before) && /aktuell/.test(versions[0][0]), 'current version listed first', versions[0] && versions[0][0]);
         ok(count(before)[0] >= 1, 'current version: the live game counts', JSON.stringify(count(before)));
         ok(count(before)[1] >= 1, 'current version: the Rundenspiel in setup counts, the finished one not');
-        for (const v of ['v83', 'v87', 'v88']) ok(count(v) && count(v)[1] >= 1, `${v}: its Rundenspiel counts`, JSON.stringify(count(v)));
+        for (const v of ['v83', 'v88', 'v93']) ok(count(v) && count(v)[1] >= 1, `${v}: its Rundenspiel counts`, JSON.stringify(count(v)));
 
         const liveRows = await rows('#table-admin-live');
         const lr = liveRows.find(r => r[0] === live.joinCode);
@@ -127,11 +127,11 @@ function makeRundenspiele(host) {
         const asyncRows = await rows('#table-admin-running');
         const ar = code => asyncRows.find(r => r[0].startsWith(code));
         ok(ar('TV83') && ar('TV83')[1] === 'v83', 'Rundenspiel without version shows v83');
-        ok(ar('TV87') && ar('TV87')[1] === 'v87', 'Rundenspiel v87 shows v87');
+        ok(ar('TV93') && ar('TV93')[1] === 'v93', 'Rundenspiel v93 shows v93');
         ok(ar('TV88') && ar('TV88')[1] === 'v88' && ar('TV88')[2] === 'Draft', 'Rundenspiel v88 shows v88 and its status');
         ok(ar('TCUR') && ar('TCUR')[1] === before, 'new Rundenspiel shows the current version');
         ok(!ar('TFIN'), 'finished Rundenspiel is not listed');
-        ok(ar('TV87') && ar('TV87')[4] === admin.name && /vor 2 T\./.test(ar('TV87')[6]), 'waiting for / since shown', ar('TV87') && ar('TV87').slice(4).join(' | '));
+        ok(ar('TV93') && ar('TV93')[4] === admin.name && /vor 2 T\./.test(ar('TV93')[6]), 'waiting for / since shown', ar('TV93') && ar('TV93').slice(4).join(' | '));
 
         // the finished-games tab no longer has the running table, and still loads
         await page.click('[data-target="tab-admin-games"]');

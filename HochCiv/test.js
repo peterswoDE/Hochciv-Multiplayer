@@ -1,6 +1,6 @@
 /* Prüft die Regelmaschine gegen die Beispiele aus dem Regelheft. */
 const fs = require('fs'), vm = require('vm');
-for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/tutorial.js', 'js/firstgame.js'])
+for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/anim.js', 'js/tutorial.js', 'js/firstgame.js'])
   vm.runInThisContext(fs.readFileSync(__dirname + '/' + f, 'utf8'));
 
 let fails = 0;
@@ -114,8 +114,33 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     'je Bevölkerung: Universitätswesen +2 Wissenschaft, Robotik +2 Münzen, auch ohne Schrift bzw. Fließband');
   eq([y(['chemie', 'bewaesserung'], 'B'), y(['buchdruck', 'muehlentechnik'], 'F'), y(['kunstduenger', 'ki'], 'W')],
     [[2, 1, 1], [1, 1, 2], [3, 1, 1]], 'Einzelglieder: Gebirge, Fluss, Kunstdünger neben der Waldkette');
-  // Was nicht aus Technologien kommt, addiert sich wie bisher
-  eq(tileYield(mkA('russland', 'basis', ['ki', 'kunstduenger']), 0, 'W'), [3, 2, 1], 'Taiga (Russland) kommt zu Kunstdünger und KI dazu');
+  /* Taiga (Russland) seit v95 (Anweisung des Autors): jedes Feld bringt mindestens 1 Nahrung –
+     eine Untergrenze nach Technologien und Leuchtturm, kein Zuschlag mehr (bis v94: +1 Nahrung
+     im Wald, das kam zu Kunstdünger und KI dazu: [3, 2, 1]). */
+  {
+    const ru = (techs, abil = 'basis') => mkA('russland', abil, techs);
+    eq(['G', 'W', 'B', 'F', 'M', 'I'].map(t => tileYield(ru([]), 0, t)),
+      [[0, 1, 0], [0, 1, 1], [1, 1, 1], [0, 1, 1], [0, 1, 1], [1, 1, 1]],
+      'Taiga: Wald, Gebirge und Meer von 0 auf 1 Nahrung, Grasland, Fluss und Insel wie ohne');
+    eq([tileYield(ru(['ki', 'kunstduenger']), 0, 'W'), tileYield(ru(['segeln']), 0, 'M'), tileYield(ru(['bewaesserung']), 0, 'B'),
+      tileYield(ru(['landwirtschaft']), 0, 'G')], [[3, 1, 1], [0, 2, 1], [1, 1, 1], [0, 2, 0]],
+      '… eine Untergrenze, kein Zuschlag: wo Kunstdünger, Segeln, Bewässerung, Landwirtschaft schon Nahrung bringen, gibt Taiga nichts dazu');
+    eq([['W', 'B', 'M'].map(t => tileYield(ru([], 'wachstum'), 0, t)[1]), ['W', 'B', 'M'].map(t => tileYield(mk('griechenland'), 0, t)[1])],
+      [[0, 0, 0], [0, 0, 0]], 'ohne Taiga (andere Fähigkeit Russlands, anderes Reich) bleibt es bei 0');
+    eq(tileYield(ru([]), 0, 'V'), [0, 0, 0], 'Vulkan bringt auch mit Taiga nichts');
+    const ev = mkX('russland', { ability: 'basis', events: true });
+    ev.ev = ev.ev || { mode: 'hard' };
+    ev.event = { round: ev.round, k: 'waldbrand', row: 0, col: 0 };
+    const tot = evTerrainDead(ev, 0, 'W');
+    eq([tot, tileYield(ev, 0, 'W'), tileYield(ev, 0, 'B')], [true, [0, 0, 0], [1, 1, 1]], 'Waldbrand legt den Wald lahm – auch Taiga hebt ihn nicht');
+    const lt = ru([]);
+    lt.wonders = [{ k: 'leuchtturm', lvl: 1, owner: 0, cityId: capitalOf(lt, 0).id, r: capitalOf(lt, 0).r, c: capitalOf(lt, 0).c }];
+    eq(hasWonder(lt, 0, 'leuchtturm') ? tileYield(lt, 0, 'M') : 'kein Leuchtturm', [1, 1, 2], 'Großer Leuchtturm bringt dem Meer schon 1 Nahrung – Taiga nichts dazu');
+    const bu = ru(['buerokratie']), bcap = capitalOf(bu, 0);
+    const [br, bc] = neighbors(bcap.r, bcap.c)[0];
+    bu.map = Object.assign({}, bu.map, { rows: bu.map.rows.map((z, r) => r === br ? z.slice(0, bc) + 'B' + z.slice(bc + 1) : z) });
+    eq(tileYieldAt(bu, 0, br, bc), [2, 2, 2], 'Bürokratie verdoppelt danach: Gebirge an der Hauptstadt 2/2/2');
+  }
   // Wer eine Kette ganz hat, steht wie bis v87, als jede Technologie ihren Zuwachs addierte
   const keys = Object.keys(YIELD_TECHS);
   const alle = mk('griechenland', keys);
@@ -337,14 +362,15 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const route = (techs, stufe) => { const z = zeile(mitRoute(techs, stufe), 'Handelsrouten'); return z && [z.y, 'note' in z]; };
   eq(route([], 1), [[1, 1, 1], false], 'Handelsroute über Straße: +1');
   eq(route(['buerokratie'], 1), [[2, 2, 2], false], 'mit Bürokratie +2 – ohne Zusatz am Namen (v88)');
-  eq(route(['buerokratie'], 2), [[4, 4, 4], false], 'über Eisenbahn mit Bürokratie +4');
+  eq(route([], 2), [[4, 4, 4], false], 'Handelsroute über Eisenbahn: +4 (v96)');
+  eq(route(['buerokratie'], 2), [[8, 8, 8], false], 'über Eisenbahn mit Bürokratie +8');
   eq(summeGehtAuf(mitRoute(['buerokratie'], 2)), true, 'Zeilen und Summe gehen auf (Handelsroute, Bürokratie)');
   {
     // Revolution: Hauptstadt still, die Handelsroute bleibt – verdoppelt
     const X = mitRoute(['buerokratie'], 2);
     X.ev = X.ev || { mode: 'hard' }; X.event = { round: X.round, k: 'revolution', row: 0, col: 0 };   // wie setEvent (steht weiter unten)
     eq(evActive(X, 0, 'revolution'), true, 'Revolution läuft');
-    eq(zeile(X, 'Handelsrouten').y, [4, 4, 4], 'Revolution: die Handelsroute läuft weiter, mit Bürokratie doppelt');
+    eq(zeile(X, 'Handelsrouten').y, [8, 8, 8], 'Revolution: die Handelsroute läuft weiter, mit Bürokratie doppelt');
   }
   // Gentechnik: der Nahrungsposten doppelt – gerechnet aus der schon verdoppelten Wissenschaft
   {
@@ -372,8 +398,95 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     const b = SEA_CITY_BONUS;
     eq([see([]), see(['buerokratie'])], [[b, b, b], [b, b, b]], 'Seemacht (Hauptstadt am Meer): Bürokratie verdoppelt sie nicht');
   }
-  eq(/Handelsrouten, Ökologie und Gentechnik/.test(TECH_BY_KEY.buerokratie.e), true, 'Techtext der Bürokratie nennt die drei');
-  eq(/trade routes, ecology and genetic engineering/.test(DATA_EN.tech.buerokratie[1]), true, 'englisch ebenso');
+  /* Texte seit v96 (Anweisung des Autors): die Kachel im Technologiebogen sagt nicht mehr, was die
+     Bürokratie mitverdoppelt – nur „Hauptstadt produziert doppelt"; im Regelbogen steht alles
+     (techEffectFull), samt der gekauften Felder (v96). */
+  eq([TECH_BY_KEY.buerokratie.e, DATA_EN.tech.buerokratie[1]], ['Hauptstadt produziert doppelt', 'The capital produces double'],
+    'Kachel der Bürokratie: nur „Hauptstadt produziert doppelt", englisch ebenso (v96)');
+  eq(/Handelsrouten, Ökologie, Gentechnik und gekaufte Felder/.test(techEffectFull(TECH_BY_KEY.buerokratie, null)), true,
+    'Regelbogen: der Text der Bürokratie nennt alle vier');
+  eq(/trade routes, ecology, genetic engineering and bought tiles/.test(DATA_EN.tech.buerokratie[2]), true, 'englisch ebenso');
+}
+
+/* --- Gekaufte Felder zählen zur Hauptstadt (v96, Anweisung des Autors): mit Bürokratie bringt
+   ein per Kolonialismus gekauftes Feld das Doppelte, wo es auch liegt. Auslegungen (ANNAHMEN
+   v96): einmal doppelt, auch wenn ein gekauftes Feld zugleich ans Umland der Hauptstadt grenzt;
+   ohne Hauptstadt nicht doppelt (wie das Umland); bei einer Revolution produziert es weiter (wie
+   die Handelsrouten seit v86). */
+{
+  const X = mk('griechenland', ['kolonialismus']);
+  const cap = capitalOf(X, 0), p = X.players[0];
+  const herrenlos = (r, c) => !X.players.some((_, i) => controlledTiles(X, i).has(key(r, c)));
+  // ein herrenloses Landfeld mit Ertrag, nicht am Umland der Hauptstadt
+  const frei = within(cap.r, cap.c, 6).find(([r, c]) => hexDistance(r, c, cap.r, cap.c) >= 3 && isLand(X, r, c) &&
+    !cityAt(X, r, c) && !TERRAIN[terrainAt(X, r, c)].block && herrenlos(r, c) && tileYield(X, 0, terrainAt(X, r, c)).some(n => n > 0));
+  const y = tileYield(X, 0, terrainAt(X, frei[0], frei[1]));
+  const dop = y.map(n => 2 * n);
+  p.res = { sci: 0, food: 0, coins: 10 };
+  eq(buyTile(X, 0, frei[0], frei[1]), null, `Feld ${frei.join('/')} gekauft (Ertrag ${y.join('/')})`);
+  // Einkommen mit und ohne das gekaufte Feld (über incomeBreakdown, also mit `pre`)
+  const anteil = () => {
+    const mit = income(X, 0), merk = X.bought[0];
+    X.bought[0] = merk.filter(k => k !== key(frei[0], frei[1]));
+    const ohne = income(X, 0);
+    X.bought[0] = merk;
+    return [mit.sci - ohne.sci, mit.food - ohne.food, mit.coins - ohne.coins];
+  };
+  eq([anteil(), tileYieldAt(X, 0, frei[0], frei[1])], [y, y], 'ohne Bürokratie: das gekaufte Feld bringt seinen Ertrag');
+  p.techs.buerokratie = true;
+  eq([anteil(), tileYieldAt(X, 0, frei[0], frei[1])], [dop, dop], 'mit Bürokratie: doppelt – im Einkommen und am Feld (tileYieldAt)');
+  // Gegenprobe: ein herrenloses Feld daneben, nicht gekauft, bleibt einfach
+  const nachbar = neighbors(frei[0], frei[1]).find(([r, c]) => isLand(X, r, c) && !cityAt(X, r, c) && herrenlos(r, c) &&
+    !TERRAIN[terrainAt(X, r, c)].block);
+  if (nachbar) eq(tileYieldAt(X, 0, nachbar[0], nachbar[1]), tileYield(X, 0, terrainAt(X, nachbar[0], nachbar[1])),
+    'ein nicht gekauftes Feld daneben bleibt einfach');
+  // Gekauft und zugleich Umland der Hauptstadt (im Spiel kaum möglich): einmal doppelt, nicht vierfach
+  const um = neighbors(cap.r, cap.c).find(([r, c]) => terrainAt(X, r, c) && !cityAt(X, r, c) && !TERRAIN[terrainAt(X, r, c)].block &&
+    tileYield(X, 0, terrainAt(X, r, c)).some(n => n > 0));
+  const umY = tileYieldAt(X, 0, um[0], um[1]);
+  X.bought[0].push(key(um[0], um[1]));
+  eq(tileYieldAt(X, 0, um[0], um[1]), umY, 'gekauft und am Umland der Hauptstadt: einmal doppelt');
+  X.bought[0].pop();
+  // Revolution: die Hauptstadt steht still, das gekaufte Feld produziert weiter – doppelt
+  X.ev = X.ev || { mode: 'hard' }; X.event = { round: X.round, k: 'revolution', row: 0, col: 0 };
+  eq([evActive(X, 0, 'revolution'), anteil()], [true, dop], 'Revolution: das gekaufte Feld produziert weiter, mit Bürokratie doppelt');
+  X.event = null;
+  // Ohne Hauptstadt (Marathon nach einer Eroberung) zählt es zu nichts: einfach
+  cap.cap = false;
+  eq([anteil(), tileYieldAt(X, 0, frei[0], frei[1])], [y, y], 'ohne Hauptstadt: einfach');
+  cap.cap = true;
+  // Die Zeilen der Übersicht gehen weiter mit der Summe auf
+  const b = incomeBreakdown(X, 0);
+  eq(JSON.stringify([0, 1, 2].map(i => b.rows.reduce((n, r) => n + r.y[i], 0) + b.extra.reduce((n, e) => n + e.y[i], 0) + b.pop.y[i])),
+    JSON.stringify(b.total), 'Zeilen und Summe gehen auf (gekauftes Feld, Bürokratie)');
+  // Texte: die Kachel des Kolonialismus wie bisher, im Regelbogen der Zusatz
+  eq(TECH_BY_KEY.kolonialismus.e, `Für ${COLONY_COST} Münzen Feld kaufen; dort auch ohne Weg gründen`, 'Kachel des Kolonialismus unverändert');
+  eq([/zählen zur Hauptstadt \(mit Bürokratie doppelt\)/.test(techEffectFull(TECH_BY_KEY.kolonialismus, X)),
+    /count towards the capital \(doubled with Bureaucracy\)/.test(DATA_EN.tech.kolonialismus[2])], [true, true],
+  'Regelbogen: gekaufte Felder zählen zur Hauptstadt (deutsch und englisch)');
+  // Die KI sieht den doppelten Ertrag auch beim Aussuchen (kiColonySpots): Schwelle mit Bürokratie halb so hoch
+  const spots = () => kiColonySpots(X, 0).length;
+  const mitB = spots(); delete p.techs.buerokratie; const ohneB = spots(); p.techs.buerokratie = true;
+  eq(mitB >= ohneB, true, `KI: mit Bürokratie mindestens so viele Kaufkandidaten (${mitB} gegen ${ohneB})`);
+}
+/* --- Kacheln ohne Bürokratie-Zusätze (v96, Anweisung des Autors): keine Kachel des Bogens sagt,
+   was die Bürokratie mitverdoppelt – das steht nur im Regelbogen (`voll`, techEffectFull). Wer
+   einen solchen Zusatz braucht, schreibt ihn nach `voll`. Der Sprachwechsel trägt beide Texte. */
+{
+  const deText = k => DATA_DE ? DATA_DE.tech[k] : [TECH_BY_KEY[k].n, TECH_BY_KEY[k].e, TECH_BY_KEY[k].voll];
+  eq(TECHS.filter(t => /Bürokratie/.test(deText(t.k)[1]) || /Bureaucracy/.test(DATA_EN.tech[t.k][1])).map(t => t.k), [],
+    'keine Kachel nennt die Bürokratie (deutsch und englisch)');
+  eq(TECHS.filter(t => t.voll != null).map(t => t.k).sort(), ['buerokratie', 'kolonialismus'], 'einen ganzen Text haben Bürokratie und Kolonialismus');
+  eq(TECHS.filter(t => (t.voll != null) !== (DATA_EN.tech[t.k][2] != null)).map(t => t.k), [], '… englisch genau dieselben');
+  eq(TECHS.filter(t => t.voll != null && !deText(t.k)[2].startsWith(deText(t.k)[1])).map(t => t.k), [],
+    'der ganze Text beginnt mit dem der Kachel');
+  setLang('en', { quiet: true });
+  const en = [TECH_BY_KEY.buerokratie.e, techEffectFull(TECH_BY_KEY.buerokratie, null), techEffectFull(TECH_BY_KEY.mathematik, null)];
+  setLang('de', { quiet: true });
+  const de = [TECH_BY_KEY.buerokratie.e, techEffectFull(TECH_BY_KEY.buerokratie, null), techEffectFull(TECH_BY_KEY.mathematik, null)];
+  eq(en, ['The capital produces double', DATA_EN.tech.buerokratie[2], 'Forest: +1 science'], 'englisch: Kachel und Regelbogen; ohne `voll` derselbe Text');
+  eq(de, ['Hauptstadt produziert doppelt', 'Hauptstadt produziert doppelt, dazu Handelsrouten, Ökologie, Gentechnik und gekaufte Felder', 'Wald: +1 Wissenschaft'],
+    'zurück auf Deutsch: beide Texte wieder deutsch');
 }
 
 /* --- Belagerung braucht zwei aufeinanderfolgende Züge */
@@ -507,6 +620,73 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const fz = rz.find(e => e.art === 'flanke');
   eq([rz.map(e => e.art), fz.a, fz.d, fz.sieg, Z.armies.some(a => a.id === 951)], [['stadt', 'flanke'], 3, 3, false, true],
     'Flanke 3 gegen 3: ein Kampf nach der Stadt, die Armee hält (Gleichstand hält)');
+}
+
+/* --- Die Macht steht für die ganze Kampfphase fest (v94, Anweisung des Autors): „wenn die
+   Wikinger mit ihrer Fähigkeit eine Stadt erobern und Burgenbau haben, ändert sich ihre Macht
+   mitten in der Phase". Kriegerkultur zählt mit Burgenbau je Stadt +2, ein Bot hat seine
+   Bevölkerung als Macht – bis v93 rechnete die Flanke nach einer Eroberung schon mit dem
+   neuen Wert. Lage je Fall: eine Stadt X, zwei Armeen A1/A2 daneben (nebeneinander), die
+   gegnerische Armee E auf dem anderen gemeinsamen Nachbarn von A1 und A2 – zwei Felder von X,
+   also keine Helferin der Stadt. Die Belagerung von X läuft schon (1/2): der Angriff erobert. */
+{
+  const lageFinden = S => {
+    const frei = (r, c) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c);
+    for (let r = 0; r < S.map.rows.length; r++) for (let c = 0; c < S.map.rows[r].length; c++) {
+      if (!frei(r, c) || S.cities.some(ct => hexDistance(ct.r, ct.c, r, c) < 5)) continue;
+      for (const A1 of neighbors(r, c)) for (const A2 of neighbors(r, c)) {
+        if (!frei(...A1) || !frei(...A2) || hexDistance(A1[0], A1[1], A2[0], A2[1]) !== 1) continue;
+        const E = neighbors(A1[0], A1[1]).find(([er, ec]) => !(er === r && ec === c) &&
+          hexDistance(er, ec, A2[0], A2[1]) === 1 && frei(er, ec));
+        if (E && hexDistance(E[0], E[1], r, c) === 2) return { X: [r, c], A1, A2, E };
+      }
+    }
+    return null;
+  };
+  // Angreifer ai erobert X (Besitzer xi) und flankiert danach E (Besitzer ei)
+  const fall = (spieler, vorbereiten) => {
+    const S = newGame({ seed: 9, seatOrder: true, players: spieler });
+    const L = lageFinden(S);
+    const X = { id: S.nextId++, owner: 1, r: L.X[0], c: L.X[1], pop: 3, cap: false, grown: 0, born: 0 };
+    S.cities.push(X);
+    S.armies.push({ id: S.nextId++, owner: 0, r: L.A1[0], c: L.A1[1], mp: 0, born: 0 },
+      { id: S.nextId++, owner: 0, r: L.A2[0], c: L.A2[1], mp: 0, born: 0 });
+    const E = { id: S.nextId++, owner: 1, r: L.E[0], c: L.E[1], mp: 0, born: 0 };
+    S.armies.push(E);
+    S.sieges['0|' + X.id] = 1;
+    S.cur = 0;
+    vorbereiten(S, X, E);
+    const rec = [];
+    finishTurn(S, rec);
+    return { S, X, E, rec, flanke: rec.find(e => e.art === 'flanke'), stadt: rec.find(e => e.art === 'stadt' && e.r === X.r && e.c === X.c) };
+  };
+  // 1 Die Wikinger greifen an: Kriegerkultur mit Burgenbau, 1 + 2 × (2 Armeen + 1 Stadt) = 7,
+  //   nach der Eroberung von X wären es 9 – England hält mit 8
+  const w = fall([{ civ: 'wikinger', kind: 'human', ability: 'armeemacht' }, { civ: 'england', kind: 'human' }], S => {
+    Object.assign(S.players[0].techs, { burgenbau: true, taktik: true });
+    S.players[0].power = 1; S.players[1].power = 8;
+  });
+  eq([w.X.owner, w.stadt.a, w.stadt.d, !!w.stadt.genommen], [0, 14, 3, true], 'Wikinger erobern X: Angriff 2 × 7 = 14 gegen 3');
+  eq([w.flanke.a, w.flanke.d, w.flanke.sieg, w.S.armies.includes(w.E)], [7, 8, false, true],
+    'die Flanke danach rechnet mit 7 vom Anfang der Phase, nicht mit 9 – Englands Armee hält (7 ≤ 8)');
+  eq(powerOf(w.S, 0), 9, 'nach der Phase gilt die neue Macht: 9');
+  // 2 Die Wikinger verteidigen: England erobert ihre Stadt; ihre Macht fiele von 6 auf 4 – die
+  //   Flanke gegen ihre Armee rechnet weiter mit 6
+  const v = fall([{ civ: 'england', kind: 'human' }, { civ: 'wikinger', kind: 'human', ability: 'armeemacht' }], S => {
+    Object.assign(S.players[0].techs, { taktik: true, belagerung: true });
+    Object.assign(S.players[1].techs, { burgenbau: true });
+    S.players[0].power = 5; S.players[1].power = 0;
+  });
+  eq([v.X.owner, v.stadt.a, v.stadt.d], [0, 16, 9], 'England erobert die Wikingerstadt: 2 × (5 + 3) = 16 gegen 3 + 6 (Burgenbau)');
+  eq([v.flanke.a, v.flanke.d, v.flanke.sieg, v.S.armies.includes(v.E), powerOf(v.S, 1)], [5, 6, false, true, 4],
+    'die Wikingerarmee hält mit 6 vom Anfang der Phase (5 ≤ 6) – erst danach gilt 4');
+  // 3 Ein Bot (Macht = Bevölkerung) erobert: 4 vor der Eroberung, 5 danach – der Mensch hält mit 4
+  const b = fall([{ civ: 'england', kind: 'bot', diff: 'prinz' }, { civ: 'griechenland', kind: 'human' }], S => {
+    Object.assign(S.players[0].techs, { taktik: true, belagerung: true });
+    capitalOf(S, 0).pop = 4; S.players[1].power = 4;
+  });
+  eq([b.X.owner, b.flanke.a, b.flanke.d, b.flanke.sieg, b.S.armies.includes(b.E), powerOf(b.S, 0)], [0, 4, 4, false, true, 5],
+    'Bot: Flanke mit Macht 4 vom Anfang der Phase gegen 4 – die Armee hält; danach Macht 5');
 }
 
 /* --- Zugfolge nach Plätzen (v90, Anweisung des Autors): mit cfg.seatOrder ziehen die Reiche in
@@ -1282,7 +1462,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     stadt(S, 0, 2, 2, true); stadt(S, 0, 2, 10); stadt(S, 1, 3, 6, true);
     for (let c = 3; c <= 9; c++) S.roads[key(2, c)] = 2;
     const fremd = [3, 4, 5, 6, 7, 8, 9].filter(c => controlledTiles(S, 1).has(key(2, c))).length;
-    eq([fremd > 0, tradeRoutes(S, 0).rail], [true, 1], 'Regelbogen: Handelsroute durch fremdes Gebiet zählt (reine Eisenbahn: +2)');
+    eq([fremd > 0, tradeRoutes(S, 0).rail], [true, 1], 'Regelbogen: Handelsroute durch fremdes Gebiet zählt (reine Eisenbahn: +4)');
     S.armies.push({ id: S.nextId++, owner: 1, r: 1, c: 7, mp: 0, born: -1 });
     S.players[1].techs.schiesspulver = true;
     const zone = [3, 4, 5, 6, 7, 8, 9].filter(c => zocStop(S, 0, 2, c)).length;
@@ -1296,7 +1476,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     for (let c = 3; c <= 5; c++) S.roads[key(2, c)] = 2;
     const zeile = () => incomeBreakdown(S, 0).extra.find(e => e.name === 'Handelsrouten').y;
     const ohne = zeile(); S.players[0].techs.buerokratie = true;
-    eq([ohne, zeile()], [[2, 2, 2], [4, 4, 4]], 'Regelbogen: Handelsroute über reine Eisenbahn +2, mit Bürokratie doppelt');
+    eq([ohne, zeile()], [[4, 4, 4], [8, 8, 8]], 'Regelbogen: Handelsroute über reine Eisenbahn +4, mit Bürokratie doppelt');
   }
   // „die sechs Felder ringsum, mit Raketentechnik auch den zweiten Ring. Mit Burgenbau gilt das
   //  auch für deine Städte." · „Die Luftwaffe ignoriert Kontrollzonen."
@@ -2059,9 +2239,10 @@ const setEvent = (S, k) => {
 
 /* ==================================================== Handelsrouten
    Jede eigene Stadt außer der Hauptstadt, die über einen durchgehenden Weg an die
-   Hauptstadt angebunden ist: +1 auf alle Erträge über Straße, +2 über reine Eisenbahn.
-   Eine Mischung gibt nur den kleineren Bonus. */
+   Hauptstadt angebunden ist: +1 auf alle Erträge über Straße, +4 über reine Eisenbahn
+   (seit v96, Anweisung des Autors; bis v95 +2). Eine Mischung gibt nur den kleineren Bonus. */
 {
+  eq([TRADE_ROAD_BONUS, TRADE_RAIL_BONUS], [1, 4], 'Handelsroute: Straße +1, reine Eisenbahn +4 (v96, bis v95 +2)');
   const S = mk('griechenland', ['rad', 'eisenbahn']);
   const cap = capitalOf(S, 0);
   // Einen echten Korridor über Landfelder suchen (BFS mit Vorgängern). Nur so lässt
@@ -2117,10 +2298,11 @@ const setEvent = (S, k) => {
   eq(routen().bonus, 0, 'eine Lücke unterbricht die Route');
   S.roads[key(lücke[0], lücke[1])] = 1;
 
-  // Alles auf Eisenbahn: +2
+  // Alles auf Eisenbahn: +4 (v96)
   zwischen.forEach(([r, c]) => S.roads[key(r, c)] = 2);
-  eq(routen().bonus, 2, 'durchgehende Eisenbahn: +2');
+  eq(routen().bonus, 4, 'durchgehende Eisenbahn: +4');
   eq(routen().rail, 1, 'als Bahnverbindung gezählt');
+  eq(bonusZeile().y, [4, 4, 4], 'die Zeile bringt +4 auf alle drei Erträge');
 
   // Mischung: ein einziges Straßenfeld drückt auf +1 zurück
   if (zwischen.length) {
@@ -2142,7 +2324,7 @@ const setEvent = (S, k) => {
     S.cities.push({ id: 501, owner: 1, r: br, c: bc, pop: 1, cap: false, grown: 0, born: 0 });
     eq(tradeRoutes(S, 0).bonus, 0, 'eine fremde Stadt unterbricht die Route');
     S.cities = S.cities.filter(c => c.id !== 501);
-    eq(tradeRoutes(S, 0).bonus, 2, 'ohne sie zählt die Route wieder');
+    eq(tradeRoutes(S, 0).bonus, 4, 'ohne sie zählt die Route wieder');
   }
 
   // Zwei angebundene Städte zählen doppelt
@@ -2152,7 +2334,7 @@ const setEvent = (S, k) => {
     S.cities.push({ id: 502, owner: 0, r: zweit[0], c: zweit[1], pop: 1, cap: false, grown: 0, born: 0 });
     S.roads[key(zweit[0], zweit[1])] = 2;
     eq(tradeRoutes(S, 0).count, 2, 'zwei angebundene Städte');
-    eq(tradeRoutes(S, 0).bonus, 4, 'zweimal Eisenbahn: +4');
+    eq(tradeRoutes(S, 0).bonus, 8, 'zweimal Eisenbahn: +8');
   }
 }
 
@@ -3316,11 +3498,12 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const DB = draftNew(B, 5);
   eq([DB.pool.length, DB.order.length, DB.order.some(pi => B.players[pi].kind === 'bot')], [7, 6, false],
     'mit einem Bot: Vorrat 2 × 3 + 1, sechs Wahlen, der Bot wählt nicht');
-  // Die KI wählt nach der Karte: Taiga gewinnt bei viel Wald gegen eine schwache Wahl
+  // Die KI wählt nach der Karte: Taiga zählt Land ohne Nahrung – Wald und Gebirge (seit v95;
+  // bis v94 nur den Wald) – um die eigene Hauptstadt, je vier Felder einen Punkt, höchstens vier
   const vi = 0, cap = capitalOf(V, vi);
-  const wald = within(cap.r, cap.c, 5).filter(([r, c]) => terrainAt(V, r, c) === 'W').length;
-  eq(kiDraftValue(V, vi, 'russland:basis', []) > KI_DRAFT_BASE['russland:basis'], wald > 0,
-    'Taiga zählt den Wald um die eigene Hauptstadt');
+  const ohneNahrung = within(cap.r, cap.c, 5).filter(([r, c]) => ['W', 'B'].includes(terrainAt(V, r, c))).length;
+  eq(kiDraftValue(V, vi, 'russland:basis', []) - KI_DRAFT_BASE['russland:basis'], Math.min(4, ohneNahrung / 4),
+    `Taiga zählt Wald und Gebirge um die eigene Hauptstadt (${ohneNahrung} Felder)`);
   eq(kiDraftValue(V, vi, 'wikinger:armeemacht', ['wikinger:armeemacht']) < 0, true, 'Doppeltes ist der KI nichts wert');
 }
 
@@ -3413,7 +3596,8 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     const bahn = erreichbar(2), weg = erreichbar(1);
     for (const city of others) {
       const k = key(city.r, city.c);
-      if (bahn.has(k)) { o.rail++; o.bonus += 2; } else if (weg.has(k)) { o.road++; o.bonus += 1; }
+      // Zuschläge aus der Regel (v96: Eisenbahn +4) – verglichen wird der Rechenweg
+      if (bahn.has(k)) { o.rail++; o.bonus += TRADE_RAIL_BONUS; } else if (weg.has(k)) { o.road++; o.bonus += TRADE_ROAD_BONUS; }
     }
     o.count = o.rail + o.road;
     return o;
@@ -4499,19 +4683,20 @@ const duellKarte = (civA, civB, seed) => {
   settleGain(S, pi, ...far); settleGain(S, pi, ...near);
   eq(JSON.stringify(S), before, 'settleGain verändert den Spielstand nicht');
 
-  // Fähigkeiten wirken mit: Russlands Grundfähigkeit gibt +1 Nahrung je Wald.
-  // Gegenprobe im selben Spielstand, nur mit umgeschalteter Fähigkeit.
+  // Fähigkeiten wirken mit: Russlands Taiga hebt seit v95 jedes Feld auf mindestens 1 Nahrung
+  // (bis v94 +1 je Wald). Gegenprobe im selben Spielstand, nur mit umgeschalteter Fähigkeit.
   {
-    const wald = within(cap.r, cap.c, 6).filter(([r, c]) =>
-      isLand(S, r, c) && hexDistance(cap.r, cap.c, r, c) >= 4 &&
-      neighbors(r, c).filter(([a, b]) => terrainAt(S, a, b) === 'W').length >= 1)[0];
-    eq(!!wald, true, 'ein Waldplatz zum Vergleich gefunden');
-    const n = neighbors(...wald).filter(([a, b]) => terrainAt(S, a, b) === 'W').length;
-    const mit = settleGain(S, pi, ...wald).food;
-    S.players[pi].ability = 'wachstum';                  // Alternative: kein Waldbonus
-    const ohne = settleGain(S, pi, ...wald).food;
+    const own = controlledTiles(S, pi);
+    const neu = ([r, c]) => neighbors(r, c).filter(([a, b]) => terrainAt(S, a, b) && !cityAt(S, a, b) && !own.has(key(a, b)));
+    const platz = within(cap.r, cap.c, 6).filter(([r, c]) => isLand(S, r, c) && hexDistance(cap.r, cap.c, r, c) >= 4 &&
+      neu([r, c]).some(([a, b]) => ['W', 'B', 'M'].includes(terrainAt(S, a, b))))[0];
+    eq(!!platz, true, 'ein Platz mit Wald, Gebirge oder Meer zum Vergleich gefunden');
+    const mit = settleGain(S, pi, ...platz).food;
+    S.players[pi].ability = 'wachstum';                  // Alternative: keine Taiga
+    const ohne = settleGain(S, pi, ...platz).food;
+    const hungrig = neu(platz).filter(([a, b]) => tileYieldAt(S, pi, a, b)[1] < 1).length;
     S.players[pi].ability = 'basis';
-    eq(mit - ohne, n, `Waldfähigkeit bringt genau +1 je Wald (${n} Wälder)`);
+    eq([mit - ohne, hungrig > 0], [hungrig, true], `Taiga hebt jedes neue Feld ohne Nahrung auf 1 (${hungrig} am Platz)`);
   }
 }
 /* ==================================================== Gründungsmodus (v75)
@@ -5496,6 +5681,212 @@ for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft
 }
 ui = { sel: null, army: null, mode: null, botTimer: null };
 
+/* ==================================================== Züge von KI und Bots nachspielen (v94, v95)
+   js/anim.js: Aufnahme über LOG_HOOK (nur der echte Spielstand, nicht die Planungskopien der
+   KI), seit v95 je Aktion eine Szene – so, wie ein Mensch sie ausführt. Abgespielt wird in der
+   Oberfläche (smoke.js). */
+{
+  eq(LOG_HOOK === null, true, 'LOG_HOOK ist ab Werk leer');
+  // Ein Fehler im Zug lässt den Haken nicht hängen
+  {
+    const S = newGame({ seed: 4, players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'bot' }] });
+    let fehler = null;
+    try { animAufnahme(S, () => { throw new Error('absichtlich'); }); } catch (e) { fehler = e.message; }
+    eq([fehler, LOG_HOOK === null], ['absichtlich', true], 'Fehler im Zug: geht weiter nach oben, der Haken ist wieder ab');
+  }
+  // Bot-Züge: je Aktion im Protokoll eine Szene, in derselben Reihenfolge; die letzte zeigt den
+  // Stand nach dem Zug
+  const bots = newGame({ seed: 11, players: CIVS.map(c => ({ civ: c.k, kind: 'bot', diff: 'koenig' })) });
+  let gesehen = 0, gleichNebeneinander = 0;
+  const artenBot = new Set();
+  for (let z = 0; z < 24; z++) {
+    if (bots.over) break;
+    const pi = bots.cur, seq = bots.logSeq;
+    const rec = animAufnahme(bots, () => botTurn(bots, pi));
+    const akt = logSince(bots, seq).filter(l => l.c === 'act');
+    const szenen = animSzenen(rec, pi);
+    if (szenen.length !== akt.length || szenen.some((s, i) => s.texte.join() !== akt[i].m || s.bild !== rec.bilder[i].snap)) { gesehen = -1; break; }
+    szenen.forEach((s, i) => { artenBot.add(s.art); if (i && s.art === szenen[i - 1].art) gleichNebeneinander++; });
+    const letzte = szenen.length ? szenen[szenen.length - 1].bild : rec.vor;
+    if (JSON.stringify([letzte.cities, letzte.armies]) !== JSON.stringify([bots.cities, bots.armies])) { gesehen = -2; break; }
+    gesehen += szenen.length;
+    endTurn(bots);
+  }
+  eq(gesehen > 30, true, `Bot-Züge: je Aktion eine Szene in der Reihenfolge des Protokolls, zuletzt der Stand danach (${gesehen} Szenen)`);
+  eq(['wachsen', 'gruenden', 'forschen', 'armee', 'zug'].every(a => artenBot.has(a)) && gleichNebeneinander > 0, true,
+    `Bots: wachsen, gründen, Armee bauen, ziehen, forschen – jede Aktion für sich, auch zwei gleiche hintereinander (${gleichNebeneinander}×; ${[...artenBot].join(', ')})`);
+  eq(LOG_HOOK === null, true, 'nach jeder Aufnahme ist der Haken wieder ab');
+  // Die KI plant auf Wegwerfkopien – deren Aktionen sind keine Szenen
+  {
+    const K = newGame({ seed: 5, players: [{ civ: 'griechenland', kind: 'ki', kiLevel: 'mittel' }, { civ: 'england', kind: 'ki', kiLevel: 'mittel' }] });
+    let ok = true, n = 0, forschungen = 0;
+    const arten = new Set();
+    for (let z = 0; z < 10 && !K.over; z++) {
+      const pi = K.cur, seq = K.logSeq;
+      const rec = animAufnahme(K, () => kiTurn(K, pi));
+      const akt = logSince(K, seq).filter(l => l.c === 'act');
+      const szenen = animSzenen(rec, pi);
+      if (szenen.length !== akt.length) ok = false;
+      szenen.forEach(s => { arten.add(s.art); n++; if (s.art === 'forschen' && s.techs.length !== 1) ok = false; if (s.art === 'forschen') forschungen++; });
+      endTurn(K);
+    }
+    eq([ok, n > 10, arten.has('forschen') && arten.has('wachsen'), forschungen > 3], [true, true, true, true],
+      `KI: nur Aktionen auf dem echten Spielstand, je Technologie eine Szene (${n} Szenen, davon ${forschungen} Forschungen: ${[...arten].join(', ')})`);
+  }
+  // Eine Aktion nach der anderen – auch Forschen und Macht, jede mit dem Stand nach ihr
+  {
+    const S = newGame({ seed: 4, players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'bot' }] });
+    const cap = capitalOf(S, 0), t = S.players[0].techs;
+    ['schrift', 'rad', 'mathematik', 'astronomie'].forEach(k => delete t[k]);
+    const rec = { vor: animSnap(S), bilder: [] };
+    const bild = (m, aendern, art) => { aendern(); rec.bilder.push({ m, art, snap: animSnap(S) }); };
+    const pop0 = cap.pop, m0 = S.players[0].power, armeen0 = S.armies.length;
+    bild('w1', () => { cap.pop += 1; });
+    bild('f1', () => { t.schrift = true; });
+    bild('w2', () => { cap.pop += 1; });
+    bild('m1', () => { S.players[0].power += 2; });
+    bild('a1', () => { S.armies.push({ id: 950, owner: 0, r: cap.r, c: cap.c, mp: 2, born: S.round }); });
+    bild('f2', () => { t.rad = true; });
+    bild('m2', () => { S.players[0].power += 1; });
+    const sz = animSzenen(rec, 0);
+    eq(sz.map(s => s.art + ':' + s.texte.join('+')), ['wachsen:w1', 'forschen:f1', 'wachsen:w2', 'macht:m1', 'armee:a1', 'forschen:f2', 'macht:m2'],
+      'je Aktion eine Szene, in der Reihenfolge des Zugs – nichts zusammengefasst');
+    eq([sz[0].marken, sz[2].marken, sz[1].techs, sz[5].techs, sz[3].macht, sz[6].macht],
+      [[{ r: cap.r, c: cap.c, text: '+1' }], [{ r: cap.r, c: cap.c, text: '+1' }], ['schrift'], ['rad'], [m0, m0 + 2], [m0 + 2, m0 + 3]],
+      '… jede mit genau dem, was sie tat (+1, +1, Schrift, Rad, Macht + 2, + 1)');
+    const pop = s => s.bild.cities.find(c => c.id === cap.id).pop;
+    eq(sz.map(s => [pop(s), s.bild.armies.length]),
+      [[pop0 + 1, armeen0], [pop0 + 1, armeen0], [pop0 + 2, armeen0], [pop0 + 2, armeen0], [pop0 + 2, armeen0 + 1], [pop0 + 2, armeen0 + 1], [pop0 + 2, armeen0 + 1]],
+      'gezeichnet: je Szene der Stand nach ihrer Aktion');
+    // Gesagte Art geht vor: geschenkte Armee, Kopie, Pentagon (Macht, aber nicht gekauft)
+    const rec2 = { vor: animSnap(S), bilder: [] };
+    const bild2 = (m, aendern, art) => { aendern(); rec2.bilder.push({ m, art, snap: animSnap(S) }); };
+    bild2('frei', () => S.armies.push({ id: 951, owner: 0, r: cap.r, c: cap.c, mp: 2, born: S.round }), 'gratisarmee');
+    bild2('kopie', () => { t.mathematik = true; }, 'kopieren');
+    bild2('England: +15 Macht (Das Pentagon).', () => { S.players[0].power += 15; }, 'sonst');
+    const sz2 = animSzenen(rec2, 0);
+    eq([sz2.map(s => s.art).join(), sz2[0].ringe, sz2[1].techs, animText(sz2[0], 'England (KI)'), animText(sz2[1], 'England (KI)'), animText(sz2[2], 'England (KI)')],
+      ['gratisarmee,kopieren,sonst', [[cap.r, cap.c]], ['mathematik'], 'England (KI) erhält eine kostenlose Armee', 'England (KI) kopiert Mathematik', 'England: +15 Macht (Das Pentagon).'],
+      'die Aktion sagt, was sie ist: geschenkte Armee (mit Ring), Kopie, sonst ihr Satz aus dem Protokoll');
+    // Was eine Aktion sonst noch ändert, zeigt ihre Szene mit (Wunder samt geschenkter Technologie)
+    const rec3 = { vor: animSnap(S), bilder: [] };
+    S.wonders.push({ k: 'zeus', lvl: 1, owner: 0, cityId: cap.id, r: cap.r, c: cap.c }); t.astronomie = true;
+    rec3.bilder.push({ m: 'wu', snap: animSnap(S) });
+    const sz3 = animSzenen(rec3, 0);
+    eq([sz3.map(s => s.art).join(), sz3[0].techs, sz3[0].ringe], ['wunder', ['astronomie'], [[cap.r, cap.c]]], 'Wunder samt Technologie: eine Szene, ein Ring');
+  }
+  // Mit der Regelmaschine: Koloss (sein Satz, dann die geschenkte Armee), Pentagon (geschenkte
+  // Macht: sein Satz statt „kauft Macht"), Kopie mit Spionage
+  {
+    const S = mkX('griechenland', { wonders: true });
+    const cap = capitalOf(S, 0), p = S.players[0];
+    S.armies = S.armies.filter(a => a.owner !== 0);
+    p.techs.spionage = true; p.res.coins = 100;
+    S.players[1].techs.schrift = true; delete p.techs.schrift;
+    const rec = animAufnahme(S, () => {
+      applyWonderEffect(S, 0, cap, WONDER_BY_KEY.koloss);
+      applyWonderEffect(S, 0, cap, WONDER_BY_KEY.pentagon);
+      copyTech(S, 0, 'schrift', 'paid');
+    });
+    const sz = animSzenen(rec, 0);
+    eq([sz.map(s => s.art).join(), sz[1].ringe, sz[3].techs, animText(sz[2], 'Griechenland') === sz[2].texte[0], /Pentagon/.test(sz[2].texte[0])],
+      ['sonst,gratisarmee,sonst,kopieren', [[cap.r, cap.c]], ['schrift'], true, true],
+      'Regelmaschine: Koloss mit seinem Satz, geschenkte Armee, Pentagon mit seinem Satz, Kopie');
+  }
+  // Jede Art einzeln: ein Stand davor, einer danach
+  {
+    const S = newGame({ seed: 4, players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'bot' }] });
+    const cap = capitalOf(S, 0);
+    const [fr, fc] = neighbors(cap.r, cap.c).find(([r, c]) => isLand(S, r, c));
+    S.armies.push({ id: 900, owner: 0, r: cap.r, c: cap.c, mp: 3, born: 0 });
+    const art = aendern => {
+      const A = animSnap(S); aendern(); const B = animSnap(S);
+      return animSzenen({ vor: A, bilder: [{ m: 'x', snap: B }] }, 0)[0];
+    };
+    const z = art(() => { const a = S.armies.find(x => x.id === 900); a.r = fr; a.c = fc; });
+    eq([z.art, z.zuege, z.felder], ['zug', [{ id: 900, owner: 0, von: [cap.r, cap.c], nach: [fr, fc] }], [[fr, fc]]], 'Armee gezogen: von → nach');
+    const w = art(() => { cap.pop += 2; });
+    eq([w.art, w.marken], ['wachsen', [{ r: cap.r, c: cap.c, text: '+2' }]], 'Stadt gewachsen: +2 an der Stadt');
+    eq(art(() => { cap.pop -= 1; }).marken[0].text, '−1', 'geopfert: −1');
+    const bahn = art(() => { S.roads[key(fr, fc)] = 2; });
+    eq([bahn.art, bahn.bahn, bahn.n], ['strasse', true, 1], 'Eisenbahn erkannt');
+    eq(art(() => { S.players[0].techs.schrift = true; }).techs, ['schrift'], 'Technologie erkannt');
+    eq(art(() => { S.players[0].power += 3; }).macht, [0, 3], 'Macht: von 0 auf 3');
+    eq(art(() => { S.armies = S.armies.filter(a => a.id !== 900); }).art, 'atom', 'Armee verschwunden: Atomschlag');
+    const b = art(() => { S.armies.push({ id: 901, owner: 0, r: cap.r, c: cap.c, mp: 2, born: S.round }); });
+    eq([b.art, b.n, b.ringe, b.felder], ['armee', 1, [[cap.r, cap.c]], [[cap.r, cap.c]]], 'Armee gebaut: Ring an der Stadt');
+    S.armies = S.armies.filter(a => a.id !== 901);
+    eq(art(() => { (S.bought[0] = S.bought[0] || []).push(key(fr, fc)); }).art, 'feld', 'Feld gekauft');
+    eq(art(() => { S.wonders.push({ k: 'zeus', lvl: 1, owner: 0, cityId: cap.id, r: cap.r, c: cap.c }); }).ringe, [[cap.r, cap.c]], 'Wunder: Ring an der Stadt');
+    eq(art(() => { S.players[0].res.coins += 5; }).art, 'sonst', 'nur Münzen: keine eigene Art – der Satz aus dem Protokoll');
+    // Die Sätze, deutsch und englisch – keine Lücke
+    const proben = [['gruenden', { n: 2 }], ['gruenden', { n: 1 }], ['armee', { n: 3 }], ['armee', { n: 1 }], ['gratisarmee', { n: 1 }],
+      ['zug', { n: 2 }], ['zug', { n: 1 }], ['wachsen', { n: 4 }], ['wachsen', { n: 1 }], ['opfer', {}],
+      ['strasse', { bahn: true, n: 1 }], ['strasse', { n: 2 }], ['strasse', { n: 1 }], ['feld', {}], ['wunder', { wunder: [{ k: 'zeus' }] }],
+      ['forschen', { techs: ['schrift', 'singularitaet'] }], ['kopieren', { techs: ['schrift'] }], ['macht', { macht: [1, 4] }], ['atom', {}]]
+      .map(([a, x]) => Object.assign({ art: a, texte: ['–'] }, x));
+    eq(animText(proben[0], 'England (Bot)'), 'England (Bot) gründet 2 Städte', 'Satz: „England (Bot) gründet 2 Städte"');
+    eq(animText(proben[15], 'Wikinger (KI)'), 'Wikinger (KI) erforscht Schrift, Singularität', 'Satz: Technologien mit Namen');
+    eq(animText(proben[12], 'Russland (KI)'), 'Russland (KI) baut eine Straße', 'Satz: „baut eine Straße" (ein Feld je Aktion)');
+    setLang('en', { quiet: true });
+    clearMissing();
+    const en = proben.map(s => animText(s, 'England'));
+    const fehlt = missingStrings();
+    setLang('de', { quiet: true });
+    clearMissing();
+    eq([fehlt, en[17], en[4], en[16], en[12]], [[], 'England buys power – now 4', 'England receives a free army', 'England copies Writing', 'England builds a road'],
+      'alle Sätze haben eine englische Fassung');
+  }
+  /* Laufender Vorrat in der Kopfzeile (v96, Wunsch des Autors): je Szene der Stand nach der Aktion
+     und was sie geändert hat (animKopf). Dafür trägt jedes Bild seinen eigenen Vorrat – bis v95
+     teilten sich alle Bilder den lebenden. */
+  {
+    const S = newGame({ seed: 4, players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'bot' }] });
+    const A = animSnap(S);
+    S.players[0].res.sci += 5;
+    const B = animSnap(S);
+    eq([B.players[0].res.sci - A.players[0].res.sci, A.players[0].res === S.players[0].res], [5, false], 'jedes Bild hat seinen eigenen Vorrat');
+    const s = { pi: 0, vor: A, nach: B };
+    eq([animKopf(S, s).delta, animKopf(S, s).nach.sci], [{ sci: 5 }, S.players[0].res.sci], 'animKopf: nur, was sich geändert hat, und der Stand danach');
+    S.players[0].res.sci -= 5;
+  }
+  {
+    // Ganze Züge der KI: der Stand läuft lückenlos von Zugbeginn bis zum Ende des Zugs, jede Szene
+    // setzt dort an, wo die vorige aufhörte; Gründen kostet Nahrung, Forschen Wissenschaft
+    const K = newGame({ seed: 8, players: [{ civ: 'russland', kind: 'ki', kiLevel: 'schwer' }, { civ: 'england', kind: 'ki', kiLevel: 'mittel' }] });
+    const R = x => [x.sci, x.food, x.coins];
+    let szenen = 0, luecken = [], gruenden = 0, forschen = 0, macht = 0;
+    for (let z = 0; z < 12 && !K.over; z++) {
+      const pi = K.cur, start = R(K.players[pi].res);
+      const rec = animAufnahme(K, () => kiTurn(K, pi));
+      const ende = R(K.players[pi].res);
+      let vorher = start;
+      animSzenen(rec, pi).forEach((s, i) => {
+        const k = animKopf(K, s);
+        if (JSON.stringify(R(k.vor)) !== JSON.stringify(vorher)) luecken.push(`${z}/${i}`);
+        vorher = R(k.nach);
+        szenen++;
+        if (s.art === 'gruenden' && (k.delta.food || 0) + (k.delta.coins || 0) < 0) gruenden++;
+        if (s.art === 'forschen' && (k.delta.sci || 0) < 0) forschen++;
+        if (s.art === 'macht' && k.delta.power > 0 && (k.delta.coins || 0) < 0) macht++;
+      });
+      if (JSON.stringify(vorher) !== JSON.stringify(ende)) luecken.push(`${z}/Ende ${vorher} ≠ ${ende}`);
+      endTurn(K);
+    }
+    eq([luecken, szenen > 20, gruenden > 0, forschen > 0], [[], true, true, true],
+      `KI: der Vorrat läuft von Szene zu Szene bis zum Ende des Zugs (${szenen} Szenen; Gründen kostet ${gruenden}×, Forschen ${forschen}×, Macht gekauft ${macht}×)`);
+    // Bots zahlen nichts: ihre Szenen ändern den Vorrat nicht (die Macht ist ihre Bevölkerung)
+    const B = newGame({ seed: 11, players: CIVS.map(c => ({ civ: c.k, kind: 'bot', diff: 'koenig' })) });
+    let vorratBot = 0, machtBot = 0;
+    for (let z = 0; z < 8 && !B.over; z++) {
+      const pi = B.cur, rec = animAufnahme(B, () => botTurn(B, pi));
+      animSzenen(rec, pi).forEach(s => { const d = animKopf(B, s).delta; if (d.sci || d.food || d.coins) vorratBot++; if (d.power) machtBot++; });
+      endTurn(B);
+    }
+    eq([vorratBot, machtBot > 0], [0, true], `Bots: kein Vorrat bewegt sich, die Macht wächst mit der Bevölkerung (${machtBot}×)`);
+  }
+}
+
 /* ==================================================== Plättchenkarten
    Zufallskarten aus Dreiecken zu 15 Feldern: Vorrat, Formen, Legeregeln, Karte. */
 {
@@ -6429,7 +6820,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
      die Flaggen direkt aus LANGS, ohne T(). Die Zahl darf sinken, nicht steigen. */
   {
     const norm = x => x.replace(/\s+/g, ' ');
-    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'ui', 'tutorial', 'firstgame']
+    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'anim', 'ui', 'tutorial', 'firstgame']
       .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8'))
       .concat(fs.readFileSync(__dirname + '/index.html', 'utf8')).join('\n');
     const heu = norm(quellen);
@@ -7156,6 +7547,44 @@ function kiAbwehrLage(popKI, gross) {
     kiTurn(S, pi); if (S.over) break; endTurn(S);
   }
   eq([zuege > 0, mit > ohne], [true, true], `mit Reserve mehr Wissenschaft in die Forschung (${mit} gegen ${ohne} in ${zuege} Zügen mit Alchemie)`);
+}
+{
+  /* --- Wissenschaftliche Methode zuerst (v96, Anweisung des Autors): sie kommt vor jeder anderen
+     bezahlten Technologie des Zugs, sobald sie lohnt – und macht eine Forschung sie erst verfügbar
+     (die erste Technologie eines Zeitalters würfelt das nächste aus), plant die KI neu und nimmt
+     sie gleich danach. Gegenprobe: mit abgeschalteten Haken (kiMethodeZuerst, kiMethodeOffen) plant
+     kiPlan wie bis v95 – dann kommt die Methode in beiden Lagen später. */
+  const lage = (avail, sci, freischalten) => {
+    const S = newGame({ seed: 3, players: [{ civ: 'england', kind: 'ki', kiLevel: 'schwer', ability: 'basis' }, { civ: 'russland', kind: 'ki', kiLevel: 'schwer', ability: 'basis' }] });
+    const pi = S.cur, p = S.players[pi];
+    p.avail = Object.assign({}, avail);
+    p.res = { sci, food: 2, coins: 0 };
+    const folge = [];
+    const dr = doResearch, ra = rollAvailability;
+    doResearch = function (X, pj, tk) {
+      const t = TECH_BY_KEY[tk], c = t ? techCost(X, pj, t) : 0, r = dr.apply(this, arguments);
+      if (!X.kiSim && !r) folge.push([tk, c, techBase(X, t)]);
+      return r;
+    };
+    // die Würfel fürs nächste Zeitalter der Forschung bringen die Methode sicher (auch auf den Kopien der KI)
+    if (freischalten) rollAvailability = function (X, pj, f, age) { ra.apply(this, arguments); if (f === 0 && age === 2) X.players[pj].avail.wiss_methode = true; };
+    try { kiTurn(S, pi); } finally { doResearch = dr; rollAvailability = ra; }
+    return folge;
+  };
+  const A = { wiss_methode: true, gilden: true, alchemie: true, papier: true, keramik: true, segeln: true };
+  const C = { alchemie: true, universitaet: true, papier: true, buchdruck: true };
+  const kurz = f => f.map(([k, c]) => k + '(' + c + ')').join(' → ');
+  const a = lage(A, 45), c = lage(C, 60, true);
+  eq([a[0][0], a.length >= 3, a.slice(1).every(([k, cost, basis]) => cost === Math.max(0, basis - 2 * (TECH_BY_KEY[k].age + 1)))],
+    ['wiss_methode', true, true], `die Methode zuerst, alles danach mit ihrem Rabatt: ${kurz(a)}`);
+  eq([TECH_BY_KEY[c[0][0]].f === 0 && TECH_BY_KEY[c[0][0]].age === 1, c[1] && c[1][0]], [true, 'wiss_methode'],
+    `macht eine Forschung die Methode erst verfügbar, kommt sie gleich danach: ${kurz(c)}`);
+  const zuerst = kiMethodeZuerst, offen = kiMethodeOffen;
+  kiMethodeZuerst = () => null; kiMethodeOffen = () => false;
+  let a0, c0;
+  try { a0 = lage(A, 45); c0 = lage(C, 60, true); } finally { kiMethodeZuerst = zuerst; kiMethodeOffen = offen; }
+  eq([a0[0][0] !== 'wiss_methode', c0.findIndex(([k]) => k === 'wiss_methode') > 1], [true, true],
+    `Gegenprobe – die Reihenfolge bis v95: ${kurz(a0)} · ${kurz(c0)}`);
 }
 {
   // --- Entschlossener Angreifer (Menschen): sein Budget enthält Alchemie, wenn er sie diesen
