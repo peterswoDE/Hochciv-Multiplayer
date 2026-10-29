@@ -2,20 +2,37 @@
  * Post-game statistics (F6): the score of every empire over the rounds, key moments and the
  * numbers as a table. Data from utils/stats.js – live games send it as 'game:stats', a finished
  * Rundenspiel has it in its view, the match history loads it from GET /api/games/:id.
- * Loaded on the game page after mp.js (inject.js).
+ * Loaded on the game page after mp.js (inject.js), and on the account page for the match history
+ * (with TX, TXS and escHtml defined there; nation names and colours then come with the match).
  *
- * Chart: one line per empire in its nation's colour (the colour it has on the map). Those colours
- * are not told apart reliably by everyone, so every line also has its own marker shape, the
- * legend and the end labels name it, a crosshair tooltip lists every empire at a round, and the
- * table view has all values.
+ * Chart: one value per empire and round – points, or cities, population, techs, armies, wonders,
+ * income and stock of science, food and coins (the selector above the chart; older matches have
+ * what was recorded then). One line per empire in its nation's colour (the colour it has on the
+ * map). Those colours are not told apart reliably by everyone, so every line also has its own
+ * marker shape, the legend and the end labels name it, a crosshair tooltip lists every empire at
+ * a round, and the table view has all values.
  */
 const STATS = {
     SHAPES: ['circle', 'square', 'triangle', 'diamond', 'down', 'hexagon', 'cross', 'star'],
+    // what the chart can show: the key in a point of utils/stats.js and its title
+    METRICS: [
+        ['s', 'Punkte je Runde'], ['c', 'Städte'], ['pop', 'Bevölkerung'], ['t', 'Technologien'],
+        ['a', 'Armeen'], ['w', 'Weltwunder'],
+        ['ys', 'Wissenschaft je Runde'], ['yf', 'Nahrung je Runde'], ['yc', 'Münzen je Runde'],
+        ['rs', 'Wissenschaft im Vorrat'], ['rf', 'Nahrung im Vorrat'], ['rc', 'Münzen im Vorrat'],
+    ],
+    names: null,             // { civ: { k: [de, en, colour] }, wonder: { k: [de, en] } } – from GET /api/games/:id
 
     civ: function (p) {
         if (typeof civOf === 'function') return civOf({ civ: p.civ, roman: p.roman, color: p.color });
         const c = typeof CIV_BY_KEY !== 'undefined' && CIV_BY_KEY[p.civ];
-        return { n: (c ? c.n : p.civ) + (p.roman ? ' ' + p.roman : ''), color: p.color || (c ? c.color : '#888') };
+        const n = this.names && this.names.civ && this.names.civ[p.civ];
+        const name = c ? c.n : n ? (HC_I18N.lang() === 'en' ? n[1] : n[0]) : p.civ;
+        return { n: name + (p.roman ? ' ' + p.roman : ''), color: p.color || (c ? c.color : n && n[2]) || '#888' };
+    },
+    /** The metrics this match has values for. */
+    metrics: function (stats, ids) {
+        return this.METRICS.filter(([k]) => stats.rounds.some(rd => ids.some(i => rd.p[i] && rd.p[i][k] != null)));
     },
     label: function (stats, i) {
         const p = stats.players[i], c = this.civ(p);
@@ -67,32 +84,53 @@ const STATS = {
             return;
         }
         const ids = this.series(stats);
-        el.innerHTML = `<h4 class="hcs-title">${TX('Punkte je Runde')}</h4><div class="hcs-legend">${ids.map(i => `<span>${this.swatch(i, this.civ(stats.players[i]).color)}${escHtml(this.label(stats, i))}</span>`).join('')}</div>
+        const metrics = this.metrics(stats, ids);
+        let k = metrics.length ? metrics[0][0] : 's';
+        const select = metrics.length > 1 ? `<label class="hcs-metric">${TX('Anzeigen')} <select>${metrics.map(([key, n]) =>
+            `<option value="${key}">${escHtml(TX(n))}</option>`).join('')}</select></label>` : '';
+        el.innerHTML = `<div class="hcs-head"><h4 class="hcs-title">${TX('Punkte je Runde')}</h4>${select}</div><div class="hcs-legend">${ids.map(i => `<span>${this.swatch(i, this.civ(stats.players[i]).color)}${escHtml(this.label(stats, i))}</span>`).join('')}</div>
             <div class="hcs-plot"><div class="hcs-tip" hidden></div></div>
             <div class="hcs-moments"></div>
             <button type="button" class="btn small hcs-table-btn">${TX('Als Tabelle')}</button>
             <div class="hcs-tables" hidden></div>`;
-        this.chart(el.querySelector('.hcs-plot'), stats, ids);
-        this.moments(el.querySelector('.hcs-moments'), stats);
+        const plot = el.querySelector('.hcs-plot'), title = el.querySelector('.hcs-title');
         const btn = el.querySelector('.hcs-table-btn'), tables = el.querySelector('.hcs-tables');
+        const draw = () => {
+            title.textContent = TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1]);
+            this.chart(plot, stats, ids, k);
+            if (!tables.hidden) tables.innerHTML = this.tables(stats, ids, k);
+        };
+        draw();
+        const sel = el.querySelector('.hcs-metric select');
+        if (sel) sel.onchange = () => { k = sel.value; tables.innerHTML = ''; draw(); };
+        this.moments(el.querySelector('.hcs-moments'), stats);
         btn.onclick = () => {
             tables.hidden = !tables.hidden;
             btn.textContent = tables.hidden ? TX('Als Tabelle') : TX('Tabelle ausblenden');
-            if (!tables.hidden && !tables.innerHTML) tables.innerHTML = this.tables(stats, ids);
+            if (!tables.hidden && !tables.innerHTML) tables.innerHTML = this.tables(stats, ids, k);
         };
     },
 
-    chart: function (box, stats, ids) {
+    chart: function (box, stats, ids, k) {
+        k = k || 's';
+        const old = box.querySelector(':scope > svg');
+        if (old) old.remove();
         const rounds = stats.rounds;
+        const val = (rd, i) => (rd.p[i] && rd.p[i][k] != null ? rd.p[i][k] : null);
+        const title = TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1]);
         const W = Math.max(300, Math.min(720, box.clientWidth || 600)), H = 240;
         const labels = W >= 440;                             // end labels need room on the right
         const m = { l: 34, r: labels ? 110 : 12, t: 10, b: 28 };
         const pw = W - m.l - m.r, ph = H - m.t - m.b;
-        const maxS = this.niceMax(Math.max(1, ...rounds.flatMap(rd => ids.map(i => rd.p[i] && rd.p[i].s || 0))));
+        const all = rounds.flatMap(rd => ids.map(i => val(rd, i))).filter(v => v != null);
+        // food income can be negative: the axis then starts below zero
+        const low = Math.min(0, ...all);
+        const minS = low < 0 ? -this.niceMax(-low) : 0;
+        const maxS = this.niceMax(Math.max(1, ...all));
         const r0 = rounds[0].r, r1 = rounds[rounds.length - 1].r;
         const x = r => m.l + (r1 === r0 ? pw / 2 : (r - r0) / (r1 - r0) * pw);
-        const y = v => m.t + ph - v / maxS * ph;
-        const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * maxS * 10) / 10);
+        const y = v => m.t + ph - (v - minS) / (maxS - minS) * ph;
+        const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round((minS + f * (maxS - minS)) * 10) / 10);
         const every = Math.max(1, Math.ceil(rounds.length / Math.floor(pw / 32)));
         const grid = ticks.map(v => `<line x1="${m.l}" x2="${m.l + pw}" y1="${y(v)}" y2="${y(v)}" class="hcs-grid"/>
             <text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" class="hcs-axis">${v}</text>`).join('');
@@ -101,7 +139,7 @@ const STATS = {
         const markersEvery = rounds.length > 24 ? Math.ceil(rounds.length / 12) : 1;
         const lines = ids.map(i => {
             const color = this.civ(stats.players[i]).color;
-            const pts = rounds.filter(rd => rd.p[i] && rd.p[i].s != null).map(rd => [x(rd.r), y(rd.p[i].s)]);
+            const pts = rounds.filter(rd => val(rd, i) != null).map(rd => [x(rd.r), y(val(rd, i))]);
             if (!pts.length) return '';
             const d = pts.map((p, k) => `${k ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
             const marks = pts.filter((p, k) => k % markersEvery === 0 || k === pts.length - 1)
@@ -114,7 +152,7 @@ const STATS = {
         if (labels) {
             const last = rounds[rounds.length - 1];
             const placed = [];
-            ids.map(i => ({ i, v: last.p[i] && last.p[i].s }))
+            ids.map(i => ({ i, v: val(last, i) }))
                 .filter(e => e.v != null).sort((a, b) => b.v - a.v)
                 .forEach(e => {
                     const yy = y(e.v);
@@ -124,7 +162,7 @@ const STATS = {
                     ends += `<text x="${x(last.r) + 9}" y="${yy + 4}" class="hcs-end">${escHtml(name.length > 14 ? name.slice(0, 13) + '…' : name)} ${e.v}</text>`;
                 });
         }
-        box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${escHtml(TX('Punkte je Runde'))}">
+        box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${escHtml(title)}">
             ${grid}${xt}
             ${lines}${ends}
             <line class="hcs-cross" x1="0" x2="0" y1="${m.t}" y2="${m.t + ph}" visibility="hidden"/>
@@ -144,10 +182,10 @@ const STATS = {
             head.className = 'hcs-tip-head';
             head.textContent = TX('Runde %s', best.r);
             tip.appendChild(head);
-            ids.filter(i => best.p[i] && best.p[i].s != null).sort((a, b) => best.p[b].s - best.p[a].s).forEach(i => {
+            ids.filter(i => val(best, i) != null).sort((a, b) => val(best, b) - val(best, a)).forEach(i => {
                 const row = document.createElement('div');
                 row.innerHTML = this.swatch(i, this.civ(stats.players[i]).color);
-                const v = document.createElement('b'); v.textContent = best.p[i].s;
+                const v = document.createElement('b'); v.textContent = val(best, i);
                 const n = document.createElement('span'); n.textContent = this.short(stats, i);
                 row.append(v, n);
                 tip.appendChild(row);
@@ -168,7 +206,8 @@ const STATS = {
         const name = i => escHtml(this.short(stats, i));
         const wonder = k => {
             const w = typeof WONDER_BY_KEY !== 'undefined' && WONDER_BY_KEY[k];
-            return escHtml(w ? (typeof T === 'function' ? T(w.n) : w.n) : k);
+            const n = !w && this.names && this.names.wonder && this.names.wonder[k];
+            return escHtml(w ? (typeof T === 'function' ? T(w.n) : w.n) : n ? (HC_I18N.lang() === 'en' ? n[1] : n[0]) : k);
         };
         const list = [];
         const caps = {};
@@ -206,13 +245,15 @@ const STATS = {
             : `<p class="sub">${TX('Keine besonderen Ereignisse.')}</p>`);
     },
 
-    tables: function (stats, ids) {
+    tables: function (stats, ids, k) {
+        k = k || 's';
+        const cell = (rd, i, key) => (rd.p[i] && rd.p[i][key] != null ? rd.p[i][key] : '–');
         const head = ids.map(i => `<th>${this.swatch(i, this.civ(stats.players[i]).color)} ${escHtml(this.short(stats, i))}</th>`).join('');
-        const rows = stats.rounds.map(rd => `<tr><td>${rd.r}</td>${ids.map(i => `<td class="hcs-num">${rd.p[i] && rd.p[i].s != null ? rd.p[i].s : '–'}</td>`).join('')}</tr>`).join('');
+        const rows = stats.rounds.map(rd => `<tr><td>${rd.r}</td>${ids.map(i => `<td class="hcs-num">${cell(rd, i, k)}</td>`).join('')}</tr>`).join('');
         const last = stats.rounds[stats.rounds.length - 1];
-        const counts = [['c', TX('Städte')], ['pop', TX('Bevölkerung')], ['t', TX('Technologien')], ['a', TX('Armeen')], ['w', TX('Wunder')]];
-        const end = counts.map(([k, n]) => `<tr><td>${n}</td>${ids.map(i => `<td class="hcs-num">${last.p[i] ? last.p[i][k] : '–'}</td>`).join('')}</tr>`).join('');
-        return `<h4>${TX('Punkte je Runde')}</h4><div class="hcs-scroll"><table class="tbl"><tr><th>${TX('Runde')}</th>${head}</tr>${rows}</table></div>
+        const counts = this.metrics(stats, ids).filter(([key]) => key !== 's');
+        const end = counts.map(([key, n]) => `<tr><td>${TX(n)}</td>${ids.map(i => `<td class="hcs-num">${cell(last, i, key)}</td>`).join('')}</tr>`).join('');
+        return `<h4>${TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1])}</h4><div class="hcs-scroll"><table class="tbl"><tr><th>${TX('Runde')}</th>${head}</tr>${rows}</table></div>
             <h4>${TX('Am Ende')}</h4><div class="hcs-scroll"><table class="tbl"><tr><th></th>${head}</tr>${end}</table></div>`;
     },
 
@@ -246,6 +287,7 @@ const STATS = {
             const res = await fetch(`/api/games/${encodeURIComponent(gameId)}`);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ? TXS(data.error) : TX('Fehler'));
+            if (data.names) this.names = data.names;
             this.render(el, data.stats);
         } catch (e) {
             el.innerHTML = `<p class="sub">${escHtml(e.message)}</p>`;
@@ -256,7 +298,11 @@ const STATS = {
 window.addEventListener('DOMContentLoaded', () => {
     const style = document.createElement('style');
     style.textContent = `
-        .hcs-title { margin: 8px 0 2px; }
+        .hcs-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 8px 0 2px; }
+        .hcs-title { margin: 0; }
+        .hcs-metric { font-size: 13px; color: var(--ink-soft, #6f6551); display: inline-flex; align-items: center; gap: 6px; }
+        .hcs-metric select { font: inherit; font-size: 14px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--rule, #c9bb98);
+            background: var(--paper-2, #efe6ce); color: var(--ink, #2a2721); }
         .hcs-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin: 6px 0; color: var(--ink, #2a2721); }
         .hcs-legend > span { display: inline-flex; align-items: center; gap: 5px; }
         .hcs-swatch { width: 18px; height: 14px; flex: 0 0 auto; vertical-align: middle; }

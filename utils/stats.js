@@ -5,8 +5,10 @@
  *
  *   stats = {
  *     players: [{ civ, slot, name, roman, color, kind }],         // by state index
- *     rounds:  [{ r, p: [{ s, c, pop, t, a, w, d }] }],          // score, cities, population,
- *                                                                //   techs, armies, wonders, out (1)
+ *     rounds:  [{ r, p: [{ s, c, pop, t, a, w, d,                // score, cities, population,
+ *                          ys, yf, yc, rs, rf, rc }] }],         //   techs, armies, wonders, out (1),
+ *                                                                //   income per round (science, food,
+ *                                                                //   coins) and the stock of each
  *     events:  [{ r, k: 'wonder' | 'capture' | 'out' | 'lead', pi, from?, w? }],
  *     owners:  { cityId: owner },  wonders: [key]                // to find the events
  *   }
@@ -21,9 +23,11 @@ function snapshot(E, S) {
     return {
         r: S.round,
         p: S.players.map((p, i) => {
-            let score = null;
+            let score = null, inc = null;
             try { score = E.victoryScore ? E.victoryScore(S, i) : null; } catch (_) { /* engine without it */ }
+            try { inc = typeof E.income === 'function' && !p.dead ? E.income(S, i) : null; } catch (_) { /* engine without it */ }
             const cities = S.cities.filter(c => c.owner === i);
+            const res = p.res || {};
             return {
                 s: score ? score.total : null,
                 c: cities.length,
@@ -32,6 +36,8 @@ function snapshot(E, S) {
                 a: S.armies.filter(a => a.owner === i).length,
                 w: (S.wonders || []).filter(w => w.owner === i).length,
                 d: p.dead ? 1 : 0,
+                ys: inc ? inc.sci : null, yf: inc ? inc.food : null, yc: inc ? inc.coins : null,
+                rs: res.sci != null ? res.sci : null, rf: res.food != null ? res.food : null, rc: res.coins != null ? res.coins : null,
             };
         }),
     };
@@ -88,6 +94,31 @@ function record(stats, E, S, names, final) {
     return stats;
 }
 
+/**
+ * Statistics recorded before the income and stock were (or of a replayed match): add them to the
+ * stored points from the replay's states – a point of round r is the first state of round r, the
+ * final point the last state. Returns the statistics, or null if nothing changed.
+ */
+function enrich(stats, E, states) {
+    if (!stats || !stats.rounds || !stats.rounds.length || !states || !states.length) return null;
+    if (stats.rounds.every(rd => rd.p.every(x => 'ys' in x))) return null;
+    const firstOf = {};
+    states.forEach(st => { if (firstOf[st.round] == null) firstOf[st.round] = st; });
+    const lastState = states[states.length - 1];
+    let changed = false;
+    stats.rounds.forEach((rd, k) => {
+        const final = stats.final && k === stats.rounds.length - 1;
+        const S = final ? lastState : firstOf[rd.r];
+        if (!S || S.players.length !== rd.p.length) return;
+        const snap = snapshot(E, S);
+        rd.p.forEach((x, i) => {
+            for (const key of ['ys', 'yf', 'yc', 'rs', 'rf', 'rc']) x[key] = snap.p[i][key];
+        });
+        changed = true;
+    });
+    return changed ? stats : null;
+}
+
 /** The part the clients and the match history need (no bookkeeping). */
 function publicStats(stats) {
     if (!stats) return null;
@@ -96,4 +127,4 @@ function publicStats(stats) {
     return rest;
 }
 
-module.exports = { record, publicStats, snapshot };
+module.exports = { record, publicStats, snapshot, enrich };

@@ -10,8 +10,10 @@
  *    every turn – one point per round, the scores are victoryScore, events point at empires.
  * 2. Live game in the browser (a logged-in test account hosts, three KI empires, the host only
  *    ends turns): the end screen's "Statistik" with chart, legend, tooltip, key moments and
- *    table; the match record and GET /api/games/:id carry the same statistics; the player's
- *    profile draws the chart when the match is opened.
+ *    table; the value selector (cities, techs, income and stock of science, food and coins …);
+ *    the match record and GET /api/games/:id carry the same statistics; the player's profile and
+ *    the match history on the account page draw the chart when the match is opened.
+ * 4. Older statistics without income and stock get them from the replay (Stats.enrich).
  * 3. Rundenspiel (finish-async.js in the container): the KI plays a real game to its end through
  *    the service – statistics stored with the game, in the finished view and the match record.
  *
@@ -75,6 +77,24 @@ function recording() {
         'record: the last point has the final scores and cities', last.p.map(x => x.s).join(','));
     ok(st.events.length > 0 && st.events.every(e => e.r >= 1 && e.r <= S.round && st.players[e.pi]), 'record: events with rounds and empires', st.events.map(e => e.k).join(','));
     ok(st.players.every((p, i) => p.name === 'P' + i && p.civ === S.players[i].civ), 'record: players with names and nations');
+    ok(last.p.every((x, i) => S.players[i].dead || (x.ys === E.income(S, i).sci && x.yc === E.income(S, i).coins && x.rf === S.players[i].res.food)),
+        'record: income per round and stock of every empire', last.p.map(x => `${x.ys}/${x.yf}/${x.yc}`).join(' '));
+    // enrich: points recorded without income and stock get them from the states (one per turn)
+    const states = [];
+    const S2 = engine.createGame(session);
+    let st2 = Stats.record(null, E, S2, names);
+    states.push(JSON.parse(JSON.stringify(S2)));
+    for (let n = 0; n < 400 && !S2.over; n++) {
+        engine.autoTurn(S2);
+        if (!E.finishTurn(S2)) E.advanceTurn(S2);
+        st2 = Stats.record(st2, E, S2, names, !!S2.over);
+        states.push(JSON.parse(JSON.stringify(S2)));
+    }
+    const want = JSON.stringify(st2.rounds);
+    st2.rounds.forEach(rd => rd.p.forEach(x => { for (const k of ['ys', 'yf', 'yc', 'rs', 'rf', 'rc']) delete x[k]; }));
+    const en = Stats.enrich(st2, E, states);
+    ok(en && JSON.stringify(en.rounds) === want, 'enrich: income and stock from the replay states, same as recorded');
+    ok(Stats.enrich(en, E, states) === null, 'enrich: nothing to do a second time');
     const pub = Stats.publicStats(st);
     ok(!pub.owners && !pub.wonders && pub.rounds.length === st.rounds.length, 'publicStats: without the bookkeeping');
 }
@@ -125,6 +145,20 @@ async function live(browser, errors) {
         await page.click('#mp-stats-box .hcs-table-btn');
         const rows = await page.evaluate(() => document.querySelectorAll('#mp-stats-box .hcs-tables table')[0].rows.length);
         ok(rows === view.rounds + 1, 'live: the table has a row per round', String(rows));
+        // the value selector: every recorded value, the chart and the table follow it
+        const metrics = await page.$$eval('#mp-stats-box .hcs-metric option', os => os.map(o => o.value));
+        ok(['s', 'c', 'pop', 't', 'a', 'w', 'ys', 'yf', 'yc', 'rs', 'rf', 'rc'].every(k => metrics.includes(k)), 'live: values to choose from', metrics.join(','));
+        await page.selectOption('#mp-stats-box .hcs-metric select', 'yc');
+        const coins = await page.evaluate(() => ({
+            title: document.querySelector('#mp-stats-box .hcs-title').textContent,
+            lines: document.querySelectorAll('#mp-stats-box svg path[stroke-width="2"]').length,
+            svgs: document.querySelectorAll('#mp-stats-box .hcs-plot > svg').length,
+            table: document.querySelector('#mp-stats-box .hcs-tables h4').textContent,
+            cell: document.querySelectorAll('#mp-stats-box .hcs-tables table')[0].rows[1].cells[1].textContent,
+            want: String(MP.lastStats.rounds[0].p[MP.lastStats.players.findIndex(p => p.kind !== 'barbar')].yc),
+        }));
+        ok(coins.title === 'Münzen je Runde' && coins.lines === 4 && coins.svgs === 1, 'live: "Münzen je Runde" redraws the chart', JSON.stringify(coins));
+        ok(coins.table === 'Münzen je Runde' && coins.cell === coins.want, 'live: the table follows the choice', `${coins.cell} / ${coins.want}`);
 
         // the match record and the API
         await page.waitForTimeout(1500);
@@ -141,6 +175,26 @@ async function live(browser, errors) {
         await page.click('#hcp-body .hcp-game summary');
         await page.waitForSelector('#hcp-body .hcp-chart svg', { timeout: 10000 });
         ok(await page.evaluate(() => document.querySelectorAll('#hcp-body .hcp-chart svg path[stroke-width="2"]').length) === 4, 'profile: the opened match shows the chart');
+
+        // the match history on the account page: clicking the match shows its chart
+        const acc = await ctx.newPage();
+        acc.on('pageerror', e => errors.push(`account: ${e.message}`));
+        await acc.goto(BASE + '/client/account.html');
+        await acc.click('[data-target="tab-history"]');
+        await acc.waitForSelector('#table-history tbody tr[onclick]');
+        await acc.click('#table-history tbody tr[onclick]');
+        await acc.waitForSelector('#hm-stats .hcs-plot svg', { timeout: 10000 });
+        const hist = await acc.evaluate(() => ({
+            lines: document.querySelectorAll('#hm-stats svg path[stroke-width="2"]').length,
+            legend: [...document.querySelectorAll('#hm-stats .hcs-legend > span')].map(s => s.textContent.trim()),
+            colours: [...document.querySelectorAll('#hm-stats svg path[stroke-width="2"]')].map(p => p.getAttribute('stroke')),
+            options: document.querySelectorAll('#hm-stats .hcs-metric option').length,
+        }));
+        ok(hist.lines === 4 && hist.options >= 12, 'history: the clicked match shows the chart with the value selector', JSON.stringify({ lines: hist.lines, options: hist.options }));
+        ok(hist.legend.some(l => l.startsWith('Gastgeber (')) && hist.legend.every(l => !/\((griechenland|england|russland|wikinger)\)/.test(l)) && !hist.colours.includes('#888'),
+            'history: nation names and colours without the game', hist.legend.join(' | '));
+        await acc.selectOption('#hm-stats .hcs-metric select', 't');
+        ok(await acc.textContent('#hm-stats .hcs-title') === 'Technologien', 'history: another value can be chosen');
         await ctx.close();
     } finally {
         sql(`DELETE FROM games WHERE participants::text LIKE '%${user.name}%'`);
