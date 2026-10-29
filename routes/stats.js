@@ -3,6 +3,9 @@
  *
  *   GET /api/stats?seats=humans|all&n=all|2|3|4|5+&mode=all|normal|duel|marathon&ver=all|vNN
  *
+ * Every match counts under its game type, so normal, 1 gegen 1 and Marathon can be viewed on
+ * their own; 'all' puts them together.
+ *
  * Win rates per nation, ability and turn position, victory types, what winners have at the end,
  * technologies and wonders (utils/gamestats.js). Anonymous: no names, no accounts. The admin
  * variant with more detail is GET /api/admin/stats (routes/admin.js).

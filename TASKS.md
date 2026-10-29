@@ -294,6 +294,7 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Decisions**
 - **Both public and admin:** *Statistiken* in the main menu for everyone; the account tab *Statistiken* for admins adds detail.
 - **Humans only by default:** win rates count human seats; a filter adds KI and bot seats. Further filters: number of empires, game type, version.
+- **Game types on their own:** every match counts under its game type (normal, 1 gegen 1, Marathon – different rules), each viewable on its own; *Alle* puts them together. Older matches from the match record have no type stored: drafted abilities mean Marathon, two empires 1 gegen 1, otherwise normal (`modeOf`, when reading – no recompute needed).
 - **Older matches are included:** the facts of a match are computed from its replay (the state after every turn), so matches from before this feature count as well. Matches without a replay fall back to the match record (no techs, no turn position).
 - **Anonymous:** the facts have no names and no account ids, so account deletion and merging don't need to touch them.
 

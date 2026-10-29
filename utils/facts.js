@@ -118,7 +118,8 @@ function fromRecord(game) {
     });
     return {
         v: 1, src: 'record', ver: game.version || null, r: game.durationRounds, n: players.length,
-        mode: null, map: null, ev: null, wo: null, win: null,
+        // the record doesn't say: drafted abilities mean Marathon, two empires 1 gegen 1
+        mode: players.some(p => Array.isArray(p.ab)) ? 'marathon' : players.length === 2 ? 'duel' : 'normal', map: null, ev: null, wo: null, win: null,
         shared: players.filter(p => p.won).length > 1, p: players,
     };
 }

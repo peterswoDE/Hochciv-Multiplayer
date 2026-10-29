@@ -6,6 +6,12 @@
  *
  *   aggregate(rows, { seats: 'humans' | 'all', n: 'all' | '2' … | '5+', mode, ver }, detail)
  *
+ * Every match counts under its game type – normal, 1 gegen 1 or Marathon, whose rules differ
+ * (Marathon: drafted abilities, dearer techs; 1 gegen 1: higher economic threshold) – so each can
+ * be viewed on its own (`mode`); 'all' (default) puts them together. Matches whose facts have no
+ * mode (older ones from the match record) get it from what is known: drafted abilities →
+ * Marathon, two empires → 1 gegen 1, otherwise normal.
+ *
  * A "seat" is one empire in one match. With seats = 'humans' only human seats count – KI and
  * bots still play in those matches, they are just not counted. A shared win counts as a win for
  * every winner. `detail` (admin) adds the matches per version, the KI levels and the sources.
@@ -58,6 +64,9 @@ function names() {
 }
 
 const bucket = n => (n >= 5 ? '5+' : String(n));
+const MODES = ['normal', 'duel', 'marathon'];
+/** The game type of a match (see above). */
+const modeOf = f => f.mode || (f.p.some(p => Array.isArray(p.ab)) ? 'marathon' : f.n === 2 ? 'duel' : 'normal');
 const avg = (sum, n) => (n ? Math.round((sum / n) * 10) / 10 : null);
 
 /** Ability keys of a seat: 'basis' → 'civ:basis'; drafted (Marathon) are 'civ:ability' already. */
@@ -66,8 +75,9 @@ const abilityKeys = p => (Array.isArray(p.ab) ? p.ab : [p.civ + ':' + (p.ab || '
 function aggregate(all, q, detail) {
     q = q || {};
     const seatsMode = q.seats === 'all' ? 'all' : 'humans';
+    const mode = MODES.includes(q.mode) ? q.mode : 'all';
     const keepGame = x => (!q.n || q.n === 'all' || bucket(x.f.n) === q.n)
-        && (!q.mode || q.mode === 'all' || x.f.mode === q.mode)
+        && (mode === 'all' || modeOf(x.f) === mode)
         && (!q.ver || q.ver === 'all' || (x.f.ver || x.ver) === q.ver);
     const keepSeat = p => seatsMode === 'all' || p.kind === 'human';
     const games = all.filter(keepGame);
@@ -82,7 +92,7 @@ function aggregate(all, q, detail) {
     for (const g of games) {
         const f = g.f;
         roundsSum += f.r || 0;
-        const m = f.mode || 'unknown';
+        const m = modeOf(f);
         roundsByMode[m] = roundsByMode[m] || { games: 0, rounds: 0 };
         roundsByMode[m].games++; roundsByMode[m].rounds += f.r || 0;
         if (f.win) win[f.win] = (win[f.win] || 0) + 1;
@@ -133,7 +143,7 @@ function aggregate(all, q, detail) {
             versions: [...new Set(all.map(x => x.f.ver || x.ver).filter(Boolean))].sort((a, b) => parseInt(b.slice(1)) - parseInt(a.slice(1))),
             current: engine.version(),
         },
-        query: { seats: seatsMode, n: q.n || 'all', mode: q.mode || 'all', ver: q.ver || 'all' },
+        query: { seats: seatsMode, n: q.n || 'all', mode, ver: q.ver || 'all' },
         games: games.length, seats,
         rounds: { avg: avg(roundsSum, games.length), byMode: Object.fromEntries(Object.entries(roundsByMode).map(([k, v]) => [k, { games: v.games, avg: avg(v.rounds, v.games) }])) },
         victory: win,
@@ -172,4 +182,4 @@ async function overall(q, detail) {
     return aggregate(await rows(), q, detail);
 }
 
-module.exports = { aggregate, overall, rows, names };
+module.exports = { aggregate, overall, rows, names, modeOf };

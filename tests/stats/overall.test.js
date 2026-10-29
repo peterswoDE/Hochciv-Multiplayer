@@ -10,7 +10,8 @@
  *    replay. Checked: turn positions from the start player, winners, the round of each tech,
  *    victory type, barbarians left out; the fallback from a match record.
  * 2. Aggregation over made-up matches: win rates per nation, ability (also drafted ones) and turn
- *    position, humans only vs. all seats, the filters, techs and wonders, winners vs. the others.
+ *    position, humans only vs. all seats, the filters, techs and wonders, winners vs. the others;
+ *    normal, 1 gegen 1 and Marathon each on their own (also matches from a match record), or all.
  * 3. A real Rundenspiel played to the end by the KI (finish-async.js in the container): its facts
  *    are computed from the replay and GET /api/stats counts it; filters are sanitised; the admin
  *    variant needs a login.
@@ -95,7 +96,7 @@ function facts() {
         { civ: 'england', ability: 'basis', isBot: false, isWinner: true, scoreDetails: { total: 30, pop: 12 } },
         { civ: 'russland', ability: 'taiga', isBot: true, isWinner: false, scoreDetails: { total: 10, pop: 5 } }],
         stats: { players: [{ civ: 'england', slot: 0 }, { civ: 'russland', slot: 1 }], rounds: [{ r: 9, p: [{ c: 5, pop: 12, a: 1, d: 0 }, { c: 2, pop: 5, a: 0, d: 0 }] }] } });
-    ok(rec.src === 'record' && rec.n === 2 && rec.p[0].won && rec.p[0].c === 5 && rec.p[0].s === 30 && rec.p[1].kind === 'ki' && rec.p[0].t === null && rec.p[0].pos === null,
+    ok(rec.mode === 'duel' && rec.src === 'record' && rec.n === 2 && rec.p[0].won && rec.p[0].c === 5 && rec.p[0].s === 30 && rec.p[1].kind === 'ki' && rec.p[0].t === null && rec.p[0].pos === null,
         'facts: fallback from a match record (no techs, no positions)');
 }
 
@@ -103,33 +104,48 @@ function aggregate() {
     const { aggregate } = require('../../utils/gamestats');
     const P = (civ, kind, pos, won, extra) => Object.assign({ civ, ab: 'basis', kind, lvl: null, pos, won, dead: false, s: won ? 30 : 10, c: won ? 6 : 2, pop: won ? 12 : 4, a: 1, w: won ? ['mauer'] : [], t: won ? { schrift: 2, mathematik: 3 } : { schrift: 4 } }, extra || {});
     const g = (n, mode, ver, players) => ({ id: crypto.randomUUID(), ver, f: { v: 1, src: 'replay', ver, r: 8, n, mode, win: 'economy', p: players } });
+    const rec = (n, players) => ({ id: crypto.randomUUID(), ver: 'v88', f: { v: 1, src: 'record', ver: 'v88', r: 6, n, mode: null, win: null, p: players } });
+    const old = { t: null, w: null };
     const rows = [
-        g(2, 'duel', 'v96', [P('england', 'human', 1, true), P('russland', 'human', 2, false)]),
-        g(2, 'duel', 'v96', [P('england', 'human', 2, false), P('russland', 'human', 1, true)]),
         g(4, 'normal', 'v93', [P('england', 'human', 1, true, { ab: 'kolonisten' }), P('russland', 'ki', 2, false), P('wikinger', 'ki', 3, false), P('griechenland', 'human', 4, false)]),
+        g(4, 'normal', 'v96', [P('england', 'human', 2, false), P('russland', 'human', 1, true), P('wikinger', 'ki', 3, false), P('griechenland', 'ki', 4, false)]),
+        g(3, 'normal', 'v96', [P('england', 'human', 1, true), P('russland', 'human', 2, false), P('wikinger', 'ki', 3, false)]),
+        g(2, 'duel', 'v96', [P('england', 'human', 1, true), P('russland', 'human', 2, false)]),
         g(4, 'marathon', 'v96', [P('wikinger', 'human', 1, false, { ab: ['wikinger:basis', 'england:seemacht'] }), P('england', 'ki', 2, true), P('russland', 'ki', 3, false), P('griechenland', 'ki', 4, false)]),
+        // from match records (no mode stored): two empires → 1 gegen 1, drafted abilities → Marathon
+        rec(2, [P('england', 'human', null, true, old), P('russland', 'human', null, false, old)]),
+        rec(4, [P('england', 'human', null, true, Object.assign({ ab: ['england:basis', 'russland:taiga'] }, old)),
+            P('russland', 'ki', null, false, Object.assign({ ab: ['russland:basis', 'wikinger:basis'] }, old)),
+            P('wikinger', 'ki', null, false, Object.assign({ ab: ['wikinger:basis', 'england:basis'] }, old)),
+            P('griechenland', 'ki', null, false, Object.assign({ ab: ['griechenland:basis', 'england:basis'] }, old))]),
     ];
-    const h = aggregate(rows, { seats: 'humans' });
     const civ = (d, k) => d.civs.find(c => c.k === k) || { games: 0, wins: 0 };
-    ok(h.games === 4 && h.seats === 7, 'aggregate: humans only – 4 matches, 7 human seats', `${h.games}/${h.seats}`);
-    ok(civ(h, 'england').games === 3 && civ(h, 'england').wins === 2 && civ(h, 'russland').wins === 1, 'aggregate: win rate per nation', JSON.stringify(h.civs));
-    const a = aggregate(rows, { seats: 'all' });
-    ok(a.seats === 12 && civ(a, 'england').games === 4 && civ(a, 'england').wins === 3, 'aggregate: all seats count the KI too', `${a.seats}`);
     const ab = (d, c, k) => d.abilities.find(x => x.civ === c && x.k === k) || {};
-    ok(ab(h, 'england', 'kolonisten').wins === 1 && ab(h, 'england', 'basis').games === 2 && ab(h, 'england', 'seemacht').games === 1 && ab(h, 'wikinger', 'basis').games === 1,
-        'aggregate: abilities, drafted ones counted for each');
-    ok(h.positions['2'].find(p => p.pos === 1).wins === 2 && h.positions['2'].find(p => p.pos === 2).wins === 0 && h.positions['4'].find(p => p.pos === 1).games === 2,
-        'aggregate: win rate per turn position, by number of empires', JSON.stringify(h.positions));
+    const every = aggregate(rows, {});
+    ok(every.query.mode === 'all' && every.games === 7 && Object.keys(every.rounds.byMode).sort().join() === 'duel,marathon,normal',
+        '"Alle": every game type together, each counted under its own', JSON.stringify(every.rounds.byMode));
+    const h = aggregate(rows, { seats: 'humans', mode: 'normal' });
+    ok(h.query.mode === 'normal' && h.games === 3 && h.seats === 6, 'normal games on their own – 3 matches, 6 human seats', `${h.games}/${h.seats}`);
+    ok(civ(h, 'england').games === 3 && civ(h, 'england').wins === 2 && civ(h, 'russland').games === 2 && civ(h, 'russland').wins === 1, 'aggregate: win rate per nation', JSON.stringify(h.civs));
+    const a = aggregate(rows, { seats: 'all', mode: 'normal' });
+    ok(a.seats === 11 && civ(a, 'england').games === 3 && civ(a, 'wikinger').games === 3, 'aggregate: all seats count the KI too', `${a.seats}`);
+    ok(ab(h, 'england', 'kolonisten').wins === 1 && ab(h, 'england', 'basis').games === 2, 'aggregate: abilities');
+    ok(h.positions['4'].find(p => p.pos === 1).games === 2 && h.positions['4'].find(p => p.pos === 1).wins === 2 && h.positions['4'].find(p => p.pos === 2).wins === 0
+        && h.positions['3'].find(p => p.pos === 1).wins === 1 && !h.positions['2'], 'aggregate: win rate per turn position, by number of empires', JSON.stringify(h.positions));
     ok(h.winners.won.cities === 6 && h.winners.lost.cities === 2 && h.winners.won.techs === 2 && h.winners.cities['6'] === 3, 'aggregate: winners vs. the others, cities of winners');
     const schrift = h.techs.list.find(t => t.k === 'schrift'), mathe = h.techs.list.find(t => t.k === 'mathematik');
-    ok(h.techs.seats === 7 && h.techs.won === 3 && schrift.had === 7 && schrift.hadWon === 3 && schrift.round === 2 && mathe.had === 3, 'aggregate: technologies of winners and the others');
+    ok(h.techs.seats === 6 && h.techs.won === 3 && schrift.had === 6 && schrift.hadWon === 3 && schrift.round === 2 && mathe.had === 3, 'aggregate: technologies of winners and the others');
     ok(h.wonders.find(w => w.k === 'mauer').built === 3, 'aggregate: wonders and their builders');
-    ok(aggregate(rows, { n: '2' }).games === 2 && aggregate(rows, { mode: 'marathon' }).games === 1 && aggregate(rows, { ver: 'v93' }).games === 1,
-        'aggregate: filters by number of empires, mode and version');
-    ok(h.filters.versions.join() === 'v96,v93' && h.names.civ.england[0] === 'England' && h.names.tech.some(t => t[0] === 'singularitaet' && t[2] === 'Singularity'),
+    const duel = aggregate(rows, { mode: 'duel' }), mara = aggregate(rows, { mode: 'marathon' });
+    ok(duel.games === 2 && civ(duel, 'england').wins === 2 && Object.keys(duel.rounds.byMode).join() === 'duel', '1 gegen 1 on its own (also the match record with two empires)', `${duel.games}`);
+    ok(mara.games === 2 && ab(mara, 'england', 'seemacht').games === 1 && ab(mara, 'russland', 'taiga').wins === 1 && Object.keys(mara.rounds.byMode).join() === 'marathon',
+        'Marathon on its own, drafted abilities counted for each (also from a match record)', `${mara.games}`);
+    ok(aggregate(rows, { mode: 'normal', n: '3' }).games === 1 && aggregate(rows, { mode: 'normal', ver: 'v93' }).games === 1 && aggregate(rows, { mode: 'x' }).query.mode === 'all',
+        'aggregate: filters by number of empires and version; an unknown game type means all');
+    ok(h.filters.versions.join() === 'v96,v93,v88' && h.names.civ.england[0] === 'England' && h.names.tech.some(t => t[0] === 'singularitaet' && t[2] === 'Singularity'),
         'aggregate: versions and names (German, English, the Singularity)');
     const d = aggregate(rows, {}, true);
-    ok(d.detail && d.detail.levels.length && d.detail.sources.replay === 4, 'aggregate: admin detail', JSON.stringify(d.detail && d.detail.sources));
+    ok(d.detail && d.detail.levels.length && d.detail.sources.replay === 5 && d.detail.sources.record === 2, 'aggregate: admin detail', JSON.stringify(d.detail && d.detail.sources));
 }
 
 async function rundenspiel() {
@@ -148,8 +164,8 @@ async function rundenspiel() {
         // facts changed → the cache is dropped; the API counts the match (its seats were taken over by the KI)
         const all = await (await fetch(`${BASE}/api/stats?seats=all`)).json();
         ok(all.games >= 1 && all.seats >= 2 && all.names && all.civs.length, 'GET /api/stats: counts the matches', `${all.games} matches`);
-        const ver = await (await fetch(`${BASE}/api/stats?seats=all&ver=${f.ver}&n=2`)).json();
-        ok(ver.query.ver === f.ver && ver.query.n === '2' && ver.games >= 1, 'GET /api/stats: filters', JSON.stringify(ver.query));
+        const ver = await (await fetch(`${BASE}/api/stats?seats=all&mode=duel&ver=${f.ver}`)).json();
+        ok(f.mode === 'duel' && ver.query.ver === f.ver && ver.query.mode === 'duel' && ver.games >= 1, 'GET /api/stats: filters', JSON.stringify(ver.query));
         const bad = await (await fetch(`${BASE}/api/stats?seats=x&n=9&mode=<b>&ver=1;drop`)).json();
         ok(bad.query.seats === 'humans' && bad.query.n === 'all' && bad.query.mode === 'all' && bad.query.ver === 'all', 'GET /api/stats: unknown filter values fall back to all');
         const adm = await fetch(`${BASE}/api/admin/stats`);
