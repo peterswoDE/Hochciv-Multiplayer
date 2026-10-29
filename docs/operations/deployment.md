@@ -37,17 +37,24 @@ Optional next steps:
 | Container | Image | Purpose |
 |---|---|---|
 | `hochciv-multiplayer` | `peterswode/hochciv-multiplayer:${HOCHCIV_IMAGE_TAG:-latest}` | the server |
-| `hochciv-db` | `postgres:15-alpine` | accounts, matches, Rundenspiele, sessions; data in a Docker volume |
+| `hochciv-db` | `postgres:15-alpine` | accounts, matches, Rundenspiele, sessions; data in the Docker volume `pgdata` or the folder in `POSTGRES_DATA` |
+| `hochciv-watchtower` | `nickfedor/watchtower` | updates `hochciv-multiplayer` when a new image is published (scope `hochciv`) |
 
 The database schema is created and updated by the server at start (`sequelize.sync({ alter: true })`); there are no migration scripts to run. See [Database](../reference/database.md).
 
 ## Updating
 
-* **Server:** pull the new image and recreate: `docker compose pull && docker compose up -d`. Before that, the change has been tested on staging (see [Branches and release flow](../development/release-flow.md)).
+* **Server:** automatic. A merge into `main` builds `peterswode/hochciv-multiplayer:latest`; Watchtower finds it within `WATCHTOWER_POLL_INTERVAL` (5 minutes) and recreates `hochciv-multiplayer`. Before that, the change has been tested on staging (see [Branches and release flow](../development/release-flow.md)) – a merge into `main` is a release. See what Watchtower did: `docker logs hochciv-watchtower`.
+* **Right away** instead of waiting: `docker exec hochciv-watchtower /watchtower --run-once --label-enable --scope hochciv`, or by hand: `docker compose pull && docker compose up -d`.
+* **Pause automatic updates** (e.g. before a long live tournament): `docker stop hochciv-watchtower`; `docker start hochciv-watchtower` resumes them.
 * **Game version:** comes with the server image (`HochCiv/` in this repository) – updating the server updates the game.
 * **A specific release:** set `HOCHCIV_IMAGE_TAG` (e.g. `v1.4.2`) in `.env` and run `docker compose up -d`. Setting it back to `latest` returns to the newest release.
 
-Live games are kept in memory: recreating the container ends running live games. Rundenspiele are in the database and continue.
+Live games are kept in memory: recreating the container ends running live games – also when Watchtower does it. Rundenspiele are in the database and continue.
+
+### Older installations
+
+An installation from before the Watchtower (or with the database in a folder) can switch to the current `docker-compose.yml` without losing data: keep its `.env` and add `POSTGRES_DATA=./postgres` (the folder it used) and `PROXY_NETWORK=proxy` (if the proxy network has that name). `CORE_REPO_URL`, `CORE_REPO_BRANCH` and `CORE_REPO_COMMIT` are no longer used – the game ships in the image. Then `docker compose up -d`.
 
 ## Health check
 

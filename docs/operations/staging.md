@@ -4,7 +4,7 @@
 
 Every merge into `development` is deployed to staging automatically, so changes can be tried with real devices before they reach production. How changes get there: [Branches and release flow](../development/release-flow.md).
 
-Staging runs on the production server next to production, with its own containers (`hochciv-multiplayer-staging`, `hochciv-staging-db`, `hochciv-staging-watchtower`), its own empty database and its own subdomain. Production is never touched: the Watchtower in `docker-compose.staging.yml` only updates containers labelled for the `hochciv-staging` scope.
+Staging runs on the production server next to production, with its own containers (`hochciv-multiplayer-staging`, `hochciv-staging-db`, `hochciv-staging-watchtower`), its own empty database and its own subdomain. Production is never touched: the Watchtower in `docker-compose.staging.yml` only updates containers labelled for the `hochciv-staging` scope. Production has its own Watchtower (`hochciv-watchtower`, scope `hochciv`, see [Deployment](deployment.md#updating)).
 
 ## Setup
 
