@@ -32,6 +32,11 @@ module.exports = (sequelize) => {
         stats: {
             type: DataTypes.JSONB,
             allowNull: true,
+        },
+        // Facts for the overall statistics (utils/facts.js) – null until computed
+        facts: {
+            type: DataTypes.JSONB,
+            allowNull: true,
         }
     }, {
         tableName: 'games',

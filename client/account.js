@@ -416,6 +416,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.querySelector('[data-target="tab-admin-running"]').addEventListener('click', loadAdminRunning);
+    // Overall statistics with the admin detail (client/gamestats.js)
+    document.querySelector('[data-target="tab-admin-stats"]').addEventListener('click', () =>
+        GAMESTATS.render(document.getElementById('admin-stats-body'), { admin: true }));
     document.getElementById('btn-admin-running-reload').addEventListener('click', loadAdminRunning);
 
     async function loadAdminGames(append) {

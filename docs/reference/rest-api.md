@@ -108,6 +108,7 @@ Playing the opened game: [Socket.IO events → Rundenspiele](socket-events.md#ru
 | GET | `/api/games/:id` | Finished match: date, version, rounds, players with points and MMR changes, statistics, whether a replay exists |
 | GET | `/api/games/:id/replay` | The replay `{ v, version, names, frames }`, Brotli-compressed for browsers that accept it |
 | GET | `/api/profile/:userId[?offset=n]` | Name, MMR, games played, wins and the player's games |
+| GET | `/api/stats[?seats=humans\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
 
@@ -150,6 +151,9 @@ All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage ac
 | POST | `/lobbies/:id/action` | `{ action: 'close' }` or `{ action: 'broadcast', message }` |
 | GET | `/games[?q=&offset=]` | Finished matches, with player search |
 | GET | `/running` | Running live games and Rundenspiele with their game version |
+| GET | `/stats[?…]` | Like `/api/stats`, plus matches per version, KI and bot win rates by level and where the facts come from |
+| GET | `/stats/export` | The facts of every match as a JSON download |
+| POST | `/stats/recompute` | *superadmin*: recompute the facts of all matches (in the background) |
 | GET | `/oauth` | OAuth provider configuration and the callback URLs |
 | POST | `/oauth/:provider` | Save client ID, secret, enabled, bot token |
 

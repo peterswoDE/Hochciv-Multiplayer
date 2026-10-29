@@ -7,6 +7,7 @@ const config = require('../config');
 const chat = require('../utils/chat');
 const reports = require('../utils/reports');
 const Stats = require('../utils/stats');
+const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 
@@ -955,6 +956,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
             console.error(`[Replay] Saving failed for ${sessionId}:`, err);
         }
         session.replay = null;
+        Facts.storeLater(game.id);                     // overall statistics (utils/facts.js), from the replay
         session.gameRecord = { id: game.id, replay };
         if (io) io.to(sessionId).emit('game:record', session.gameRecord);
 
