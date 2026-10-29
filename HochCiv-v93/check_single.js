@@ -59,5 +59,18 @@ const F = w.eval(`(() => { closeModal(); if (isAuto(P(S))) return null; $('a-abi
   return [$('sheet-body').querySelectorAll('.abil-card').length, $('sheet-body').querySelectorAll('.opt').length]; })()`);
 console.log('Fähigkeiten:', F ? F[0] + ' Fähigkeit(en), ' + F[1] + ' Knöpfe' : 'KI am Zug – übersprungen');
 if (F && F[0] < 1) { console.log('FEHLER: das Blatt „Fähigkeiten" nennt keine Fähigkeit'); process.exit(1); }
+// Erstes Spiel (v92, v93): der rote Knopf ganz oben zeigt erst die Seite mit den drei Wegen,
+// ein Weg startet die geführte Partie mit Ziel im Panel
+w.eval("closeModal(); closeSheet(); show('screen-menu')");
+const oben = w.document.querySelector('.menu-actions .btn');
+$('m-first').onclick();
+const seite = w.document.querySelectorAll('#ov-body .fg-seite [data-pfad]').length;
+const wahl = w.document.querySelector('#ov-body [data-pfad="wissenschaft"]');
+if (wahl) wahl.onclick();
+const E = w.eval(`({ fg: !!S.fg, schritt: S.fg && S.fg.schritt, pfad: S.fg && S.fg.pfad, panel: !$('tut-panel').hidden,
+  ziel: ($('tut-body').querySelector('.fg-ziel') || {}).textContent })`);
+console.log('Erstes Spiel:', oben.id, oben.classList.contains('primary') ? 'rot oben' : 'NICHT rot', '|', seite, 'Wege |', E.pfad, '|', E.schritt, '|', E.ziel);
+if (oben.id !== 'm-first' || seite !== 3 || !E.fg || E.pfad !== 'wissenschaft' || !E.panel || !E.ziel)
+  { console.log('FEHLER: Erstes Spiel startet nicht wie vorgesehen'); process.exit(1); }
 console.log('Fehler:', errs.length ? errs : 'keine');
 process.exit(errs.length?1:0);

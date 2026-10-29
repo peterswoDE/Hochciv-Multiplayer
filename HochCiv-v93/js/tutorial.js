@@ -20,8 +20,12 @@ const TUT_SEED = 20250817;
    und siedeln sichtbar, Griechenland belagert die Grenzstadt, und die Belagerung bricht am
    Ende, wenn der Spieler Mauern, Burgenbau und Macht genommen hat. */
 const TUT_DICE = [3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2];
-function tutNextDie() {
-  if (typeof ui === 'undefined' || !ui || !ui.tut) return null;
+/* `ctx` (v92): wofür gewürfelt wird – nur das Erste Spiel liest es (fgNextDie in
+   js/firstgame.js), dieses Tutorial nimmt weiter seine feste Folge. */
+function tutNextDie(ctx) {
+  if (typeof ui === 'undefined' || !ui) return null;
+  if (ui.fg) return typeof fgNextDie === 'function' ? fgNextDie(ctx) : null;
+  if (!ui.tut) return null;
   // Ein Schritt kann die nächsten Würfe vorgeben (dice), damit z. B. die Technologie des
   // nächsten Zeitalters wirklich ausgewürfelt wird und nicht heimlich gesetzt werden muss.
   if (ui.tut.pre && ui.tut.pre.length) return ui.tut.pre.shift();
@@ -158,7 +162,7 @@ const TUT_STEPS = [
   },
   {
     t: T('Forschung und Technologien'),
-    html: () => T('<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben links in der Kachel.</p>'),
+    html: () => T('<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben rechts in der Kachel.</p>'),
     kurz: () => T('<p>Der Technologiebaum ist <b>zufällig</b>: jede Technologie steht in einer Partie nur mit 50 % Wahrscheinlichkeit zur Verfügung. Ausgewürfelt wird immer beim Erreichen eines neuen Zeitalters. Planen kannst du also nur grob.</p>'),
     task: T('Öffne <b>Forschen</b> und forsche <b>Schrift</b>.'),
     // Papier steht in Forschung/Mittelalter an erster Stelle – dieser Wurf ist gesetzt,
@@ -369,8 +373,8 @@ const TUT_STEPS = [
   },
   {
     t: T('Der Gegenangriff als Verteidigung'),
-    html: () => T('<p>Bots ziehen ihre Armeen nach festen Prioritäten – und <b>die eigene Hauptstadt steht ganz oben</b>, noch vor „eine begonnene Belagerung zu Ende bringen". Wer eine Armee neben ihre Hauptstadt stellt, zwingt sie zum Rückzug.</p> <p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+5 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>8 statt 3</b> an – mehr als die 3, die dort stehen. Am Ende deines Zuges gewinnst du den Kampf, und Griechenlands Hauptstadt steht bei <b>Zug 1 von 2</b>: noch ein Erfolg, und sie gehört dir. Genau das zwingt den Bot, seine Armeen zurückzuholen, statt deine Stadt zu Ende zu belagern.</p> <p>Dein Vorrat geht dabei genau auf – übrig bleiben <b>1 Wissenschaft</b> und <b>4 Münzen</b>, beides brauchst du gleich noch.</p> <p><b>So kaufst du</b> Macht: unten auf <b>Macht</b> → die Menge antippen.</p> <div class="tut-key"><b>Merke</b> Angriff ist oft die billigere Verteidigung. Eine Armee an der richtigen Stelle bindet zwei gegnerische – und kostet dich weniger, als deren Angriff aufzuwiegen. Bots verteidigen ihre Hauptstadt, sobald dort ein erster Angriff durchkam; eine Armee, die bloß danebensteht, beeindruckt sie nicht.</div>'),
-    kurz: () => T('<p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+5 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>8 statt 3</b> an – mehr als die 3, die dort stehen.</p><p>Ein Gegenangriff auf die <b>Hauptstadt</b> ist dabei besonders lohnend: wer eine gegnerische Hauptstadt erobert, <b>gewinnt das Spiel sofort</b>. Genau deshalb ziehen Bots ihre Armeen zur eigenen Hauptstadt zurück, statt deine Stadt zu Ende zu belagern.</p>'),
+    html: () => T('<p>Bots ziehen ihre Armeen nach festen Prioritäten – und <b>die eigene Hauptstadt steht ganz oben</b>, noch vor „eine begonnene Belagerung zu Ende bringen". Wer eine Armee neben ihre Hauptstadt stellt, zwingt sie zum Rückzug.</p> <p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+3 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>6 statt 3</b> an – mehr als die 3, die dort stehen. Am Ende deines Zuges gewinnst du den Kampf, und Griechenlands Hauptstadt steht bei <b>Zug 1 von 2</b>: noch ein Erfolg, und sie gehört dir. Genau das zwingt den Bot, seine Armeen zurückzuholen, statt deine Stadt zu Ende zu belagern.</p> <p>Dein Vorrat geht dabei genau auf – übrig bleiben <b>1 Wissenschaft</b> und <b>4 Münzen</b>, beides brauchst du gleich noch.</p> <p><b>So kaufst du</b> Macht: unten auf <b>Macht</b> → die Menge antippen.</p> <div class="tut-key"><b>Merke</b> Angriff ist oft die billigere Verteidigung. Eine Armee an der richtigen Stelle bindet zwei gegnerische – und kostet dich weniger, als deren Angriff aufzuwiegen. Bots verteidigen ihre Hauptstadt, sobald dort ein erster Angriff durchkam; eine Armee, die bloß danebensteht, beeindruckt sie nicht.</div>'),
+    kurz: () => T('<p>Um die griechische Hauptstadt zu bedrohen, musst du ihren <b>Verteidigungswert von 3</b> überbieten. Dafür dienen die folgenden drei Schritte:</p> <div class="tut-calc"> <div><span><b>Belagerungsmaschinen</b> forschen (+3 Angriff gegen Städte)</span><b>2 🔬</b></div> <div><span><b>3 Macht</b> kaufen (statt 4)</span><b>12 🪙</b></div> <div><span>Armee auf das <b>goldene Feld</b> daneben ziehen</span><b>3 Bewegung</b></div> </div> <p>Danach greift deine Armee mit <b>6 statt 3</b> an – mehr als die 3, die dort stehen.</p><p>Ein Gegenangriff auf die <b>Hauptstadt</b> ist dabei besonders lohnend: wer eine gegnerische Hauptstadt erobert, <b>gewinnt das Spiel sofort</b>. Genau deshalb ziehen Bots ihre Armeen zur eigenen Hauptstadt zurück, statt deine Stadt zu Ende zu belagern.</p>'),
     enter: () => { ui.tutStrike = tutStrikeSpot(); },
     task: T('Forsche <b>Belagerungsmaschinen</b>, kaufe <b>3 Macht</b> und zieh deine Armee auf das <b>goldene Feld</b>.'),
     hl: () => {
@@ -462,8 +466,8 @@ const TUT_STEPS = [
   },
   {
     t: 'Die drei Wege zu gewinnen',
-    html: () => T('<p><b>Militärsieg</b> – erobere eine gegnerische Hauptstadt: dafür musst du zwei Züge in Folge stärker sein. Es ist der Weg, auf dem Bots einem Menschen meist am gefährlichsten werden – und der einzige Sieg, der das Spiel <b>sofort</b> beendet.</p><p><b>Wirtschaftssieg</b> – hältst du am Ende einer Runde mehr als zwei Drittel der Weltbevölkerung, hast du gewonnen. Oben links neben der Runde steht der aktuelle Stand: gerade 7 von 33. Um hier eine echte Chance zu haben, braucht es meist vier bis sechs Städte plus einige der Technologien <b>Töpferei</b>, <b>Verbundwerkstoffe</b>, <b>Theologie</b> oder <b>Vereinte Nationen</b>.</p><p><b>Forschungssieg</b> – erforsche die <b>Singularität</b>: 100 Wissenschaft, mit der wissenschaftlichen Methode 90. Sie verlangt in jedem der <b>vier Felder mindestens eine Technologie der Moderne</b>. Für ein Reich, das früh auf Multiplikatoren gegangen ist, ist das oft der kürzeste Weg.</p><div class="tut-key"><b>Merke</b> Nur der Militärsieg endet sofort. Den Forschungssieg <b>meldest du an</b>, und die Runde wird zu Ende gespielt – die anderen bekommen also noch ihren Zug, und ein Militärsieg in diesem Fenster schlägt deinen Anspruch. Den Wirtschaftssieg prüft das Spiel erst am Ende der Runde, wenn alle gleich oft gezogen haben. Erfüllen mehrere Reiche in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>, bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung danach wieder wegfällt.</div>'),
-    kurz: () => T('<p><b>Militärsieg</b> – eine gegnerische Hauptstadt erobern. Er ist der einzige Sieg, der <b>sofort</b> endet.</p><p><b>Wirtschaftssieg</b> – mehr als zwei Drittel der Weltbevölkerung am Ende einer Runde (im Duell 3/4). Der Stand steht oben in der Kopfzeile.</p><p><b>Forschungssieg</b> – die <b>Singularität</b>: 100 Wissenschaft und in jedem der vier Felder mindestens eine Technologie der Moderne.</p><div class="tut-key"><b>Merke</b> Außer dem Militärsieg endet keiner sofort: Den Forschungssieg <b>meldest du an</b>, die Runde wird zu Ende gespielt; den Wirtschaftssieg prüft das Spiel erst am Rundenende. Erfüllen mehrere in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>. Bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung später wieder wegfällt.</div>'),
+    html: () => T('<p><b>Militärsieg</b> – erobere eine gegnerische Hauptstadt: dafür musst du zwei Züge in Folge stärker sein. Es ist der Weg, auf dem Bots einem Menschen meist am gefährlichsten werden – und der einzige Sieg, der das Spiel <b>sofort</b> beendet.</p><p><b>Wirtschaftssieg</b> – hältst du am Ende einer Runde mehr als zwei Drittel der Weltbevölkerung, hast du gewonnen. Oben links neben der Runde steht der aktuelle Stand: gerade 7 von 33. Um hier eine echte Chance zu haben, braucht es meist vier bis sechs Städte plus einige der Technologien <b>Töpferei</b>, <b>Verbundwerkstoffe</b>, <b>Theologie</b> oder <b>Vereinte Nationen</b>.</p><p><b>Forschungssieg</b> – erforsche die <b>Singularität</b>: 120 Wissenschaft, mit der wissenschaftlichen Methode 110. Sie verlangt in jedem der <b>vier Felder mindestens eine Technologie der Moderne</b>. Für ein Reich, das früh auf Multiplikatoren gegangen ist, ist das oft der kürzeste Weg.</p><div class="tut-key"><b>Merke</b> Nur der Militärsieg endet sofort. Den Forschungssieg <b>meldest du an</b>, und die Runde wird zu Ende gespielt – die anderen bekommen also noch ihren Zug, und ein Militärsieg in diesem Fenster schlägt deinen Anspruch. Den Wirtschaftssieg prüft das Spiel erst am Ende der Runde, wenn alle gleich oft gezogen haben. Erfüllen mehrere Reiche in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>, bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung danach wieder wegfällt.</div>'),
+    kurz: () => T('<p><b>Militärsieg</b> – eine gegnerische Hauptstadt erobern. Er ist der einzige Sieg, der <b>sofort</b> endet.</p><p><b>Wirtschaftssieg</b> – mehr als zwei Drittel der Weltbevölkerung am Ende einer Runde (im Duell 3/4). Der Stand steht oben in der Kopfzeile.</p><p><b>Forschungssieg</b> – die <b>Singularität</b>: 120 Wissenschaft und in jedem der vier Felder mindestens eine Technologie der Moderne.</p><div class="tut-key"><b>Merke</b> Außer dem Militärsieg endet keiner sofort: Den Forschungssieg <b>meldest du an</b>, die Runde wird zu Ende gespielt; den Wirtschaftssieg prüft das Spiel erst am Rundenende. Erfüllen mehrere in derselben Runde eine Bedingung, entscheiden <b>Punkte: Bevölkerung + Weltwunder + Technologien</b>. Bei Gleichstand gewinnt der Mensch vor dem Bot. Ein angemeldeter Sieg bleibt gültig, auch wenn die Bedingung später wieder wegfällt.</div>'),
   },
   {
     t: T('Die drei Anfängerfehler'),
@@ -596,6 +600,7 @@ function tutorialSetup(opts) {
 function tutorialStart(opts) {
   tutorialSetup(opts);
   $('tut-panel').hidden = false;
+  document.body.classList.remove('fg');
   document.body.classList.add('tut');
   tutEnter();
   startGameScreen();
@@ -618,9 +623,14 @@ function renderTutPanel() {
   if (st.task) task.innerHTML = `<b>${T('Deine Aufgabe:')}</b> ` + tutTaskText(st);
   $('tut-count').textContent = `${ui.tut.i + 1}/${tutList().length}`;
   $('tut-bar-fill').style.width = Math.round(((ui.tut.i + 1) / tutList().length) * 100) + '%';
+  // Das Panel teilt sich das Tutorial mit dem Ersten Spiel (v92) – dessen Kopf und Leiste zurück
+  $('tut-panel').querySelector('.tut-sub').textContent = '';
+  $('tut-quit').textContent = T('Tutorial beenden');
+  $('tut-prev').hidden = false;
+  $('tut-next').classList.add('primary');
   $('tut-prev').disabled = ui.tut.i === 0;
   $('tut-next').disabled = !done;
-  $('tut-next').textContent = last ? 'Fertig' : 'Weiter ›';
+  $('tut-next').textContent = last ? T('Fertig') : T('Weiter ›');
   tutMaybeAdvance();
 }
 function tutMove(d) {
@@ -655,7 +665,7 @@ function tutMaybeAdvance() {
   // Wer zurückblättert, will nachlesen – dort darf nicht sofort wieder vorgesprungen
   // werden. Automatisch geht es nur auf dem weitesten je erreichten Schritt weiter.
   if (ui.tut.i < (ui.tut.max || 0)) return;
-  if (ui.botLock) return;
+  if (ui.botLock || ui.combat) return;        // Bot-Fenster offen, Kampf läuft noch (v90)
   const p = tutP();
   // offene Rückschau: nur, was sich noch wählen lässt (v87 – ein leerer Anspruch hält nichts auf)
   if ((p.freePicks || []).some(c => c.n > 0) || backPickOptions(S, RU()).length) return;
@@ -664,7 +674,7 @@ function tutMaybeAdvance() {
   const from = ui.tut.i;
   ui.tutAuto = true;
   const go = () => {
-    if (!ui.tut || ui.tut.i !== from || !tutDone()) { ui.tutAuto = false; return; }
+    if (!ui.tut || ui.tut.i !== from || !tutDone() || ui.combat) { ui.tutAuto = false; return; }
     closeSheet(); closeModal();
     tutMove(1);
     ui.tutAuto = false;                // erst danach frei: eine Stufe je Aktion, keine Kette

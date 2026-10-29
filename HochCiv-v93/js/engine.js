@@ -11,10 +11,14 @@ function nextRand(S) {
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
-function d6(S, why) {
+/* `ctx` (v92): wofür gewürfelt wird, als Daten – { pi, tech } bei der Verfügbarkeit einer
+   Technologie, { pi, pick } beim Auswürfeln, wenn nichts verfügbar wurde. Nur das Erste Spiel
+   liest es (tutNextDie): dort fallen die Würfe so, wie die geführte Partie es braucht. Das
+   Protokoll zeigt sie wie jeden anderen Wurf. */
+function d6(S, why, ctx) {
   // Im Tutorial kommen die Würfe aus einer festen Folge (tutNextDie), damit die Partie –
   // inklusive aller Bot-Entscheidungen – bei jedem Durchlauf identisch abläuft.
-  let v = (typeof tutNextDie === 'function') ? tutNextDie() : null;
+  let v = (typeof tutNextDie === 'function') ? tutNextDie(ctx) : null;
   if (!v) v = 1 + Math.floor(nextRand(S) * 6);
   log(S, 'roll', '🎲 ' + v + (why ? ' — ' + why : ''));
   return v;
@@ -287,8 +291,16 @@ function newGame(cfg) {
   // Gleiche Zivilisationen behalten ihre Reihenfolge aus dem Aufbau (stabile Sortierung),
   // und der Startspieler wird über den Platz bestimmt, nicht über die Zivilisation –
   // sonst zeigte „Startspieler Russland" bei zwei Russlands auf das falsche Reich.
+  /* Seit v90 (Anweisung des Autors): mit cfg.seatOrder ziehen die Reiche in der Reihenfolge
+     der Plätze aus dem Aufbau – so setzt es die Oberfläche, wo der Aufbau nummerierte Plätze
+     hat (Plättchenkarte, drei Reiche, Duell). Bis v89 galt auch dort ORDER, und mit zwei
+     gleichen Zivilisationen zogen die Plätze in seltsamer Folge (Platz 1 Russland, Platz 3
+     Russland, erst dann Platz 2 Griechenland). Ohne den Schalter – die klassische Aufstellung
+     mit allen vier Zivilisationen, Marathon, Tutorial, Tests – bleibt es bei ORDER: dort ist
+     jede Zivilisation ihr eigener Platz (Russland im Osten, dann im Uhrzeigersinn). */
   const startPc = cfg.players[cfg.startPlayer ?? 0];
-  const ordered = cfg.players.slice().sort((a, b) => ORDER.indexOf(a.civ) - ORDER.indexOf(b.civ));
+  const ordered = cfg.seatOrder ? cfg.players.slice()
+    : cfg.players.slice().sort((a, b) => ORDER.indexOf(a.civ) - ORDER.indexOf(b.civ));
   const startIdx = Math.max(0, ordered.indexOf(startPc));
   const S = {
     v: 2, seed: (cfg.seed ?? Math.floor(Math.random() * 2 ** 31)) | 0,
@@ -395,12 +407,12 @@ function rollAvailability(S, pi, field, age) {
   let any = false;
   for (const t of list) {
     if (p.avail[t.k] || p.techs[t.k]) { any = true; continue; }
-    const v = d6(S, T('Verfügbarkeit %s%s', t.n, bonus ? ' (+' + bonus + ')' : '')) + bonus;
+    const v = d6(S, T('Verfügbarkeit %s%s', t.n, bonus ? ' (+' + bonus + ')' : ''), { pi, tech: t.k, bonus }) + bonus;
     if (v >= 4) { p.avail[t.k] = true; any = true; }
   }
   if (!any) {   // "Falls danach keine Technologie verfügbar ist, eine auswürfeln die verfügbar ist"
     let idx = 0;
-    do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length)); } while (idx > list.length);
+    do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length), { pi, pick: list.map(t => t.k) }); } while (idx > list.length);
     p.avail[list[idx - 1].k] = true;
   }
   log(S, 'info', T('%s: verfügbar in %s (%s):', civOf(p).n, FIELDS[field], AGES[age]) +
@@ -537,31 +549,28 @@ function useBackPick(S, pi, tk) {
 }
 
 /* ------------------------------------------------------------ Einkommen */
+/* Bonus der Ertragstechnologien auf ein Ziel – Geländeart oder 'pop' (je Bevölkerungspunkt).
+   Seit v88 (Anweisung des Autors) zählt je Feld nur das höchste erforschte Glied der Kette,
+   das die billigeren einschließt (YIELD_CHAINS in data.js): Mathematik, Elektrizität und
+   Künstliche Intelligenz geben dem Wald zusammen +3 Wissenschaft wie KI allein. Ketten
+   verschiedener Felder addieren sich. Bis v87 addierte jede Technologie ihren Zuwachs.
+   Addiert in `y` (ohne `y`: in ein neues [0, 0, 0]) und gibt es zurück – tileYield läuft in
+   der KI sehr oft, deshalb ohne Zwischenfeld. */
+const NO_CHAINS = [];
+function yieldBonus(p, on, y = [0, 0, 0]) {
+  for (const chain of YIELD_CHAINS[on] || NO_CHAINS)
+    for (let i = chain.length - 1; i >= 0; i--)
+      if (has(p, chain[i].k)) { for (let j = 0; j < 3; j++) y[j] += chain[i].y[j]; break; }
+  return y;
+}
 function tileYield(S, pi, t) {
   const p = S.players[pi];
   if (TERRAIN[t].block) return [0, 0, 0];              // Vulkan
   if (evTerrainDead(S, pi, t)) return [0, 0, 0];       // Ereignis legt das Gelände lahm
-  const y = TERRAIN[t].yield.slice();
-  const add = (i, n) => y[i] += n;
-  switch (t) {
-    case 'G':
-      if (has(p, 'papier')) add(0, 1); if (has(p, 'biologie')) add(0, 1);
-      if (has(p, 'landwirtschaft')) add(1, 1); if (has(p, 'gruene_revolution')) add(2, 1); break;
-    case 'W':
-      if (has(p, 'mathematik')) add(0, 1); if (has(p, 'elektrizitaet')) add(0, 1); if (has(p, 'ki')) add(0, 1);
-      if (has(p, 'kunstduenger')) add(1, 1);
-      if (hasAbil(p, 'russland', 'basis')) add(1, 1); break;
-    case 'B':
-      if (has(p, 'chemie')) add(0, 1); if (has(p, 'bewaesserung')) add(1, 1); break;
-    case 'F':
-      if (has(p, 'buchdruck')) add(0, 1); if (has(p, 'muehlentechnik')) add(2, 1); break;
-    case 'M':
-      if (has(p, 'astronomie')) add(0, 1);
-      if (has(p, 'fischerei')) add(1, 1); if (has(p, 'segeln')) add(1, 1);
-      if (has(p, 'containerlogistik')) add(2, 1);
-      if (hasWonder(S, pi, 'leuchtturm')) { add(0, 1); add(1, 1); add(2, 1); }   // Großer Leuchtturm
-      break;
-  }
+  const y = yieldBonus(p, t, TERRAIN[t].yield.slice());    // Technologien: je Feld die höchste (v88)
+  // Was nicht aus Technologien kommt, addiert sich wie bisher
+  if (t === 'W' && hasAbil(p, 'russland', 'basis')) y[1] += 1;                     // Taiga
+  if (t === 'M' && hasWonder(S, pi, 'leuchtturm')) { y[0] += 1; y[1] += 1; y[2] += 1; }   // Großer Leuchtturm
   return y;
 }
 /* Ertrag eines konkreten Feldes: wie tileYield, aber mit Bürokratie –
@@ -578,14 +587,10 @@ function tileYieldAt(S, pi, r, c, pre) {
   }
   return y;
 }
+// Ertrag je Bevölkerungspunkt: CITY_YIELD plus die Ketten auf 'pop' (Schrift → Universitätswesen,
+// Fließband → Robotik; seit v88 schließt die höhere die niedrigere ein).
 function cityPopYield(S, pi) {
-  const p = S.players[pi];
-  const y = CITY_YIELD.slice();
-  if (has(p, 'schrift')) y[0]++;
-  if (has(p, 'universitaet')) y[0]++;
-  if (has(p, 'fliessband')) y[2]++;
-  if (has(p, 'robotik')) y[2]++;
-  return y;
+  return yieldBonus(S.players[pi], 'pop', CITY_YIELD.slice());
 }
 /* Kontrollierte Felder: alle an eigene Städte angrenzenden Felder (ohne Stadtfelder),
    plus per Kolonialismus gekaufte Felder. Nicht exklusiv – so steht es in den Regeln.
@@ -710,12 +715,12 @@ function incomeBreakdown(S, pi) {
   });
   // Handelsrouten: Städte, die über Straßen (+1) oder durchgehend Eisenbahn (+2) an
   // der Hauptstadt hängen. Grundregel, gilt also auch für Bots.
-  // Mit Bürokratie doppelt (v86). `note` erklärt das in der Übersicht.
+  // Mit Bürokratie doppelt (v86). Die Übersicht sagt seit v88 nicht mehr dazu, warum
+  // (Anweisung des Autors; v86/v87 hing „(Bürokratie ×2)" am Zeilennamen).
   const tr = tradeRoutes(S, pi);
   if (tr.bonus) {
     const b = tr.bonus * buro;
-    extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b],
-      note: buro > 1 ? T('Bürokratie ×2') : null });
+    extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b] });
   }
   // Wallfahrt (Erweiterung): je eigenem Weltwunder +3 auf alle drei Erträge
   if (has(p, 'wallfahrt') && p.kind !== 'bot') {
@@ -742,7 +747,7 @@ function incomeBreakdown(S, pi) {
   if (has(p, 'gentechnik') && !evActive(S, pi, 'hungersnot')) {
     const gen = Math.floor(total[0] / GENE_SCI_PER_FOOD) * buro;
     if (gen > 0) {
-      extra.push({ name: T('Gentechnik'), glyph: '🧬', y: [0, gen, 0], note: buro > 1 ? T('Bürokratie ×2') : null });
+      extra.push({ name: T('Gentechnik'), glyph: '🧬', y: [0, gen, 0] });
       total[1] += gen;
     }
   }
@@ -1257,11 +1262,14 @@ function arriveAt(S, army, r, c, cost) {
 const moveBudget = a => a.halted ? -1 : a.mp;
 
 /* ------------------------------------------------------------ Aktionen */
-/* Wie oft eine Stadt pro Runde wachsen darf und wie oft davon kostenlos:
-   Keramik = 2× bezahlt, Verbundwerkstoffe = +1× gratis, beide zusammen bis 3×. */
+/* Wie oft eine Stadt pro Runde wachsen darf und wie oft davon kostenlos: ein bezahlter
+   Schritt, Keramik +1 und seit v89 (Anweisung des Autors) die Dampfmaschine +1 bezahlten
+   (bis v88 strich sie nur die Münzkosten); Verbundwerkstoffe +1 kostenlos. Alle drei
+   zusammen: 3 bezahlte und 1 kostenloser Schritt je Stadt und Runde. */
+const GROW_EXTRA_PAID = ['keramik', 'dampfmaschine'];   // je +1 bezahlter Schritt
 function growLimits(S, pi) {
   const p = S.players[pi];
-  const paid = has(p, 'keramik') ? 2 : 1;      // bezahlte Schritte je Runde
+  const paid = 1 + GROW_EXTRA_PAID.filter(k => has(p, k)).length;   // bezahlte Schritte je Runde
   const free = has(p, 'verbundwerkstoffe') ? 1 : 0;   // zusätzlich, und nur kostenlos
   return { max: paid + free, paid, free };
 }
@@ -1905,7 +1913,7 @@ function attackValue(S, pi, count) {
   const p = S.players[pi];
   if (count <= 0) return 0;
   let per = powerOf(S, pi);
-  if (has(p, 'belagerung')) per += 5;
+  if (has(p, 'belagerung')) per += SIEGE_BONUS;      // v88: 3 (vorher 5)
   if (has(p, 'dynamit')) per *= 2;
   return per * (COMBAT.attackStacks ? count : 1);
 }
@@ -1974,39 +1982,86 @@ function powerView(S) {
   }));
   return { cities, armies };
 }
-function combatPhase(S, pi) {
+/* Kampfphase am Ende eines Zugs: die Armeen des Reichs pi greifen an – erst die Städte, dann
+   wird flankiert. So war es bis v89 und ist es wieder seit v91 (Anweisung des Autors): eine
+   Armee an ihrer Stadt verteidigt diese mit, auch wenn sie im selben Zug noch weggeflankt
+   wird. v90 hatte die Reihenfolge umgedreht – dann fielen Städte, die verteidigt waren.
+   Umgekehrt wirkt eine Eroberung schon auf das Flankieren desselben Zugs (eroberte Stadt mit
+   Burgenbau als Position, Kriegerkultur je Stadt, Zeus, Bot-Macht = Bevölkerung).
+   `rec` (nur die Oberfläche, seit v90): Hier hinein kommt jeder Kampf als Eintrag – Art, Feld,
+   Angreifer und Verteidiger, beide Werte, Ausgang, die beteiligten Felder und der Stand der
+   Karte davor (combatEntry), in der Reihenfolge, in der gerechnet wird. Daraus spielt die
+   Oberfläche den Kampf Schritt für Schritt nach; die Regel selbst läuft wie immer in einem Zug
+   durch, auch ohne `rec` (KI, Bots, Tests). */
+function combatPhase(S, pi, rec) {
   const p = S.players[pi];
-  // Wikinger "Beutezüge": Stand vor den Belagerungen festhalten, Auszahlung nächste Runde
+  // Wikinger "Beutezüge": Stand vor dem Kampf festhalten, Auszahlung nächste Runde
   if (isAbil(p, 'kampfertrag')) {
     const raid = raidYield(S, pi);
     p.raidPending = raid.sum;
     if (raid.sum) log(S, 'act', T('%s: Beutezüge ergeben %s (%s) – gutgeschrieben zu Beginn der nächsten Runde.', civOf(p).n, raid.sum, raid.parts.join(', ')));
   }
-  // Belagerungen
+  // 1 Städte: Belagerung, nach dem zweiten Treffer in Folge erobert
   for (const city of S.cities.slice()) {
     if (city.owner === pi) continue;
     const sk = pi + '|' + city.id;
     const atk = attackersOn(S, pi, city);
     if (!atk.length) { delete S.sieges[sk]; continue; }
     const a = attackValue(S, pi, atk.length), d = defenseValue(S, city);
+    const e = rec ? combatEntry(S, {
+      art: 'stadt', pi, gegner: city.owner, r: city.r, c: city.c, a, d, sieg: a > d,
+      von: atk.map(x => [x.r, x.c]),
+    }) : null;
     if (a > d) {
       S.sieges[sk] = (S.sieges[sk] || 0) + 1;
       log(S, 'fight', T('Kampf um %ss Stadt: Angriff %s > Verteidigung %s (Zug %s/2).', civOf(S.players[city.owner]).n, a, d, S.sieges[sk]));
-      if (S.sieges[sk] >= 2) captureCity(S, pi, city);
+      if (e) e.zug = S.sieges[sk];
+      if (S.sieges[sk] >= 2) {
+        captureCity(S, pi, city);
+        if (e) { e.genommen = true; e.zerstoert = !S.cities.includes(city); }
+      }
     } else {
+      if (e) e.gebrochen = !!S.sieges[sk];
       if (S.sieges[sk]) log(S, 'fight', T('Belagerung gebrochen (Angriff %s ≤ Verteidigung %s).', a, d));
       S.sieges[sk] = 0;
     }
+    if (e) rec.push(e);
   }
-  // Flankieren: Stellung (canFlank), dann der Machtvergleich.
+  // 2 Flankieren: Stellung (canFlank), dann der Machtvergleich – mit dem Stand nach den
+  //   Städten. Jede Stellung ist ein Kampf, auch wenn die Macht nicht reicht (dann bleibt die
+  //   Armee stehen).
   const flankSpots = flankSpotsOf(S, pi);
   for (const enemy of S.armies.slice()) {
-    if (enemy.owner === pi) continue;
-    if (canFlank(S, pi, enemy, flankSpots) && powerOf(S, pi) > powerOf(S, enemy.owner)) {
-      S.armies = S.armies.filter(a => a !== enemy);
+    if (enemy.owner === pi || !canFlank(S, pi, enemy, flankSpots)) continue;
+    const a = powerOf(S, pi), d = powerOf(S, enemy.owner);
+    if (rec) rec.push(combatEntry(S, {
+      art: 'flanke', pi, gegner: enemy.owner, r: enemy.r, c: enemy.c, a, d, sieg: a > d,
+      von: flankersOf(S, pi, enemy, flankSpots),
+    }));
+    if (a > d) {
+      S.armies = S.armies.filter(x => x !== enemy);
       log(S, 'fight', T('%s flankiert und zerstört eine Armee von %s.', civOf(p).n, civOf(S.players[enemy.owner]).n));
     }
   }
+}
+// Von wo aus flankiert wird: die Positionen des Angreifers in Reichweite des Gegners
+function flankersOf(S, pi, enemy, spots) {
+  const rng = projectRange(S, pi);
+  return (spots || flankSpotsOf(S, pi)).filter(([r, c]) => {
+    const d = hexDistance(r, c, enemy.r, enemy.c);
+    return d >= 1 && d <= rng;
+  });
+}
+/* Ein Kampfeintrag samt Kartenstand DAVOR: Städte, Armeen, Wunder und die Reiche (für
+   Farben und Grenzen) – genug, um die Karte so zu zeichnen, wie sie vor diesem Kampf stand. */
+function combatEntry(S, e) {
+  e.snap = {
+    cities: JSON.parse(JSON.stringify(S.cities)),
+    armies: JSON.parse(JSON.stringify(S.armies)),
+    wonders: JSON.parse(JSON.stringify(S.wonders || [])),
+    players: S.players.map(q => Object.assign({}, q)),
+  };
+  return e;
 }
 function captureCity(S, pi, city) {
   const p = S.players[pi], loser = S.players[city.owner];
@@ -2214,9 +2269,10 @@ function pendingWarnings(S, pi) {
 }
 /* Schritt 4 + 5 des Zuges. Läuft für Menschen wie Bots an genau einer Stelle –
    sonst würde ein Belagerungszähler zweimal pro Zug steigen. */
-function finishTurn(S) {
+// `rec`: siehe combatPhase – die Oberfläche bekommt so jeden Kampf zum Nachspielen
+function finishTurn(S, rec) {
   if (S.over) return S.over;
-  combatPhase(S, S.cur);
+  combatPhase(S, S.cur, rec);
   // Der Wirtschaftssieg wird nicht am Zugende geprüft, sondern am Ende der Runde für alle
   // (checkEconomyRoundEnd, v85).
   return S.over;

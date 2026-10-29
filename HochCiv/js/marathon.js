@@ -249,7 +249,8 @@ function draftPick(D, pi, id) {
 
 /* ------------------------------------------------------------------ Wahl der KI
    Feste Grundwerte je Fähigkeit, dazu, was die Karte um die eigene Hauptstadt hergibt
-   (Wald für Taiga, Küste für Seemacht, Land für Siedler und Kolonisten).
+   (Land ohne Nahrung für Taiga – bis v94 nur der Wald –, Küste für Seemacht, Land für Siedler
+   und Kolonisten).
    Die Grundwerte sind gemessen (v85, ANNAHMEN; zuerst v83 mit 40 Partien): 200
    Marathonpartien nach den Regeln von v85 mit vier KI (Schwer) und zufällig zugeteilten
    Fähigkeiten, Stärke L je Fähigkeit über ein bedingtes Logit (wer gewinnt, gegeben die
@@ -273,7 +274,10 @@ function kiDraftValue(V, pi, id, mine) {
   const umkreis = within(cap.r, cap.c, 5).filter(([r, c]) => terrainAt(V, r, c));
   const zahl = t => umkreis.filter(([r, c]) => terrainAt(V, r, c) === t).length;
   const land = umkreis.filter(([r, c]) => TERRAIN[terrainAt(V, r, c)].land).length;
-  if (id === 'russland:basis') v += Math.min(4, zahl('W') / 4);    // +1 Nahrung je Wald
+  // Taiga (seit v95 mindestens 1 Nahrung je Feld): was sie an Land hebt, Wald und Gebirge – im
+  // Meer bringt Fischerei die Nahrung ohnehin bald. Grundwert und Gewicht sind noch die der
+  // Taiga bis v94 (+1 Nahrung je Wald), nicht neu gemessen.
+  if (id === 'russland:basis') v += Math.min(4, (zahl('W') + zahl('B')) / 4);
   if (id === 'england:kuestenstaedte') {
     // Landfelder am Meer, auf denen eine Stadt stehen könnte
     const kueste = umkreis.filter(([r, c]) => TERRAIN[terrainAt(V, r, c)].land &&

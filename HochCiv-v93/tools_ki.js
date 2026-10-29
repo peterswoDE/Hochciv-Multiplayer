@@ -26,7 +26,8 @@
    n ist die Zahl der Partien (bei „stufen" die Zahl der Paare). Die Partien sind aus ihren
    Startwerten reproduzierbar: gleiche Befehlszeile, gleiche Zahlen.
    alterbaum (v82): die Partien laufen im alten Techtree (bis v81 Standard, heute nur noch
-   im Tutorial) – zum Vergleich mit Messungen von vor v82.                          */
+   im Tutorial) – zum Vergleich mit Messungen von vor v82.
+   reihenfolge, kampflaenge (v90): Messhaken zur Kampfphase, siehe unten.          */
 const fs = require('fs'), vm = require('vm');
 for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js',
   'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js'])
@@ -38,6 +39,69 @@ const modus = args[0] || 'duell';
 const N = +(args[1] || 20);
 const opt = (k, d) => { const x = args.find(a => a.startsWith(k + '=')); return x ? x.split('=')[1] : d; };
 const flag = k => args.includes(k);
+
+/* Messhaken (v90), nur mit Schalter – am Spiel ändern sie nichts:
+   reihenfolge  jede echte Kampfphase (nicht die Wegwerfkopien der KI) läuft zusätzlich auf einer
+                Kopie in der anderen Reihenfolge – erst die Flanken, dann die Städte, wie in v90
+                (die Regel ist seit v91 wieder: erst die Städte); verglichen werden Armeen,
+                Städte, Belagerungen und Spielende, je Größe aus Sicht des Angreifers (eigene
+                Städte, Belagerungszähler, zerstörte gegnerische Armeen): „besser" heißt, die
+                Flanken zuerst hätten dem Angreifer mehr gebracht
+   kampflaenge  Kämpfe je Kampfphase – so viele Sekunden dauert das Nachspiel
+   Die Zahlen in ANNAHMEN.md stammen von hier – die von v90 aus Partien, die selbst mit den
+   Flanken zuerst liefen (damals verglich der Haken mit „erst die Städte"). */
+if (flag('reihenfolge') || flag('kampflaenge')) {
+  const echt = combatPhase;
+  const anderePhase = (S, pi) => {
+    const spots = flankSpotsOf(S, pi);
+    for (const enemy of S.armies.slice())
+      if (enemy.owner !== pi && canFlank(S, pi, enemy, spots) && powerOf(S, pi) > powerOf(S, enemy.owner))
+        S.armies = S.armies.filter(a => a !== enemy);
+    for (const city of S.cities.slice()) {
+      if (city.owner === pi) continue;
+      const sk = pi + '|' + city.id, atk = attackersOn(S, pi, city);
+      if (!atk.length) { delete S.sieges[sk]; continue; }
+      if (attackValue(S, pi, atk.length) > defenseValue(S, city)) {
+        S.sieges[sk] = (S.sieges[sk] || 0) + 1;
+        if (S.sieges[sk] >= 2) captureCity(S, pi, city);
+      } else S.sieges[sk] = 0;
+    }
+  };
+  const sig = X => JSON.stringify([X.armies.map(a => a.id).sort((x, y) => x - y),
+    X.cities.map(c => [c.id, c.owner, c.pop]).sort((x, y) => x[0] - y[0]),
+    Object.entries(X.sieges).filter(([, v]) => v).sort(), !!X.over]);
+  const st = { mitKampf: 0, beide: 0, anders: 0, besser: 0, schlechter: 0, gemischt: 0, ende: 0 }, laengen = [];
+  combatPhase = function (S, pi, rec) {
+    if (S.kiSim) return echt(S, pi, rec);
+    const K = flag('reihenfolge') ? kiClone(S, S.seed) : null;
+    if (K) { delete K.kiSim; anderePhase(K, pi); }
+    const r = rec || [];
+    echt(S, pi, r);
+    if (r.length) { st.mitKampf++; laengen.push(r.length); }
+    if (r.some(e => e.art === 'flanke') && r.some(e => e.art === 'stadt')) st.beide++;
+    if (!K || sig(K) === sig(S)) return;
+    st.anders++;
+    const staedte = X => X.cities.filter(c => c.owner === pi).length;
+    const belag = X => Object.entries(X.sieges).filter(([k]) => k.startsWith(pi + '|')).reduce((n, [, v]) => n + (v || 0), 0);
+    const feinde = X => X.armies.filter(a => a.owner !== pi).length;
+    const d = [staedte(K) - staedte(S), belag(K) - belag(S), feinde(S) - feinde(K)];   // Flanken zuerst minus Regel
+    if (!!S.over !== !!K.over) st.ende++;
+    if (d.every(x => x >= 0) && d.some(x => x > 0)) st.besser++;
+    else if (d.every(x => x <= 0) && d.some(x => x < 0)) st.schlechter++;
+    else st.gemischt++;
+  };
+  process.on('exit', () => {
+    if (flag('reihenfolge')) console.log(`   Reihenfolge: Kampfphasen mit Kampf ${st.mitKampf}, Flanke und Stadt im selben Zug ${st.beide}, ` +
+      `mit den Flanken zuerst anders ${st.anders}: für den Angreifer besser ${st.besser}, schlechter ${st.schlechter}, ` +
+      `gemischt ${st.gemischt}; Spielende nur in einer Reihenfolge ${st.ende}`);
+    if (flag('kampflaenge') && laengen.length) {
+      laengen.sort((a, b) => a - b);
+      const q = f => laengen[Math.min(laengen.length - 1, Math.floor(f * laengen.length))];
+      console.log(`   Kämpfe je Kampfphase (${laengen.length} mit Kampf): Median ${q(0.5)}, 90 % ${q(0.9)}, ` +
+        `höchstens ${laengen[laengen.length - 1]} · mehr als 5: ${laengen.filter(x => x > 5).length}, mehr als 10: ${laengen.filter(x => x > 10).length}`);
+    }
+  });
+}
 const CIVK = CIVS.map(c => c.k);
 
 /* Aufbau wie im Spiel: Plättchenplan, Vorabwurf, jeder Platz legt (KI selbst, Bots
