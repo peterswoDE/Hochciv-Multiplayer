@@ -136,7 +136,9 @@ All planned features are on `development` (staging). Production (`main`) gets th
 - `mp.js`: `MP.lastStats` (live: `game:stats`; Rundenspiel: the view). The log, player list and chat panels are now at `z-index` 29, below the game's dialogs (30): before, they covered every dialog.
 - Texts in `client/i18n.js`.
 
-**Tests:** `tests/stats/stats.test.js`: recording with the engine (one point per round, final scores, events, names), a real Rundenspiel played to the end by the KI through the service (`finish-async.js`: stored, in the view and in the match record), and a live game in the browser (end screen, chart, legend, tooltip, key moments, table, the match record, `GET /api/games/:id`, the chart in the profile).
+**Later additions (requested after the staging tests):** each point also has the income per round and the stock of science, food and coins (`ys yf yc rs rf rc`, from the engine's `income()` and `res`); the chart has a value selector (points, cities, population, techs, armies, wonders, income, stock) and the table follows it; older matches get the new values from their replay (`Stats.enrich`, run with the facts backfill of F13). The match history on the account page shows the chart when a match is clicked (`client/stats.js` is loaded there; `GET /api/games/:id` sends nation names and colours for pages without the game).
+
+**Tests:** `tests/stats/stats.test.js`: recording with the engine (one point per round, final scores, events, names, income and stock), `enrich`, the value selector, the chart in the account page's match history, a real Rundenspiel played to the end by the KI through the service (`finish-async.js`: stored, in the view and in the match record), and a live game in the browser (end screen, chart, legend, tooltip, key moments, table, the match record, `GET /api/games/:id`, the chart in the profile).
 
 **Status:** ✅ on `development`
 

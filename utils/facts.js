@@ -13,7 +13,8 @@
  *   }
  *
  * Computed from the replay (the state after every turn, utils/replay.js) right after a match is
- * stored, and for older matches at server start (backfill). A match without a replay falls back
+ * stored, and for older matches at server start (backfill). The same pass adds income and stock
+ * per round to the match's own statistics if they were recorded without (Stats.enrich). A match without a replay falls back
  * to what the match record has ('record': participants and the statistics over the rounds).
  */
 const zlib = require('zlib');
@@ -21,6 +22,7 @@ const { promisify } = require('util');
 const { Op } = require('sequelize');
 const { Game, Replay } = require('../models');
 const engine = require('../engine-adapter');
+const Stats = require('./stats');
 
 const decompress = promisify(zlib.brotliDecompress);
 
@@ -133,16 +135,20 @@ async function replayStates(gameId) {
 async function store(gameId) {
     const game = await Game.findByPk(gameId);
     if (!game) return null;
-    let facts = null;
+    let facts = null, stats = null;
     try {
         const states = await replayStates(gameId);
-        if (states) facts = fromStates(states, game.version);
+        if (states) {
+            facts = fromStates(states, game.version);
+            // the match's own statistics: income and stock per round for older matches (utils/stats.js)
+            stats = Stats.enrich(game.stats ? JSON.parse(JSON.stringify(game.stats)) : null, engineFor(game.version), states);
+        }
     } catch (err) {
         console.error(`[Facts] Replay of ${gameId} unusable:`, err.message);
     }
     if (!facts) facts = fromRecord(game);
     // a match without any data stays out of the statistics, but is not tried again
-    await game.update({ facts: facts || { v: 1, src: 'none', p: [] } });
+    await game.update(Object.assign({ facts: facts || { v: 1, src: 'none', p: [] } }, stats ? { stats } : {}));
     if (typeof onChange === 'function') onChange();
     return facts;
 }

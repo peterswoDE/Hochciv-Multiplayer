@@ -44,7 +44,8 @@ function names() {
     const EN = get('DATA_EN') || {}, ageOfCost = get('ageOfCost');
     const en = (tab, k) => (tab && tab[k] ? (Array.isArray(tab[k]) ? tab[k][0] : tab[k]) : null);
     namesCache = {
-        civ: Object.fromEntries(CIVS.map(c => [c.k, [c.n, en(EN.civ, c.k) || c.n]])),
+        // [de, en, colour on the map]
+        civ: Object.fromEntries(CIVS.map(c => [c.k, [c.n, en(EN.civ, c.k) || c.n, c.color]])),
         abil: Object.fromEntries(CIVS.map(c => [c.k, Object.fromEntries(c.abilities.map(a =>
             [a.k, [a.n, en(EN.abil && EN.abil[c.k], a.k) || a.n]]))])),
         // [de, en, field, age] in the order of the tech tree

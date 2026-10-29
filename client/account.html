@@ -613,7 +613,7 @@
     <div id="history-modal" class="modal-overlay"
         style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
         <div class="modal-content"
-            style="background:#fff; padding:25px; border-radius:8px; max-width:600px; width:90%; position:relative; max-height:80vh; overflow-y:auto;">
+            style="background:#fff; padding:25px; border-radius:8px; max-width:760px; width:90%; position:relative; max-height:85vh; overflow-y:auto;">
             <button onclick="document.getElementById('history-modal').style.display='none'"
                 style="position:absolute; right:15px; top:15px; background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
             <h2 id="hm-title" style="margin-top:0; font-family: Georgia, serif; color: var(--red);">Spielauswertung</h2>
@@ -675,6 +675,14 @@
     <script src="passkey.js"></script>
     <script src="profile.js"></script>
     <script src="gamestats.js"></script>
+    <script>
+        // client/stats.js (the chart of a match in the history) uses these helpers of the game page (mp.js)
+        const TX = (de, ...args) => HC_I18N.t(de, ...args);
+        const TXS = msg => HC_I18N.tr(msg);
+        const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    </script>
+    <script src="stats.js"></script>
     <script src="account.js"></script>
 </body>
 
