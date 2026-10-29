@@ -1600,7 +1600,10 @@ for (const [fnName, makePayload] of Object.entries(ACTIONS)) {
     const orig = window[fnName];
     if (!orig) continue; // safety check
     window[fnName] = function (state, ...args) {
-        if (MP.active) {
+        // Only actions on the live state go to the server. The game also runs them on throwaway
+        // copies to plan (growAllPlan prices "Alle Städte wachsen" when Fähigkeiten opens) –
+        // sending those made every city grow just by opening the sheet.
+        if (MP.active && state === S) {
             if (MP.spectator) return TX('Du schaust nur zu.');
             const pi = fnName === 'moveArmy' ? args[0].owner : args[0];
             if (pi !== MP.playerIndex) return TX('Du bist nicht am Zug (oder nicht deine Armee).');
