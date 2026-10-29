@@ -28,6 +28,7 @@ Tests create their own test accounts and delete them afterwards.
 | Test | Covers | Server started with |
 |---|---|---|
 | `admin/running-games.test.js` | admin tab *Laufende Spiele* | default |
+| `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
@@ -42,6 +43,7 @@ Tests create their own test accounts and delete them afterwards.
 | `score/win-bonus.test.js` | winner's bonus points | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
 | `spectators/spectators.test.js` | spectator mode | default |
+| `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin tab | default |
 | `stats/stats.test.js` | post-game statistics | default |
 | `summary/summary.test.js` | "since your last turn" | default |
 | `timer/turn-timer.test.js` | turn timer of live games | `TURN_TIMER_SCALE=0.05 TURN_TIMER_AFK_AFTER=2` |

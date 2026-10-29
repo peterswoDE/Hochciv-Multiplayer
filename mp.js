@@ -1600,7 +1600,10 @@ for (const [fnName, makePayload] of Object.entries(ACTIONS)) {
     const orig = window[fnName];
     if (!orig) continue; // safety check
     window[fnName] = function (state, ...args) {
-        if (MP.active) {
+        // Only actions on the live state go to the server. The game also runs them on throwaway
+        // copies to plan (growAllPlan prices "Alle Städte wachsen" when Fähigkeiten opens) –
+        // sending those made every city grow just by opening the sheet.
+        if (MP.active && state === S) {
             if (MP.spectator) return TX('Du schaust nur zu.');
             const pi = fnName === 'moveArmy' ? args[0].owner : args[0];
             if (pi !== MP.playerIndex) return TX('Du bist nicht am Zug (oder nicht deine Armee).');
@@ -2289,6 +2292,7 @@ MP.drawLegalFooter = function () {
 MP.applyLang = function () {
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
     set('mp-live-btn', TX('Multiplayer'));
+    set('mp-overall-btn', TX('Statistiken'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
     const wait = document.querySelector('.mp-waiting-toast');
@@ -2328,6 +2332,15 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.id = 'mp-async-btn';
         btn.textContent = TX('Rundenspiele');
         btn.onclick = () => ASYNC.showList();
+        mNew.parentNode.insertBefore(btn, $('m-continue'));
+    }
+    // Menu button "Statistiken": win rates over all matches (client/gamestats.js)
+    if (mNew && !$('mp-overall-btn') && typeof GAMESTATS !== 'undefined') {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.id = 'mp-overall-btn';
+        btn.textContent = TX('Statistiken');
+        btn.onclick = () => GAMESTATS.open();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
     }
     MP.applyLang();

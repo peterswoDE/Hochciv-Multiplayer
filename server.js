@@ -121,6 +121,8 @@ app.use(passport.session());
 // Initialize ORM
 sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
+    // facts of older matches for the overall statistics (needs the column `facts`)
+    require('./utils/facts').startBackfill();
     // the admins' words for the chat filter (utils/profanity.js)
     require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`
@@ -156,6 +158,8 @@ app.use('/api/mfa', mfaRoutes);
 app.use('/api/profile', require('./routes/profile'));
 // Finished matches with their statistics and replays (routes/games.js); old replays are deleted
 app.use('/api/games', require('./routes/games'));
+// Overall statistics over all matches (F13)
+app.use('/api/stats', require('./routes/stats'));
 require('./utils/replay').startCleanup();
 require('./utils/reports').startCleanup();
 // Asynchronous games ("Rundenspiele", play by turn)

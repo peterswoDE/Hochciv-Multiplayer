@@ -18,6 +18,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 8 | F9 | [Ranked matchmaking](#f9-ranked-matchmaking) | ✔ | – | ✅ |
 | 9 | F11 | [Chat: report and block](#f11-chat-report-and-block) | ✔ | ✔ | ✅ |
 | 10 | F12 | [Chat: word filter, guests emote-only](#f12-chat-word-filter-and-guests-emote-only) | ✔ | ✔ | ✅ |
+| 11 | F13 | [Overall statistics](#f13-overall-statistics) | ✔ | ✔ | ✅ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
 
@@ -135,7 +136,9 @@ All planned features are on `development` (staging). Production (`main`) gets th
 - `mp.js`: `MP.lastStats` (live: `game:stats`; Rundenspiel: the view). The log, player list and chat panels are now at `z-index` 29, below the game's dialogs (30): before, they covered every dialog.
 - Texts in `client/i18n.js`.
 
-**Tests:** `tests/stats/stats.test.js`: recording with the engine (one point per round, final scores, events, names), a real Rundenspiel played to the end by the KI through the service (`finish-async.js`: stored, in the view and in the match record), and a live game in the browser (end screen, chart, legend, tooltip, key moments, table, the match record, `GET /api/games/:id`, the chart in the profile).
+**Later additions (requested after the staging tests):** each point also has the income per round and the stock of science, food and coins (`ys yf yc rs rf rc`, from the engine's `income()` and `res`); the chart has a value selector (points, cities, population, techs, armies, wonders, income, stock) and the table follows it; older matches get the new values from their replay (`Stats.enrich`, run with the facts backfill of F13). The match history on the account page shows the chart when a match is clicked (`client/stats.js` is loaded there; `GET /api/games/:id` sends nation names and colours for pages without the game).
+
+**Tests:** `tests/stats/stats.test.js`: recording with the engine (one point per round, final scores, events, names, income and stock), `enrich`, the value selector, the chart in the account page's match history, a real Rundenspiel played to the end by the KI through the service (`finish-async.js`: stored, in the view and in the match record), and a live game in the browser (end screen, chart, legend, tooltip, key moments, table, the match record, `GET /api/games/:id`, the chart in the profile).
 
 **Status:** ✅ on `development`
 
@@ -281,6 +284,28 @@ Texts with bad language are not sent but reported automatically, and the sender 
 - retention.
 
 `tests/reports` and `tests/chat` now use accounts for texts, a guest sends emotes, and the guest is muted instead of blocked.
+
+**Status:** ✅ on `development`
+
+## F13 Overall statistics
+
+**Goal:** Numbers over all finished matches – requested by the players: win rate per nation and per turn position, how many cities winners have, which technologies winners research, and more.
+
+**Decisions**
+- **Both public and admin:** *Statistiken* in the main menu for everyone; the account tab *Statistiken* for admins adds detail.
+- **Humans only by default:** win rates count human seats; a filter adds KI and bot seats. Further filters: number of empires, game type, version.
+- **Older matches are included:** the facts of a match are computed from its replay (the state after every turn), so matches from before this feature count as well. Matches without a replay fall back to the match record (no techs, no turn position).
+- **Anonymous:** the facts have no names and no account ids, so account deletion and merging don't need to touch them.
+
+**Implementation**
+- `utils/facts.js`: `fromStates(states, version)` → per empire nation, ability (or the drafted pair), human/KI/bot and level, turn position (from `S.startIdx`, barbarians left out), won, dead, score, cities, population, armies, wonders and the round of each technology (a tech new in frame j was researched in the turn of frame j-1). Per match: rounds, empires, mode, map, events/wonders, victory type (from `S.over`). `fromRecord(game)` is the fallback. `storeLater(gameId)` runs after a match is stored (`sockets/game.js`, `async/service.js`); `backfill()` fills every match without facts after the DB sync at start.
+- `models/Game.js`: new column `facts` (JSONB).
+- `utils/gamestats.js`: `aggregate(rows, query, detail)` – nations, abilities, turn positions (by number of empires), victory types, winners vs. the others (averages), winners' cities, techs (share among winners and the others, win rate with it, average round for winners), wonders; names in German and English from the current game. The facts of all matches are cached for a minute and dropped when new facts are stored.
+- `routes/stats.js`: `GET /api/stats` (public, filters sanitised). `routes/admin.js`: `GET /api/admin/stats` (adds matches per version, KI/bot levels, sources), `GET /api/admin/stats/export` (JSON download), `POST /api/admin/stats/recompute` (superadmin).
+- `client/gamestats.js` (new, injected after `mp.js` and loaded by the account page): `GAMESTATS.open()` (overlay) and `GAMESTATS.render(el, { admin })`. Tables with one bar per row and the number next to it (one neutral colour; the table is the accessible view), rows with fewer than 5 seats greyed out, the tech table sortable. On phones the tables are compact and scroll sideways.
+- `mp.js`: the menu button *Statistiken*. Texts in `client/i18n.js`.
+
+**Tests:** `tests/stats/overall.test.js`: facts from a KI game played with the engine (turn positions, winners, tech rounds, victory type, barbarians, the fallback), the aggregation over made-up matches (every table and filter), a real Rundenspiel played to the end (facts from its replay, `GET /api/stats`, filters, no names), the overlay in German and English, and the admin tab with export.
 
 **Status:** ✅ on `development`
 

@@ -348,7 +348,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dateStr = new Date(g.matchDate).toLocaleString(HC_I18N.locale());
 
         document.getElementById('hm-title').innerHTML = `${tx('Spielauswertung')} <span style="font-size:14px; color:#666; font-weight:normal; margin-left:10px;">(${dateStr})</span>`;
-        document.getElementById('hm-body').innerHTML = tafel;
+        // the statistics over the rounds (client/stats.js): chart with a choice of values, key moments
+        document.getElementById('hm-body').innerHTML = tafel + (g.stats && typeof STATS !== 'undefined' ? '<div id="hm-stats"></div>' : '');
+        if (g.stats && typeof STATS !== 'undefined') STATS.loadInto(document.getElementById('hm-stats'), g.id);
 
         document.getElementById('history-modal').style.display = 'flex';
     }
@@ -416,6 +418,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.querySelector('[data-target="tab-admin-running"]').addEventListener('click', loadAdminRunning);
+    // Overall statistics with the admin detail (client/gamestats.js)
+    document.querySelector('[data-target="tab-admin-stats"]').addEventListener('click', () =>
+        GAMESTATS.render(document.getElementById('admin-stats-body'), { admin: true }));
     document.getElementById('btn-admin-running-reload').addEventListener('click', loadAdminRunning);
 
     async function loadAdminGames(append) {

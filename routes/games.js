@@ -3,7 +3,8 @@
  *
  *   GET /api/games/:id         – date, version, rounds, the players with their points, the
  *                                statistics over the rounds (utils/stats.js; null for older
- *                                matches) and whether there is a replay
+ *                                matches), whether there is a replay, and the names of nations
+ *                                (with their colours) and wonders in German and English
  *   GET /api/games/:id/replay  – the replay (utils/replay.js): { v, version, names, frames } as
  *                                stored, Brotli-compressed (Content-Encoding: br) for browsers
  *                                that accept it, else decompressed
@@ -15,6 +16,7 @@ const express = require('express');
 const zlib = require('zlib');
 const rateLimitLib = require('express-rate-limit');
 const { Game, Replay } = require('../models');
+const GameStats = require('../utils/gamestats');
 
 const router = express.Router();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,6 +44,8 @@ router.get('/:id', limit, async (req, res) => {
                 points: p.points || 0, isWinner: !!p.isWinner, mmrShift: p.mmrShift != null ? p.mmrShift : null,
             })),
             stats: g.stats || null,
+            // nation names and colours, wonder names – for pages without the game (account page)
+            names: { civ: GameStats.names().civ, wonder: Object.fromEntries(GameStats.names().wonder.map(w => [w[0], [w[1], w[2]]])) },
             replay: !!(await Replay.count({ where: { gameId: g.id } })),
         });
     } catch (err) {
