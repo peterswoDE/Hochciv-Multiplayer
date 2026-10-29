@@ -28,6 +28,7 @@ Tests create their own test accounts and delete them afterwards.
 | Test | Covers | Server started with |
 |---|---|---|
 | `admin/running-games.test.js` | admin tab *Laufende Spiele* | default |
+| `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
