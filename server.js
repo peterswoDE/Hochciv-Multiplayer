@@ -85,7 +85,8 @@ if (process.env.NODE_ENV === 'production') {
 
 const pgPool = new pg.Pool({ connectionString: dbUrl });
 
-// gzip for pages, scripts and API answers (Socket.IO handles its own traffic before Express)
+// gzip for pages and API answers – scripts and styles are gzipped once (utils/assets.js);
+// Socket.IO handles its own traffic before Express
 app.use(compression());
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
 // Changing requests only from this site's pages (utils/origin.js): staging is the same site
@@ -113,7 +114,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Scripts and styles with the current content hash (?v=…, written by inject.js) are kept for a year
 const staticOpts = { setHeaders: (res, file, stat) => { if (Assets.isCurrent(res.req, file, stat)) res.set('Cache-Control', Assets.YEAR); } };
-app.use('/client', express.static(path.join(__dirname, 'client'), staticOpts));
+app.use('/client', Assets.gzipped(path.join(__dirname, 'client')), express.static(path.join(__dirname, 'client'), staticOpts));
 
 // Explicit routes for legal pages at root
 app.get('/impressum.html', (req, res) => res.sendFile(path.join(__dirname, 'client/impressum.html')));
@@ -147,6 +148,7 @@ if (!fs.existsSync(ACTIVITY_BUNDLE)) {
     console.warn('[Activity] Bridge bundle missing – run "npm run build:activity". The Discord Activity is unavailable.');
 }
 app.get(OLD_GAME_PATHS.map(p => p + '/js/activity.js'), (req, res) => {
+    if (Assets.sendGzipped(req, res, ACTIVITY_BUNDLE)) return;
     res.set('Cache-Control', Assets.isCurrent(req, ACTIVITY_BUNDLE) ? Assets.YEAR : 'no-cache');
     res.sendFile(ACTIVITY_BUNDLE, err => {
         if (err && !res.headersSent) res.type('application/javascript').send('/* Discord Activity bundle not built */');
@@ -154,7 +156,7 @@ app.get(OLD_GAME_PATHS.map(p => p + '/js/activity.js'), (req, res) => {
 });
 
 // The game with mp.js (public/, scripts/build-public.js) – this makes the game the root /
-app.use(express.static(path.join(__dirname, 'public'), staticOpts));
+app.use(Assets.gzipped(path.join(__dirname, 'public')), express.static(path.join(__dirname, 'public'), staticOpts));
 
 const sessionMiddleware = session({
     store: new pgSession({ pool: pgPool, tableName: 'session' }),

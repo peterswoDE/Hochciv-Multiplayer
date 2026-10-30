@@ -38,7 +38,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `mmr.js`, `score.js` | MMR calculation and end-of-game points ([Points and MMR](ranking.md)) |
 | `chat.js`, `profanity.js`, `reports.js` | Chat messages and rate limit, word filter, reports and blocks |
 | `stats.js`, `summary.js`, `replay.js` | Statistics over the rounds, "since your last turn", replays |
-| `assets.js` | Content hashes of the page's scripts and styles (`inject.js`), and whether a request may be cached for a year (`server.js`) |
+| `assets.js` | Content hashes of the page's scripts and styles (`inject.js`), whether a request may be cached for a year, and these files gzipped once in memory (`server.js`) |
 | `scenes.js` | What happened as scenes for the clients (actions and battles as a chain of map diffs) |
 | `deleteAccount.js`, `detachUser.js`, `rename.js`, `mergeAccounts.js` | Deleting/banning accounts, removing names from game states, merging Discord Activity accounts |
 | `serverState.js` | Maintenance mode, registration switch, metrics (in memory) |

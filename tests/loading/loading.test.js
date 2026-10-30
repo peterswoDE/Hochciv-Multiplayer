@@ -69,9 +69,29 @@ async function hashes(page) {
         ok(r.headers.get('content-encoding') === 'gzip', `gzip: ${u.replace(/\?.*/, '')}`, `${r.status} ${r.headers.get('content-encoding')}`);
     }
 
+    // scripts and styles are gzipped once, in memory (utils/assets.js): the same file, a 304 for
+    // a browser that has it, plain for clients without gzip
+    const zlib = require('zlib');
+    const http = require('http');
+    const raw = (u, headers) => new Promise((resolve, reject) => http.get(BASE + u, { headers }, r => {
+        const chunks = [];
+        r.on('data', c => chunks.push(c));
+        r.on('end', () => resolve({ status: r.statusCode, headers: r.headers, body: Buffer.concat(chunks) }));
+    }).on('error', reject));
+    const gz = await raw('/' + ui, { 'Accept-Encoding': 'gzip' });
+    const id = await raw('/' + ui, { 'Accept-Encoding': 'identity' });
+    ok(gz.headers['content-encoding'] === 'gzip' && !id.headers['content-encoding'] && zlib.gunzipSync(gz.body).equals(id.body),
+        'gzip from memory is the same file', `${gz.body.length} / ${id.body.length} bytes`);
+    const again = await raw('/' + ui, { 'Accept-Encoding': 'gzip', 'If-None-Match': gz.headers.etag });
+    ok(again.status === 304, 'a browser that has the file gets 304', again.status);
+    const chat = await raw(own.find(u => u.startsWith('/client/chat.js')), { 'Accept-Encoding': 'gzip' });
+    ok(chat.headers['content-encoding'] === 'gzip' && /In-game chat/.test(zlib.gunzipSync(chat.body)), 'gzip from memory under /client');
+    const out = await raw('/client/..%2fserver.js', { 'Accept-Encoding': 'gzip' });
+    ok(out.status === 404, 'nothing outside the folders', out.status);
+
     // ── The page's files do not touch the session ───────────────────────────
     const name = 'ld_' + crypto.randomBytes(3).toString('hex');
-    const id = inServer(`const { User } = require('./models'); const bcrypt = require('bcryptjs');
+    const uid = inServer(`const { User } = require('./models'); const bcrypt = require('bcryptjs');
         User.create({ username: '${name}', email: '${name}@example.com', password_hash: bcrypt.hashSync('${PASSWORD}', 10),
             isActive: true, emailOtpEnabled: false, notifyEmail: false })
             .then(u => { console.log(u.id); process.exit(0); })`);
@@ -96,7 +116,7 @@ async function hashes(page) {
         ok(me.status === 200 && JSON.stringify(user).includes(name), 'logged in: the API still knows the player', me.status);
         ok(Number(expire()) > Number(before) + 20 * 86400, 'logged in: an API request still keeps the session alive', `${before} → ${expire()}`);
     } finally {
-        sql(`DELETE FROM users WHERE id = '${id}'`);
+        sql(`DELETE FROM users WHERE id = '${uid}'`);
     }
 
     console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
