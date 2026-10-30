@@ -12,6 +12,7 @@
  *     chat:   [message] – the last 200 chat messages (utils/chat.js),
  *     stats:  score and counts over the rounds, key moments (utils/stats.js),
  *     marks:  per state player the point of their last turn ("since your last turn", utils/summary.js),
+ *     scenes: what happened as scenes for the clients, since the earliest mark (utils/scenes.js),
  *     pre:    null | { plan } (tile map placement) | { draft: { V, D } } (Marathon),
  *     hold:   true while the game waits for an unclaimed seat (S.cur is that seat, its
  *             beginTurn has not run yet),
@@ -26,6 +27,7 @@
 const engine = require('../engine-adapter');
 const { renameInState } = require('../utils/rename');
 const Summary = require('../utils/summary');
+const Scenes = require('../utils/scenes');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and are v83. New games get the current one. */
@@ -434,7 +436,7 @@ function finishDraft(g) {
  */
 function finishAndAdvance(g) {
     const S = g.state;
-    if (ENG(g).getEngine().finishTurn(S)) return;
+    if (ENG(g).finishTurn(S)) return;
     const next = ENG(g).peekNext(S);
     const seat = g.seats[S.players[next].slot];
     if (seat && isFree(seat)) {
@@ -455,6 +457,7 @@ function action(g, userId, type, params) {
     if (!seat) return 'Du bist nicht in diesem Spiel.';
     const pi = stateIndex(g, seat.slot);
     if (g.hold || S.cur !== pi) return 'Du bist nicht am Zug.';
+    ENG(g).attachScenes(S, g);
     if (type === 'endTurn') {
         if (typeof ENG(g).getEngine().blockingIssues === 'function') {
             const stop = ENG(g).getEngine().blockingIssues(S, pi);
@@ -474,6 +477,7 @@ function action(g, userId, type, params) {
 async function drive(g, onStep) {
     const S = g.state;
     if (!S || g.status !== 'playing') return;
+    ENG(g).attachScenes(S, g);
     let guard = 0;
     while (!S.over && guard++ < 400) {
         const p = S.players[S.cur];
@@ -754,6 +758,12 @@ function view(g, userId) {
         // "since your last turn" (utils/summary.js) while it is the player's turn
         if (g.status === 'playing' && !g.hold && out.myIndex >= 0 && g.state.cur === out.myIndex) {
             out.summary = Summary.summarize(ENG(g).getEngine(), g.state, g.marks, out.myIndex) || undefined;
+        }
+        // the same time as scenes (client/scenes.js): everything since the player's last turn –
+        // the client plays it when the turn is theirs, and while watching only what is new
+        if (g.status === 'playing' && g.scenes) {
+            const m = out.myIndex >= 0 && g.marks && g.marks[out.myIndex];
+            out.scenes = Scenes.chain(g.scenes, m ? { afterSeq: m.seq } : { afterN: g.scenes.n0 }) || undefined;
         }
     }
     return out;

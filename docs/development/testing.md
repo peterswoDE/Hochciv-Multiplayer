@@ -40,6 +40,7 @@ Tests create their own test accounts and delete them afterwards.
 | `rematch/rematch.test.js` | rematch of a live game | default |
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin tab | default |
+| `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
 | `score/win-bonus.test.js` | winner's bonus points | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
 | `spectators/spectators.test.js` | spectator mode | default |
@@ -62,7 +63,7 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 
 | Change | Run |
 |---|---|
-| new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `rematch`, `summary`, `spectators`, `admin/running-games` |
+| new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
 | `client/mobile/` | `mobile` |
 | new or changed texts | `i18n` |
 | a feature from [TASKS.md](../../TASKS.md) | that feature's test (named in its section) |

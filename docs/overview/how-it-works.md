@@ -31,7 +31,7 @@ The game files are never edited in this repository by hand: a new version is bui
 1. **Build** – `scripts/build-public.js` (run by the Dockerfile and again at container start) copies every version into `public/`, `public/v96/`, `public/v93/` and `public/v83/`, leaving out development files (tests, tools, notes).
 2. **Inject** – it copies `mp.js` into each copy and runs `inject.js`, which adds script tags to its `index.html`: the Socket.IO client (served by this server, because the Discord Activity may not use CDNs), the multiplayer texts (`client/i18n.js`), the player profile, `mp.js`, the chat, the statistics, the replay viewer, matchmaking, the mobile layer and the Discord Activity bridge.
 3. **Hook** – in the browser, `mp.js` replaces the game's action functions so that moves are sent to the server instead of being applied locally, and adds the lobby, login and account UI. The game's own screens show the state the server sends.
-4. **Rules on the server** – `engine-adapter.js` loads the same game files (`data.js`, `civs.js`, `i18n.js`, `hex.js`, `tiles.js`, `engine.js`, `expansion.js`, `bots.js`, `ki.js`, `marathon.js` – everything except the DOM code) into a sandbox, one per game version, and applies every move there. The server's state is the only true one; clients only display it.
+4. **Rules on the server** – `engine-adapter.js` loads the same game files (`data.js`, `civs.js`, `i18n.js`, `hex.js`, `tiles.js`, `engine.js`, `expansion.js`, `bots.js`, `ki.js`, `marathon.js`, `anim.js` – everything except the DOM code) into a sandbox, one per game version, and applies every move there. The server's state is the only true one; clients only display it.
 
 ## Game versions
 
