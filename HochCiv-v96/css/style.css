@@ -117,6 +117,24 @@ html.w-narrow .hud-res{gap:4px}
 html.w-narrow .hud-res .res{min-width:0;padding:3px 6px 2px}
 html.w-narrow .hud-res .res u{display:none}
 html.w-narrow .hud-res .res b{font-size:18px}
+/* Laufender Vorrat beim Nachspielen von KI- und Bot-Zügen (v96): was eine Szene ausgibt oder
+   bekommt, erscheint als Marke unter dem Kästchen – „−10" rot, „+7" grün – und vergeht mit der
+   Szene (animVorrat). Unter dem Kästchen, nicht darüber: oben ist der Bildschirmrand. */
+.hud-res .res{position:relative;overflow:visible}
+.res-delta{position:absolute;left:50%;top:calc(100% + 3px);z-index:40;pointer-events:none;
+  padding:2px 8px 3px;border-radius:10px;font:700 14px/1.1 var(--sans);letter-spacing:.01em;
+  color:#fdf7e8;white-space:nowrap;box-shadow:0 1px 0 rgba(0,0,0,.12),0 3px 8px rgba(60,48,20,.25);
+  transform:translateX(-50%);animation:res-delta 1.35s ease-out both}
+.res-delta.minus{background:var(--red)}
+.res-delta.plus{background:#56713f}
+.res-delta.still{animation:none}
+@keyframes res-delta{
+  0%{opacity:0;transform:translate(-50%,-6px) scale(.8)}
+  14%{opacity:1;transform:translate(-50%,0) scale(1.06)}
+  24%{transform:translate(-50%,0) scale(1)}
+  78%{opacity:1;transform:translate(-50%,3px)}
+  100%{opacity:0;transform:translate(-50%,8px)}
+}
 
 /* Karte und Tutorialpanel teilen sich die Fläche zwischen Kopf- und Aktionsleiste.
    Hochkant/schmal untereinander, quer nebeneinander (siehe unten). */
@@ -403,6 +421,17 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
    „Tutorial beenden" – dort gehört er über die Karte. */
 html.w-side body.tut .toast{left:auto;right:16px;transform:translateY(-18px);max-width:58%}
 html.w-side body.tut .toast.show{transform:none}
+/* Während der Kampf nachgespielt wird (v90), liegt der Hinweis über der gesperrten
+   Aktionsleiste: oben verdeckte er die Werte von Kämpfen in den oberen Reihen. */
+.toast.unten,html.w-side body.tut .toast.unten{left:50%;right:auto;top:auto;bottom:calc(11px + var(--safe-b));
+  transform:translateX(-50%) translateY(18px);max-width:86%}
+.toast.unten.show,html.w-side body.tut .toast.unten.show{transform:translateX(-50%)}
+/* v94: der Satz zur Szene eines KI- oder Bot-Zugs – zwei Zeilen: was geschieht (mit einem
+   Punkt in der Farbe des Reichs), darunter klein, dass ein Tipp überspringt, und die wievielte */
+.toast.anim b{display:block;font-weight:600}
+.toast.anim small{display:block;font-size:11px;opacity:.72;margin-top:2px}
+.toast.anim .anim-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;
+  vertical-align:0;box-shadow:0 0 0 2px var(--paper)}
 
 /* Die folgenden Klassen setzt syncLayout() auf <html>. Bewusst keine Media Queries:
    im gedrehten Hochformat (html.turn) misst eine Media Query den ungedrehten Viewport
@@ -494,6 +523,44 @@ html.w-side .tut-scroll{min-height:0}
 .tut-nav .btn.small{flex:none;padding:8px 12px}
 .tut-nav .btn.primary{flex:1}
 .tut-count{font-size:12px;color:var(--ink-soft);min-width:34px;text-align:center}
+
+/* Erstes Spiel (v92): dasselbe Panel. Oben die Rückmeldung zum letzten Ziel, unten das
+   neue Ziel samt Stand; der Tipp kommt erst auf Wunsch. Was der Tipp meint, leuchtet
+   golden – Felder auf der Karte (tutHl), Knöpfe in Leiste, Blatt und Technologiebogen. */
+.fg-gut{background:#e7efd9;border:1px solid #bccd9c;border-radius:9px;padding:8px 10px;
+  margin:0 0 9px;font-size:13px;line-height:1.45}
+.fg-gut>b:first-child{color:#3f7a2f;margin-right:2px}
+.fg-tipp{background:#f2e5cf;border:1px dashed #c9a96a;border-radius:9px;padding:8px 10px;
+  margin:0 0 10px;font-size:13px;line-height:1.45}
+.fg-tipp>b:first-child{display:block;font-family:var(--serif);font-size:12px;letter-spacing:.04em;
+  text-transform:uppercase;color:#9a6a12;margin-bottom:3px}
+/* Das Ziel steht im Textbereich: dieselbe Zeile wie die Aufgabe des Tutorials, ohne deren Rand */
+#tut-body .fg-ziel{margin:0 0 10px}
+.fg-stand{display:block;margin-top:5px;font-size:13px;color:var(--ink-soft)}
+.tut-task .fg-stand b{color:var(--ink)}
+.fg-ja{color:#3f7a2f;font-weight:700}
+.tut-task .fg-nein{color:var(--red);font-weight:700}
+.fg-wahl{display:grid;gap:8px;margin:6px 0 4px}
+.fg-wahl .btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
+  padding:11px 13px;margin:0}
+.fg-wahl .btn>span{font-weight:600}
+.fg-wahl .btn small{font-size:12px;line-height:1.35;color:var(--ink-soft);font-weight:400}
+#tut-body .btn.wide{margin-top:8px}
+body.fg .tut-nav .btn.small{flex:1}
+/* Umriss statt Schatten: Kacheln und Knöpfe haben eigene Schatten, ein Umriss kommt keinem
+   davon in die Quere (und folgt den runden Ecken). */
+.fg-hl{outline:3px solid #e0b23a;outline-offset:2px;animation:fgPuls 1.4s ease-in-out infinite}
+@keyframes fgPuls{50%{outline-color:rgba(224,178,58,.3)}}
+@media (prefers-reduced-motion:reduce){.fg-hl{animation:none}}
+/* v93: blasse Kacheln sind im Ersten Spiel antippbar (warum blass?); meint der Tipp eine,
+   tritt sie hervor – sonst ginge der goldene Rand in der Blässe unter. */
+.tech.locked[data-blass]{cursor:pointer}
+.tech.locked.fg-hl{opacity:.6}
+/* v93: die Seite vor dem Ersten Spiel – wer man ist, worum es geht, und die Wahl des Wegs */
+.fg-seite p{margin:0 0 10px;line-height:1.5}
+.fg-auftakt{font-family:var(--serif);font-size:19px;line-height:1.4}
+.fg-seite .fg-wahl{margin:4px 0 12px}
+.fg-seite .hint{margin:0;font-size:13px;color:var(--ink-soft)}
 
 /* Technologieliste in den Kurzregeln */
 .rule-field{font-family:var(--serif);font-size:15px;font-weight:600;margin:16px 0 2px}

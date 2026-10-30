@@ -38,6 +38,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `mmr.js`, `score.js` | MMR calculation and end-of-game points ([Points and MMR](ranking.md)) |
 | `chat.js`, `profanity.js`, `reports.js` | Chat messages and rate limit, word filter, reports and blocks |
 | `stats.js`, `summary.js`, `replay.js` | Statistics over the rounds, "since your last turn", replays |
+| `scenes.js` | What happened as scenes for the clients (actions and battles as a chain of map diffs) |
 | `deleteAccount.js`, `detachUser.js`, `rename.js`, `mergeAccounts.js` | Deleting/banning accounts, removing names from game states, merging Discord Activity accounts |
 | `serverState.js` | Maintenance mode, registration switch, metrics (in memory) |
 
@@ -45,11 +46,12 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 
 | Path | Purpose |
 |---|---|
-| `HochCiv/`, `HochCiv-v93/`, `HochCiv-v88/`, `HochCiv-v83/` | The game (current version, and old versions for Rundenspiele started on them) |
+| `HochCiv/`, `HochCiv-v96/`, `HochCiv-v93/`, `HochCiv-v83/` | The game (current version, and old versions for Rundenspiele started on them) |
 | `mp.js` | Multiplayer client injected into the game: hooks the game's actions, lobby, login, Rundenspiele, HUD, spectators, end screen |
 | `client/i18n.js` | English texts of everything the server adds ([Languages](../development/languages.md)) |
 | `client/chat.js` | In-game chat panel |
 | `client/stats.js`, `client/replay.js` | Post-game statistics, replay viewer (`?replay=<id>`) |
+| `client/scenes.js` | Plays what the others did on the map (also the diff code `utils/scenes.js` uses) |
 | `client/profile.js` | Player profiles |
 | `client/matchmaking.js` | Ranked matchmaking UI |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |
@@ -66,7 +68,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | Path | Served from |
 |---|---|
 | `/` | `public/` (current game with the injected scripts) |
-| `/v93/`, `/v88/`, `/v83/` | `public/<version>/` |
+| `/v96/`, `/v93/`, `/v83/` | `public/<version>/` |
 | `/client/…` | `client/` |
 | `/api/…` | `routes/` |
 | `/socket.io/…` | Socket.IO (also serves its client script) |

@@ -5,16 +5,17 @@
 ```
 feature/… or fix/…  ──PR──▶  development  ──▶  staging server  ──PR──▶  main  ──▶  production
                              (image :staging,     (test there)          (image :latest + vX.Y.Z,
-                              Watchtower updates)                         GitHub release)
+                              Watchtower updates)                         GitHub release,
+                                                                          Watchtower updates)
 ```
 
 1. Branch from `development` (`git fetch && git switch -c feature/… origin/development`).
 2. Test locally with `docker-compose.local.yml` ([Local setup](local-setup.md)), then open a PR **into `development`**.
 3. Merging builds `peterswode/hochciv-multiplayer:staging` (plus `staging-<commit>`). Watchtower on the server pulls it within a few minutes and restarts [staging](../operations/staging.md).
 4. Test on staging (web and, if needed, the Android app pointed at the staging URL).
-5. When staging is good, open a PR **`development` → `main`**. Merging builds the release, then update production as described under [Deployment → Updating](../operations/deployment.md#updating).
+5. When staging is good, open a PR **`development` → `main`**. Merging builds the release, and production's Watchtower installs it within a few minutes – a merge into `main` goes live ([Deployment → Updating](../operations/deployment.md#updating)).
 
-Hotfixes that cannot wait go from a `hotfix/…` branch off `main` straight into `main`; merge `main` back into `development` afterwards (PR `main` → `development`) so the two do not drift.
+Hotfixes that cannot wait go from a `hotfix/…` branch off `main` straight into `main` (and so live within minutes, untested on staging); merge `main` back into `development` afterwards (PR `main` → `development`) so the two do not drift.
 
 ## Branch rules
 

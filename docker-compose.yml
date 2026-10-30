@@ -13,7 +13,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
       POSTGRES_DB: ${POSTGRES_DB:-hochciv}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # A named volume, or a folder (POSTGRES_DATA=./postgres in .env, for an existing installation)
+      - ${POSTGRES_DATA:-pgdata}:/var/lib/postgresql/data
     networks:
       - internal
 
@@ -24,6 +25,10 @@ services:
     restart: unless-stopped
     depends_on:
       - hochciv-db
+    labels:
+      # Updated by the Watchtower below whenever a new image is published (a merge into main)
+      - com.centurylinklabs.watchtower.enable=true
+      - com.centurylinklabs.watchtower.scope=hochciv
     environment:
       - PORT=3000
       - NODE_ENV=production
@@ -45,6 +50,22 @@ services:
     networks:
       - nginx
       - internal
+
+  watchtower:
+    image: nickfedor/watchtower:1.23.0
+    container_name: hochciv-watchtower
+    restart: unless-stopped
+    environment:
+      # Only containers labelled for this scope: production (above). Staging has its own
+      # Watchtower with the scope "hochciv-staging" (docker-compose.staging.yml).
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_SCOPE=hochciv
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-300}
+      - WATCHTOWER_CLEANUP=true
+    labels:
+      - com.centurylinklabs.watchtower.scope=hochciv
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 networks:
   nginx:

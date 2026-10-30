@@ -259,12 +259,18 @@ function draftPick(D, pi, id) {
    Kolonisten bekommen von der Karte im Mittel etwas dazu (gemessen über 120 Hauptstädte:
    Taiga +2,8, Seemacht +2,4, Land +1,5) – gemessen ist der Wert samt Karte, also steht hier
    der Wert ohne. Weit vorn nur Kolonisten (105 Siege bei 139 Besitzern), dann die Freie
-   Forschung; die übrigen liegen auf ±0,5 genau. */
+   Forschung; die übrigen liegen auf ±0,5 genau.
+   Seit v97 (Anweisung des Autors) wirken fünf Fähigkeiten anders; ihre Werte sind seitdem
+   GESCHÄTZT, nicht gemessen (dafür bräuchte es wieder Hunderte Marathonpartien): Freie Forschung
+   8,5 → 4,5 (zweimal je Partie statt jede Runde – der frühe, sich aufschaukelnde Vorsprung fällt
+   weg), Günstige Forschung 5 → 4 (im Marathon 2/2/4/4/10 statt 2/4/6/8/10), Kriegerkultur
+   3,5 → 2,5 (+1 statt +2 Macht), Siedlertrecks 3 → 5,5 (jedes Wachstum eine Stufe billiger),
+   Fruchtbarkeit 5 → 7 (dazu ein Wachstum mehr je Stadt und Runde). */
 const KI_DRAFT_BASE = {
   'england:gruenden': 14.5, 'england:basis': 5.5, 'england:kuestenstaedte': 2,
-  'griechenland:gratistech': 8.5, 'griechenland:basis': 5, 'griechenland:rueckschau': 7,
-  'wikinger:armeemacht': 3.5, 'wikinger:basis': 4, 'wikinger:kampfertrag': 5,
-  'russland:siedler': 3, 'russland:wachstum': 5, 'russland:basis': 0,
+  'griechenland:gratistech': 4.5, 'griechenland:basis': 4, 'griechenland:rueckschau': 7,
+  'wikinger:armeemacht': 2.5, 'wikinger:basis': 4, 'wikinger:kampfertrag': 5,
+  'russland:siedler': 5.5, 'russland:wachstum': 7, 'russland:basis': 0,
 };
 function kiDraftValue(V, pi, id, mine) {
   if (mine.includes(id)) return -5;                  // doppelt wirkt nichts

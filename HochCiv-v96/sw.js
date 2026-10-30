@@ -1,9 +1,9 @@
 /* Offline-Cache. Bei Änderungen VERSION erhöhen. */
-const VERSION = 'hochciv-v88';
-const BUILD_HASH = 'af433df2f13e';   // von tools_version.js
+const VERSION = 'hochciv-v96';
+const BUILD_HASH = '52c025943f63';   // von tools_version.js
 const FILES = [
   './', './index.html', './css/style.css',
-  './js/data.js', './js/civs.js', './js/i18n.js', './js/hex.js', './js/tiles.js', './js/engine.js', './js/expansion.js', './js/bots.js', './js/ki.js', './js/marathon.js', './js/tutorial.js', './js/ui.js',
+  './js/data.js', './js/civs.js', './js/i18n.js', './js/hex.js', './js/tiles.js', './js/engine.js', './js/expansion.js', './js/bots.js', './js/ki.js', './js/marathon.js', './js/anim.js', './js/tutorial.js', './js/firstgame.js', './js/ui.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './favicon.ico', './icons/favicon-32.png'
 ];
 self.addEventListener('install', e => {

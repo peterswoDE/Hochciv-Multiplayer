@@ -156,7 +156,7 @@ function kiPowerAfterDecay(S, pi) {
 function kiPowerBonus(S, pi, n) {
   const p = S.players[pi];
   let b = 0;
-  if (isAbil(p, 'armeemacht')) b += 2 * warriorUnits(S, pi, n);
+  if (isAbil(p, 'armeemacht')) b += WARRIOR_POWER * warriorUnits(S, pi, n);
   if (hasWonder(S, pi, 'zeus')) b += 3;
   return b;
 }
@@ -561,6 +561,15 @@ function kiContext(S, pi) {
 }
 
 /* ------------------------------------------------------------------ Bewertung */
+/* Wissenschaftliche Methode (v97): Der feste Zuschlag in kiTechBonus ist auf ihren Rabatt bis v96
+   abgestimmt – ab dem Mittelalter 4 + 6 + 8 = 18. Seit v97 zieht sie dort 3 + 4 + 5 = 12 ab, der
+   Zuschlag schrumpft im selben Verhältnis auf zwei Drittel. Abgeleitet, nicht gemessen. Antike und
+   Singularität zählen nicht mit: wer die Methode hat, ist mit der Antike meist durch, und die
+   Singularität steht in beiden Fassungen bei 10. Im alten Techtree (OLD_METHOD_DISCOUNT) bleibt es 1. */
+function kiMethodeAnteil(S) {
+  const d = methodDiscount(S);
+  return (d[1] + d[2] + d[3]) / 18;
+}
 /* Wert, den eine Technologie über ihre Ertragswirkung hinaus hat (die Erträge selbst stecken
    schon im Einkommen). Grobe, lesbare Schätzungen je Wirkung – abgestimmt per Selbstspiel. */
 function kiTechBonus(S, pi, k, K, y) {
@@ -581,8 +590,9 @@ function kiTechBonus(S, pi, k, K, y) {
     case 'alchemie': return 0.12 * H * Math.max(0, y.sci) + 2;
     case 'gilden': return 0.12 * H * Math.max(0, y.coins) + 2;
     case 'computertechnik': return 0.2 * H * Math.max(0, y.coins) + 3;
-    // im Marathon zieht sie doppelt ab (v85), also auch doppelt so viel wert
-    case 'wiss_methode': return discountFactor(S) * (18 + 4 * Math.min(4, H));
+    // im Marathon zieht sie doppelt ab (v85), also auch doppelt so viel wert; seit v97 zieht sie
+    // weniger ab (kiMethodeAnteil)
+    case 'wiss_methode': return discountFactor(S) * kiMethodeAnteil(S) * (18 + 4 * Math.min(4, H));
     case 'philosophie': return 3 + 0.6 * H;
     case 'theologie': case 'un': return 3;
     case 'sklaverei': return 2;
@@ -594,9 +604,10 @@ function kiTechBonus(S, pi, k, K, y) {
     case 'stahl': case 'panzer': return 1 + 0.25 * p.power;
     // Im Ernstfall zählt dazu, dass sie bleiben (kiDefPerm) – gekaufte Macht verfällt
     case 'stadtmauern': return 4 + 1.5 * cities + kiDefPerm(K, () => 5);
-    // Kriegerkultur (v83): mit Burgenbau gibt jede Stadt dauerhaft +2 Macht
-    case 'burgenbau': return 4 + cities + (isAbil(p, 'armeemacht') ? 1.5 * cities : 0) +
-      kiDefPerm(K, () => Math.max(2, p.power + (isAbil(p, 'armeemacht') ? 2 * cities : 0)));
+    // Kriegerkultur (v83): mit Burgenbau gibt jede Stadt dauerhaft WARRIOR_POWER Macht (bis v96 2 –
+    // der Zuschlag 1,5 je Stadt galt diesen 2, seit v97 also 0,75 je Punkt)
+    case 'burgenbau': return 4 + cities + (isAbil(p, 'armeemacht') ? 0.75 * WARRIOR_POWER * cities : 0) +
+      kiDefPerm(K, () => Math.max(2, p.power + (isAbil(p, 'armeemacht') ? WARRIOR_POWER * cities : 0)));
     case 'maschinengewehr': return 3 + cities + kiDefPerm(K, c => 2 * c.pop);
     case 'schiesspulver': return 3;
     case 'taktik': return 3;
@@ -886,7 +897,7 @@ function kiCandidates(S, pi, K, memo, billig) {
       if (techCost(S, pi, t) <= sci)
         add(() => T('forscht %s', t.n), X => doResearch(X, pi, t.k), 'tech:' + t.k);
   }
-  for (const t of freeTechOptions(S, pi))
+  for (const t of kiFreeTechChoices(S, pi, K))
     add(() => T('Freie Forschung: %s', t.n), X => useFreeTech(X, pi, t.k), 'free:' + t.k);
   for (const t of backPickOptions(S, pi))
     add(() => T('Rückschau: %s', t.n), X => useBackPick(X, pi, t.k), 'back:' + t.k);
@@ -940,6 +951,19 @@ function kiCandidates(S, pi, K, memo, billig) {
   // --- Militär: Verteidigung, Angriff, Flankieren, Macht
   if (!billig) for (const m of kiMilitaryCandidates(S, pi, K, memo)) out.push(m);
   return out;
+}
+/* Freie Forschung (seit v97 zweimal je Partie, aus jedem Zeitalter): Was jetzt verbraucht wird,
+   fehlt später, wenn die Technologien teurer sind – das sieht die Bewertung nicht (übrige
+   Ressourcen zählen in kiValue nicht, eine aufgesparte Freie Forschung ebenso wenig). Bis v96 galt
+   sie je Runde und war jede Runde zu nutzen. Jetzt erwägt die KI sie nur für Technologien der
+   Moderne – die teuersten, und je Feld eine verlangt die Singularität – oder gegen Ende: Bleiben
+   nicht mehr Runden (K.R), als Freie Forschungen offen sind, für alles, was geht. Abgeleitet;
+   gemessen ist nur, wie sie sie dann nutzt (ANNAHMEN.md, v97: in 60 Duellen 101 von 109 Nutzungen
+   in der Moderne, in 4 Partien keine). */
+function kiFreeTechChoices(S, pi, K) {
+  const opts = freeTechOptions(S, pi);
+  if (!opts.length || K.R <= freeTechsLeft(S.players[pi])) return opts;
+  return opts.filter(t => t.age >= 3);
 }
 /* Mit Massenmedien (1 Münze ernährt 3) oder Gentechnik (1 Wissenschaft ernährt 1) Nahrung
    freimachen, bevor Nahrung gebraucht wird. Massenmedien ist fast immer der bessere Kurs

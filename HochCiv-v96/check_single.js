@@ -28,7 +28,7 @@ console.log('Erweiterungen:', 'Ereignisse='+(S.ev?S.ev.mode:'aus'), 'Wunder='+S.
 console.log('Techs im Bogen:', (w.eval("$('a-tech').onclick(); $('ov-body').querySelectorAll('.tech').length")));
 // Plättchenkarte samt Legephase: einmal komplett durchspielen
 w.eval("closeModal(); show('screen-setup'); setupScreen();");
-w.eval("$('setup-mode').querySelector('[data-mode=duell]').onclick()");
+w.eval("setupSetMode('duell')");
 w.eval("$('setup-map').value='plaettchen'; $('setup-map').onchange(); $('setup-go').onclick()");
 w.eval("closeModal()");
 w.eval(`(() => {
@@ -42,7 +42,7 @@ console.log('Plättchenkarte:', T.map.name, T.map.rows.length + 'x' + T.map.rows
   '|', $('map').querySelectorAll('[data-r]').length, 'Felder |', T.cities.length, 'Hauptstädte');
 // Marathon (v83): Zufallskarte, Draft mit der KI, dann das Spiel
 w.eval("closeModal(); show('screen-setup'); setupScreen();");
-w.eval("$('setup-mode').querySelector('[data-mode=marathon]').onclick(); $('setup-go').onclick()");
+w.eval("setupSetMode('marathon'); $('setup-go').onclick()");
 w.eval(`(() => {
   let n = 0;
   while (!draftDone(draftState.D) && n++ < 20)
@@ -59,5 +59,24 @@ const F = w.eval(`(() => { closeModal(); if (isAuto(P(S))) return null; $('a-abi
   return [$('sheet-body').querySelectorAll('.abil-card').length, $('sheet-body').querySelectorAll('.opt').length]; })()`);
 console.log('Fähigkeiten:', F ? F[0] + ' Fähigkeit(en), ' + F[1] + ' Knöpfe' : 'KI am Zug – übersprungen');
 if (F && F[0] < 1) { console.log('FEHLER: das Blatt „Fähigkeiten" nennt keine Fähigkeit'); process.exit(1); }
+// Erstes Spiel (v92, v93): der rote Knopf ganz oben zeigt erst die Seite mit den drei Wegen,
+// ein Weg startet die geführte Partie mit Ziel im Panel
+w.eval("closeModal(); closeSheet(); show('screen-menu')");
+const oben = w.document.querySelector('.menu-actions .btn');
+$('m-first').onclick();
+const seite = w.document.querySelectorAll('#ov-body .fg-seite [data-pfad]').length;
+const wahl = w.document.querySelector('#ov-body [data-pfad="wissenschaft"]');
+if (wahl) wahl.onclick();
+const E = w.eval(`({ fg: !!S.fg, schritt: S.fg && S.fg.schritt, pfad: S.fg && S.fg.pfad, panel: !$('tut-panel').hidden,
+  ziel: ($('tut-body').querySelector('.fg-ziel') || {}).textContent })`);
+console.log('Erstes Spiel:', oben.id, oben.classList.contains('primary') ? 'rot oben' : 'NICHT rot', '|', seite, 'Wege |', E.pfad, '|', E.schritt, '|', E.ziel);
+if (oben.id !== 'm-first' || seite !== 3 || !E.fg || E.pfad !== 'wissenschaft' || !E.panel || !E.ziel)
+  { console.log('FEHLER: Erstes Spiel startet nicht wie vorgesehen'); process.exit(1); }
+// Züge von KI und Bots nachspielen (v94, v95): js/anim.js steckt in der Datei, die Auswahl
+// „Animationen" steht in den Einstellungen und steht ab Werk auf „Langsam"
+const A = w.eval(`({ wahl: $('opt-anim') && $('opt-anim').nodeName === 'SELECT' ? [...$('opt-anim').options].map(o => o.value).join('/') : null,
+  stufe: prefs.anim, anim: typeof animSzenen === 'function' && typeof playAnim === 'function' })`);
+console.log('Nachspielen (v95):', A.anim ? 'js/anim.js da' : 'js/anim.js FEHLT', '|', A.wahl ? 'Auswahl ' + A.wahl : 'KEINE Auswahl', '|', 'ab Werk ' + A.stufe);
+if (A.wahl !== 'langsam/schnell/aus' || A.stufe !== 'langsam' || !A.anim) { console.log('FEHLER: Nachspielen der KI- und Bot-Züge fehlt'); process.exit(1); }
 console.log('Fehler:', errs.length ? errs : 'keine');
 process.exit(errs.length?1:0);

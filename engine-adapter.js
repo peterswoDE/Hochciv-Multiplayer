@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v93/, HochCiv-v88/ and HochCiv-v83/ versions deployed before it. Every version gets its own sandbox
+ * HochCiv-v96/, HochCiv-v93/ and HochCiv-v83/ versions deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -15,20 +15,22 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const Scenes = require('./utils/scenes');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
 // Same order as the <script> tags in Hochciv's index.html (minus the DOM-only tutorial.js/ui.js).
 // ki.js (KI players, kiPlaceSeat) and marathon.js (v83) are pure rule code and must be loaded too.
-const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js', 'ki.js', 'marathon.js'];
-const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js']);
+// anim.js (v94) records actions as scenes – without a DOM; the server uses it for utils/scenes.js.
+const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js', 'ki.js', 'marathon.js', 'anim.js'];
+const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
 
 /* Older versions stay as long as Rundenspiele started on them are running – remove an entry
    (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
+    v96: path.resolve(__dirname, 'HochCiv-v96', 'js'),
     v93: path.resolve(__dirname, 'HochCiv-v93', 'js'),
-    v88: path.resolve(__dirname, 'HochCiv-v88', 'js'),
     v83: path.resolve(__dirname, 'HochCiv-v83', 'js'),
 };
 const OLD_VERSIONS = Object.keys(GAME_DIRS).filter(v => v !== 'current');
@@ -77,6 +79,12 @@ function makeAdapter(engineDir, label) {
                 sandbox.APP_VERSION = vm.runInContext('typeof APP_VERSION !== "undefined" ? APP_VERSION : "Unknown"', sandbox);
                 sandbox.victoryScore = vm.runInContext('typeof victoryScore === "function" ? victoryScore : null', sandbox);
             } catch (e) { }
+            // Scenes for the clients (utils/scenes.js): every action of a state that has a scene
+            // log attached. The KI's planning copies have none, so they record nothing.
+            sandbox.__sceneHook = (S, e) => {
+                try { Scenes.onLog(sandbox, S, e); } catch (err) { console.error('[Scenes] Recording failed:', err); }
+            };
+            vm.runInContext('if (typeof animSnap === "function" && typeof LOG_HOOK !== "undefined") LOG_HOOK = (S, e) => __sceneHook(S, e);', sandbox);
 
             console.log(`[Engine Adapter] Loaded Hochciv game engine ${label} from ${dir}`);
             return true;
@@ -322,6 +330,7 @@ function makeAdapter(engineDir, label) {
         if (state.over) return 'Das Spiel ist vorbei.';
         // Bots / KI are not controllable
         if (isAutoPlayer(state.players[pi])) return 'Bot-Spieler werden automatisch gesteuert.';
+        scenesSync(state);
 
         try {
             switch (action) {
@@ -405,7 +414,7 @@ function makeAdapter(engineDir, label) {
                         const stop = E.blockingIssues(state, pi);
                         if (stop && stop.length) return stop[0];
                     }
-                    E.endTurn(state);
+                    endTurn(state);
                     // Auto-play bot turns
                     runBots(state, onStateChanged);
                     return null;
@@ -471,12 +480,11 @@ function makeAdapter(engineDir, label) {
 
                 const p = state.players[state.cur];
                 try {
-                    if (p.kind === 'ki' && typeof E.kiTurn === 'function') E.kiTurn(state, state.cur);
-                    else E.botTurn(state, state.cur);
+                    autoTurn(state);
                 } catch (err) {
                     console.error(`[Engine Adapter] ${p.kind} turn failed for player ${state.cur}:`, err);
                 }
-                E.endTurn(state);
+                endTurn(state);
                 guard++;
 
                 if (onStateChanged) {
@@ -600,6 +608,7 @@ function makeAdapter(engineDir, label) {
 
     /** Play the automatic part of the current player's turn (bot or KI), without ending it. */
     function autoTurn(S) {
+        scenesSync(S);
         const p = S.players[S.cur];
         if (p.kind === 'ki' && typeof E.kiTurn === 'function') E.kiTurn(S, S.cur);
         else E.botTurn(S, S.cur);
@@ -621,8 +630,38 @@ function makeAdapter(engineDir, label) {
             console.error(`[Engine Adapter] KI turn for absent player ${state.cur} failed:`, err);
         }
         if (!keepKi) Object.assign(p, before);
-        E.endTurn(state);
+        endTurn(state);
         runBots(state, onStateChanged);
+    }
+
+    // ── Scenes (utils/scenes.js) ─────────────────────────────────────────────────
+
+    /** The scene log `holder[key]` attached to S; null for versions without js/anim.js. */
+    function attachScenes(S, holder, key) {
+        if (!ensureEngineLoaded()) return null;
+        try { return Scenes.attach(E, S, holder, key); } catch (err) {
+            console.error('[Scenes] Attaching failed:', err);
+            return null;
+        }
+    }
+    function scenesSync(S) {
+        try { Scenes.sync(E, S); } catch (err) { console.error('[Scenes] Sync failed:', err); }
+    }
+
+    /**
+     * Step 4 + 5 of a turn (combat, victory) – with the battles recorded as scenes when S has a
+     * scene log. Returns S.over like the engine's finishTurn.
+     */
+    function finishTurn(S) {
+        scenesSync(S);
+        const over = E.finishTurn(S, Scenes.fights(S));
+        scenesSync(S);
+        return over;
+    }
+    /** The engine's endTurn with the recording finishTurn. */
+    function endTurn(S) {
+        if (finishTurn(S)) return;
+        E.advanceTurn(S);
     }
 
     /**
@@ -641,7 +680,7 @@ function makeAdapter(engineDir, label) {
         marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
         advanceDraft, assignDoubles, isAutoPlayer, kiLevelFor, randomAbility, checkCustomMap,
         engineConst, turnOrderSlots, peekNext, advanceWithoutBegin, applyLateAbility, autoTurn,
-        finishTurnForAbsent, ensureEngineLoaded,
+        finishTurnForAbsent, ensureEngineLoaded, attachScenes, finishTurn,
         getEngine: () => E,
         version: () => engineConst('APP_VERSION') || label,
     };
