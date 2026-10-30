@@ -19,6 +19,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 9 | F11 | [Chat: report and block](#f11-chat-report-and-block) | ✔ | ✔ | ✅ |
 | 10 | F12 | [Chat: word filter, guests emote-only](#f12-chat-word-filter-and-guests-emote-only) | ✔ | ✔ | ✅ |
 | 11 | F13 | [Overall statistics](#f13-overall-statistics) | ✔ | ✔ | ✅ |
+| 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | 🔨 |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
 
@@ -309,6 +310,29 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Tests:** `tests/stats/overall.test.js`: facts from a KI game played with the engine (turn positions, winners, tech rounds, victory type, barbarians, the fallback), the aggregation over made-up matches (every table and filter), a real Rundenspiel played to the end (facts from its replay, `GET /api/stats`, filters, no names), the overlay in German and English, and the admin tab with export.
 
 **Status:** ✅ on `development`
+
+## F14 What the others did, played on the map
+
+**Goal:** The animations single player has since v94 (KI and bot turns replayed on the map, `js/anim.js`) also in multiplayer – in Rundenspiele as a replay of the time one was away.
+
+**Decisions** (by the user)
+- **Everybody's actions, not only the KI:** KI turns, the actions of the other humans and every battle. One's own actions are not played back to oneself; one's own battles are (they happen at the end of the turn, as in single player).
+- **Live games:** every update plays what is new, then shows the new state. **Rundenspiele:** opening the game in one's turn plays everything since one's last turn, then "Seit deinem letzten Zug" (F5) pops up. What a device has shown is not shown again (reload, watching live before one's turn).
+- The game's own setting *Animationen* (Langsam / Schnell / Keine) applies. A tap on the map skips everything still queued (single player skips only the rest of one turn – here that would mean one tap per empire). Battles play like in single player, also with *Keine*.
+- **Turn timer (F2):** when one's own timed turn begins, whatever is still queued is skipped – the clock runs on the server, the time belongs to the player. The F5 pop-up still tells what happened.
+- Game versions before v94 (v93, v83) have no `js/anim.js`: their games record and play nothing.
+
+**Implementation**
+- `utils/scenes.js` (new): the scene log of a game, `{ n0, base, frames }`. The engine's `LOG_HOOK` (v94) records every log entry of class `act` of a state that has a log attached – the action's text and the map snapshot after it (`animSnap`); battles come from `finishTurn(S, rec)` with the engine's combat entries; silent frames (`sync`, before actions and turns) keep the chain equal to the state (income, turn change). Frames are diffs against the snapshot before. The log hangs on the state under a symbol, so it is never sent or stored with it, and the KI's planning copies don't get it. `trim()` folds what every human has seen (after the earliest F5 mark) into the base; `chain()` cuts out what a client needs (base + frames).
+- `client/scenes.js` (new, shared with the server): `diff` / `apply` of snapshots, and in the browser `SCENES.run()`: rebuilds the chain and turns it into the game's own scenes (`animUnterschied`, `animDetails`) and battle entries, one part per empire's turn, played with `playAnim` / `playCombat`.
+- `engine-adapter.js`: loads `anim.js` (optional, no DOM), sets `LOG_HOOK`, `attachScenes()`, and a `finishTurn()` / `endTurn()` that record battles – used for human turn ends, `runBots`, the turn timer and Rundenspiele (`async/logic.js`).
+- Live games (`sockets/game.js`): the log in `session.scenes`; every `state:update` carries `scenes` – the frames since the last update – and nothing older is kept.
+- Rundenspiele: the log in `data.scenes` (dropped when the game ends), trimmed with the marks; the view carries `scenes` since the player's mark.
+- `mp.js`: `queueScenes()` – each update's scenes play, then its state is applied, in order. The turn start (and with it the F5 pop-up) waits for the queue; `endAnim` / `endCombat` hooks make a tap skip the whole queue. Rundenspiele remember the last frame shown per game (`hochciv.scenes.<id>`).
+
+**Tests:** `tests/timer` covers the skip on a timed turn. `tests/scenes/scenes.test.js`: recording with the engine (the chain rebuilds the engine's snapshot after every turn, actions / battles / silent frames, the same game with and without recording, trim, v93 records nothing), a live game (the KI's and the other human's actions are played, one's own not, the turn starts after them, a tap skips the queue, spectators see everything, *Keine* plays nothing) and a Rundenspiel (opening it in one's turn plays the other human's research and the KI's turn, then "Seit deinem letzten Zug"; opened again, nothing is played twice).
+
+**Status:** 🔨 in progress
 
 ---
 

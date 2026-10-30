@@ -10,6 +10,7 @@ const Stats = require('../utils/stats');
 const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
+const Scenes = require('../utils/scenes');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -270,6 +271,7 @@ module.exports = function registerHandlers(io) {
             if (session.state.cur !== finalIndex)
                 return ack({ error: 'Du bist nicht am Zug.' });
 
+            engine.attachScenes(session.state, session);      // what everybody sees played (utils/scenes.js)
             const err = engine.applyAction(session.state, finalIndex, data.type, params, () => {
                 broadcastState(io, session);
                 checkGameOver(io, session);
@@ -782,7 +784,26 @@ function broadcastState(io, session) {
         round: session.state.round,
         turn: turnInfo(session),
         summary: turnSummary(session),
+        scenes: newScenes(session),
     });
+}
+
+/**
+ * The scenes since the last broadcast (utils/scenes.js, client/scenes.js): everyone in the room
+ * watches the game live, so each update carries only what is new, and nothing older is kept.
+ */
+function newScenes(session) {
+    const log = Scenes.logOf(session.state);
+    if (!log) return undefined;
+    try {
+        const chain = Scenes.chain(log, { afterN: log.sent || log.n0 });
+        log.sent = Scenes.lastN(log);
+        Scenes.fold(log, log.frames.length);
+        return chain || undefined;
+    } catch (err) {
+        console.error(`[Scenes] Failed in session ${session.id}:`, err);
+        return undefined;
+    }
 }
 
 // ── Turn timer ────────────────────────────────────────────────────────────────
@@ -837,6 +858,7 @@ function timeOutTurn(io, session) {
 
     sessions.recordActivity(session.id);
     if (lp.socketId) io.to(lp.socketId).emit('turn:timeout', { afk: lp.afk });
+    engine.attachScenes(S, session);
     engine.finishTurnForAbsent(S, level, lp.afk, () => {
         broadcastState(io, session);
         checkGameOver(io, session);

@@ -40,7 +40,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `placement:start` | Start-tile placement begins (tile map) |
 | `draft:update` | Marathon draft state |
 | `game:start` | `{ state, yourIndex, turn }` – the game begins (or the state after a reconnect) |
-| `state:update` | New state after every action or KI turn, with turn/timer info |
+| `state:update` | New state after every action or KI turn, with turn/timer info and the scenes since the last update (`scenes`, `client/scenes.js`) |
 | `turn:timeout` | Your turn ran out; `{ afk }` when the KI keeps the seat |
 | `chat:history` | `{ list, guest, mute }` – the chat so far, on connect |
 | `chat:msg` | A new chat message or ping |
@@ -63,7 +63,7 @@ Handled by `sockets/async.js`; login required. A client has one Rundenspiel open
 | `async:draft` | → server | `{ id, abilityId }` | Marathon draft pick |
 | `async:chat` | → server | `{ id, kind, … }` | Chat message, emote or ping |
 | `async:report` | → server | `{ id, msgId, reason }` | Report a message |
-| `async:update` | → client | view | The player's new view after every change (also KI turns) |
+| `async:update` | → client | view | The player's new view after every change (also KI turns); `scenes`: what happened since the player's last turn |
 | `async:chat` | → client | `{ id, msg }` | A new chat message |
 | `chat:history` | → client | `{ id, list, guest, mute }` | The chat so far |
 

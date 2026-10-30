@@ -524,6 +524,7 @@ const MP = {
 
             this.socket.on('game:start', data => {
                 if (MP.asyncId) return;
+                MP.clearScenes();
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
                 MP.lastStats = null;
@@ -549,7 +550,11 @@ const MP = {
                 if (MP.asyncId) return;
                 MP.setTurnClock(data.turn);
                 MP.takeSummary(data.summary);
-                MP.applyState(data.state);
+                // what the others did plays first (client/scenes.js), then the new state – unless our
+                // turn has begun with the clock running: the time is ours, the scenes are skipped
+                const hurry = !!(data.turn && data.turn.left != null && data.state && data.state.cur === MP.playerIndex && !MP.isAfk());
+                if (hurry) MP.skipScenes();
+                MP.queueScenes(hurry ? null : data.scenes, data.scenes && data.scenes.from, () => MP.applyState(data.state));
             });
 
             // Turn timer: our time was up – the server (KI) has finished the turn
@@ -598,6 +603,59 @@ const MP = {
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    // ── What the others did, played on the map (client/scenes.js) ───────────
+    /* Every update with scenes waits in a queue: its scenes play (the game's own animations,
+       "Animationen" in the settings), then its state is applied – in the order they came. The
+       turn start (and with it "since your last turn") waits until the queue is empty. A tap on
+       the map skips everything queued, not only the empire on screen. */
+    sceneQueue: [],
+    scenesBusy: false,
+    afterScenes: null,
+    sceneGen: 0,
+    queueScenes: function (chain, after, apply) {
+        this.sceneQueue.push({ chain, after, apply, gen: this.sceneGen });
+        if (!this.scenesBusy) this.nextScenes();
+    },
+    nextScenes: function () {
+        const it = this.sceneQueue.shift();
+        if (!it) {
+            this.scenesBusy = false;
+            const go = this.afterScenes;
+            this.afterScenes = null;
+            if (go) go();
+            return;
+        }
+        this.scenesBusy = true;
+        // a queue cleared meanwhile (another game opened) ignores what was still playing
+        const done = () => { if (it.gen !== this.sceneGen) return; it.apply(); this.nextScenes(); };
+        if (this.scenesSkipped || typeof SCENES === 'undefined' || !it.chain) return done();
+        SCENES.run(it.chain, it.after, this.playerIndex, done);
+    },
+    /**
+     * The map was tapped during the scenes (or our timed turn has begun): what is on screen ends
+     * and the rest of the queue only applies its states.
+     */
+    skipScenes: function () {
+        if (!this.scenesBusy || this.scenesSkipped) return;
+        this.scenesSkipped = true;
+        setTimeout(() => { this.scenesSkipped = false; }, 0);
+        if (typeof ui !== 'undefined' && ui) {
+            if (ui.anim) endAnim();
+            else if (ui.combat) endCombat();
+        }
+    },
+    clearScenes: function () {
+        this.sceneGen++;
+        this.sceneQueue = [];
+        this.scenesBusy = false;
+        this.afterScenes = null;
+        if (typeof ui !== 'undefined' && ui) {
+            if (ui.anim) endAnim();
+            if (ui.combat) endCombat();
+        }
+        this.scenesSkipped = false;
     },
 
     // ── "Since your last turn" (utils/summary.js) ────────────────────────────
@@ -1504,12 +1562,30 @@ if (originalRunBots) {
         return originalRunBots.apply(this, arguments);
     };
 }
+// A tap on the map ends the scene or battle on screen (ui.js) – in multiplayer it skips
+// everything that is still queued as well (MP.skipScenes)
+for (const name of ['endAnim', 'endCombat']) {
+    const original = window[name];
+    if (typeof original !== 'function') continue;
+    window[name] = function () {
+        const running = typeof ui !== 'undefined' && ui && (name === 'endAnim'
+            ? ui.anim && ui.anim.i < ui.anim.szenen.length
+            : ui.combat && ui.combat.i < ui.combat.kaempfe.length);
+        if (MP.active && running) MP.skipScenes();
+        return original.apply(this, arguments);
+    };
+}
 const originalHumanTurnStart = window.humanTurnStart;
 if (originalHumanTurnStart) {
     window.humanTurnStart = function () {
         // Only open the turn-start dialogs (food, free pick …) for the player whose turn it is.
         if (MP.active && typeof S !== 'undefined' && S && !S.over && !MP.isMyTurn()) {
             MP.syncTurnBlocker();
+            return redraw();
+        }
+        // What the others did plays first (client/scenes.js) – the turn starts after it
+        if (MP.active && MP.scenesBusy) {
+            MP.afterScenes = () => window.humanTurnStart();
             return redraw();
         }
         // "Since your last turn" pops up first; the game's turn-start dialogs follow when it closes
@@ -2171,6 +2247,7 @@ const ASYNC = {
     /** Leave the game view (the game itself goes on). */
     close: function () {
         if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
+        MP.clearScenes();
         MP.asyncId = null;
         MP.active = false;
         MP.spectator = false;
@@ -2216,6 +2293,10 @@ const ASYNC = {
         const fresh = !prev || !['playing', 'finished'].includes(prev.status) || !$('screen-game').classList.contains('show');
         MP.playerIndex = view.myIndex;
         MP.takeSummary(view.summary);                 // "since your last turn" – needs our index
+        // What the others did as scenes (client/scenes.js): the server sends everything since our
+        // last turn; played is only what this device has not shown yet (sceneSeen)
+        const sc = view.scenes, seen = this.sceneSeen(view.id);
+        if (sc) this.sceneSeen(view.id, sc.to);
         if (fresh) {
             closeModal();
             if (typeof draftState !== 'undefined') draftState = null;
@@ -2224,13 +2305,27 @@ const ASYNC = {
             MP.lastTurnKey = S.round + ':' + S.cur;
             MP.lastTurn = S.cur;
             MP.syncTurnBlocker();
+            MP.clearScenes();
             startGameScreen();
             MP.updateHudDelayed();
                 MP.updatePlayerList();
-            if (S.cur === MP.playerIndex && !S.over) MP.animDeinZug();
+            // opened in our turn: the away time plays first; otherwise it is only marked as seen
+            const mine = S.cur === MP.playerIndex && !S.over;
+            MP.queueScenes(sc, sc && mine ? Math.max(sc.from, seen == null ? -1 : seen) : null,
+                () => { if (mine) MP.animDeinZug(); });
         } else {
-            MP.applyState(view.state);
+            MP.queueScenes(sc, sc ? Math.max(sc.from, seen == null ? sc.from : seen) : null, () => MP.applyState(view.state));
         }
+    },
+
+    /** The last scene this device has shown of a Rundenspiel (read, or with `n` write). */
+    sceneSeen: function (id, n) {
+        const key = 'hochciv.scenes.' + id;
+        try {
+            if (n == null) { const v = localStorage.getItem(key); return v == null ? null : +v; }
+            localStorage.setItem(key, String(n));
+        } catch (_) { }
+        return n == null ? null : n;
     },
 
     waitingModal: function (view, text) {
