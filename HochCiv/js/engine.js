@@ -254,17 +254,14 @@ function abilById(id) {
    einzige), abilInfos alle. */
 function abilInfos(p) { return abilitiesOf(p).map(abilById).filter(Boolean); }
 function abilInfo(p) { return abilInfos(p)[0] || null; }
-/* Wirkungstext einer Fähigkeit in dieser Partie ({civ, k, e}): im Marathon wirken zwei anders
-   (v85) – Griechenlands Günstige Forschung doppelt, die Freie Forschung nur bis ins
-   Mittelalter. Ohne Spielstand oder sonst der Text des Zivilisationsbogens. */
+/* Wirkungstext einer Fähigkeit in dieser Partie ({civ, k, e}): im Marathon wirkt Griechenlands
+   Günstige Forschung doppelt (v85). Ohne Spielstand oder sonst der Text des Zivilisationsbogens.
+   (v85–v96 hatte auch die Freie Forschung hier einen eigenen Marathontext – sie reichte dort nur
+   bis ins Mittelalter; seit v97 gilt sie überall gleich.) */
 function abilEffect(a, S) {
-  if (a && S && S.marathon) {
-    if (a.civ === 'griechenland' && a.k === 'basis')
-      return T('Techs %s günstiger (je Zeitalter, im Marathon doppelt)',
-        [1, 2, 3, 4, 5].map(n => n * MARATHON_DISCOUNT_FACTOR).join('/'));
-    if (a.k === 'gratistech')
-      return T('1× pro Runde eine verfügbare Technologie des Mittelalters oder früher umsonst erforschen (Marathon)');
-  }
+  if (a && S && S.marathon && a.civ === 'griechenland' && a.k === 'basis')
+    return T('Techs %s günstiger (je Zeitalter, im Marathon doppelt)',
+      GREEK_DISCOUNT.map(n => n * MARATHON_DISCOUNT_FACTOR).join('/'));
   return a ? a.e : '';
 }
 
@@ -274,14 +271,15 @@ function abilEffect(a, S) {
 function powerBonus(S, pi) {
   const p = S.players[pi];
   let b = 0;
-  if (isAbil(p, 'armeemacht')) b += 2 * warriorUnits(S, pi, armiesOf(S, pi).length);
+  if (isAbil(p, 'armeemacht')) b += WARRIOR_POWER * warriorUnits(S, pi, armiesOf(S, pi).length);
   if (hasWonder(S, pi, 'zeus')) b += 3;
   return b;
 }
-/* Kriegerkultur (Wikinger): +2 Macht je Armee. Seit v83 (Anweisung des Autors) zählt mit
-   Burgenbau auch jede eigene Stadt – dort steht die unbewegliche Armee, die verteidigt,
-   flankiert und Kontrollzonen hält wie eine echte. Für die Baukosten weiterer Armeen
-   zählt sie weiter nicht. `n` = Zahl der echten Armeen (die KI rechnet mit geplanten). */
+/* Kriegerkultur (Wikinger): +1 Macht je Armee (WARRIOR_POWER; bis v96 +2). Seit v83 (Anweisung
+   des Autors) zählt mit Burgenbau auch jede eigene Stadt – dort steht die unbewegliche Armee, die
+   verteidigt, flankiert und Kontrollzonen hält wie eine echte; sie bringt dasselbe wie eine Armee.
+   Für die Baukosten weiterer Armeen zählt sie weiter nicht. `n` = Zahl der echten Armeen (die KI
+   rechnet mit geplanten). */
 function warriorUnits(S, pi, n) {
   return n + (has(S.players[pi], 'burgenbau') ? citiesOf(S, pi).length : 0);
 }
@@ -397,14 +395,14 @@ function techCost(S, pi, tech) {
   let c = techBase(S, tech);          // Grundkosten dieser Partie (im Tutorial der alte Techtree)
   const age = tech.k === 'singularitaet' ? 4 : tech.age;
   if (tech.k === 'singularitaet' && kremlBuilt(S)) c += KREML_SURCHARGE;
-  const f = discountFactor(S);                                   // Marathon: doppelt (v85)
-  if (hasAbil(p, 'griechenland', 'basis')) c -= f * (age + 1);   // 1/2/3/4/5 je Zeitalter
-  if (has(p, 'wiss_methode')) c -= f * 2 * (age + 1);            // -2/-4/-6/-8/-10
+  const f = discountFactor(S);                                         // Marathon: doppelt (v85)
+  if (hasAbil(p, 'griechenland', 'basis')) c -= f * GREEK_DISCOUNT[age];   // 1/1/2/2/5 (v97)
+  if (has(p, 'wiss_methode')) c -= f * methodDiscount(S)[age];            // −2/−3/−4/−5/−10 (v97)
   return Math.max(0, c);
 }
 const discountFactor = S => S && S.marathon ? MARATHON_DISCOUNT_FACTOR : 1;
-// Freie Forschung (Griechenland): bis Industrialisierung, im Marathon bis Mittelalter (v85)
-const freeTechMaxAge = S => S && S.marathon ? MARATHON_FREE_TECH_AGE : 2;
+// Rabatt der Wissenschaftlichen Methode je Zeitalter – im alten Techtree (Tutorial) der bis v96
+const methodDiscount = S => S && S.oldTree ? OLD_METHOD_DISCOUNT : METHOD_DISCOUNT;
 // Griechenland hat keinen Würfelbonus mehr – nur Philosophie gibt +1.
 function availBonus(p) { return has(p, 'philosophie') ? 1 : 0; }
 function rollAvailability(S, pi, field, age) {
@@ -445,6 +443,8 @@ function migrateState(S) {
   if (S.oldTree === undefined) S.oldTree = !S.altTree;
   delete S.altTree;
   delete S.roundPop; delete S.roundPops;   // Stand zu Rundenbeginn (v83/v84), seit v85 ungenutzt
+  // Freie Forschung: bis v96 die Runde der letzten Nutzung, seit v97 gezählt (p.freeTechsUsed)
+  for (const p of S.players || []) delete p.freeTechUsed;
   return S;
 }
 function rollSetup(cfg) {
@@ -511,22 +511,25 @@ function grantTech(S, pi, tk, quelle, opts) {
   applyTech(S, pi, tech, quelle, opts);
   return null;
 }
-/* Griechenland "Freie Forschung": 1× pro Runde eine verfügbare Technologie
-   der Industrialisierung oder früher (Zeitalter 0–2) umsonst – im Marathon nur bis ins
-   Mittelalter (0–1, v85). */
+/* Griechenland "Freie Forschung": seit v97 (Anweisung des Autors) zweimal je Partie
+   (FREE_TECH_USES) eine verfügbare Technologie aus jedem Zeitalter umsonst – auch beide im selben
+   Zug. Bis v96 einmal je Runde, bis zur Industrialisierung (im Marathon v85–v96 bis ins
+   Mittelalter). Die Singularität bleibt außen vor, wie bei der Raumfahrt: gratis holt sie nur
+   Oxford, das sie ausdrücklich nennt. Ein Dunkles Zeitalter sperrt sie wie jede Forschung.
+   Gezählt wird in p.freeTechsUsed. */
+const freeTechsLeft = p => Math.max(0, FREE_TECH_USES - (p.freeTechsUsed || 0));
 function freeTechOptions(S, pi) {
   const p = S.players[pi];
-  if (!isAbil(p, 'gratistech') || p.freeTechUsed === S.round) return [];
+  if (!isAbil(p, 'gratistech') || !freeTechsLeft(p)) return [];
   if (evActive(S, pi, 'dunkles_zeitalter')) return [];
-  const bis = freeTechMaxAge(S);
-  return techPool(S).filter(t => t.age <= bis && p.avail[t.k] && !p.techs[t.k]);
+  return techPool(S).filter(t => p.avail[t.k] && !p.techs[t.k]);
 }
 function useFreeTech(S, pi, tk) {
   const p = S.players[pi];
   if (!freeTechOptions(S, pi).some(t => t.k === tk)) return T('Nicht möglich.');
   const err = grantTech(S, pi, tk, 'Freie Forschung');
   if (err) return err;
-  p.freeTechUsed = S.round;
+  p.freeTechsUsed = (p.freeTechsUsed || 0) + 1;
   return null;
 }
 /* Griechenland "Rückschau": beliebige Tech eines früheren Zeitalters, auch nicht freigeschaltet. */
@@ -1042,16 +1045,26 @@ function growthBlocked(S, pi, city, delta = 1) {
 
 /* ------------------------------------------------------------ Zugbeginn */
 /* Platz in der Zugfolge (0 = Startspieler) und der Startausgleich daraus: im allerersten Zug
-   bekommt der Zweite 1 Münze, der Dritte 2, der Vierte 3 (v85, Anweisung des Autors). Bots
-   zahlen nichts, also brauchen sie auch nichts. */
+   bekommt der Zweite Münzen dazu, der Dritte und der Vierte mehr (v85, Anweisung des Autors) –
+   seit v98 2/4/6 (START_BONUS_COINS, bis v97 1/2/3), zu zweit der Zweite 4 (START_BONUS_DUEL,
+   bis v97 1). „Zu zweit" heißt: zwei Reiche ohne die Barbaren – das Duell und jede andere Partie
+   mit zwei Reichen. Bots zahlen nichts, also brauchen sie auch nichts. */
+const empireCount = S => S.players.filter(p => p.kind !== 'barbar').length;   // Barbaren hängen hinten an
 const turnPosition = (S, pi) => {
-  const n = S.players.filter(p => p.kind !== 'barbar').length;   // Barbaren hängen hinten an
+  const n = empireCount(S);
   return (pi - (S.startIdx || 0) + n) % n;
 };
 function startBonus(S, pi) {
   const p = S.players[pi];
   if (S.round !== 1 || p.kind === 'bot' || p.kind === 'barbar') return 0;
-  return START_BONUS_COINS[turnPosition(S, pi)] || 0;
+  const platz = turnPosition(S, pi);
+  if (empireCount(S) === 2) return platz === 1 ? START_BONUS_DUEL : 0;
+  return START_BONUS_COINS[platz] || 0;
+}
+// Der Satz im Regelbogen (v98): die Reihe und der Wert zu zweit, aus den Zahlen
+function startBonusText() {
+  return T('Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge %s, %s bzw. %s Münzen dazu – zu zweit bekommt der Zweite %s.',
+    START_BONUS_COINS[1], START_BONUS_COINS[2], START_BONUS_COINS[3], START_BONUS_DUEL);
 }
 function beginTurn(S) {
   const p = P(S);
@@ -1289,11 +1302,14 @@ const moveBudget = a => a.halted ? -1 : a.mp;
 /* Wie oft eine Stadt pro Runde wachsen darf und wie oft davon kostenlos: ein bezahlter
    Schritt, Keramik +1 und seit v89 (Anweisung des Autors) die Dampfmaschine +1 bezahlten
    (bis v88 strich sie nur die Münzkosten); Verbundwerkstoffe +1 kostenlos. Alle drei
-   zusammen: 3 bezahlte und 1 kostenloser Schritt je Stadt und Runde. */
+   zusammen: 3 bezahlte und 1 kostenloser Schritt je Stadt und Runde. Seit v97 (Anweisung des
+   Autors) bringt Russlands Fruchtbarkeit einen bezahlten Schritt mehr, wie Keramik – mit
+   beiden Technologien also 4 bezahlte. */
 const GROW_EXTRA_PAID = ['keramik', 'dampfmaschine'];   // je +1 bezahlter Schritt
 function growLimits(S, pi) {
   const p = S.players[pi];
-  const paid = 1 + GROW_EXTRA_PAID.filter(k => has(p, k)).length;   // bezahlte Schritte je Runde
+  const paid = 1 + GROW_EXTRA_PAID.filter(k => has(p, k)).length +   // bezahlte Schritte je Runde
+    (isAbil(p, 'wachstum') ? 1 : 0);                                  // Fruchtbarkeit (v97)
   const free = has(p, 'verbundwerkstoffe') ? 1 : 0;   // zusätzlich, und nur kostenlos
   return { max: paid + free, paid, free };
 }
@@ -1310,14 +1326,20 @@ function paidGrowthAvailable(S, pi, city) {
 /* Wachstumskosten: je Bevölkerung 1 Nahrung und 1 Münze.
    Russlands „Fruchtbarkeit" streicht die Nahrung, die Dampfmaschine die Münzen.
    Englands „Kolonisten" (v53) zahlt dagegen **doppelt** – die Fähigkeit macht das
-   Gründen fast umsonst, also kostet das Wachsen in diesen Städten mehr. */
+   Gründen fast umsonst, also kostet das Wachsen in diesen Städten mehr.
+   Russlands „Siedlertrecks" (seit v97, Anweisung des Autors): Städte beginnen mit 2
+   Bevölkerung und wachsen zum Preis einer um 1 kleineren Stadt – von 2 auf 3 also für 1 Nahrung
+   und 1 Münze. Wörtlich genommen wächst eine Stadt mit 1 Bevölkerung (nach Sklaverei, Eroberung
+   oder Ereignis) damit für 0; mit den Kolonisten zusammen (Marathon) zählt das Doppelte der
+   kleineren Stadt. */
 const GROW_ABIL_FACTOR = { gruenden: 2 };
 function growPrice(S, pi, city) {
   const p = S.players[pi];
   const f = abilitiesOf(p).reduce((m, a) => Math.max(m, GROW_ABIL_FACTOR[a.slice(a.indexOf(':') + 1)] || 1), 1);
+  const n = Math.max(0, city.pop - (isAbil(p, 'siedler') ? 1 : 0));   // Siedlertrecks: eine kleiner
   return {
-    food: isAbil(p, 'wachstum') ? 0 : city.pop * f,
-    coins: has(p, 'dampfmaschine') ? 0 : city.pop * f,
+    food: isAbil(p, 'wachstum') ? 0 : n * f,
+    coins: has(p, 'dampfmaschine') ? 0 : n * f,
   };
 }
 // Das kostenlose Kontingent ist NICHT an die Reihenfolge gebunden: es zählt, wie viele
@@ -2160,7 +2182,10 @@ function techEffect(t, S) {
   // Marathon (v85): die Wissenschaftliche Methode wirkt doppelt
   if (t.k === 'wiss_methode' && S && S.marathon)
     return T('Techkosten %s (je Zeitalter, im Marathon doppelt)',
-      [2, 4, 6, 8, 10].map(n => '−' + n * MARATHON_DISCOUNT_FACTOR).join('/'));
+      METHOD_DISCOUNT.map(n => '−' + n * MARATHON_DISCOUNT_FACTOR).join('/'));
+  // alter Techtree (Tutorial): die Methode von bis v96 (v97)
+  if (t.k === 'wiss_methode' && S && S.oldTree)
+    return T('Techkosten %s (je Zeitalter)', OLD_METHOD_DISCOUNT.map(n => '−' + n).join('/'));
   return t.e;
 }
 /* Der ganze Wirkungstext für den Regelbogen (v96, Anweisung des Autors): `voll`, wo die Kachel

@@ -52,8 +52,8 @@ const DATA_EN = {
      deshalb nach Zivilisation geschachtelt. */
   abil: {
     griechenland: {
-      basis: ['Cheap research', 'Techs cost 1/2/3/4/5 less (by age)'],
-      gratistech: ['Free research', 'Once per round, research one available technology of the Industrial Age or earlier for free'],
+      basis: ['Cheap research', 'Techs cost 1/1/2/2/5 less (by age)'],
+      gratistech: ['Free research', 'Twice per game, research one available technology of any age for free (not the Singularity)'],
       rueckschau: ['Hindsight', 'With every technology researched, also get one of an earlier age for free (even a locked one)'],
     },
     england: {
@@ -63,13 +63,13 @@ const DATA_EN = {
     },
     russland: {
       basis: ['Taiga', 'Every hex yields at least 1 food'],
-      wachstum: ['Fertility', 'Population growth costs no food'],
-      siedler: ['Settler treks', 'Cities are founded with 2 population'],
+      wachstum: ['Fertility', 'Population growth costs no food; one extra growth per city'],
+      siedler: ['Settler treks', 'Cities are founded with 2 population and grow at the price of a city one size smaller'],
     },
     wikinger: {
       basis: ['Seafarers', 'Free army at the start; one army does not count towards army build costs'],
       kampfertrag: ['Raids', 'An army next to an enemy army or city yields 1 science, food and coin per point of superiority'],
-      armeemacht: ['Warrior culture', 'Each of your armies grants +2 power – with Castles each of your cities as well'],
+      armeemacht: ['Warrior culture', 'Each of your armies grants +1 power – with Castles each of your cities as well'],
     },
   },
   tech: {
@@ -81,7 +81,7 @@ const DATA_EN = {
     alchemie: ['Alchemy', '1:1 science → coins'],
     buchdruck: ['Printing', 'River: +1 science'],
     universitaet: ['Universities', 'Per population: +2 science'],
-    wiss_methode: ['Scientific method', 'Tech costs −2/−4/−6/−8/−10 (by age)'],
+    wiss_methode: ['Scientific method', 'Tech costs −2/−3/−4/−5/−10 (by age)'],
     chemie: ['Chemistry', 'Mountains: +1 science'],
     elektrizitaet: ['Electricity', 'Forest: +2 science'],
     biologie: ['Biology', 'Grassland: +2 science'],
@@ -190,7 +190,7 @@ const DATA_EN = {
     'Researching free technologies immediately with Greece\u2019s base ability is not always right. With Philosophy, researching later can be valuable too.',
     'Greece\u2019s Hindsight starts slowly but keeps getting better towards the end.',
     'The key to Greece\u2019s Hindsight is being able to research a technology of the Middle Ages as early as possible.',
-    'With Greece\u2019s Free research, an explosive start is a must.',
+    'Greece\u2019s Free research comes only twice per game. Save it for expensive technologies of the Modern Age instead of spending it early on cheap ones.',
     'England\u2019s Trading empire allows for great flexibility.',
     'With England\u2019s Sea power, settling by the sea can be better than inland cities \u2013 but it does not have to be.',
     'England\u2019s Colonists are only an advantage while there is still room to settle on the map. Plan accordingly.',
@@ -343,8 +343,8 @@ const UI_EN = {
   'Ereignisstärke': 'Event strength',
   'Mit Weltwundern': 'With wonders',
   'Marathon': 'Marathon',
-  'Marathon: vier Reiche auf einer Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter das Zwei- bis Fünffache, die Singularität 300; Griechenlands Rabatt und die Wissenschaftliche Methode zählen doppelt, Freie Forschung reicht nur bis ins Mittelalter. Höchstens fünf neue Städte je Zug, und der Militärsieg verlangt zwei eroberte Hauptstädte. Vor dem ersten Zug sehen alle die Karte und die Starttechnologien und draften dann ihre Fähigkeiten: je zwei, in Schlangenreihenfolge.':
-    'Marathon: four empires on a random map four times the size of the original map. Technologies cost two to five times as much depending on the age, the Singularity 300; Greece’s discount and the scientific method count double, free research only reaches the Middle Ages. At most five new cities per turn, and a military victory takes two captured capitals. Before the first turn everyone sees the map and the starting technologies and then drafts their abilities: two each, in snake order.',
+  'Marathon: vier Reiche auf einer Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter das Zwei- bis Fünffache, die Singularität 300; Griechenlands Rabatt und die Wissenschaftliche Methode zählen doppelt. Höchstens fünf neue Städte je Zug, und der Militärsieg verlangt zwei eroberte Hauptstädte. Vor dem ersten Zug sehen alle die Karte und die Starttechnologien und draften dann ihre Fähigkeiten: je zwei, in Schlangenreihenfolge.':
+    'Marathon: four empires on a random map four times the size of the original map. Technologies cost two to five times as much depending on the age, the Singularity 300; Greece’s discount and the scientific method count double. At most five new cities per turn, and a military victory takes two captured capitals. Before the first turn everyone sees the map and the starting technologies and then drafts their abilities: two each, in snake order.',
   'Fähigkeiten werden vor dem ersten Zug gedraftet – je zwei, auch fremde.': 'Abilities are drafted before the first turn – two each, from any civilisation.',
   'Marathon · Fähigkeiten draften': 'Marathon · draft abilities',
   'Marathonkarte (%s × %s)': 'Marathon map (%s × %s)',
@@ -361,17 +361,16 @@ const UI_EN = {
   'Starttechnologien: %s': 'Starting technologies: %s',
   '%s · Starttechnologien': '%s · starting technologies',
   'Ausgewürfelt vor dem Draft – im Spiel steht genau das hier. Kosten ohne Fähigkeiten.': 'Rolled before the draft – this is exactly what the game will have. Costs without abilities.',
-  'Marathon: Technologien kosten je Zeitalter das Zwei-, Drei-, Vier- und Fünffache, die Singularität %s – die Kosten hier sind schon umgerechnet. Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab, Griechenlands Freie Forschung reicht nur bis ins Mittelalter. Höchstens %s neue Städte je Zug. Militärsieg erst mit %s eroberten Hauptstädten; eine eroberte Hauptstadt ist danach eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt weiter.':
-    'Marathon: technologies cost two, three, four and five times as much depending on the age, the Singularity %s – the costs shown here already include that. Greece’s cheap research and the scientific method take off twice as much; Greece’s free research only reaches the Middle Ages. At most %s new cities per turn. A military victory takes %s captured capitals; a captured capital becomes an ordinary city, and its former empire plays on without a capital.',
+  'Marathon: Technologien kosten je Zeitalter das Zwei-, Drei-, Vier- und Fünffache, die Singularität %s – die Kosten hier sind schon umgerechnet. Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Höchstens %s neue Städte je Zug. Militärsieg erst mit %s eroberten Hauptstädten; eine eroberte Hauptstadt ist danach eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt weiter.':
+    'Marathon: technologies cost two, three, four and five times as much depending on the age, the Singularity %s – the costs shown here already include that. Greece’s cheap research and the scientific method take off twice as much. At most %s new cities per turn. A military victory takes %s captured capitals; a captured capital becomes an ordinary city, and its former empire plays on without a capital.',
   'Höchstens %s neue Städte je Zug (Marathon).': 'At most %s new cities per turn (marathon).',
   'Techs %s günstiger (je Zeitalter, im Marathon doppelt)': 'Techs %s cheaper (by age, doubled in marathon)',
-  '1× pro Runde eine verfügbare Technologie des Mittelalters oder früher umsonst erforschen (Marathon)':
-    'Once per round, research one available technology of the Middle Ages or earlier for free (marathon)',
   'Techkosten %s (je Zeitalter, im Marathon doppelt)': 'Tech costs %s (by age, doubled in marathon)',
+  'Techkosten %s (je Zeitalter)': 'Tech costs %s (by age)',
   'Startausgleich: +%s Münzen (%s. in der Zugfolge).': 'Starting compensation: +%s coins (position %s in turn order).',
   'Startausgleich: +1 Münze (%s. in der Zugfolge).': 'Starting compensation: +1 coin (position %s in turn order).',
-  'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge 1, 2 bzw. 3 Münzen dazu.':
-    'Starting compensation: on their very first turn, the second, third and fourth in turn order get 1, 2 and 3 extra coins.',
+  'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge %s, %s bzw. %s Münzen dazu – zu zweit bekommt der Zweite %s.':
+    'Starting compensation: on their very first turn, the second, third and fourth in turn order get %s, %s and %s extra coins – with two empires, the second gets %s.',
   '%s von %s Hauptstädten erobert': '%s of %s capitals captured',
   'ohne Hauptstadt': 'without a capital',
   'Militärsieg (Hauptstädte von %s erobert)': 'Military victory (capitals of %s captured)',
@@ -1401,7 +1400,8 @@ const UI_EN = {
   'Fähigkeiten': 'Abilities',
   'Deine Fähigkeit': 'Your ability',
   'Deine Fähigkeiten': 'Your abilities',
-  'Diese Runde schon genutzt.': 'Already used this round.',
+  'Noch %s von %s kostenlosen Forschungen in dieser Partie.': 'Free research left this game: %s of %s.',
+  'Die kostenlosen Forschungen dieser Partie sind verbraucht.': 'This game\u2019s free research is used up.',
   'Gerade ist keine passende Technologie verfügbar.': 'No suitable technology is available right now.',
   'Gerade nichts offen. Jede Technologie ab dem Mittelalter, die du erforschst, bringt hier eine kostenlose aus einem früheren Zeitalter desselben Feldes – nur im selben Zug.':
     'Nothing open right now. Every technology from the Middle Ages on that you research brings a free one here from an earlier age of the same field – in the same turn only.',
@@ -1554,8 +1554,8 @@ const UI_EN = {
   'Jedes Reich hat eine eigene Fähigkeit.': 'Every empire has an ability of its own.',
   'Finde heraus, was Griechenland besonders gut kann.': 'Find out what Greece is especially good at.',
   'Unten in der Leiste: <b>Fähigkeiten</b>.': 'In the bar at the bottom: <b>Abilities</b>.',
-  'Griechenland forscht günstiger: Jede Technologie kostet 1 weniger in der Antike, 2 im Mittelalter, 3 in der Industrialisierung und 4 in der Moderne (die Singularität 5).':
-    'Greece researches cheaply: every technology costs 1 less in Antiquity, 2 in the Middle Ages, 3 in the Industrial Age and 4 in the Modern Age (the Singularity 5).',
+  'Griechenland forscht günstiger: Jede Technologie kostet %s weniger in der Antike, %s im Mittelalter, %s in der Industrialisierung und %s in der Moderne (die Singularität %s).':
+    'Greece researches cheaply: every technology costs %s less in Antiquity, %s in the Middle Ages, %s in the Industrial Age and %s in the Modern Age (the Singularity %s).',
   'Technologien kosten 🔬 Wissenschaft und wirken für den Rest des Spiels.':
     'Technologies cost 🔬 science and work for the rest of the game.',
   'Erforsche alle Technologien, die dich nichts kosten.': 'Research every technology that costs you nothing.',

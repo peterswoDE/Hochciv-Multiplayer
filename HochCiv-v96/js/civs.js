@@ -23,9 +23,9 @@ const CIVS = [
   },
   {
     k: "russland", n: "Russland", sym: "square", color: "#3f6f3f",
-    ability: "+1 Nahrung in Wald",
+    ability: "Jedes Feld bringt mindestens 1 Nahrung",
     abilities: [
-      { k: "basis", n: "Taiga", e: "+1 Nahrung in Wald" },
+      { k: "basis", n: "Taiga", e: "Jedes Feld bringt mindestens 1 Nahrung" },
       { k: "wachstum", n: "Fruchtbarkeit", e: "Bevölkerungswachstum kostet keine Nahrung" },
       { k: "siedler", n: "Siedlertrecks", e: "Städte werden mit 2 Bevölkerung gegründet" },
     ],

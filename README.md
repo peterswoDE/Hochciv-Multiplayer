@@ -59,4 +59,4 @@ Branch from `origin/development`, PR into `development` (auto-deployed to stagin
 
 ## The game
 
-`HochCiv/` is [timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv) with the multiplayer extension; older versions in `HochCiv-v93/`, `HochCiv-v88/`, `HochCiv-v83/` keep running Rundenspiele on their rules. → [How it works](docs/overview/how-it-works.md) · [Updating the game](docs/development/updating-the-game.md)
+`HochCiv/` is [timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv) with the multiplayer extension; older versions in `HochCiv-v96/`, `HochCiv-v93/`, `HochCiv-v83/` keep running Rundenspiele on their rules. → [How it works](docs/overview/how-it-works.md) · [Updating the game](docs/development/updating-the-game.md)

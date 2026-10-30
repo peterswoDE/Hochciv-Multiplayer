@@ -22,7 +22,7 @@ const errors = [];
 window.addEventListener('error', e => errors.push(e.message));
 // Im Browser teilen sich <script>-Tags den globalen Gültigkeitsbereich; eval nicht.
 // Deshalb alles zusammen auswerten und einen Zugriffspunkt für den Test anhängen.
-const src = ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/tutorial.js', 'js/ui.js']
+const src = ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/anim.js', 'js/tutorial.js', 'js/firstgame.js', 'js/ui.js']
   .map(f => fs.readFileSync(__dirname + '/' + f, 'utf8')).join('\n');
 window.eval(src + '\n;window.__get = n => eval(n); window.__set = (n, v) => eval(n + "=v");'
   + '\n;window.__runAuto = i => { TUT_STEPS[i].auto(); redraw(); };');
@@ -44,6 +44,16 @@ const AUTO = p => p.kind === 'bot' || p.kind === 'ki';
 // Das Auto-Weiterschalten im Tutorial läuft in der App über setTimeout. Im Test
 // wird die Verzögerung auf 0 gesetzt, damit es synchron und damit prüfbar abläuft.
 SET('TUT_AUTO_MS', 0);
+SET('FG_AUTO_MS', 0);                     // ebenso im Ersten Spiel (v92)
+// Ebenso das Nachspielen der Kämpfe am Zugende (v90): ohne Wartezeit läuft der Zugwechsel
+// wie bisher synchron durch. Der Schritt „v90" schaltet es eigens ein.
+SET('COMBAT_MS', 0);
+/* Züge von KI und Bots (v94): ab Werk nachgespielt, ohne Blatt. Die älteren Schritte prüfen das
+   Blatt mit „Weiter" – sie laufen mit Animationen „Keine" (wie bis v93); die Schritte „v94: …"
+   und „v95: …" schalten die Animationen eigens ein (ANIM_MS 0: sofort durch, sonst Szene für
+   Szene). */
+SET('ANIM_MS', 0);
+G('prefs').anim = 'aus';
 
 const $ = id => window.document.getElementById(id);
 const step = (label, fn) => {
@@ -196,9 +206,27 @@ step('Tutorial: alle Aufgaben über die echte Oberfläche erledigen', () => {
   const open = () => !$('tut-next').disabled;
   const idx = () => +$('tut-count').textContent.split('/')[0] - 1;
   let manual = 0, auto = 0, guard = 0;
+  const zahlenGeprueft = new Set();
   while (guard++ < n * 3) {
     const i = idx();
     if (!$('tut-body').textContent.trim()) throw new Error('Schritt ' + (i + 1) + ' ohne Text');
+    // Zahlen im Text = Regelmaschine (v95: die neue Taiga änderte zwei, und kein Test merkte es)
+    if (!zahlenGeprueft.has(i)) {
+      zahlenGeprueft.add(i);
+      const S0 = G('S'), ru = G('RU')(), txt = $('tut-body').textContent.replace(/\s+/g, ' '), titel = $('tut-title').textContent;
+      if (/vierte Stadt/.test(titel)) {
+        const sp = G('ui').tutSpot3 || G('TUT_CITY_3'), g = G('settleGain')(S0, ru, sp[0], sp[1]);
+        const soll = [`Auch die ${S0.players[ru].res.food} Nahrung`, `kostet ${G('foundCost')(S0, ru, sp[0], sp[1])} Nahrung`,
+          `+${g.sci} 🔬, +${g.food} 🌾, +${g.coins} 🪙`];
+        const fehlt = soll.filter(x => !txt.includes(x));
+        if (fehlt.length) throw new Error('„Die vierte Stadt" nennt nicht: ' + fehlt.join(' · '));
+      }
+      if (/Jede Bevölkerung isst/.test(titel)) {
+        const f = G('baseIncome')(S0, ru).food;
+        if (!txt.includes(`gerade ${f} Nahrung über den Verbrauch`) || !txt.includes(`also noch ${f}× wachsen`))
+          throw new Error('„Jede Bevölkerung isst": ' + f + ' Nahrung über den Verbrauch, der Text sagt anderes');
+      }
+    }
     if (!open()) {
       if ($('tut-task').hidden) throw new Error('Aufgabe ohne Hinweiszeile in Schritt ' + (i + 1));
       const t = $('tut-title').textContent;
@@ -1357,7 +1385,7 @@ step('Handelsrouten erscheinen in der Ertragsübersicht (neue Regel)', () => {
   if (JSON.stringify(z1.y) !== '[1,1,1]') throw new Error('falscher Bonus: ' + JSON.stringify(z1.y));
   S.roads[G('key')(nb[0], nb[1])] = 2;
   const z2 = zeile();
-  if (JSON.stringify(z2.y) !== '[2,2,2]') throw new Error('Eisenbahn gibt nicht +2');
+  if (JSON.stringify(z2.y) !== '[4,4,4]') throw new Error('Eisenbahn gibt nicht +4 (v96): ' + JSON.stringify(z2.y));
   // Und im Forschungsbogen muss die Zeile sichtbar sein
   $('a-tech').onclick();
   if (!/Handelsrouten/.test($('ov-body').textContent))
@@ -1366,7 +1394,7 @@ step('Handelsrouten erscheinen in der Ertragsübersicht (neue Regel)', () => {
   /* Bürokratie verdoppelt sie (v86). Seit v88 (Anweisung des Autors) sagt die Übersicht das
      nicht mehr dazu: die Zeile heißt einfach „Handelsrouten", auch auf Englisch. */
   p.techs.buerokratie = true;
-  if (JSON.stringify(zeile().y) !== '[4,4,4]') throw new Error('Bürokratie verdoppelt die Handelsroute nicht: ' + JSON.stringify(zeile().y));
+  if (JSON.stringify(zeile().y) !== '[8,8,8]') throw new Error('Bürokratie verdoppelt die Handelsroute nicht: ' + JSON.stringify(zeile().y));
   const uebersicht = () => {
     $('a-tech').onclick();
     const reihen = [...$('ov-body').querySelectorAll('.yield-panel .yrow')]
@@ -1376,7 +1404,7 @@ step('Handelsrouten erscheinen in der Ertragsübersicht (neue Regel)', () => {
   };
   const de = uebersicht(), tr = de.find(([n]) => /Handelsrouten/.test(n));
   if (!tr || tr[0] !== 'Handelsrouten') throw new Error('Zeile heißt nicht schlicht „Handelsrouten": ' + de.map(r => r[0]).join(' | '));
-  if ((tr[1].match(/4/g) || []).length !== 3) throw new Error('Zeile zeigt nicht dreimal +4: ' + tr[1]);
+  if ((tr[1].match(/8/g) || []).length !== 3) throw new Error('Zeile zeigt nicht dreimal +8: ' + tr[1]);
   if (de.some(([n]) => /Bürokratie/.test(n))) throw new Error('eine Zeile nennt die Bürokratie: ' + de.map(r => r[0]).join(' | '));
   G('switchLang')('en');
   try {
@@ -1388,7 +1416,7 @@ step('Handelsrouten erscheinen in der Ertragsübersicht (neue Regel)', () => {
     if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
   } finally { G('switchLang')('de'); }
   delete p.techs.buerokratie;
-  console.log('       Straße +1, Eisenbahn +2, mit Bürokratie +4 ohne Zusatz am Namen, Zeile im Forschungsbogen sichtbar (DE/EN)');
+  console.log('       Straße +1, Eisenbahn +4 (v96), mit Bürokratie +8 ohne Zusatz am Namen, Zeile im Forschungsbogen sichtbar (DE/EN)');
 });
 step('Zurückblättern springt nicht sofort wieder vor', () => {
   G('tutorialStart')();
@@ -1440,7 +1468,11 @@ step('Tutorialtext erklärt die Handelsrouten', () => {
   G('ui').tut.i = idx; G('tutEnter')();
   const t = schritt.html().replace(/<[^>]+>/g, ' ');
   if (!/Handelsrouten/.test(t)) throw new Error('Handelsrouten werden nicht erklärt');
-  if (!/\+2/.test(t) || !/\+1/.test(t)) throw new Error('die beiden Stufen fehlen');
+  // die beiden Stufen, wie die Regel sie rechnet (v96: Eisenbahn +4 statt +2)
+  const bahn = '+' + G('TRADE_RAIL_BONUS'), weg = '+' + G('TRADE_ROAD_BONUS');
+  if (!t.includes(bahn) || !t.includes(weg) || /\+2\b/.test(t)) throw new Error('die beiden Stufen fehlen oder +2 steht noch da: ' + bahn + '/' + weg);
+  const kurz = schritt.kurz().replace(/<[^>]+>/g, ' ');
+  if (!kurz.includes('Eisenbahn ' + bahn)) throw new Error('kurze Fassung: ' + kurz);
   if (!/Eisenbahn/.test(t)) throw new Error('Eisenbahn nicht erwähnt');
   // Im Abschlusstext soll die Erklärung NICHT mehr stehen
   const letzterT = G('TUT_STEPS')[G('TUT_STEPS').length - 1].html().replace(/<[^>]+>/g, ' ');
@@ -1451,8 +1483,15 @@ step('Tutorialtext erklärt die Handelsrouten', () => {
   G('rulesModal')();
   if (!/Handelsrouten/.test($('ov-body').textContent))
     throw new Error('Kurzregeln erwähnen die Handelsrouten nicht');
+  if (!$('ov-body').textContent.includes(`bringt ${weg} auf alle drei Erträge – über eine reine Eisenbahn ${bahn}.`))
+    throw new Error('Kurzregeln nennen die Stufen nicht wie die Regel');
   G('closeModal')();
-  console.log('       Abschlusstext und Kurzregeln nennen beide Stufen');
+  // Auch der Abschlusstext des Tutorials (lang und kurz) nennt die Bahn mit +4
+  const ende = G('TUT_STEPS')[G('TUT_STEPS').length - 1];
+  const endeTexte = [ende.html(), typeof ende.kurz === 'function' ? ende.kurz() : ''].map(x => x.replace(/<[^>]+>/g, ' '));
+  if (endeTexte.some(x => /Handelsroute(nbonus)? (auf )?\+2|\(Handelsroute \+2\)/.test(x)) || !endeTexte.every(x => x.includes(bahn)))
+    throw new Error('Abschlusstext: ' + endeTexte.map(x => x.slice(0, 80)).join(' | '));
+  console.log('       Straßenschritt (lang und kurz), Abschlusstext und Kurzregeln nennen beide Stufen: Straße ' + weg + ', Eisenbahn ' + bahn);
 });
 step('Techbogen zeigt, was andere Menschen erforschen könnten', () => {
   // Zwei Menschen aufsetzen: der Aufbau macht nur den ersten zum Menschen
@@ -3669,9 +3708,11 @@ step('v88: Hauptmenü „Ne Runde Civ?", Ertragstechnologien in Bogen, Übersich
   if (meer && !reihen.some(r => r.includes('Meer') && r.includes('🌾' + meer.y[1]) && r.includes('🪙' + meer.y[2]) &&
     meer.y[1] === 2 * meer.count && meer.y[2] === 2 * meer.count))
     throw new Error('Meereszeile nicht 🌾2 🪙2 je Feld: ' + reihen.join(' | '));
-  for (const t of ['Wald: +3 Wissenschaft (inkl. Mathematik, Elektrizität)', 'Meer: +2 Nahrung, +1 Münze (inkl. Fischerei, Segeln)',
-    'Je Bevölkerung: +2 Münzen (inkl. Fließband)', '+3 Angriff gegen Städte'])
+  for (const t of ['Wald: +3 Wissenschaft', 'Meer: +2 Nahrung, +1 Münze', 'Je Bevölkerung: +2 Münzen', '+3 Angriff gegen Städte'])
     if (!body().includes(t)) throw new Error('Bogen: fehlt „' + t + '"');
+  // seit v89 ohne „(inkl. …)" auf den Kacheln (Anweisung des Autors)
+  const effs = [...$('ov-body').querySelectorAll('.tech .eff')].map(e => e.textContent);
+  if (effs.some(t => /inkl\./.test(t))) throw new Error('Kachel mit „inkl.": ' + effs.find(t => /inkl\./.test(t)));
   G('closeModal')();
   // Regelbogen: der erklärende Satz, die Texte, Singularität 120 – deutsch und englisch
   const regeln = () => {
@@ -3688,15 +3729,308 @@ step('v88: Hauptmenü „Ne Runde Civ?", Ertragstechnologien in Bogen, Übersich
     G('clearMissing')();
     const [en, singEn] = regeln();
     $('a-tech').onclick(); const bogenEn = body(); G('closeModal')();
-    for (const t of ['Yield technologies include the cheaper ones of their field', 'Forest: +3 science (incl. Mathematics, Electricity)', '+3 attack against cities'])
+    for (const t of ['Yield technologies include the cheaper ones of their field', 'Forest: +3 science', '+3 attack against cities'])
       if (!en.includes(t)) throw new Error('Regelbogen englisch: fehlt „' + t + '"');
-    if (!bogenEn.includes('Sea: +2 food, +1 coin (incl. Fishing, Sailing)')) throw new Error('Bogen englisch ohne Containerlogistik-Text');
+    if (!bogenEn.includes('Sea: +2 food, +1 coin') || /incl\./.test(bogenEn)) throw new Error('Bogen englisch: Containerlogistik-Text fehlt oder „incl." steht noch da');
     if (JSON.stringify(singEn) !== '["120","Singularity"]') throw new Error('Singularity englisch: ' + singEn.join(' '));
     const fehlt = G('missingStrings')();
     if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
   } finally { G('switchLang')('de'); }
   console.log('       Menü DE/EN · Wald ' + (wald ? `×${wald.count} → 🔬${wald.y[0]}` : '–') +
     ' · Meer ' + (meer ? `×${meer.count} → 🌾${meer.y[1]} 🪙${meer.y[2]}` : '–') + ' · Texte in Bogen und Regelbogen DE/EN · Singularität 120');
+});
+
+/* ======================================================= v89
+   Gemeldet: „beim Öffnen von Fähigkeiten wachsen manchmal alle Städte" (nicht nachstellbar).
+   Nachgestellt in Chromium: nach einer Aktion zeichnet sich das Blatt neu, der Rest rutscht
+   nach oben, und ein Doppeltipp traf „Alle Städte wachsen". Jetzt zählt ein Tipp auf einen
+   Knopf erst 0,4 s nach dem Öffnen/Neuzeichnen – außer auf denselben Knopf. Hier mit echten
+   Klick-Ereignissen (die Erfassung am Blatt sieht nur die), die Zeit über sheetCalm.until. */
+step('v89: frisch gezeigte Blätter nehmen kurz keine Tipps an – außer auf denselben Knopf', () => {
+  const S = griechenSpiel('gratistech'), pi = S.cur, p = G('P')(S);
+  ['verbundwerkstoffe', 'keramik', 'spionage', 'gentechnik'].forEach(k => { p.techs[k] = true; });
+  G('techPool')(S).filter(t => t.age <= 1).forEach(t => { p.avail[t.k] = true; });
+  S.players.forEach((o, i) => { if (i !== pi) G('TECHS').slice(0, 40).forEach(t => { if (!p.techs[t.k]) o.techs[t.k] = true; }); });
+  p.res = { sci: 20, food: 40, coins: 40 };
+  G('redraw')();
+  const tippe = el => {
+    if (!el) throw new Error('Knopf fehlt');
+    el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  };
+  const calm = G('sheetCalm');
+  const pops = () => G('citiesOf')(S, pi).map(c => c.pop).join(',');
+  const knopf = sel => $('sheet-body').querySelector(sel);
+  const vorher = pops();
+  // 1 Öffnen und sofort „Alle Städte wachsen" – das Blatt gleitet noch herein: zählt nicht
+  $('a-abil').onclick();
+  tippe(knopf('[data-act="wachsen:bezahlt"]'));
+  if (pops() !== vorher) throw new Error('Tipp gleich nach dem Öffnen hat gewirkt');
+  // 2 Freie Forschung wählen (nach der Pause) – wirkt. Der Doppeltipp, der danach auf
+  //   „Alle Städte wachsen" oder „Kopieren" fällt, nicht.
+  calm.until = 0;
+  const vorTech = Object.keys(p.techs).length;
+  tippe(knopf('[data-act^="forschung:"]'));
+  if (Object.keys(p.techs).length !== vorTech + 1) throw new Error('Freie Forschung ging nicht');
+  const coins = p.res.coins;
+  tippe(knopf('[data-act="wachsen:bezahlt"]'));
+  tippe(knopf('[data-act^="kopie:bezahlt:"]'));
+  if (pops() !== vorher || p.res.coins !== coins || Object.keys(p.techs).length !== vorTech + 1)
+    throw new Error('Doppeltipp nach dem Neuzeichnen hat gewirkt');
+  // 3 bewusst, nach der Pause: wirkt
+  calm.until = 0;
+  tippe(knopf('[data-act="wachsen:bezahlt"]'));
+  const nachher = pops();
+  if (nachher === vorher) throw new Error('bewusster Tipp auf „Alle Städte wachsen" ohne Wirkung');
+  // 4 derselbe Knopf darf gleich wieder: zweimal schnell „+1 Macht"
+  p.res.coins = 40;
+  $('a-power').onclick(); calm.until = 0;
+  const m = p.power;
+  tippe(knopf('[data-n="1"]'));
+  tippe(knopf('[data-n="1"]'));
+  if (p.power !== m + 2) throw new Error('zweimal „+1 Macht" gab +' + (p.power - m));
+  // 5 Stadtblatt: nach „Kostenlos wachsen" rückt „Bevölkerung wachsen" an seine Stelle –
+  //   der Doppeltipp darauf zählt nicht
+  G('closeSheet')();
+  const ct = G('citiesOf')(S, pi).find(c => G('freeGrowthAvailable')(S, pi, c));
+  if (!ct) throw new Error('keine Stadt mit kostenlosem Wachstum');
+  G('tapHex')(ct.r, ct.c); calm.until = 0;
+  const pop0 = ct.pop;
+  const nachLabel = l => [...$('sheet-body').querySelectorAll('.opt')].find(b => b.dataset.label === l);
+  tippe(nachLabel('Kostenlos wachsen'));
+  tippe(nachLabel('Bevölkerung wachsen'));
+  if (ct.pop !== pop0 + 1) throw new Error(`Stadtblatt: ${pop0} → ${ct.pop} statt +1`);
+  // 6 Blatt eines Bot- oder KI-Zugs: „Weiter" wirkt sofort
+  G('closeSheet')();
+  $('a-end').onclick();
+  if (!G('ui').botLock) $('a-end').onclick();          // eine Warnung bestätigen
+  if (!G('ui').botLock) throw new Error('kein Bot-Blatt nach dem Zugende');
+  const wer = G('S').cur;
+  tippe($('bot-next-top'));
+  if (G('S').cur === wer) throw new Error('„Weiter" im Bot-Blatt wirkte nicht sofort');
+  let guard = 0;
+  while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  console.log(`       Öffnen + Tipp: nichts · Freie Forschung + Doppeltipp: nur die Technologie · bewusst: ${vorher} → ${nachher} · 2× „+1 Macht": +2 · Stadtblatt: +1 · Bot-„Weiter" sofort`);
+});
+
+/* ======================================================= v90 / v91
+   Kampf nachspielen (v90): am Zugende jeder Kampf einzeln, in der Reihenfolge der Regel – seit
+   v91 wieder erst die Städte, dann die Flanken –, mit beiden Machtwerten auf dem Kampffeld.
+   Die Bilder schaltet hier nicht der Zeitgeber weiter (die Schritte laufen synchron), sondern
+   combatNext – so wie es der Zeitgeber täte. */
+// Griechenland (Mensch) gegen eine Bot-Stadt: Armee daneben, von G1 (auch an der Stadt) und
+// G2 (gegenüber) flankierbar. Macht 5 gegen 3, Stadt mit 3 Bevölkerung: Verteidigung 6 mit der
+// Armee – die Stadt hält (die Armee verteidigt mit), danach wird die Armee weggeflankt.
+const kampfLage = () => {
+  const S = griechenSpiel('basis'), pi = S.cur;
+  const frei = (r, c) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c);
+  for (const C of S.cities.filter(c => c.owner !== pi && S.players[c.owner].kind === 'bot')) {
+    for (const [er, ec] of G('neighbors')(C.r, C.c)) {
+      if (!frei(er, ec)) continue;
+      for (const [g1r, g1c] of G('neighbors')(er, ec)) {
+        if (!frei(g1r, g1c) || G('hexDistance')(g1r, g1c, C.r, C.c) !== 1) continue;
+        const g2 = G('neighbors')(er, ec).find(([r, c]) => frei(r, c) &&
+          G('hexDistance')(r, c, C.r, C.c) === 2 && G('hexOpposite')(er, ec, g1r, g1c, r, c));
+        if (!g2) continue;
+        G('citiesOf')(S, C.owner).forEach(c => { c.pop = 1; });
+        C.pop = 3;                                          // Bot-Macht = Bevölkerung = 3
+        const E = { id: 981, owner: C.owner, r: er, c: ec, mp: 0, born: 0 };
+        S.armies.push(E,
+          { id: 982, owner: pi, r: g1r, c: g1c, mp: 0, born: 0 },
+          { id: 983, owner: pi, r: g2[0], c: g2[1], mp: 0, born: 0 });
+        S.players[pi].power = 5;
+        G('redraw')();
+        return { S, pi, C, E };
+      }
+    }
+  }
+  throw new Error('keine Kampfstellung gefunden');
+};
+const fightText = cls => { const el = $('map').querySelector('.' + cls); return el ? el.textContent : null; };
+// Steht auf dem Feld eine Armee dieses Reichs? (gezeichnet als Symbol in seiner Farbe)
+const armeeGezeichnet = (r, c, owner) => {
+  const [x, y] = G('hexCenter')(r, c, G('HEX'));
+  const farbe = G('civOf')(G('S').players[owner]).color;
+  return [...$('map').querySelectorAll('text')].some(t =>
+    +t.getAttribute('x') === x && +t.getAttribute('y') === y + 8 && t.getAttribute('fill') === farbe);
+};
+step('v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke, mit beiden Werten', () => {
+  const { S, pi, C, E } = kampfLage();
+  SET('COMBAT_MS', 1000);
+  try {
+    $('a-end').onclick();
+    if (!G('ui').combat) $('a-end').onclick();              // eine Warnung bestätigen
+    const k = G('ui').combat;
+    if (!k) throw new Error('kein Nachspiel');
+    if (k.kaempfe.map(f => f.art).join() !== 'stadt,flanke') throw new Error('Reihenfolge: ' + k.kaempfe.map(f => f.art).join());
+    // Bild 1: die Stadt – sie hält, die Armee verteidigt mit. Gerechnet ist schon alles (auch die
+    // Flanke danach), gezeichnet der Stand davor.
+    if (S.armies.includes(E)) throw new Error('die Flanke ist nicht schon gerechnet');
+    if (!armeeGezeichnet(E.r, E.c, E.owner)) throw new Error('Bild 1 zeigt die Armee an der Stadt nicht mehr');
+    if (!window.document.body.classList.contains('blocked')) throw new Error('Leiste während des Nachspiels nicht gesperrt');
+    const b1 = [fightText('fight-a'), fightText('fight-sign'), fightText('fight-d'), fightText('fight-caption')];
+    if (JSON.stringify(b1) !== JSON.stringify(['⚔️ 5', '≤', '🛡️ 6', 'Stadt 1/2 · hält']))
+      throw new Error('Bild 1: ' + b1.join(' | '));
+    if ($('map').querySelectorAll('.fight-from').length !== 1) throw new Error('Stadt: nicht genau der Angreifer markiert');
+    // Die Werte verdecken weder die Figuren der Angreifer noch das Kampffeld (in jedem Bild)
+    const figur = G('HEX') * 0.55;
+    const kasten = cls => ['x', 'y', 'width', 'height'].map(a => +$('map').querySelector('.' + cls + '-box').getAttribute(a));
+    const freiVonWerten = bild => {
+      for (const p of $('map').querySelectorAll('.fight-from, .fight-field')) {
+        const [hx, hy] = p.getAttribute('transform').match(/translate\(([-\d.]+),([-\d.]+)\)/).slice(1).map(Number);
+        for (const cls of ['fight-a', 'fight-d']) {
+          const [x, y, w, h] = kasten(cls);
+          if (hx + figur > x && hx - figur < x + w && hy + figur > y && hy - figur < y + h)
+            throw new Error(bild + ': ' + cls + ' verdeckt das Feld ' + p.getAttribute('class') + ' bei ' + hx + ',' + hy);
+        }
+      }
+    };
+    freiVonWerten('Bild 1');
+    // Ein Neuzeichnen zwischendurch (Tutorial, …) behält das Kampfbild – und speichert nicht:
+    // gekämpft ist schon, gewechselt noch nicht; nach dem Neuladen käme der Kampf ein zweites Mal
+    const gespeichert = () => G('load')('hochciv.save');
+    if (!gespeichert()) throw new Error('kein Spielstand gespeichert');
+    G('redraw')();
+    if (fightText('fight-caption') !== 'Stadt 1/2 · hält' || !armeeGezeichnet(E.r, E.c, E.owner))
+      throw new Error('Neuzeichnen während des Nachspiels zeigt schon den Stand danach');
+    if (gespeichert().sieges[pi + '|' + C.id] || !gespeichert().armies.some(a => a.id === E.id))
+      throw new Error('während des Nachspiels gespeichert: der Kampf käme nach dem Neuladen doppelt');
+    // Der Hinweis zum Überspringen liegt unten (über der gesperrten Leiste) und bleibt stehen
+    const hinweis = $('toast');
+    if (!hinweis.classList.contains('show') || !hinweis.classList.contains('unten') ||
+      hinweis.textContent !== '2 Kämpfe – Tippen auf die Karte überspringt')
+      throw new Error('Hinweis: ' + hinweis.className + ' „' + hinweis.textContent + '"');
+    // Während des Nachspiels: kein zweites Zugende, kein Feldblatt
+    const seq = S.logSeq;
+    $('a-end').onclick();
+    if (S.logSeq !== seq || S.cur !== pi) throw new Error('„Zug beenden" wirkte während des Nachspiels');
+    // Bild 2: die Flanke – Macht 5 gegen 3, die Armee steht im Bild noch (Stand davor)
+    G('combatNext')();
+    const b2 = [fightText('fight-a'), fightText('fight-sign'), fightText('fight-d'), fightText('fight-caption')];
+    if (JSON.stringify(b2) !== JSON.stringify(['⚔️ 5', '>', '🛡️ 3', 'Flanke 2/2 · Armee zerstört']))
+      throw new Error('Bild 2: ' + b2.join(' | '));
+    if ($('map').querySelectorAll('.fight-from').length !== 2) throw new Error('Flanke: nicht beide Felder markiert');
+    if (!armeeGezeichnet(E.r, E.c, E.owner)) throw new Error('Bild 2 zeigt die Armee vor der Flanke nicht');
+    freiVonWerten('Bild 2');
+    // Englisch
+    G('switchLang')('en');
+    try {
+      G('clearMissing')();
+      const cap = [G('combatCaption')(k.kaempfe[0], 0, 2), G('combatCaption')(k.kaempfe[1], 1, 2)].join(' | ');
+      if (cap !== 'City 1/2 · holds | Flank 2/2 · army destroyed') throw new Error('englisch: ' + cap);
+      const fehlt = G('missingStrings')();
+      if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.join(' | '));
+    } finally { G('switchLang')('de'); }
+    // Ein Tipp auf die Karte überspringt den Rest; danach geht es wie gewohnt weiter
+    SET('COMBAT_MS', 0);
+    G('tapHex')(C.r, C.c);
+    if (G('ui').combat) throw new Error('Tippen hat nicht übersprungen');
+    // weder der Hinweis noch – doppelt zum eben Gezeigten – der letzte Kampf als Meldung
+    if (hinweis.classList.contains('show')) throw new Error('nach dem Nachspiel steht noch: „' + hinweis.textContent + '"');
+    if (S.sieges[pi + '|' + C.id] || S.armies.includes(E)) throw new Error('Ausgang: die Stadt hält (keine Belagerung), die Armee fällt');
+    if (G('S').cur === pi || !G('ui').botLock) throw new Error('nach dem Nachspiel kein Zugwechsel mit Bot-Blatt');
+    let guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  } finally { SET('COMBAT_MS', 0); }
+  console.log('       Bild 1: ⚔️ 5 ≤ 🛡️ 6 · Stadt 1/2 · hält · Bild 2: ⚔️ 5 > 🛡️ 3 · Flanke 2/2 · Armee zerstört · Tipp überspringt');
+});
+step('v90: das Menü (☰) beendet ein laufendes Nachspiel, bevor es öffnet', () => {
+  const { S, pi, C, E } = kampfLage();
+  SET('COMBAT_MS', 1000);
+  try {
+    $('a-end').onclick();
+    if (!G('ui').combat) $('a-end').onclick();
+    if (!G('ui').combat) throw new Error('kein Nachspiel');
+    SET('COMBAT_MS', 0);
+    $('g-menu').onclick();
+    if (G('ui').combat) throw new Error('das Nachspiel läuft weiter');
+    if (!$('overlay').classList.contains('show')) throw new Error('das Menü ist nicht offen');
+    if (G('S').cur === pi && !G('ui').botLock) throw new Error('kein Zugwechsel');
+    if (S.sieges[pi + '|' + C.id] || S.armies.includes(E)) throw new Error('Ausgang: die Stadt hält, die Armee fällt');
+    G('closeModal')();
+    let guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  } finally { SET('COMBAT_MS', 0); }
+  console.log('       ☰ mitten im Nachspiel: Rest übersprungen, Zug gewechselt, dann das Menü');
+});
+step('v90: im Zug eines Bots erst der Kampf, dann das Blatt', () => {
+  const S = griechenSpiel('basis'), pi = S.cur;
+  // Ein Bot mit einer Armee an der eigenen Hauptstadt; sein Zug selbst tut nichts (botTurn
+  // stillgelegt), damit genau dieser Angriff übrig bleibt.
+  const cap = G('capitalOf')(S, pi);
+  const bi = S.players.findIndex(p => p.kind === 'bot');
+  const spot = G('neighbors')(cap.r, cap.c).find(([r, c]) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c));
+  S.armies.push({ id: 991, owner: bi, r: spot[0], c: spot[1], mp: 0, born: 0 });
+  const echt = G('botTurn');
+  SET('botTurn', () => { });
+  SET('COMBAT_MS', 1000);
+  try {
+    // bis zum Zug dieses Bots durchklicken
+    $('a-end').onclick();
+    if (!G('ui').botLock && !G('ui').combat) $('a-end').onclick();
+    let guard = 0;
+    while (G('S').cur !== bi && G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+    const k = G('ui').combat;
+    if (!k) throw new Error('kein Nachspiel im Bot-Zug');
+    if ($('sheet').classList.contains('open')) throw new Error('das Bot-Blatt ist schon offen');
+    if (k.kaempfe[0].art !== 'stadt' || k.kaempfe[0].pi !== bi) throw new Error('falscher Kampf: ' + JSON.stringify(k.kaempfe[0]).slice(0, 80));
+    SET('COMBAT_MS', 0);
+    G('combatNext')();
+    if (G('ui').combat || !$('sheet').classList.contains('open') || !$('bot-next')) throw new Error('nach dem Nachspiel kein Bot-Blatt');
+    guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+  } finally { SET('botTurn', echt); SET('COMBAT_MS', 0); }
+  console.log('       Bot-Angriff auf die Hauptstadt: erst das Kampfbild, dann das Blatt mit „Weiter"');
+});
+step('v90: das Tutorial schaltet nicht weiter, solange ein Kampf nachgespielt wird', () => {
+  G('tutorialStart')();
+  for (let i = 0; i < 3; i++) G('tutMove')(1);              // drei Lesetexte, dann: gründen
+  const ziel = G('tutStep')().allow.hex()[0];
+  G('closeSheet')();
+  $('a-found').onclick();
+  G('tapHex')(ziel[0], ziel[1]);
+  const knopf = [...$('sheet-body').querySelectorAll('.opt')].find(b => b.dataset.label === 'Hier gründen');
+  if (!knopf) throw new Error('kein Gründen-Knopf');
+  G('ui').combat = { kaempfe: [], i: 0, weiter: () => { }, timer: null };   // „ein Kampf läuft"
+  try {
+    knopf.onclick();
+    if (G('ui').tut.i !== 3) throw new Error('schaltet mitten im Kampf weiter');
+  } finally { G('ui').combat = null; G('lockBar')(); }
+  G('redraw')();
+  if (G('ui').tut.i !== 4) throw new Error('nach dem Kampf nicht weiter (Schritt ' + (G('ui').tut.i + 1) + ')');
+  G('tutorialQuit')();
+  console.log('       Aufgabe erledigt während des Kampfs: Schritt 4 bleibt, danach Schritt 5');
+});
+step('v90: Zugfolge nach Plätzen – Plättchenkarte zu dritt mit zweimal Russland', () => {
+  $('m-new').onclick();
+  G('setupSetMode')('drei');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  ['russland', 'griechenland', 'russland'].forEach((civ, i) => {
+    const sel = $('setup-list').children[i].querySelector('[data-civpick]');
+    sel.value = civ; sel.onchange();
+  });
+  $('setup-list').children[0].querySelector('[data-kind="human"]').onclick();
+  [1, 2].forEach(i => $('setup-list').children[i].querySelector('[data-kind="ki"]').onclick());
+  $('setup-start').value = '1'; $('setup-start').onchange();
+  const mitEreignis = $('setup-events').checked;
+  $('setup-events').checked = false; $('setup-events').onchange();
+  mitBots(() => $('setup-go').onclick());
+  $('setup-events').checked = mitEreignis; $('setup-events').onchange();
+  G('closeModal')();
+  {
+    const st = G('placeState'), seat = G('placeSeatNow')();
+    const rcs = G('slotRC')(st.plan, seat.slot), ok = G('placeOptions')(st.plan, seat, st.o);
+    const i = ok.indexOf(true);
+    G('plTap')(rcs[i][0], rcs[i][1]); G('placeConfirm')(); G('placeConfirm')();
+  }
+  const S = G('S');
+  const reihe = S.players.map(p => p.civ + '/' + p.slot).join(' ');
+  if (reihe !== 'russland/0 griechenland/1 russland/2') throw new Error('Zugfolge: ' + reihe);
+  if (S.players[S.startIdx].slot !== 1) throw new Error('Startspieler nicht Platz 2');
+  // die klassische Aufstellung bleibt bei Russland → Griechenland → England → Wikinger
+  const K = (() => { frischesSpiel(); return G('S'); })();
+  if (K.players.map(p => p.civ).join() !== 'russland,griechenland,england,wikinger')
+    throw new Error('klassisch: ' + K.players.map(p => p.civ).join());
+  console.log('       Plätze 1–3 (Russland, Griechenland, Russland) ziehen in dieser Reihenfolge, ab Platz 2 · klassisch unverändert');
 });
 
 step('Duell auf den festen Karten: zwei Hauptstädte auf ihren Sternen, Duellschwellen', () => {
@@ -3990,6 +4324,812 @@ step('Technologiebogen: im fremden Zug das eigene Reich, nur zum Ansehen', () =>
     if (/nicht am Zug/.test($('ov-title').textContent)) throw new Error('eigener Zug als fremd markiert');
     G('closeModal')();
   } finally { G('__set')('viewerHook', null); G('show')('screen-menu'); }
+});
+
+/* ------------------------------------------------------------------ Erstes Spiel (v92, umgebaut v93) */
+const FG = () => G('S').fg;
+const fgId = () => G('fgSchritt')().id;
+const panelText = () => $('tut-body').textContent.replace(/\s+/g, ' ');
+// Seite vor der Partie: Weg antippen (die Seite liegt als Fenster über dem Menü bzw. dem Spielende)
+const fgSeiteWahl = pfad => {
+  if (!$('overlay').classList.contains('show') || !$('ov-body').querySelector('.fg-seite')) throw new Error('keine Seite vor der Partie');
+  $('ov-body').querySelector(`[data-pfad="${pfad}"]`).onclick();
+};
+// Spielt mit den Musterlösungen bis zum Schritt `ziel` – das Zugende über den echten Knopf
+// (samt Nachfrage) und das Bot-Blatt über „Weiter", wie ein Mensch es täte
+function fgSpieleBis(ziel) {
+  const echt = G('fgTestZug');
+  SET('fgTestZug', () => {
+    $('a-end').onclick();
+    if (G('ui').fg && G('ui').fg.frage) $('a-end').onclick();
+    let n = 0;
+    while (G('ui').botLock && n++ < 4) $('bot-next').onclick();
+  });
+  try {
+    for (let n = 0; n < 120; n++) {
+      if (G('ui').botLock) { $('bot-next').onclick(); continue; }
+      const st = G('fgSchritt')();
+      if (!st || st.id === ziel || st.ende) return st && st.id;
+      if (st.fertig()) { G('fgNachholen')(); G('redraw')(); continue; }
+      st.loesung();
+      G('redraw')();
+    }
+  } finally { SET('fgTestZug', echt); }
+  return 'abbruch';
+}
+step('v92: Menü – „Erstes Spiel" rot ganz oben, „Neues Spiel" wie die übrigen', () => {
+  G('show')('screen-menu');
+  const knoepfe = [...$('screen-menu').querySelectorAll('.menu-actions .btn')];
+  if (knoepfe[0].id !== 'm-first') throw new Error('oben steht ' + knoepfe[0].id);
+  if (!$('m-first').classList.contains('primary')) throw new Error('„Erstes Spiel" ist nicht rot');
+  const rot = knoepfe.filter(b => b.classList.contains('primary')).map(b => b.id);
+  if (rot.join() !== 'm-first') throw new Error('rot sind: ' + rot.join());
+  if ($('m-first').textContent.trim() !== 'Erstes Spiel') throw new Error('Text: ' + $('m-first').textContent);
+  G('switchLang')('en');
+  const en = $('m-first').textContent.trim();
+  G('switchLang')('de');
+  if (en !== 'First game') throw new Error('englisch: ' + en);
+  console.log('       ' + knoepfe.filter(b => !b.hidden).map(b => b.id + (b.classList.contains('primary') ? ' (rot)' : '')).join(', '));
+});
+step('v93: Erstes Spiel – erst die Seite (Steinzeit, mehrere Wege), dann gleich die Wahl', () => {
+  window.localStorage.removeItem('hochciv.fg');
+  const vorher = G('S');
+  $('m-first').onclick();
+  if (G('S') !== vorher || $('screen-game').classList.contains('show')) throw new Error('Partie schon gestartet');
+  const txt = $('ov-body').textContent.replace(/\s+/g, ' ');
+  if ($('ov-title').textContent !== 'Erstes Spiel' || !/einzige Stadt in der Steinzeit/.test(txt) || !/Zeiten überdauert/.test(txt) ||
+    !/mehr als einen Weg zum Sieg/.test(txt)) throw new Error('Seite: ' + txt.slice(0, 160));
+  const wege = [...$('ov-body').querySelectorAll('[data-pfad]')].map(b => b.dataset.pfad);
+  if (wege.join() !== 'militaer,wirtschaft,wissenschaft') throw new Error('Wege: ' + wege.join());
+  if ($('ov-body').querySelector('.fg-ja')) throw new Error('schon abgehakt');
+  // Schließen ändert nichts: zurück im Menü, keine Partie
+  G('closeModal')();
+  if ($('screen-game').classList.contains('show')) throw new Error('nach dem Schließen läuft eine Partie');
+  $('m-first').onclick();
+  fgSeiteWahl('militaer');
+  console.log('       „' + txt.slice(0, 95) + '…"');
+});
+step('v92: Erstes Spiel – Start, Ziel, Tipp, Ablehnung, Hauptstadt antippen', () => {
+  const S = G('S');
+  if (!$('screen-game').classList.contains('show') || $('tut-panel').hidden) throw new Error('kein Spiel mit Panel');
+  if ($('overlay').classList.contains('show')) throw new Error('die Seite steht noch');
+  if (!window.document.body.classList.contains('fg')) throw new Error('body.fg fehlt');
+  if (S.players.map(p => p.civ + ':' + p.kind).join() !== 'griechenland:human,england:ki') throw new Error('Aufstellung');
+  if (S.fg.pfad !== 'militaer' || !/Militärsieg · Runde 1/i.test($('tut-panel').querySelector('.tut-sub').textContent)) throw new Error('Weg im Kopf: ' + $('tut-panel').querySelector('.tut-sub').textContent);
+  if (fgId() !== 'hauptstadt' || !/Ziel: Tippe deine Hauptstadt an/.test(panelText()) || !/Dein Weg: Militärsieg/.test(panelText())) throw new Error('Schritt 1: ' + panelText());
+  if (!$('tut-prev').hidden || !/Tipp anzeigen/.test($('tut-next').textContent) || $('tut-next').disabled) throw new Error('Leiste');
+  // Erst etwas anderes versuchen: der Bogen geht auf, Forschen wird abgelehnt – mit Grund
+  $('a-tech').onclick();
+  const mathe = $('ov-body').querySelector('[data-tech="mathematik"]');
+  mathe.onclick();
+  if (S.players[0].techs.mathematik) throw new Error('Mathematik trotz Schiene erforscht');
+  if (!/Eins nach dem anderen/.test($('toast').textContent)) throw new Error('Meldung: ' + $('toast').textContent);
+  G('closeModal')();
+  // Tipp: Text, goldene Umrandung, Knopf danach aus
+  $('tut-next').onclick();
+  const cap = G('capitalOf')(S, 0);
+  if (!/So geht es/.test(panelText()) || !$('tut-next').disabled) throw new Error('Tipp nicht offen');
+  if (!G('fgHighlight')().some(h => h[0] === cap.r && h[1] === cap.c)) throw new Error('Hauptstadt nicht markiert');
+  G('tapHex')(cap.r, cap.c);
+  if (fgId() !== 'faehigkeit') throw new Error('nicht weiter: ' + fgId());
+  if (!$('sheet').classList.contains('open')) throw new Error('Stadtblatt zu (soll stehen bleiben)');
+  if (!$('tut-body').querySelector('.fg-gut') || !/sechs Felder/.test(panelText())) throw new Error('keine Rückmeldung');
+  $('a-abil').onclick();
+  if (fgId() !== 'gratis') throw new Error('Fähigkeiten: ' + fgId());
+  console.log('       „' + $('toast').textContent + '" · Schritt 3: ' + $('tut-title').textContent);
+});
+step('v93: Erstes Spiel – kostenlos forschen, dann der Würfel: blasse Kacheln antippen', () => {
+  const S = G('S');
+  G('closeSheet')();
+  $('a-tech').onclick();
+  $('ov-body').querySelector('[data-tech="rad"]').onclick();
+  if (S.players[0].techs.rad || !/kostet 2/.test($('toast').textContent)) throw new Error('Rad: ' + $('toast').textContent);
+  // vor dem Würfel-Schritt: eine blasse Kachel erklärt sich, zählt aber noch nicht
+  $('ov-body').querySelector('[data-blass="astronomie"]').onclick();
+  if (!/gibt es in dieser Partie nicht/.test($('toast').textContent) || S.fg.flags.blass) throw new Error('zu früh: ' + $('toast').textContent);
+  $('ov-body').querySelector('[data-tech="mathematik"]').onclick();
+  $('ov-body').querySelector('[data-tech="taktik"]').onclick();
+  // Ohne Pause (FG_AUTO_MS = 0) schließt das Weiterschalten den Bogen, bevor der Knopf ihn neu
+  // zeichnet – in der App kommt das Schließen 0,9 s später (Chromium-Prüfung).
+  G('closeModal')();
+  if (fgId() !== 'wuerfel') throw new Error('nach dem Forschen: ' + fgId());
+  if (!/Mittelalter in Forschung und Militär/.test(panelText()) || !/Forschung: 2 von 4 · Militär: 1 von 3/.test(panelText())) throw new Error('Würfel: ' + panelText());
+  $('tut-next').onclick();                                      // Tipp: die durchgefallenen leuchten
+  $('a-tech').onclick();
+  const gold = [...$('ov-body').querySelectorAll('.fg-hl')].map(b => b.dataset.blass).filter(Boolean).sort();
+  if (gold.join() !== 'alchemie,buchdruck,burgenbau,schiesspulver') throw new Error('golden: ' + gold.join());
+  if ($('ov-body').querySelector('[data-blass="papier"]') || !$('ov-body').querySelector('[data-tech="rad"]')) throw new Error('Kacheln falsch');
+  // noch nicht ausgewürfelt (Produktion, Mittelalter): erklärt, zählt nicht
+  $('ov-body').querySelector('[data-blass="segeln"]').onclick();
+  if (!/noch nicht ausgewürfelt/.test($('toast').textContent) || fgId() !== 'wuerfel') throw new Error('Segeln: ' + $('toast').textContent);
+  const w = G('fgWurf')(0, 'alchemie');
+  $('ov-body').querySelector('[data-blass="alchemie"]').onclick();
+  if (!new RegExp(`Alchemie gibt es in dieser Partie nicht: Der Würfel zeigte ${w}`).test($('toast').textContent)) throw new Error('Alchemie: ' + $('toast').textContent);
+  if (fgId() !== 'gruenden1' || $('overlay').classList.contains('show')) throw new Error('nicht weiter: ' + fgId());
+  if (!/Alchemie ist durchgefallen: Der Würfel zeigte \d/.test(panelText()) || !/50 %/.test(panelText())) throw new Error('Rückmeldung: ' + panelText());
+  console.log('       „' + $('toast').textContent + '"');
+});
+step('v92: Erstes Spiel – gründen, wachsen, Zugende, Englands Zug', () => {
+  const S = G('S');
+  $('a-found').onclick();
+  G('tapHex')(5, 6);
+  $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
+  if (G('cityAt')(S, 5, 6) || !/4 🌾/.test($('toast').textContent)) throw new Error('falscher Platz: ' + $('toast').textContent);
+  G('tapHex')(5, 5);
+  $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
+  if (!G('cityAt')(S, 5, 5) || fgId() !== 'wachsen1') throw new Error('gründen: ' + fgId());
+  const cap = G('capitalOf')(S, 0);
+  G('tapHex')(cap.r, cap.c);
+  $('sheet-body').querySelector('.opt[data-label="Bevölkerung wachsen"]').onclick();
+  if (fgId() !== 'zug1') throw new Error('wachsen: ' + fgId());
+  $('a-end').onclick();
+  if (!G('ui').botLock || !/England ist am Zug/.test($('tut-title').textContent)) throw new Error('Englands Zug: ' + $('tut-title').textContent);
+  $('bot-next').onclick();
+  if (S.round !== 2 || fgId() !== 'wachsen2' || !/in Runde 1 waren es 1, 4 und 4/.test(panelText())) throw new Error('Runde 2: ' + panelText());
+  console.log('       Runde 2 · ' + panelText().slice(0, 90));
+});
+step('v92: Erstes Spiel – alle Städte wachsen, Handelsroute, dritte Stadt, belagert', () => {
+  const S = G('S');
+  $('a-abil').onclick();
+  $('sheet-body').querySelector('.opt[data-label="Alle Städte wachsen"]').onclick();
+  if (fgId() !== 'strasse') throw new Error('wachsen: ' + fgId());
+  if (!/gut für deinen Angriff/.test(panelText())) throw new Error('Militärweg führt nicht: ' + panelText());
+  $('a-tech').onclick();
+  $('ov-body').querySelector('[data-tech="rad"]').onclick();
+  G('closeModal')();
+  G('tapHex')(4, 2);
+  $('sheet-body').querySelector('.opt[data-label="Straße bauen"]').onclick();
+  if (G('roadLevel')(S, 4, 2) || !/nicht zwischen/.test($('toast').textContent)) throw new Error('Straße abseits: ' + $('toast').textContent);
+  for (const [r, c] of [[5, 3], [5, 4]]) { G('tapHex')(r, c); $('sheet-body').querySelector('.opt[data-label="Straße bauen"]').onclick(); }
+  if (fgId() !== 'gruenden2') throw new Error('Handelsroute: ' + fgId());
+  $('a-found').onclick(); G('tapHex')(2, 3);
+  $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
+  if (fgId() !== 'zug2') throw new Error('dritte Stadt: ' + fgId());
+  $('a-end').onclick(); $('bot-next').onclick();
+  if (fgId() !== 'belagert' || !/Angriff 3 gegen Verteidigung 2/.test(panelText())) throw new Error('belagert: ' + panelText());
+  // Zugende geht nicht, solange die Stadt fiele
+  $('a-end').onclick();
+  if (S.round !== 3 || S.cur !== 0 || !/Die Stadt fiele/.test($('toast').textContent)) throw new Error('Zugende: ' + $('toast').textContent);
+  const stadt = G('cityAt')(S, 5, 5);
+  G('tapHex')(5, 5);
+  $('sheet-body').querySelector('.opt[data-label="Armee bauen"]').onclick();
+  $('sheet-body').querySelector('.opt[data-label="Armee hier bewegen"]').onclick();
+  G('tapHex')(4, 4);
+  if (!G('ui').army || !/direkt neben/.test($('toast').textContent)) throw new Error('Zug weg: ' + $('toast').textContent);
+  G('tapHex')(4, 6);
+  if (!G('armyAt')(S, 4, 6)) throw new Error('Armee nicht auf 4/6');
+  if (!/Verteidigung 2 · Englands Angriff 3/.test(panelText())) throw new Error('Stand: ' + panelText());
+  $('a-power').onclick();
+  $('sheet-body').querySelector('[data-n="1"]').onclick();
+  if (fgId() !== 'rest3') throw new Error('Macht: ' + fgId() + ' ' + G('defenseValue')(S, stadt));
+  console.log('       ' + panelText().slice(0, 100));
+});
+step('v93: Erstes Spiel – Runde 3 vom Weg geführt, Nachfrage beim Zugende, Flanke, Militärsieg', () => {
+  const S = G('S');
+  if (!/Ziel: Erforsche Belagerungsmaschinen/.test(panelText())) throw new Error('Runde 3, Militär: ' + panelText());
+  $('a-tech').onclick();
+  $('ov-body').querySelector('[data-tech="schrift"]').onclick();
+  if (S.players[0].techs.schrift || !/Erst Belagerungsmaschinen/.test($('toast').textContent)) throw new Error('Schrift: ' + $('toast').textContent);
+  G('closeModal')();
+  $('a-end').onclick();
+  if (S.cur !== 0 || !/Belagerungsmaschinen noch nicht erforscht/.test($('toast').textContent)) throw new Error('keine Nachfrage: ' + $('toast').textContent);
+  $('a-end').onclick();
+  $('bot-next').onclick();
+  if (S.round !== 4 || fgId() !== 'flanke') throw new Error('Runde 4: ' + fgId());
+  if (fgSpieleBis('m_belagern') !== 'm_belagern') throw new Error('bis zum Militärweg: ' + fgId());
+  fgSpieleBis('ende');
+  if (!S.over || !/^Militärsieg/.test(S.over.how) || fgId() !== 'ende') throw new Error('kein Militärsieg: ' + (S.over && S.over.how));
+  if ($('ov-title').textContent !== 'Spielende' || !/Gewonnen!/.test($('ov-body').textContent)) throw new Error('Spielende: ' + $('ov-body').textContent.slice(0, 80));
+  if (!$('ov-body').querySelector('[data-fg="anders"]') || !/Zum Menü/.test($('tut-next').textContent)) throw new Error('Knöpfe am Ende');
+  if (JSON.parse(window.localStorage.getItem('hochciv.fg')).geschafft.join() !== 'militaer') throw new Error('nicht gemerkt');
+  console.log('       ' + S.over.how + ' in Runde ' + S.round);
+});
+step('v93: Erstes Spiel – anderer Weg: die Seite wieder (Militär abgehakt), Wirtschaft, dann Forschung', () => {
+  $('ov-body').querySelector('[data-fg="anders"]').onclick();
+  if (!$('ov-body').querySelector('.fg-seite [data-pfad="militaer"] .fg-ja')) throw new Error('Militärweg nicht abgehakt');
+  fgSeiteWahl('wirtschaft');
+  let S = G('S');
+  if (S.round !== 1 || S.over || fgId() !== 'hauptstadt' || S.fg.pfad !== 'wirtschaft') throw new Error('keine neue Partie: ' + fgId());
+  fgSpieleBis('rest3');
+  if (!/Ziel: Erforsche Keramik/.test(panelText())) throw new Error('Runde 3, Wirtschaft: ' + panelText());
+  fgSpieleBis('ende');
+  S = G('S');
+  if (!S.over || !/^Wirtschaftssieg/.test(S.over.how)) throw new Error('kein Wirtschaftssieg: ' + (S.over && S.over.how));
+  $('ov-body').querySelector('[data-fg="anders"]').onclick();
+  fgSeiteWahl('wissenschaft');
+  fgSpieleBis('rest4');
+  // die Musterlösung hat Papier schon in Runde 3 mitgenommen (billig) – dann sagt das Ziel das
+  if (!/Ziel: (Erforsche Papier|Gib aus, was noch geht – Papier hast du schon)/.test(panelText())) throw new Error('Runde 4, Forschung: ' + panelText());
+  fgSpieleBis('ende');
+  S = G('S');
+  if (!S.over || !/^Forschungssieg/.test(S.over.how)) throw new Error('kein Forschungssieg: ' + (S.over && S.over.how));
+  const gemerkt = JSON.parse(window.localStorage.getItem('hochciv.fg')).geschafft.join();
+  if (gemerkt !== 'militaer,wirtschaft,wissenschaft') throw new Error('gemerkt: ' + gemerkt);
+  console.log('       Wirtschaft, Forschung: ' + S.over.how + ' in Runde ' + S.round + ' · gemerkt: ' + gemerkt);
+});
+step('v92: Erstes Spiel – fortsetzen, Englisch, beenden (England spielt als KI weiter)', () => {
+  G('closeModal')();
+  $('m-first').onclick();
+  fgSeiteWahl('militaer');
+  fgSpieleBis('belagert');
+  G('saveGame')();
+  G('show')('screen-menu');
+  G('endTutorialPanel')();
+  $('m-continue').hidden = false;
+  $('m-continue').onclick();
+  if (fgId() !== 'belagert' || $('tut-panel').hidden || !G('ui').fg) throw new Error('nicht fortgesetzt: ' + (G('S').fg && fgId()));
+  G('switchLang')('en');
+  const en = $('tut-title').textContent + ' · ' + $('tut-panel').querySelector('.tut-sub').textContent + ' · ' + panelText().slice(0, 60);
+  if (!/Under siege!/.test(en) || !/Military victory · round 3/i.test(en) || G('missingStrings')().length) throw new Error('englisch: ' + en + ' ' + G('missingStrings')().join(' | '));
+  G('switchLang')('de');
+  $('tut-quit').onclick();
+  $('fg-aus').onclick();
+  const S = G('S');
+  if (S.fg || G('ui').fg || !$('tut-panel').hidden) throw new Error('nicht beendet');
+  const r = S.round;
+  // jetzt ohne Schienen: Zugende geht, England zieht als KI
+  $('a-end').onclick();
+  if (G('ui').botLock) $('bot-next').onclick();
+  if (G('S').round !== r + 1) throw new Error('Zug ging nicht weiter: Runde ' + G('S').round);
+  console.log('       ' + en + ' · beendet, Runde ' + G('S').round + ' ohne Führung');
+});
+step('v93: Spielstand von v92 ohne Weg – das Panel fragt zuerst, dann geht es weiter', () => {
+  G('closeModal')();
+  $('m-first').onclick();
+  fgSeiteWahl('wirtschaft');
+  fgSpieleBis('w_theologie');
+  const S = G('S');
+  S.fg.pfad = null; S.fg.schritt = 'wahl'; S.fg.v = 1; S.fg.wahl = '{}';    // so sah es in v92 vor der Wahl aus
+  G('saveGame')();
+  G('show')('screen-menu');
+  G('endTutorialPanel')();
+  $('m-continue').hidden = false;
+  $('m-continue').onclick();
+  const knoepfe = [...$('tut-body').querySelectorAll('[data-pfad]')].map(b => b.dataset.pfad).join();
+  if (knoepfe !== 'militaer,wirtschaft,wissenschaft' || !/Wähle deinen Weg/.test(panelText())) throw new Error('keine Wahl im Panel: ' + panelText());
+  $('a-end').onclick();
+  if (!/Wähle deinen Weg/.test($('toast').textContent) || G('S').round !== 5) throw new Error('Zugende ohne Weg: ' + $('toast').textContent);
+  $('tut-body').querySelector('[data-pfad="wirtschaft"]').onclick();
+  if (G('S').fg.pfad !== 'wirtschaft' || fgId() !== 'w_theologie' || 'wahl' in G('S').fg) throw new Error('nach der Wahl: ' + fgId());
+  console.log('       ' + $('tut-title').textContent + ' · ' + panelText().slice(0, 70));
+  G('closeModal')();
+});
+step('v92: das klassische Tutorial hat sein Panel wieder ganz', () => {
+  G('tutorialStart')();
+  if (window.document.body.classList.contains('fg')) throw new Error('body.fg blieb');
+  if ($('tut-prev').hidden || $('tut-quit').textContent !== 'Tutorial beenden' || !$('tut-next').classList.contains('primary'))
+    throw new Error('Panel des Tutorials: ' + [$('tut-prev').hidden, $('tut-quit').textContent, $('tut-next').className].join(' | '));
+  if (!/Weiter ›|Fertig/.test($('tut-next').textContent)) throw new Error('Weiter: ' + $('tut-next').textContent);
+  G('techModal')();
+  if ($('ov-body').querySelector('[data-blass]') || !$('ov-body').querySelector('.tech.locked[disabled]'))
+    throw new Error('blasse Kacheln antippbar außerhalb des Ersten Spiels');
+  G('closeModal')();
+  G('tutorialQuit')();
+});
+
+/* ======================================================= v94 (v95: je Aktion eine Szene, Tempo)
+   Züge von KI und Bots nachspielen statt des Blatts mit „Weiter". Oben laufen alle älteren
+   Schritte mit Animationen „Keine" (wie bis v93); hier ist die Einstellung an (ab Werk
+   „Langsam"). ANIM_MS 0: alles läuft sofort durch. ANIM_MS groß: der Zeitgeber kommt während
+   eines Schritts nie – die Szenen schaltet animNext weiter, so wie er es täte. */
+const mitAnimation = (ms, fn, stufe = 'langsam') => {
+  const vorher = [G('prefs').anim, G('ANIM_MS')];
+  G('prefs').anim = stufe; SET('ANIM_MS', ms);
+  try { return fn(); } finally {
+    if (G('ui').anim) { SET('ANIM_MS', 0); G('endAnim')(); }
+    G('prefs').anim = vorher[0]; SET('ANIM_MS', vorher[1]);
+  }
+};
+const goldFelder = () => $('map').querySelectorAll('polygon[fill="rgba(255,214,102,.30)"]').length;
+const werIst = pi => { const p = G('S').players[pi]; return G('civOf')(p).n + (p.kind === 'ki' ? ' (KI)' : p.kind === 'bot' ? ' (Bot)' : ''); };
+step('v95: Einstellung „Animationen" – Auswahl Langsam (ab Werk) / Schnell / Keine, gemerkt, v94-Häkchen übernommen, englisch', () => {
+  const vorher = window.localStorage.getItem('hochciv.prefs'), jetzt = G('prefs').anim;
+  try {
+    window.localStorage.removeItem('hochciv.prefs');
+    G('loadPrefs')();
+    if (G('prefs').anim !== 'langsam') throw new Error('ab Werk: ' + G('prefs').anim);
+    G('show')('screen-options'); G('optionsScreen')();
+    const wahl = $('opt-anim');
+    if (!wahl || wahl.nodeName !== 'SELECT' || wahl.value !== 'langsam') throw new Error('Auswahl fehlt oder steht falsch');
+    if ([...wahl.options].map(o => o.value + '=' + o.textContent.trim()).join() !== 'langsam=Langsam,schnell=Schnell,aus=Keine')
+      throw new Error('Einträge: ' + [...wahl.options].map(o => o.textContent).join());
+    for (const stufe of ['schnell', 'aus', 'langsam']) {
+      wahl.value = stufe; wahl.onchange();
+      G('prefs').anim = 'x'; G('loadPrefs')();
+      if (G('prefs').anim !== stufe) throw new Error(stufe + ' nicht gemerkt: ' + G('prefs').anim);
+    }
+    // ein Spielstand von v94 mit Häkchen „Keine Animationen" – bzw. ohne
+    window.localStorage.setItem('hochciv.prefs', JSON.stringify({ listPrice: false, noAnim: true }));
+    G('loadPrefs')();
+    const alt = G('prefs').anim;
+    window.localStorage.setItem('hochciv.prefs', JSON.stringify({ listPrice: true, noAnim: false }));
+    G('loadPrefs')();
+    if (alt !== 'aus' || G('prefs').anim !== 'langsam' || !G('prefs').listPrice) throw new Error('v94 übernommen: ' + alt + ' / ' + G('prefs').anim);
+    G('prefs').listPrice = false;
+    const hinweis = wahl.closest('label').nextElementSibling;
+    G('clearMissing')();
+    G('switchLang')('en');
+    const zeile = wahl.closest('label').querySelector('span').textContent.trim();
+    const eintraege = [...wahl.options].map(o => o.textContent.trim()).join('/'), en = hinweis.textContent.replace(/\s+/g, ' ');
+    G('switchLang')('de');
+    if (zeile !== 'Animations' || eintraege !== 'Slow/Fast/None' || !/one action after another/.test(en) || /Weiter|Langsam/.test(en))
+      throw new Error('englisch: ' + zeile + ' | ' + eintraege + ' | ' + en);
+    console.log('       ' + zeile + ': ' + eintraege + ' · „' + en.slice(0, 80) + '…"');
+  } finally {
+    if (vorher == null) window.localStorage.removeItem('hochciv.prefs'); else window.localStorage.setItem('hochciv.prefs', vorher);
+    G('prefs').anim = jetzt;
+    G('show')('screen-game');
+  }
+});
+step('v94: nach dem Zugende laufen alle Bots durch, bis du wieder dran bist – kein Blatt, alles im Protokoll', () => {
+  mitAnimation(0, () => {
+    const S = griechenSpiel('basis'), pi = S.cur, r0 = S.round, seq = S.logSeq;
+    $('sheet-body').innerHTML = '';                                     // das Blatt behält sonst den Inhalt des letzten
+    $('a-end').onclick();
+    if (S.cur === pi && S.round === r0) $('a-end').onclick();          // eine Warnung bestätigen
+    if (G('ui').botLock || $('sheet').classList.contains('open') || $('bot-next')) throw new Error('ein Blatt steht');
+    if (S.cur !== pi || S.round !== r0 + 1) throw new Error(`nicht wieder dran: Runde ${S.round}, am Zug ${S.cur}`);
+    if (G('ui').anim || window.document.body.classList.contains('blocked')) throw new Error('noch gesperrt');
+    if (!/Griechenland ist am Zug/.test($('toast').textContent) || $('toast').classList.contains('anim')) throw new Error('Meldung: ' + $('toast').textContent);
+    // Im Protokoll: jeder Bot mit seiner Überschrift und seinen Aktionen
+    const neu = G('logSince')(S, seq);
+    const bots = S.players.map((p, i) => i).filter(i => i !== pi);
+    $('a-log').onclick();
+    const prot = $('ov-body').textContent;
+    G('closeModal')();
+    for (const bi of bots) {
+      const kopf = neu.findIndex(l => l.c === 'head' && l.m.includes(werIst(bi)));
+      if (kopf < 0 || !prot.includes(neu[kopf].m)) throw new Error('keine Überschrift für ' + werIst(bi));
+      const akt = neu.slice(kopf + 1).filter(l => l.c === 'act');
+      if (!akt.length || !prot.includes(akt[0].m)) throw new Error('keine Aktion von ' + werIst(bi) + ' im Protokoll');
+    }
+    console.log(`       3 Bots in einem Rutsch · Runde ${S.round}, Griechenland am Zug · ${neu.filter(l => l.c === 'act').length} Aktionen im Protokoll`);
+  });
+});
+step('v94: zwei Menschen am Tisch – die Bots dazwischen laufen durch, dann ist der andere Mensch dran', () => {
+  mitAnimation(0, () => {
+    $('m-new').onclick();
+    G('setupSetMode')('vier');
+    $('setup-map').value = '0'; $('setup-map').onchange();
+    // Platz 2 ist ein Bot wie in einem Spielstand von früher (im Aufbau KI, beim Start zum Bot)
+    ['human', 'ki', 'human', 'ki'].forEach((k, i) => $('setup-list').children[i].querySelector(`[data-kind="${k}"]`).onclick());
+    mitBots(() => $('setup-go').onclick(), 'prinz', [1]);
+    const S = G('S'), arten = () => S.players.map(p => p.kind);
+    const mensch = S.players.map((p, i) => i).filter(i => S.players[i].kind === 'human');
+    const zugEnde = () => { const wer = S.cur; $('a-end').onclick(); if (S.cur === wer) $('a-end').onclick(); };
+    const folge = [];
+    for (let n = 0; n < 4; n++) {
+      if (G('P')(S).kind !== 'human') throw new Error('kein Mensch am Zug: ' + arten()[S.cur]);
+      folge.push(S.cur + '@' + S.round);
+      zugEnde();
+      if (G('ui').botLock || G('ui').anim) throw new Error('angehalten');
+    }
+    if (mensch.length !== 2 || new Set(folge.map(f => f.split('@')[0])).size !== 2) throw new Error('Folge: ' + folge.join(' '));
+    console.log('       Aufstellung ' + arten().join('/') + ' · Menschen am Zug: ' + folge.join(' → '));
+  });
+});
+step('v94: Szene für Szene – Karte, Satz unten, Sperre; ein Tipp überspringt den Rest des Zugs', () => {
+  mitAnimation(100000, () => {
+    const S = griechenSpiel('basis'), pi = S.cur;
+    const cap = G('capitalOf')(S, pi);
+    $('a-end').onclick();
+    if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+    const a = G('ui').anim;
+    if (!a) throw new Error('kein Nachspiel');
+    const bi = S.cur, t = $('toast');
+    if (bi === pi || a.szenen.some(s => s.pi !== bi)) throw new Error('falscher Zug');
+    if (G('ui').botLock || $('sheet').classList.contains('open')) throw new Error('ein Blatt steht');
+    if (!window.document.body.classList.contains('blocked')) throw new Error('Leiste nicht gesperrt');
+    const arten = [];
+    for (let i = 0; i < a.szenen.length; i++) {
+      const s = a.szenen[i];
+      if (G('ui').anim !== a || a.i !== i) throw new Error('Szene ' + i + ' nicht an der Reihe');
+      arten.push(s.art);
+      // der Satz: was geschieht, darunter „Tippen …" und die wievielte
+      const satz = G('animText')(s, werIst(bi));
+      if (!t.classList.contains('show') || !t.classList.contains('unten') || !t.classList.contains('anim')) throw new Error('kein Satz unten');
+      if (t.querySelector('b').textContent !== satz || !t.querySelector('small').textContent.endsWith(`${i + 1}/${a.szenen.length}`))
+        throw new Error('Satz: ' + t.textContent);
+      if (!/Tippen auf die Karte überspringt/.test(t.textContent)) throw new Error('kein Hinweis aufs Überspringen');
+      // die Karte: der Stand nach der Szene, das Neue golden, Ringe und Marken
+      if (goldFelder() !== s.felder.length) throw new Error(`${s.art}: ${goldFelder()} goldene Felder statt ${s.felder.length}`);
+      if ($('map').querySelectorAll('.anim-ring').length !== s.ringe.length) throw new Error(s.art + ': Ringe');
+      const marken = [...$('map').querySelectorAll('.anim-marke')].map(m => m.textContent).join();
+      if (marken !== s.marken.map(m => m.text).join()) throw new Error(s.art + ': Marken ' + marken);
+      const gleiten = new Set(s.zuege.map(z => z.id));
+      for (const ar of s.bild.armies) {
+        if (gleiten.has(ar.id) === armeeGezeichnet(ar.r, ar.c, ar.owner)) throw new Error(s.art + ': Armee ' + ar.id + ' falsch gezeichnet');
+      }
+      // Zugende geht nicht, das Protokoll (Leiste) ist gesperrt
+      $('a-end').onclick();
+      if (G('ui').anim !== a) throw new Error('„Zug beenden" hat eingegriffen');
+      G('animNext')();
+    }
+    if (G('ui').anim === a) throw new Error('nach der letzten Szene nicht zu Ende');
+    if (!arten.length || arten.includes('sonst') && arten.length === 1) throw new Error('Szenen: ' + arten.join());
+    // jetzt der nächste Bot – ein Tipp auf die Karte überspringt jeweils den Rest seines Zugs,
+    // auch einer auf den Rand neben den Feldern (der erste hier)
+    let n = 0, guard = 0;
+    while (G('ui').anim && guard++ < 6) {
+      const b = G('ui').anim, wer = S.cur;
+      if (wer === bi) throw new Error('derselbe Bot zweimal');
+      if (n === 0) $('map').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+      else G('tapHex')(cap.r, cap.c);
+      if (G('ui').anim === b || S.cur === wer && G('ui').anim) throw new Error('Tipp hat nicht übersprungen');
+      if ($('sheet').classList.contains('open')) throw new Error('Tipp hat das Stadtblatt geöffnet');
+      n++;
+    }
+    if (!n) throw new Error('kein weiterer Bot zum Überspringen');
+    if (S.cur !== pi || G('ui').anim || G('ui').botLock) throw new Error('nicht wieder dran');
+    if (window.document.body.classList.contains('blocked')) throw new Error('Leiste bleibt gesperrt');
+    if (t.classList.contains('anim')) throw new Error('der Satz bleibt stehen: ' + t.textContent);
+    if (!/Griechenland ist am Zug/.test(t.textContent)) throw new Error('Meldung: ' + t.textContent);
+    console.log(`       ${werIst(bi)}: ${arten.join(' → ')} · danach ${n} Bots per Tipp übersprungen · wieder dran`);
+  });
+});
+step('v94: eine Szene auf der Karte – die Armee gleitet, die Spur bleibt, +1 an der Stadt, ohne Bewegung gleich das Ende', () => {
+  mitAnimation(100000, () => {
+    const S = griechenSpiel('basis');
+    const bi = S.players.findIndex(p => p.kind === 'bot'), cap = G('capitalOf')(S, bi);
+    const frei = (r, c) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c);
+    const [fr, fc] = G('neighbors')(cap.r, cap.c).find(([r, c]) => frei(r, c));
+    S.armies.push({ id: 977, owner: bi, r: cap.r, c: cap.c, mp: 2, born: 0 });
+    const A = G('animSnap')(S);
+    const ar = S.armies.find(x => x.id === 977); ar.r = fr; ar.c = fc;
+    const B = G('animSnap')(S);
+    cap.pop += 1;
+    const C = G('animSnap')(S);
+    S.armies.push({ id: 978, owner: bi, r: cap.r, c: cap.c, mp: 2, born: S.round });   // zuletzt: eine neue Armee
+    const D = G('animSnap')(S);
+    const szenen = G('animSzenen')({ vor: A, bilder: [{ m: 'zieht', snap: B }, { m: 'wächst', snap: C }, { m: 'baut', snap: D }] }, bi);
+    if (szenen.map(s => s.art).join() !== 'zug,wachsen,armee') throw new Error('Szenen: ' + szenen.map(s => s.art).join());
+    let fertig = null;
+    G('playAnim')(szenen, g => { fertig = g; });
+    // Bild 1: die Armee gleitet von der Hauptstadt aufs Nachbarfeld
+    const HEX = G('HEX'), [x0, y0] = G('hexCenter')(cap.r, cap.c, HEX), [x1, y1] = G('hexCenter')(fr, fc, HEX);
+    const g = $('map').querySelectorAll('.anim-armee');
+    const tr = g.length === 1 && g[0].querySelector('animateTransform');
+    if (!tr || tr.getAttribute('from') !== `${x0} ${y0}` || tr.getAttribute('to') !== `${x1} ${y1}` ||
+      g[0].getAttribute('transform') !== `translate(${x1},${y1})` || tr.getAttribute('fill') !== 'freeze') throw new Error('kein Gleiten');
+    if (armeeGezeichnet(fr, fc, bi) || armeeGezeichnet(cap.r, cap.c, bi)) throw new Error('die Armee steht zusätzlich still');
+    const spur = $('map').querySelectorAll('.anim-spur');
+    if (spur.length !== 1 || +spur[0].getAttribute('x1') !== x0 || +spur[0].getAttribute('x2') !== x1) throw new Error('keine Spur');
+    if (spur[0].getAttribute('stroke') !== G('civOf')(S.players[bi]).color) throw new Error('Spur nicht in der Farbe des Reichs');
+    if (goldFelder() !== 1 || !/zieht eine Armee/.test($('toast').textContent) || !/1\/3$/.test($('toast').textContent)) throw new Error('Bild 1: ' + $('toast').textContent);
+    // gezeichnet ist der Stand nach der Szene – nicht schon das Ende des Zugs
+    const stadtZahl = () => [...$('map').querySelectorAll('text')].filter(t => t.textContent === String(cap.pop)).length;
+    const neuZahl = stadtZahl();
+    if (G('ui').anim.szenen[0].bild.cities.find(c => c.id === cap.id).pop !== cap.pop - 1) throw new Error('Stand vor dem Wachsen');
+    // Bild 2: die Hauptstadt wächst, die Armee steht jetzt
+    G('animNext')();
+    const marke = $('map').querySelectorAll('.anim-marke');
+    if (marke.length !== 1 || marke[0].textContent !== '+1' || $('map').querySelector('.anim-armee')) throw new Error('Bild 2: Marke');
+    if (!armeeGezeichnet(fr, fc, bi) || !/lässt eine Stadt wachsen/.test($('toast').textContent)) throw new Error('Bild 2: ' + $('toast').textContent);
+    if (armeeGezeichnet(cap.r, cap.c, bi)) throw new Error('die Armee aus Bild 3 steht schon da');
+    if (stadtZahl() <= neuZahl) throw new Error('Bild 1 zeigte die Stadt schon gewachsen');
+    // Bild 3: die neue Armee in der Hauptstadt, mit Ring
+    G('animNext')();
+    if (!armeeGezeichnet(cap.r, cap.c, bi) || $('map').querySelectorAll('.anim-ring').length !== 1 || !/baut eine Armee/.test($('toast').textContent)) throw new Error('Bild 3: ' + $('toast').textContent);
+    // Wer reduzierte Bewegung eingestellt hat, sieht gleich das Ende – ohne <animate>
+    G('animNext')(); G('animNext')();                             // (zu Ende – zweimal schadet nicht)
+    if (fertig !== true || G('ui').anim) throw new Error('nicht zu Ende');
+    const mm = window.matchMedia;
+    window.matchMedia = q => ({ matches: /reduce/.test(q) });
+    try {
+      G('playAnim')(szenen, () => { });
+      if ($('map').querySelector('animateTransform, animate') || $('map').querySelectorAll('.anim-armee').length !== 1) throw new Error('reduzierte Bewegung: es bewegt sich');
+      G('animNext')();
+      if ($('map').querySelector('animate') || !$('map').querySelector('.anim-marke')) throw new Error('reduzierte Bewegung, Bild 2');
+      G('animNext')();
+      if ($('map').querySelector('animate') || !$('map').querySelector('.anim-ring')) throw new Error('reduzierte Bewegung, Bild 3');
+      G('endAnim')();
+    } finally { window.matchMedia = mm; }
+    // Takt (v95): Langsam 1,5 × ANIM_MS je Szene, immer; Schnell wie v94 – ANIM_MS, ab 8 Szenen
+    // kürzer, höchstens bis 60 %; gezogene Armeen je das 1,4-Fache. Der Zeitgeber wird dafür
+    // nur mitgeschrieben – die Szenen schaltet animNext.
+    const echterZeitgeber = window.setTimeout, takte = {};
+    const M = G('ANIM_MS'), lang = Array.from({ length: 14 }, () => szenen[1]);
+    window.setTimeout = (fn, ms) => { if (fn === G('animNext')) takte[G('prefs').anim + G('ui').anim.szenen.length].push(ms); return 0; };
+    try {
+      for (const stufe of ['langsam', 'schnell']) for (const liste of [szenen, lang]) {
+        G('prefs').anim = stufe; takte[stufe + liste.length] = [];
+        G('playAnim')(liste, () => { });
+        G('animNext')(); G('animNext')();
+        G('endAnim')();
+      }
+    } finally { window.setTimeout = echterZeitgeber; G('prefs').anim = 'langsam'; }
+    const soll = { langsam3: [2.1, 1.5, 1.5], langsam14: [1.5, 1.5, 1.5], schnell3: [1.4, 1, 1], schnell14: [0.6, 0.6, 0.6] };
+    for (const k in soll) if (takte[k].join() !== soll[k].map(f => Math.round(M * f)).join()) throw new Error('Takt ' + k + ': ' + takte[k].join());
+    // Englisch
+    G('clearMissing')();
+    G('switchLang')('en');
+    G('playAnim')(szenen, () => { });
+    const en = $('toast').textContent;
+    G('endAnim')();
+    G('switchLang')('de');
+    if (!/moves an army/.test(en) || !/Tap the map to skip · 1\/3/.test(en) || G('missingStrings')().length) throw new Error('englisch: ' + en + ' ' + G('missingStrings')().join(' | '));
+    console.log('       Bild 1: Armee gleitet ' + `${cap.r}/${cap.c} → ${fr}/${fc}` + ', Spur · Bild 2: +1 · Bild 3: Ring · ohne Bewegung: gleich das Ende · „' + en + '"');
+  });
+});
+step('v94: der Kampf eines Bots kommt nach seinen Szenen, dann geht es gleich weiter', () => {
+  mitAnimation(100000, () => {
+    const S = griechenSpiel('basis'), pi = S.cur;
+    const cap = G('capitalOf')(S, pi);
+    const bi = S.players.findIndex(p => p.kind === 'bot');
+    const spot = G('neighbors')(cap.r, cap.c).find(([r, c]) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c));
+    S.armies.push({ id: 991, owner: bi, r: spot[0], c: spot[1], mp: 0, born: 0 });
+    // sein Zug: nur die Hauptstadt wachsen lassen (eine Szene), dann greift die Armee an
+    const echt = G('botTurn');
+    SET('botTurn', (S2, i) => { if (i === bi) G('growCity')(S2, i, G('capitalOf')(S2, i), 'paid'); });
+    SET('COMBAT_MS', 1000);
+    try {
+      $('a-end').onclick();
+      if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+      const a = G('ui').anim;
+      if (!a || S.cur !== bi || a.szenen.map(s => s.art).join() !== 'wachsen') throw new Error('erst die Szene: ' + (a && a.szenen.map(s => s.art).join()));
+      if (G('ui').combat) throw new Error('Kampf schon während der Szene');
+      G('animNext')();
+      const k = G('ui').combat;
+      if (G('ui').anim || !k || k.kaempfe[0].pi !== bi || k.kaempfe[0].art !== 'stadt') throw new Error('dann der Kampf');
+      const t = $('toast');
+      if (t.classList.contains('show') && /wachsen/.test(t.textContent)) throw new Error('der Satz der Szene steht über dem Kampf: ' + t.textContent);
+      if (!window.document.body.classList.contains('blocked')) throw new Error('Leiste im Kampf nicht gesperrt');
+      SET('COMBAT_MS', 0);
+      G('combatNext')();
+      if (G('ui').combat || G('ui').anim || G('ui').botLock || $('sheet').classList.contains('open')) throw new Error('danach hängt es');
+      if (S.cur !== pi) throw new Error('nicht wieder dran: ' + S.cur);
+    } finally { SET('botTurn', echt); SET('COMBAT_MS', 0); }
+    console.log('       ' + werIst(bi) + ': Szene „wachsen" → Kampf an der Hauptstadt → die übrigen Bots → wieder dran');
+  });
+});
+step('v94: neu geladen mitten im Nachspiel – der Bot zieht nicht noch einmal, es geht beim nächsten weiter', () => {
+  mitAnimation(100000, () => {
+    const S0 = griechenSpiel('basis'), pi = S0.cur;
+    $('a-end').onclick();
+    if (!G('ui').anim && S0.cur === pi) $('a-end').onclick();
+    const alt = G('ui').anim;
+    if (!alt) throw new Error('kein Nachspiel');
+    const bi = S0.cur, runde = S0.round;
+    // wie ein Neustart der App: der gespeicherte Stand, alles andere frisch (runBots käme nach 400 ms)
+    G('show')('screen-menu');
+    $('m-continue').hidden = false;
+    $('m-continue').onclick();
+    if (G('ui').anim || window.document.body.classList.contains('blocked') || $('toast').classList.contains('anim')) throw new Error('vom alten Nachspiel blieb etwas stehen');
+    const S = G('S');
+    if (S === S0 || S.cur !== bi || !S.autoPlayed) throw new Error('nicht der gespeicherte Stand');
+    G('runBots')();
+    const kopf = S.log.filter(l => l.c === 'head' && l.m.includes(werIst(bi)) && l.m.includes(G('T')('Runde %s', runde)));
+    if (kopf.length !== 1) throw new Error(werIst(bi) + ' zog ' + kopf.length + '×');
+    const a = G('ui').anim;
+    if (S.cur === bi || (a && a.szenen.some(s => s.pi !== S.cur))) throw new Error('nicht beim nächsten weiter');
+    let guard = 0;
+    while (G('ui').anim && guard++ < 6) G('tapHex')(0, 0);
+    if (S.cur !== pi || G('ui').anim) throw new Error('nicht wieder dran');
+    console.log('       ' + werIst(bi) + ' einmal gezogen · weiter mit dem nächsten · wieder dran');
+  });
+});
+step('v95: Animationen „Keine" über die Einstellungen – das Blatt mit „Weiter" wie bisher; „Schnell" und „Langsam" spielen nach', () => {
+  const jetzt = G('prefs').anim;
+  try {
+    const stelle = stufe => {
+      G('show')('screen-options'); G('optionsScreen')();
+      $('opt-anim').value = stufe; $('opt-anim').onchange();
+      G('show')('screen-game');
+    };
+    SET('ANIM_MS', 900);
+    const S = griechenSpiel('basis'), pi = S.cur;
+    stelle('aus');
+    $('a-end').onclick();
+    if (!G('ui').botLock && S.cur === pi) $('a-end').onclick();
+    if (!G('ui').botLock || !$('bot-next') || G('ui').anim) throw new Error('kein Blatt mit „Weiter"');
+    let guard = 0;
+    while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
+    if (S.cur !== pi) throw new Error('nach „Weiter" nicht wieder dran');
+    const weiter = guard;
+    // Schnell und Langsam: der erste Bot spielt nach (Szene 1), ein Tipp je Bot führt zurück
+    const nachgespielt = [];
+    for (const stufe of ['schnell', 'langsam']) {
+      stelle(stufe);
+      const r = S.round;
+      $('a-end').onclick();
+      if (!G('ui').anim && S.cur === pi && S.round === r) $('a-end').onclick();
+      if (G('ui').botLock || !G('ui').anim) throw new Error(stufe + ': kein Nachspiel');
+      nachgespielt.push(stufe + ' ' + G('ui').anim.szenen[0].tempo);
+      guard = 0;
+      while ((G('ui').anim || G('ui').combat) && guard++ < 12) G('tapHex')(0, 0);
+      if (S.cur !== pi || S.round !== r + 1) throw new Error(stufe + ': nicht wieder dran');
+    }
+    console.log(`       Keine: ${weiter}× „Weiter" · ${nachgespielt.join(' · ')} (Faktor der ersten Szene)`);
+  } finally { SET('ANIM_MS', 0); G('prefs').anim = jetzt; G('store')('hochciv.prefs', G('prefs')); }
+});
+step('v94: das klassische Tutorial bleibt beim Blatt mit „Weiter" – seine Texte erklären es', () => {
+  mitAnimation(900, () => {
+    G('tutorialStart')();
+    if (G('animAn')() || !G('animBlatt')()) throw new Error('im Tutorial nachgespielt');
+    G('tutorialQuit')();
+    if (!G('animAn')() || G('animBlatt')()) throw new Error('nach dem Tutorial nicht wieder an');
+  });
+});
+step('v94: Erstes Spiel – Englands Zug auf der Karte, das Panel sagt es, dann Runde 2', () => {
+  mitAnimation(100000, () => {
+    G('closeModal')();
+    $('m-first').onclick();
+    fgSeiteWahl('militaer');
+    if (fgSpieleBis('zug1') !== 'zug1') throw new Error('nicht bis zum Zugende: ' + fgId());
+    if (!/auf der Karte siehst du, was es tut/.test(panelText())) throw new Error('Zugende-Text: ' + panelText());
+    const S = G('S');
+    $('a-end').onclick();
+    const a = G('ui').anim;
+    if (!a || G('ui').botLock || $('sheet').classList.contains('open')) throw new Error('kein Nachspiel von Englands Zug');
+    if (!/England ist am Zug/.test($('tut-title').textContent) || !/Schau auf der Karte zu, was England tut/.test(panelText()) ||
+      !/Ein Tipp auf die Karte überspringt/.test(panelText())) throw new Error('Panel: ' + $('tut-title').textContent + ' · ' + panelText());
+    const arten = a.szenen.map(s => s.art).join();
+    if (arten !== 'gruenden,wachsen') throw new Error('Englands Szenen: ' + arten);
+    if (fgId() !== 'zug1') throw new Error('das Panel ist schon weiter: ' + fgId());
+    G('animNext')();
+    G('tapHex')(0, 0);
+    if (G('ui').anim || S.round !== 2 || fgId() !== 'wachsen2') throw new Error('Runde 2: ' + fgId() + ' / ' + S.round);
+    console.log('       Englands Zug: ' + arten + ' · danach ' + $('tut-title').textContent);
+  });
+  // ohne Wartezeit läuft das Erste Spiel mit Animationen bis zum Sieg durch, ohne Blatt
+  mitAnimation(0, () => {
+    if (fgSpieleBis('ende') !== 'ende' || !G('S').over) throw new Error('kein Ende: ' + fgId());
+    if (!/^Militärsieg/.test(G('S').over.how)) throw new Error(G('S').over.how);
+    G('closeModal')();
+  });
+});
+
+/* ======================================================= v96
+   Anweisungen des Autors: Eisenbahn +4, gekaufte Felder zählen zur Hauptstadt, Kacheln ohne die
+   Hinweise, was die Bürokratie mitverdoppelt (im Regelbogen bleiben sie), laufender Stand in der
+   Kopfzeile, solange KI und Bots nachgespielt werden. */
+step('v96: Kacheln nennen die Bürokratie nicht – der Regelbogen nennt alles; Straßenknöpfe mit +1/+4; deutsch und englisch', () => {
+  frischesSpiel();
+  const S = G('S'), pi = S.cur, p = G('P')(S), TB = G('TECH_BY_KEY');
+  const pruefen = sprache => {
+    bogenMitWissenschaft();
+    const kacheln = [...$('ov-body').querySelectorAll('.techgrid .tech')].map(b => [b.querySelector('b').textContent, b.querySelector('.eff').textContent]);
+    G('closeModal')();
+    const kachel = k => (kacheln.find(([n]) => n === TB[k].n) || [])[1];
+    if (kachel('buerokratie') !== TB.buerokratie.e || kachel('kolonialismus') !== TB.kolonialismus.e)
+      throw new Error(sprache + ' Kacheln: ' + kachel('buerokratie') + ' | ' + kachel('kolonialismus'));
+    if (kacheln.some(([, e]) => /Bürokratie|Bureaucracy/.test(e))) throw new Error(sprache + ': eine Kachel nennt die Bürokratie');
+    G('rulesModal')();
+    const regel = [...$('ov-body').querySelectorAll('.rule-tech')].map(d => [d.querySelector('b').textContent, d.querySelector('i').textContent]);
+    G('closeModal')();
+    const zeile = k => (regel.find(([n]) => n === TB[k].n) || [])[1];
+    if (zeile('buerokratie') !== TB.buerokratie.voll || zeile('kolonialismus') !== TB.kolonialismus.voll || zeile('mathematik') !== TB.mathematik.e)
+      throw new Error(sprache + ' Regelbogen: ' + zeile('buerokratie') + ' | ' + zeile('kolonialismus'));
+    return [kachel('buerokratie'), zeile('buerokratie')];
+  };
+  const de = pruefen('deutsch');
+  if (de[0] !== 'Hauptstadt produziert doppelt' || !/Handelsrouten, Ökologie, Gentechnik und gekaufte Felder/.test(de[1])) throw new Error('deutsch: ' + de.join(' | '));
+  // Straßenknöpfe: die Zuschläge der Regel
+  p.techs.rad = true; p.techs.eisenbahn = true; p.res.coins = 20;
+  const cap = G('capitalOf')(S, pi);
+  const feld = G('neighbors')(cap.r, cap.c).find(([r, c]) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && G('roadLevel')(S, r, c) === 0);
+  G('tapHex')(feld[0], feld[1]);
+  const knoepfe = () => [...$('sheet-body').querySelectorAll('.opt')].filter(b => /bauen/.test(b.dataset.label || '')).map(b => b.querySelector('small').textContent);
+  const k = knoepfe();
+  if (k.join(' / ') !== 'Bewegung ½ Punkt · Handelsroute +1 / Bewegung kostenlos · Handelsroute +4') throw new Error('Straßenknöpfe: ' + k.join(' / '));
+  G('closeSheet')();
+  G('clearMissing')();
+  G('switchLang')('en');
+  let en, ken;
+  try {
+    en = pruefen('englisch');
+    G('tapHex')(feld[0], feld[1]); ken = knoepfe(); G('closeSheet')();
+    if (G('missingStrings')().length) throw new Error('ohne Übersetzung: ' + G('missingStrings')().slice(0, 3).join(' | '));
+  } finally { G('switchLang')('de'); }
+  if (en[0] !== 'The capital produces double' || !/trade routes, ecology, genetic engineering and bought tiles/.test(en[1])) throw new Error('englisch: ' + en.join(' | '));
+  if (ken.join(' / ') !== 'movement ½ point · trade route +1 / movement free · trade route +4') throw new Error('englisch, Straßenknöpfe: ' + ken.join(' / '));
+  // zurück auf Deutsch: wieder die deutschen Texte (der Sprachwechsel trägt auch `voll`)
+  if (TB.buerokratie.voll !== de[1]) throw new Error('nach dem Zurückschalten: ' + TB.buerokratie.voll);
+  console.log(`       Kachel „${de[0]}" · Regelbogen „${de[1]}" · englisch „${en[0]}" · Knöpfe ${k.join(' / ')}`);
+});
+step('v96: laufender Vorrat in der Kopfzeile – je Szene der Stand danach und ein −x/+x am Kästchen; danach der echte Stand', () => {
+  mitAnimation(100000, () => {
+    // ein Mensch (beginnt) gegen drei KI auf der Originalkarte, ohne Ereignisse
+    $('m-new').onclick();
+    G('setupSetMode')('vier');
+    $('setup-map').value = '0'; $('setup-map').onchange();
+    $('setup-list').children[0].querySelector('[data-kind="human"]').onclick();
+    [1, 2, 3].forEach(i => $('setup-list').children[i].querySelector('[data-kind="ki"]').onclick());
+    $('setup-start').value = '0'; $('setup-start').onchange();
+    const mitEreignis = $('setup-events').checked;
+    $('setup-events').checked = false; $('setup-events').onchange();
+    $('setup-go').onclick();
+    $('setup-events').checked = mitEreignis; $('setup-events').onchange();
+    const S = G('S'), pi = S.cur;
+    if (S.players[pi].kind !== 'human') throw new Error('der Mensch beginnt nicht');
+    $('a-end').onclick();
+    if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+    const a = G('ui').anim;
+    if (!a || S.players[S.cur].kind !== 'ki') throw new Error('kein Nachspiel eines KI-Zugs');
+    const marken = () => [...$('screen-game').querySelectorAll('.hud-res .res-delta')]
+      .map(m => m.dataset.k + ':' + m.textContent + ':' + (m.classList.contains('minus') ? 'rot' : 'gruen') + ':' + m.parentElement.querySelector('b').id);
+    const id = { sci: 'hud-sci', food: 'hud-food', coins: 'hud-coins', power: 'hud-power' };
+    const zahlen = () => ['hud-sci', 'hud-food', 'hud-coins', 'hud-power'].map(x => $(x).textContent).join('/');
+    const bericht = [];
+    let mitMarke = 0;
+    for (let i = 0; i < a.szenen.length; i++) {
+      const s = a.szenen[i], k = G('animKopf')(S, s);
+      const soll = [k.nach.sci, k.nach.food + (k.nach.deficit ? ` (−${k.nach.deficit})` : ''), k.nach.coins, k.nach.power].join('/');
+      if (zahlen() !== soll) throw new Error(`Szene ${i + 1} (${s.art}): Kopfzeile ${zahlen()} statt ${soll}`);
+      const sollM = ['sci', 'food', 'coins', 'power'].filter(x => k.delta[x])
+        .map(x => `${x}:${k.delta[x] < 0 ? '−' : '+'}${Math.abs(k.delta[x])}:${k.delta[x] < 0 ? 'rot' : 'gruen'}:${id[x]}`);
+      if (marken().join() !== sollM.join()) throw new Error(`Szene ${i + 1} (${s.art}): Marken ${marken().join()} statt ${sollM.join()}`);
+      // die Bevölkerung in der Zeile darunter läuft mit
+      if (!$('hud-round').textContent.includes(`Bevölkerung ${k.pop}/${k.welt}`)) throw new Error('Bevölkerung: ' + $('hud-round').textContent);
+      if (sollM.length) mitMarke++;
+      bericht.push(s.art + (sollM.length ? ' ' + sollM.map(x => x.split(':').slice(0, 2).join('')).join(' ') : ''));
+      // ein Neuzeichnen zwischendurch zeigt weiter den Stand der Szene
+      G('redraw')();
+      if (zahlen() !== soll) throw new Error('nach redraw: ' + zahlen());
+      G('animNext')();
+    }
+    if (!mitMarke) throw new Error('keine Szene mit Ausgaben');
+    // der nächste KI-Zug läuft schon – ein Tipp je Zug, dann ist der Mensch wieder dran
+    let guard = 0;
+    while ((G('ui').anim || G('ui').combat) && guard++ < 12) G('tapHex')(0, 0);
+    if (S.cur !== pi) throw new Error('nicht wieder dran');
+    const p = S.players[pi];
+    if (marken().length || zahlen() !== [p.res.sci, p.res.food + (p.foodDeficit ? ` (−${p.foodDeficit})` : ''), p.res.coins, G('powerOf')(S, pi)].join('/'))
+      throw new Error('danach: ' + marken().join() + ' · ' + zahlen());
+    // Überspringen mitten im Zug: danach steht, was jetzt dran ist – die erste Szene der nächsten KI
+    // samt ihren Marken, oder (ganz am Ende) wieder der eigene Stand ohne Marken
+    const jetzt = () => {
+      const c = G('ui').anim;
+      if (c) {
+        const k = G('animKopf')(S, c.szenen[c.i]);
+        return [[k.nach.sci, k.nach.food + (k.nach.deficit ? ` (−${k.nach.deficit})` : ''), k.nach.coins, k.nach.power].join('/'),
+          Object.keys(k.delta).length];
+      }
+      const x = G('P')(S);
+      return [[x.res.sci, x.res.food + (x.foodDeficit ? ` (−${x.foodDeficit})` : ''), x.res.coins, G('powerOf')(S, S.cur)].join('/'), 0];
+    };
+    $('a-end').onclick();
+    if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+    if (!G('ui').anim) throw new Error('kein zweites Nachspiel');
+    guard = 0;
+    let uebersprungen = 0;
+    while (G('ui').anim && guard++ < 12) {
+      G('animNext')();                                        // eine Szene weiter, dann überspringen
+      if (!G('ui').anim) break;
+      G('endAnim')();
+      uebersprungen++;
+      const [soll, n] = jetzt();
+      if (zahlen() !== soll || marken().length !== n) throw new Error(`nach dem Überspringen: ${zahlen()} statt ${soll}, ${marken().length} Marken statt ${n}`);
+    }
+    while (G('ui').combat && guard++ < 24) G('tapHex')(0, 0);
+    if (!uebersprungen || S.cur !== pi || marken().length || zahlen() !== jetzt()[0]) throw new Error('am Ende: ' + zahlen() + ' / ' + marken().join());
+    // Reduzierte Bewegung: die Marke steht still; die Dauer folgt dem Takt der Szene
+    const mm = window.matchMedia;
+    const mitAusgabe = a.szenen.find(s => Object.keys(G('animKopf')(S, s).delta).length);
+    G('playAnim')([mitAusgabe], () => { });
+    const dauer = $('screen-game').querySelector('.res-delta').style.animationDuration;
+    G('endAnim')();
+    window.matchMedia = qy => ({ matches: /reduce/.test(qy) });
+    try {
+      G('playAnim')([mitAusgabe], () => { });
+      const still = [...$('screen-game').querySelectorAll('.res-delta')];
+      if (!still.length || still.some(m => !m.classList.contains('still') || m.style.animationDuration)) throw new Error('reduzierte Bewegung: ' + still.map(m => m.className).join());
+      G('endAnim')();
+    } finally { window.matchMedia = mm; }
+    if (dauer !== Math.round(G('ANIM_MS') * mitAusgabe.tempo * (mitAusgabe.zuege.length ? 1.4 : 1)) + 'ms') throw new Error('Dauer der Marke: ' + dauer);
+    // Was eine Aktion bringt, steht grün mit „+" da: Münzen aus der Sklaverei, gekaufte Macht (gegen Münzen)
+    const ki = S.players.findIndex(x => x.kind === 'ki'), kp = S.players[ki];
+    const vorG = G('animSnap')(S);
+    kp.res.coins += 7; kp.power += 2;
+    const nachG = G('animSnap')(S);
+    kp.res.coins -= 7; kp.power -= 2;
+    const gewinn = G('animSzenen')({ vor: vorG, bilder: [{ m: 'x', snap: nachG }] }, ki);
+    G('playAnim')(gewinn, () => { });
+    const gm = marken();
+    G('endAnim')();
+    if (!gm.includes('coins:+7:gruen:hud-coins') || !gm.includes('power:+2:gruen:hud-power')) throw new Error('Gewinn: ' + gm.join());
+    console.log(`       ${werIst(a.szenen[0].pi)}: ${bericht.join(' · ')} · danach wieder der eigene Stand`);
+  });
 });
 
 step('kein abgefangener Fehler im Zugablauf', () => {

@@ -48,3 +48,4 @@ Running Rundenspiele are not affected by a new version only if their version is 
 | v91 | #21 | v88, v87, v83 |
 | v93 | #48 | v88, v87, v83 (v91 dropped – no running games) |
 | v96 | #51 | v93, v88, v83 (v87 dropped – no running games) |
+| v98 | – | v96, v93, v83 (v88 dropped – no running games) |

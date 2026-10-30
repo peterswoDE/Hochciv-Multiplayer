@@ -20,8 +20,12 @@ const TUT_SEED = 20250817;
    und siedeln sichtbar, Griechenland belagert die Grenzstadt, und die Belagerung bricht am
    Ende, wenn der Spieler Mauern, Burgenbau und Macht genommen hat. */
 const TUT_DICE = [3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2];
-function tutNextDie() {
-  if (typeof ui === 'undefined' || !ui || !ui.tut) return null;
+/* `ctx` (v92): wofür gewürfelt wird – nur das Erste Spiel liest es (fgNextDie in
+   js/firstgame.js), dieses Tutorial nimmt weiter seine feste Folge. */
+function tutNextDie(ctx) {
+  if (typeof ui === 'undefined' || !ui) return null;
+  if (ui.fg) return typeof fgNextDie === 'function' ? fgNextDie(ctx) : null;
+  if (!ui.tut) return null;
   // Ein Schritt kann die nächsten Würfe vorgeben (dice), damit z. B. die Technologie des
   // nächsten Zeitalters wirklich ausgewürfelt wird und nicht heimlich gesetzt werden muss.
   if (ui.tut.pre && ui.tut.pre.length) return ui.tut.pre.shift();
@@ -158,7 +162,7 @@ const TUT_STEPS = [
   },
   {
     t: T('Forschung und Technologien'),
-    html: () => T('<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben links in der Kachel.</p>'),
+    html: () => T('<p>Im Gegensatz zu anderen Spielen nutzt Hochzeivilization einen dynamischen Technologiebaum: Jede Technologie ist nur mit <b>50 % Wahrscheinlichkeit</b> in einer Partie verfügbar.</p> <p><b>So forschst du:</b> unten auf <b>Forschen</b> → im Bogen die Kachel <b>Schrift</b> antippen. Der Bogen zeigt Kosten oben rechts in der Kachel.</p>'),
     kurz: () => T('<p>Der Technologiebaum ist <b>zufällig</b>: jede Technologie steht in einer Partie nur mit 50 % Wahrscheinlichkeit zur Verfügung. Ausgewürfelt wird immer beim Erreichen eines neuen Zeitalters. Planen kannst du also nur grob.</p>'),
     task: T('Öffne <b>Forschen</b> und forsche <b>Schrift</b>.'),
     // Papier steht in Forschung/Mittelalter an erster Stelle – dieser Wurf ist gesetzt,
@@ -411,7 +415,7 @@ const TUT_STEPS = [
   },
   {
     t: T('Die vierte Stadt'),
-    html: () => T('<p>Auch die 12 Nahrung sollen nicht verfallen. Eine vierte Stadt kostet <b>9 Nahrung</b> – 6 Basiskosten bei drei bestehenden Städten plus Weg. Teuer, aber es ist die einzige Ausgabe, die dauerhaft etwas zurückgibt.</p> <p><b>Warum dieses Feld?</b> Ringsum liegen 4 × Grasland, 1 × Gebirge, 1 × Meer, das bringt <b>+7 🔬, +4 🌾, +3 🪙</b> je Runde. Es liegt südlich deiner Hauptstadt, also im Rücken – weg von der griechischen Grenze, wo gerade gekämpft wird. </p> <div class="tut-key"><b>Merke</b> Vier Städte sind fast immer besser als zwei große: jede bringt eigene Felder, wächst billiger und verteilt das Risiko. Die Basiskosten steigen zwar (1/3/6/10), aber sie sind einmalig – der Ertrag bleibt.</div>'),
+    html: () => T('<p>Auch die 12 Nahrung sollen nicht verfallen. Eine vierte Stadt kostet <b>9 Nahrung</b> – 6 Basiskosten bei drei bestehenden Städten plus Weg. Teuer, aber es ist die einzige Ausgabe, die dauerhaft etwas zurückgibt.</p> <p><b>Warum dieses Feld?</b> Ringsum liegen 4 × Grasland, 1 × Gebirge, 1 × Meer, das bringt <b>+7 🔬, +5 🌾, +3 🪙</b> je Runde. Es liegt südlich deiner Hauptstadt, also im Rücken – weg von der griechischen Grenze, wo gerade gekämpft wird. </p> <div class="tut-key"><b>Merke</b> Vier Städte sind fast immer besser als zwei große: jede bringt eigene Felder, wächst billiger und verteilt das Risiko. Die Basiskosten steigen zwar (1/3/6/10), aber sie sind einmalig – der Ertrag bleibt.</div>'),
     kurz: () => T('<p>Vierte Stadt: Basiskosten 6 + Distanz 3 = 9 Nahrung.</p>'),
     enter: () => { ui.tutSpot3 = tutSpot(TUT_CITY_3); },
     task: T('Tippe unten auf <b>Stadt gründen</b>, dann auf das <b>goldene Feld</b> und auf <b>Hier gründen</b>.'),
@@ -425,8 +429,8 @@ const TUT_STEPS = [
   },
   {
     t: T('Straßen: die Städte verbinden'),
-    html: () => T('<p>Mit dem <b>Rad</b> kannst du auf Feldern Straßen bauen. Eine Straße kostet <b>1 Münze</b> und halbiert dort die Bewegungskosten – aber der eigentliche Gewinn ist ein anderer:</p> <div class="tut-key"><b>Handelsrouten</b> Jede deiner Städte außer der Hauptstadt, die über einen <b>durchgehenden Weg</b> mit ihr verbunden ist, bringt jede Runde <b>+1 Wissenschaft, +1 Nahrung und +1 Münze</b>. Liegt auf der ganzen Strecke <b>Eisenbahn</b>, sind es <b>+2</b>. Gemischt zählt der kleinere Wert – ein einziges Straßenfeld drückt die Strecke von +2 auf +1.</div> <p>Du hast <b>4 Münzen</b> und brauchst genau <b>4</b> davon: die vier golden umrandeten Felder hängen alle drei Nebenstädte an die Hauptstadt.</p> <p>Das bringt <b>+3</b> auf jeden der drei Erträge – jede Runde, dauerhaft, für einmalig 4 Münzen. Im Forschungsbogen taucht dafür die Zeile <b>Handelsrouten</b> auf.</p>'),
-    kurz: () => T('<p>Eine Straße kostet 1 Münze. Der eigentliche Gewinn sind <b>Handelsrouten</b>: jede Stadt, die über einen durchgehenden Weg an der Hauptstadt hängt, bringt <b>+1 auf alle drei Erträge</b> – über durchgehende Eisenbahn +2.</p><p>Straßen und Eisenbahn <b>senken außerdem die Bewegungskosten</b> auf diesen Feldern, deine Armeen kommen darüber also weiter.</p>'),
+    html: () => T('<p>Mit dem <b>Rad</b> kannst du auf Feldern Straßen bauen. Eine Straße kostet <b>1 Münze</b> und halbiert dort die Bewegungskosten – aber der eigentliche Gewinn ist ein anderer:</p> <div class="tut-key"><b>Handelsrouten</b> Jede deiner Städte außer der Hauptstadt, die über einen <b>durchgehenden Weg</b> mit ihr verbunden ist, bringt jede Runde <b>+1 Wissenschaft, +1 Nahrung und +1 Münze</b>. Liegt auf der ganzen Strecke <b>Eisenbahn</b>, sind es <b>+4</b>. Gemischt zählt der kleinere Wert – ein einziges Straßenfeld drückt die Strecke von +4 auf +1.</div> <p>Du hast <b>4 Münzen</b> und brauchst genau <b>4</b> davon: die vier golden umrandeten Felder hängen alle drei Nebenstädte an die Hauptstadt.</p> <p>Das bringt <b>+3</b> auf jeden der drei Erträge – jede Runde, dauerhaft, für einmalig 4 Münzen. Im Forschungsbogen taucht dafür die Zeile <b>Handelsrouten</b> auf.</p>'),
+    kurz: () => T('<p>Eine Straße kostet 1 Münze. Der eigentliche Gewinn sind <b>Handelsrouten</b>: jede Stadt, die über einen durchgehenden Weg an der Hauptstadt hängt, bringt <b>+1 auf alle drei Erträge</b> – über durchgehende Eisenbahn +4.</p><p>Straßen und Eisenbahn <b>senken außerdem die Bewegungskosten</b> auf diesen Feldern, deine Armeen kommen darüber also weiter.</p>'),
     enter: () => { ui.tutRoads = true; },
     task: T('Baue Straßen auf den vier <b>goldenen Feldern</b> – je Feld antippen und <b>Straße bauen</b>.'),
     hl: () => TUT_ROADS.filter(([r, c]) => roadLevel(S, r, c) < 1),
@@ -456,7 +460,7 @@ const TUT_STEPS = [
   },
   {
     t: T('Jede Bevölkerung isst'),
-    html: () => T('<p>Weil jeder Bevölkerungspunkt dauerhaft 1 Nahrung verbraucht, darf deine <b>Nahrungsproduktion nie negativ</b> werden. Ist die Grenze erreicht, wird Wachstum gesperrt – verhungern tut aber niemand.</p> <p>Du produzierst gerade <b>19 Nahrung</b> über den Verbrauch hinaus. Deine Städte können zusammen also noch <b>19×</b> wachsen, bevor die Grenze greift – egal, wie du die Schritte auf die Städte verteilst.</p> <p>Dagegen hilft mehr Ertrag: <b>Landwirtschaft</b> auf Grasland, <b>Kunstdünger</b> im Wald, <b>Bewässerung</b> im Gebirge, <b>Ökologie</b>. Oder <b>Gentechnik</b> und <b>Massenmedien</b>: damit ernährt zu Zugbeginn jede Münze drei Bevölkerung und jede Wissenschaft eine – dann wird der 🌾-Knopf oben anklickbar. <b>Gentechnik</b> bringt dir obendrein für je vier Wissenschaft eine Nahrung ins Einkommen.</p>'),
+    html: () => T('<p>Weil jeder Bevölkerungspunkt dauerhaft 1 Nahrung verbraucht, darf deine <b>Nahrungsproduktion nie negativ</b> werden. Ist die Grenze erreicht, wird Wachstum gesperrt – verhungern tut aber niemand.</p> <p>Du produzierst gerade <b>20 Nahrung</b> über den Verbrauch hinaus. Deine Städte können zusammen also noch <b>20×</b> wachsen, bevor die Grenze greift – egal, wie du die Schritte auf die Städte verteilst.</p> <p>Dagegen hilft mehr Ertrag: <b>Landwirtschaft</b> auf Grasland, <b>Kunstdünger</b> im Wald, <b>Bewässerung</b> im Gebirge, <b>Ökologie</b>. Oder <b>Gentechnik</b> und <b>Massenmedien</b>: damit ernährt zu Zugbeginn jede Münze drei Bevölkerung und jede Wissenschaft eine – dann wird der 🌾-Knopf oben anklickbar. <b>Gentechnik</b> bringt dir obendrein für je vier Wissenschaft eine Nahrung ins Einkommen.</p>'),
     kurz: false,          // in der kurzen Fassung nicht dabei
     hl: () => citiesOf(S, RU()).map(c => [c.r, c.c]),
   },
@@ -472,8 +476,8 @@ const TUT_STEPS = [
   },
   {
     t: 'Ab hier spielst du allein',
-    html: () => T('<p>Das Tutorial ist durch – und dieses Spiel läuft einfach weiter, jetzt ohne Einschränkungen. Du stehst in Runde 4 mit 4 Städten, 7 Bevölkerung und 9 Technologien.</p> <p>Der nächste sinnvolle Schritt: weiter wachsen, Nahrungstechnologien nachziehen und in jedem Feld ein Zeitalter aufschließen – die Singularität braucht am Ende eine Moderne-Technologie in allen vier.</p> <p><b>Was das Tutorial nicht gezeigt hat</b>, aber im Spiel steckt: gegnerische Armeen <b>flankieren</b> und zerstören (zwei eigene Armeen gegenüberliegend, mit <b>Taktik</b> von zwei beliebigen Seiten) · <b>Eisenbahn</b> statt Straße: eine durchgehende Bahn verdoppelt den Handelsroutenbonus auf +2 · Technologien mit eigenen Aktionen: <b>Sklaverei</b> (Bevölkerung gegen Münzen opfern), <b>Spionage</b>, <b>Kundschafterei</b> und <b>Internet</b> (fremde Technologien kopieren), <b>Kolonialismus</b> (Felder kaufen), <b>Atomwaffen</b> (alle Armeen auf einem Feld und ringsum entfernen) · und Reichsfähigkeiten, die du im Aufbau umstellen kannst.</p> <p>Zwei Dinge helfen immer: <b>Protokoll</b> zeigt jeden Würfelwurf, <b>Regeln &amp; Technologien</b> im Menü listet alle Technologien mit ihrer Wirkung.</p>'),
-    kurz: () => T('<p>Das Tutorial ist durch, die Partie läuft ohne Einschränkungen weiter.</p><p>Nicht gezeigt, aber vorhanden: Armeen <b>flankieren</b> und zerstören, <b>Eisenbahnen</b> (Handelsroute +2), Technologien mit eigenen Aktionen (Sklaverei, Spionage, Internet, Kolonialismus, Atomwaffen). <b>Regeln &amp; Technologien</b> im Menü listet alles auf.</p>'),
+    html: () => T('<p>Das Tutorial ist durch – und dieses Spiel läuft einfach weiter, jetzt ohne Einschränkungen. Du stehst in Runde 4 mit 4 Städten, 7 Bevölkerung und 9 Technologien.</p> <p>Der nächste sinnvolle Schritt: weiter wachsen, Nahrungstechnologien nachziehen und in jedem Feld ein Zeitalter aufschließen – die Singularität braucht am Ende eine Moderne-Technologie in allen vier.</p> <p><b>Was das Tutorial nicht gezeigt hat</b>, aber im Spiel steckt: gegnerische Armeen <b>flankieren</b> und zerstören (zwei eigene Armeen gegenüberliegend, mit <b>Taktik</b> von zwei beliebigen Seiten) · <b>Eisenbahn</b> statt Straße: eine durchgehende Bahn hebt den Handelsroutenbonus von +1 auf +4 · Technologien mit eigenen Aktionen: <b>Sklaverei</b> (Bevölkerung gegen Münzen opfern), <b>Spionage</b>, <b>Kundschafterei</b> und <b>Internet</b> (fremde Technologien kopieren), <b>Kolonialismus</b> (Felder kaufen), <b>Atomwaffen</b> (alle Armeen auf einem Feld und ringsum entfernen) · und Reichsfähigkeiten, die du im Aufbau umstellen kannst.</p> <p>Zwei Dinge helfen immer: <b>Protokoll</b> zeigt jeden Würfelwurf, <b>Regeln &amp; Technologien</b> im Menü listet alle Technologien mit ihrer Wirkung.</p>'),
+    kurz: () => T('<p>Das Tutorial ist durch, die Partie läuft ohne Einschränkungen weiter.</p><p>Nicht gezeigt, aber vorhanden: Armeen <b>flankieren</b> und zerstören, <b>Eisenbahnen</b> (Handelsroute +4), Technologien mit eigenen Aktionen (Sklaverei, Spionage, Internet, Kolonialismus, Atomwaffen). <b>Regeln &amp; Technologien</b> im Menü listet alles auf.</p>'),
   },
 ];
 
@@ -596,6 +600,7 @@ function tutorialSetup(opts) {
 function tutorialStart(opts) {
   tutorialSetup(opts);
   $('tut-panel').hidden = false;
+  document.body.classList.remove('fg');
   document.body.classList.add('tut');
   tutEnter();
   startGameScreen();
@@ -618,9 +623,14 @@ function renderTutPanel() {
   if (st.task) task.innerHTML = `<b>${T('Deine Aufgabe:')}</b> ` + tutTaskText(st);
   $('tut-count').textContent = `${ui.tut.i + 1}/${tutList().length}`;
   $('tut-bar-fill').style.width = Math.round(((ui.tut.i + 1) / tutList().length) * 100) + '%';
+  // Das Panel teilt sich das Tutorial mit dem Ersten Spiel (v92) – dessen Kopf und Leiste zurück
+  $('tut-panel').querySelector('.tut-sub').textContent = '';
+  $('tut-quit').textContent = T('Tutorial beenden');
+  $('tut-prev').hidden = false;
+  $('tut-next').classList.add('primary');
   $('tut-prev').disabled = ui.tut.i === 0;
   $('tut-next').disabled = !done;
-  $('tut-next').textContent = last ? 'Fertig' : 'Weiter ›';
+  $('tut-next').textContent = last ? T('Fertig') : T('Weiter ›');
   tutMaybeAdvance();
 }
 function tutMove(d) {
@@ -655,7 +665,7 @@ function tutMaybeAdvance() {
   // Wer zurückblättert, will nachlesen – dort darf nicht sofort wieder vorgesprungen
   // werden. Automatisch geht es nur auf dem weitesten je erreichten Schritt weiter.
   if (ui.tut.i < (ui.tut.max || 0)) return;
-  if (ui.botLock) return;
+  if (ui.botLock || ui.combat) return;        // Bot-Fenster offen, Kampf läuft noch (v90)
   const p = tutP();
   // offene Rückschau: nur, was sich noch wählen lässt (v87 – ein leerer Anspruch hält nichts auf)
   if ((p.freePicks || []).some(c => c.n > 0) || backPickOptions(S, RU()).length) return;
@@ -664,7 +674,7 @@ function tutMaybeAdvance() {
   const from = ui.tut.i;
   ui.tutAuto = true;
   const go = () => {
-    if (!ui.tut || ui.tut.i !== from || !tutDone()) { ui.tutAuto = false; return; }
+    if (!ui.tut || ui.tut.i !== from || !tutDone() || ui.combat) { ui.tutAuto = false; return; }
     closeSheet(); closeModal();
     tutMove(1);
     ui.tutAuto = false;                // erst danach frei: eine Stufe je Aktion, keine Kette

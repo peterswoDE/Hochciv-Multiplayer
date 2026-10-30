@@ -5,10 +5,10 @@
 const CIVS = [
   {
     k: "griechenland", n: "Griechenland", sym: "star", color: "#2f6f8f",
-    ability: "Techs 1/2/3/4/5 günstiger (je Zeitalter)",
+    ability: "Techs 1/1/2/2/5 günstiger (je Zeitalter)",
     abilities: [
-      { k: "basis", n: "Günstige Forschung", e: "Techs 1/2/3/4/5 günstiger (je Zeitalter)" },
-      { k: "gratistech", n: "Freie Forschung", e: "1× pro Runde eine verfügbare Technologie der Industrialisierung oder früher umsonst erforschen" },
+      { k: "basis", n: "Günstige Forschung", e: "Techs 1/1/2/2/5 günstiger (je Zeitalter)" },
+      { k: "gratistech", n: "Freie Forschung", e: "2× pro Partie eine verfügbare Technologie beliebigen Zeitalters umsonst erforschen (nicht die Singularität)" },
       { k: "rueckschau", n: "Rückschau", e: "Bei jeder erforschten Technologie zusätzlich eine beliebige (auch nicht freigeschaltete) eines früheren Zeitalters umsonst" },
     ],
   },
@@ -26,8 +26,8 @@ const CIVS = [
     ability: "Jedes Feld bringt mindestens 1 Nahrung",
     abilities: [
       { k: "basis", n: "Taiga", e: "Jedes Feld bringt mindestens 1 Nahrung" },
-      { k: "wachstum", n: "Fruchtbarkeit", e: "Bevölkerungswachstum kostet keine Nahrung" },
-      { k: "siedler", n: "Siedlertrecks", e: "Städte werden mit 2 Bevölkerung gegründet" },
+      { k: "wachstum", n: "Fruchtbarkeit", e: "Bevölkerungswachstum kostet keine Nahrung; 1× zusätzliches Wachstum pro Stadt" },
+      { k: "siedler", n: "Siedlertrecks", e: "Städte werden mit 2 Bevölkerung gegründet und wachsen zum Preis einer um 1 kleineren Stadt" },
     ],
   },
   {
@@ -36,7 +36,7 @@ const CIVS = [
     abilities: [
       { k: "basis", n: "Seefahrer", e: "Kostenlose Armee am Start; eine Armee zählt nicht für Baukosten von Armeen" },
       { k: "kampfertrag", n: "Beutezüge", e: "Steht eine Armee neben einer gegnerischen Armee oder Stadt, bringt sie je Punkt Überlegenheit 1 Wissenschaft, Nahrung und Münze" },
-      { k: "armeemacht", n: "Kriegerkultur", e: "Jede eigene Armee gibt +2 Macht – mit Burgenbau auch jede eigene Stadt" },
+      { k: "armeemacht", n: "Kriegerkultur", e: "Jede eigene Armee gibt +1 Macht – mit Burgenbau auch jede eigene Stadt" },
     ],
   },
 ];
