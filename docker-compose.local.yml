@@ -57,8 +57,8 @@ services:
       - ./maps:/app/maps
       # the game itself (rebuilt into public/ at every start)
       - ./HochCiv:/app/HochCiv
+      - ./HochCiv-v96:/app/HochCiv-v96
       - ./HochCiv-v93:/app/HochCiv-v93
-      - ./HochCiv-v88:/app/HochCiv-v88
       - ./HochCiv-v83:/app/HochCiv-v83
       - ./scripts:/app/scripts
       - ./config.js:/app/config.js

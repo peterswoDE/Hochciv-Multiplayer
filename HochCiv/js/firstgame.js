@@ -430,7 +430,8 @@ const FG_STEPS = [
     tipp: () => T('Unten in der Leiste: <b>Fähigkeiten</b>.'),
     leiste: ['#a-abil'],
     fertig: () => !!S.fg.flags.faehigkeiten,
-    gut: () => T('Griechenland forscht günstiger: Jede Technologie kostet 1 weniger in der Antike, 2 im Mittelalter, 3 in der Industrialisierung und 4 in der Moderne (die Singularität 5).'),
+    // die Zahlen aus GREEK_DISCOUNT (seit v97 1/1/2/2/5)
+    gut: () => T('Griechenland forscht günstiger: Jede Technologie kostet %s weniger in der Antike, %s im Mittelalter, %s in der Industrialisierung und %s in der Moderne (die Singularität %s).', ...GREEK_DISCOUNT),
     loesung: () => fgSieht('faehigkeiten'),
   },
   {

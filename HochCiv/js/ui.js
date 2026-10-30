@@ -1265,12 +1265,16 @@ function abilSheet(oben) {
   abils.forEach(a => {
     rows.push(`<div class="abil-card"><b>${esc(a.n)}</b><small>${esc(abilEffect(a, S))}</small></div>`);
     if (a.k === 'gratistech') {
+      // seit v97 zweimal je Partie: wie viele noch offen sind, steht immer da
+      const rest = freeTechsLeft(p);
+      notiz(rest ? T('Noch %s von %s kostenlosen Forschungen in dieser Partie.', rest, FREE_TECH_USES)
+        : T('Die kostenlosen Forschungen dieser Partie sind verbraucht.'));
       const ft = freeTechOptions(S, pi);
       ft.forEach(t => knopf('Freie Forschung', 'forschung:' + t.k, esc(t.n), techSub(t), T('gratis'),
         tu(() => useFreeTech(S, pi, t.k)), false, true));
-      if (!ft.length) notiz(p.freeTechUsed === S.round ? T('Diese Runde schon genutzt.')
-        : evActive(S, pi, 'dunkles_zeitalter') ? T('Dunkles Zeitalter: Diese Runde kann nicht geforscht werden.')
-          : T('Gerade ist keine passende Technologie verfügbar.'));
+      if (!ft.length && rest) notiz(evActive(S, pi, 'dunkles_zeitalter')
+        ? T('Dunkles Zeitalter: Diese Runde kann nicht geforscht werden.')
+        : T('Gerade ist keine passende Technologie verfügbar.'));
     }
     if (a.k === 'rueckschau') {
       const bp = backPickOptions(S, pi);
@@ -3320,7 +3324,7 @@ function rulesModal() {
         victoryLabels(!!(S && S.duel)).theologie)}</li>
     </ol>
     <p class="sub">${T('Ressourcen gelten nur für den laufenden Zug – nur Macht bleibt liegen. 2 Münzen zählen als 1 Nahrung oder 1 Wissenschaft.')}</p>
-    <p class="sub">${T('Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge 1, 2 bzw. 3 Münzen dazu.')}</p>
+    <p class="sub">${startBonusText()}</p>
     <p class="sub">${T('Die Nahrungsproduktion darf nicht negativ werden: Wachstum wird blockiert, sobald das Einkommen dadurch unter 0 fiele – gerechnet auf dem dauerhaften Wert, ein Ereignis dieser Runde zählt dafür nicht. Gentechnik und Massenmedien heben die Grenze auf: zu Zugbeginn ernährt jede Münze drei Bevölkerung, jede Wissenschaft eine – höchstens bis zur Höhe dessen, was die Bevölkerung isst, also kein allgemeiner Umtausch. Gentechnik bringt zusätzlich Nahrung ins Einkommen: je vier Wissenschaft eine.')}</p>
     <p class="sub">${T('Bewegung, Straßen und Eisenbahn')}</p>
     <p style="font-size:13px;margin:4px 0">${T('Jede Armee hat je Zug 3 Bewegungspunkte (mit Panzerschiff 6, mit Luftwaffe 9); ein Schritt aufs Nachbarfeld kostet 1. Armeen ziehen nicht auf Städte und nicht auf andere Armeen. Eine Armee, die in einer Stadt entsteht, muss sie im selben Zug verlassen.')}</p>
@@ -3351,7 +3355,7 @@ function rulesModal() {
     <p class="sub">${T('Alle Technologien')}</p>
     <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">${T('Kosten links, Wirkung rechts. Verfügbar wird eine Technologie erst, wenn sie ausgewürfelt ist.')}</p>
     ${oldTreeShown() ? `<p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">${T('In dieser Partie gilt noch der alte Techtree.')}</p>` : ''}
-    ${S && S.marathon ? `<p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">${T('Marathon: Technologien kosten je Zeitalter das Zwei-, Drei-, Vier- und Fünffache, die Singularität %s – die Kosten hier sind schon umgerechnet. Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab, Griechenlands Freie Forschung reicht nur bis ins Mittelalter. Höchstens %s neue Städte je Zug. Militärsieg erst mit %s eroberten Hauptstädten; eine eroberte Hauptstadt ist danach eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt weiter.', MARATHON_SINGULARITY, MARATHON_MAX_FOUNDS, MARATHON_CAPITALS)}</p>` : ''}
+    ${S && S.marathon ? `<p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">${T('Marathon: Technologien kosten je Zeitalter das Zwei-, Drei-, Vier- und Fünffache, die Singularität %s – die Kosten hier sind schon umgerechnet. Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Höchstens %s neue Städte je Zug. Militärsieg erst mit %s eroberten Hauptstädten; eine eroberte Hauptstadt ist danach eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt weiter.', MARATHON_SINGULARITY, MARATHON_MAX_FOUNDS, MARATHON_CAPITALS)}</p>` : ''}
     ${FIELDS.map((fn, f) => `<p class="rule-field">${fn}</p>` +
       AGES.map((an, a) => {
         const list = techsIn(f, a, S);

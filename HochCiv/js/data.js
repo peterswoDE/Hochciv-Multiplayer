@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v96';
+const APP_VERSION = 'v98';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -61,7 +61,7 @@ const TECHS = [
   { k: 'alchemie', n: 'Alchemie', f: 0, c: 8, e: '1:1 Wissenschaft → Münzen' },
   { k: 'buchdruck', n: 'Buchdruck', f: 0, c: 9, e: 'Fluss: +1 Wissenschaft' },
   { k: 'universitaet', n: 'Universitätswesen', f: 0, c: 10, e: 'Je Bevölkerung: +2 Wissenschaft' },
-  { k: 'wiss_methode', n: 'Wissenschaftliche Methode', f: 0, c: 15, e: 'Techkosten −2/−4/−6/−8/−10 (je Zeitalter)' },
+  { k: 'wiss_methode', n: 'Wissenschaftliche Methode', f: 0, c: 15, e: 'Techkosten −2/−3/−4/−5/−10 (je Zeitalter)' },
   { k: 'chemie', n: 'Chemie', f: 0, c: 11, e: 'Gebirge: +1 Wissenschaft' },
   { k: 'elektrizitaet', n: 'Elektrizität', f: 0, c: 13, e: 'Wald: +2 Wissenschaft' },
   { k: 'biologie', n: 'Biologie', f: 0, c: 12, e: 'Grasland: +2 Wissenschaft' },
@@ -158,6 +158,24 @@ const UN_FRAC = 1 / 2;             // mit Vereinte Nationen
 const BOT_RESEARCH_TWICE = true;
 const SLAVERY_OBSOLETE_IN_MODERN = true;
 const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (bis v83: 10)
+/* Seit v97 (Anweisung des Autors):
+   · Rabatte je Zeitalter – Antike, Mittelalter, Industrialisierung, Moderne und an fünfter Stelle
+     die Singularität (techCost): Griechenlands Günstige Forschung 1/1/2/2/5 (bis v96 1/2/3/4/5),
+     die Wissenschaftliche Methode 2/3/4/5/10 (bis v96 2/4/6/8/10). Im Marathon zählen beide
+     doppelt (MARATHON_DISCOUNT_FACTOR). Der alte Techtree behält die alte Methode
+     (OLD_METHOD_DISCOUNT) – sonst ginge der feste Ablauf des Tutorials nicht mehr auf.
+   · Griechenlands Freie Forschung: zweimal je Partie, eine verfügbare Technologie aus jedem
+     Zeitalter (bis v96 einmal je Runde, bis zur Industrialisierung, im Marathon bis ins
+     Mittelalter). Die Singularität nicht – wie bei der Raumfahrt holt nur Oxford sie gratis.
+   · Kriegerkultur der Wikinger: +1 Macht je Armee, mit Burgenbau auch je Stadt (bis v96 +2).
+   Dazu, ohne eigene Zahl (js/engine.js): Siedlertrecks wachsen zum Preis einer um 1 kleineren
+   Stadt (growPrice), Fruchtbarkeit bringt ein bezahltes Wachstum mehr (growLimits).
+   Die Texte in data/civs.json, TECHS und DATA_EN nennen dieselben Zahlen; ein Test hält sie
+   zusammen. */
+const GREEK_DISCOUNT = [1, 1, 2, 2, 5];
+const METHOD_DISCOUNT = [2, 3, 4, 5, 10];
+const FREE_TECH_USES = 2;          // Freie Forschung je Partie
+const WARRIOR_POWER = 1;           // Kriegerkultur: Macht je Armee (mit Burgenbau je Stadt)
 
 const TECH_BY_KEY = {};
 TECHS.forEach(t => { TECH_BY_KEY[t.k] = t; });
@@ -229,8 +247,9 @@ const SINGULARITY = {
 /* Der alte Techtree (bis v81 der Standard) – seit v82 nur noch im Tutorial (Anweisung des
    Autors: „bis ich ein besseres Tutorialspiel liefere"). Er unterscheidet sich vom
    heutigen nur in den Grundkosten dieser zwölf Technologien (die drei militärischen seit
-   v84: das Tutorial behält seine Kosten und damit seinen festen Ablauf); Wirkung, Feld und
-   Zeitalter sind gleich. Eine Partie trägt ihn als S.oldTree. Bis v81 hieß der Schalter andersherum
+   v84: das Tutorial behält seine Kosten und damit seinen festen Ablauf) und seit v97 im
+   Rabatt der Wissenschaftlichen Methode (OLD_METHOD_DISCOUNT, aus demselben Grund); die
+   übrigen Wirkungen, Feld und Zeitalter sind gleich. Eine Partie trägt ihn als S.oldTree. Bis v81 hieß der Schalter andersherum
    S.altTree (der heutige Standard war zuschaltbar) – migrateState übersetzt alte
    Spielstände, eine laufende Partie behält ihren Techtree. Ein Test hält fest, dass keiner
    dieser Werte die Zeitaltergrenze überschreitet (t.age kommt aus c). */
@@ -240,6 +259,10 @@ const OLD_TECH_COSTS = {
   landwirtschaft: 1, bewaesserung: 5,                           // Produktion, Antike
   eisenverarbeitung: 2, belagerung: 4, stadtmauern: 5,          // Militär, Antike (bis v83 Standard)
 };
+/* Seit v97 dazu die Wissenschaftliche Methode von damals (bis v96 überall): Das Tutorial rechnet
+   mit ihr – Burgenbau (Mittelalter) kostet dort 3 statt 4, und am Ende des Zuges bleibt genau die
+   1 Wissenschaft fürs Rad. Gilt im alten Techtree, also auch in Partien von vor v82. */
+const OLD_METHOD_DISCOUNT = [2, 4, 6, 8, 10];
 /* Kolonialismus und Kundschafterei (v72, Anweisung des Autors; gilt in beiden Techtrees –
    sie unterscheiden sich nur in den Forschungskosten). Die Techtexte in TECHS und DATA_EN
    nennen dieselben Zahlen; ein Test hält beides zusammen. */
@@ -266,13 +289,16 @@ const MARATHON_SINGULARITY = 300;
 const MARATHON_MAX_FOUNDS = 5;      // neue Städte je Zug
 const MARATHON_CAPITALS = 2;        // eroberte Hauptstädte für den Militärsieg
 /* Seit v85 (Anweisung des Autors): Griechenlands Günstige Forschung und die Wissenschaftliche
-   Methode wirken doppelt, Griechenlands Freie Forschung reicht nur bis ins Mittelalter. */
+   Methode wirken doppelt. Die Freie Forschung reichte v85–v96 im Marathon nur bis ins
+   Mittelalter; seit v97 gilt sie zweimal je Partie für jedes Zeitalter, auch hier. */
 const MARATHON_DISCOUNT_FACTOR = 2;
-const MARATHON_FREE_TECH_AGE = 1;   // Freie Forschung: bis Mittelalter (sonst bis Industrialisierung, 2)
 /* Startausgleich (v85, Anweisung des Autors): im allerersten Zug bekommt der Zweite in der
-   Zugfolge 1 Münze dazu, der Dritte 2, der Vierte 3 – zu zweit also nur der Zweite.
-   Ab fünf Reichen (Mehrspieler-Erweiterung) in derselben Reihe weiter: der Fünfte 4 … der Achte 7. */
-const START_BONUS_COINS = [0, 1, 2, 3, 4, 5, 6, 7];
+   Zugfolge Münzen dazu, der Dritte mehr, der Vierte noch mehr – je Platz in der Zugfolge.
+   Seit v98 (Anweisung des Autors) 2/4/6 statt 1/2/3, und zu zweit bekommt der Zweite 4 statt 1
+   (START_BONUS_DUEL; zu dritt gilt die Reihe: 2 und 4).
+   Ab fünf Reichen (Mehrspieler-Erweiterung) in derselben Reihe weiter: der Fünfte 8 … der Achte 14. */
+const START_BONUS_COINS = [0, 2, 4, 6, 8, 10, 12, 14];
+const START_BONUS_DUEL = 4;         // zu zweit: der Zweite (bis v97: 1)
 const MARATHON_MIN_START = 4;      // Nahrung + ½ Münzen der Hauptstadt im ersten Zug, mit 2 Bevölkerung
 const MARATHON_MIN_DIST = 14;      // Mindestabstand der Hauptstädte (Originalkarte: 7 auf halber Breite)
 /* Grundkosten einer Technologie IN DIESER PARTIE, vor allen Vergünstigungen (Griechenland,
@@ -491,7 +517,7 @@ const TIPS = [
   'Es ist nicht immer korrekt durch Griechenlands Basisfähigkeit kostenlose Technologien sofort zu erforschen. Durch Philosophie kann ein späteres Forschen auch wertvoll sein.',
   'Griechenlands Rückschau hat einen langsamen Start, aber wird zum Ende hin immer besser.',
   'Der Schlüssel zu Griechenlands Rückschau ist es, frühestmöglich eine Technologie des Mittelalters forschen zu können.',
-  'Mit Griechenlands freier Forschung ist ein explosiver Start ein Muss.',
+  'Griechenlands Freie Forschung gibt es nur zweimal je Partie. Hebe sie für teure Technologien der Moderne auf, statt sie früh für billige auszugeben.',
   'Englands Handelsreich erlaubt hohe Flexibilität.',
   'Mit Englands Seemacht kann das Siedeln am Meer besser sein als Binnenstädte, muss es aber nicht.',
   'Englands Kolonisten haben nur einen Vorteil, solange es noch Platz zum Siedeln auf der Karte gibt. Plane dementsprechend.',

@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 22.10., `sw.js` v88)
+# Hochzeivilization — Projekt-Übergabe (Stand 29.10., `sw.js` v96)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v88)
+## Letzte Sitzungen auf einen Blick (v61 → v96)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -43,6 +43,57 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v86 | **Ökologie übers ganze Reich:** je 2 Bevölkerung des Reichs +1 auf alle drei Erträge, einmal abgerundet (vorher je Stadt). **Bürokratie** verdoppelt auch Handelsrouten, Ökologie und den Nahrungsposten der Gentechnik; die Ertragsübersicht sagt es („Bürokratie ×2"). Späte KI-Züge mit vielen Kolonien schneller (gleiche Ergebnisse) | Regel + KI-Tempo |
 | v87 | **„Weiter" oben und unten** im Blatt eines Bot- oder KI-Zugs. **„Fähigkeiten" statt „Erträge"** (zeigte dasselbe wie der Gründungsmodus): eigene Fähigkeit mit Wirkung, Freie Forschung und Rückschau, Wunder-Technologien, **Alle Städte (kostenlos) wachsen**, **In allen Städten opfern**, Kopieren – Freie Forschung, Rückschau und Kopieren sind aus dem Technologiebogen ausgezogen; an der Leiste die **Zahl der Arten kostenloser Aktionen**. Fehler: ein Rückschau-Anspruch ohne Wahl blockierte die übrigen; **hochkant (gedreht) lag jedes Blatt außerhalb des Bildschirms** – auch das eines KI-Zugs samt „Weiter" (`setBarHeight` maß die gedrehte Leiste). Ein vom Zufall abhängiger Smoke-Schritt (Hungersnot) läuft jetzt ohne Ereignisse | Oberfläche + Fehler |
 | v88 | **Ertragstechnologien schließen die billigeren ihres Feldes ein** – sie setzen den Bonus, statt ihn zu erhöhen: Mathematik/Elektrizität/KI geben dem Wald +1/+2/+3 Wissenschaft, auch alle drei zusammen +3; Containerlogistik dem Meer +2 Nahrung, +1 Münze; Universitätswesen und Robotik je Bevölkerung +2; verschiedene Felder addieren sich, wer eine Kette ganz hat, steht wie vorher. **Belagerungsmaschinen +3** (vorher +5). **Singularität 120** (vorher 100; Marathon bleibt 300). Die Ertragsübersicht sagt nicht mehr „(Bürokratie ×2)". Hauptmenü: „Ne Runde Civ? …" | Regel + Oberfläche |
+| v89 | **Doppeltipp auf nachgerückte Knöpfe** (gemeldet: „beim Öffnen von Fähigkeiten wachsen alle Städte", nicht nachstellbar; nachgestellt: nach der Freien Forschung rückt „Alle Städte wachsen" unter den Finger): ein Knopf im Blatt zählt erst 0,4 s nach dem Öffnen/Neuzeichnen, derselbe Knopf und „Weiter" im Bot-Blatt sofort. Ertragstexte ohne „inkl. …". **Dampfmaschine: ein bezahltes Wachstum mehr** (wie Keramik, Wortlaut angeglichen) | Fehler + Regel + Oberfläche |
+| v90 | **Kampf am Zugende nachgespielt:** jeder Kampf eine Sekunde lang auf der Karte – Kampffeld golden, Angreiferfelder umrandet, ⚔️ Angriff und 🛡️ Verteidigung mit > oder ≤, Zeile mit Ausgang; ein Tipp auf die Karte überspringt; auch in Bot- und KI-Zügen vor ihrem Blatt. **Regeländerung: erst Flankieren, dann die Städte** (bis v89 umgekehrt; in v91 zurückgenommen). **Zugfolge nach Plätzen**, wo der Aufbau Plätze nummeriert (Plättchenkarte, drei Reiche, Duell); klassisch und Marathon weiter R → G → E → W | Oberfläche + Regel |
+| v91 | **Städte wieder vor den Flanken** (Anweisung des Autors: mit den Flanken zuerst fielen verteidigte Städte) – Rechenweg wie bis v89; das Nachspiel zeigt damit erst die Städte, dann die Flanken. `tools_ki.js … reihenfolge` vergleicht jetzt mit „Flanken zuerst" | Regel |
+| v92 | **Erstes Spiel** (Wunsch des Autors): roter Knopf ganz oben im Menü („Neues Spiel" nicht mehr rot), eine ganze Partie 1 gegen 1 gegen England auf eigener Karte – Ziele statt Erklärtexten, „💡 Tipp anzeigen" mit goldener Markierung, Rückmeldung nach jedem Ziel, Schienen durch Ablehnen mit Begründung statt gesperrter Knöpfe; Runde 1–4 für alle gleich, dann wählt man Militär-, Wirtschafts- oder Forschungssieg (`js/firstgame.js`). Das Tutorial bleibt (dort zwei Textfehler behoben) | Modus + Oberfläche |
+| v93 | **Erstes Spiel umgebaut** (Wünsche des Autors): zuerst eine **Seite** (eine Stadt in der Steinzeit, eine Zivilisation, die die Zeiten überdauert, mehrere Wege zum Sieg) mit **gleich der Wahl des Wegs**; Runde 1–4 lehren allen dasselbe, aber **vom Weg geführt** (Runde 3/4 je eine Technologie des Wegs, Lage und Tipps); neuer Schritt **„Ausgewürfelt"**: blasse Kacheln sind antippbar und nennen ihren Wurf, danach die Regel – 4–6, also 50 %; **ab dem Mittelalter fehlt etwa die Hälfte** (fest, 24 von 46), die Würfel im Protokoll passen dazu. Alle drei Wege siegen in Runde 6 | Modus + Oberfläche |
+| v94 | **Macht fest für die Kampfphase** (Anweisung des Autors: eroberten die Wikinger mit Kriegerkultur und Burgenbau eine Stadt, flankierten sie im selben Zug schon stärker) – Kriegerkultur, Zeus und Bot-Macht wirken erst nach der Phase. **Züge von KI und Bots auf der Karte nachgespielt** (Wunsch des Autors): kein Blatt mehr, nach dem Zugende laufen alle ihre Züge durch, bis wieder ein Mensch dran ist – je Zug kurze Szenen (Armeen gleiten, Ringe um Neues, +1/−1, ein Satz über der Leiste), ein Tipp auf die Karte überspringt; alles im Protokoll (`js/anim.js`). Einstellung **„Keine Animationen"** bringt das Blatt mit „Weiter" zurück; das Tutorial behält es immer | Regel + Oberfläche |
+| v95 | Nachspiel der KI- und Bot-Züge **je Aktion eine Szene** (Wunsch des Autors: v94 zeigte zu viel auf einmal, etwa alle Technologien zusammen) – jede Stadt, Technologie, Armee, jedes Straßenfeld für sich; wo der Stand täuscht, sagt die Aktion ihre Art (`log(…, art)`: geschenkte Armee, Kopie). Einstellung **„Animationen": Langsam (ab Werk, 1,5-facher Takt) / Schnell (Takt von v94) / Keine** statt des Häkchens. **Taiga** (Russland): **jedes Feld bringt mindestens 1 Nahrung** statt +1 Nahrung im Wald; zwei Tutorialzahlen angepasst (+5 🌾, 20 Nahrung) und jetzt geprüft | Oberfläche + Regel |
+| v96 | Fünf Anweisungen des Autors: **Handelsroute über Eisenbahn +4** (vorher +2; `TRADE_RAIL_BONUS`); **per Kolonialismus gekaufte Felder zählen zur Hauptstadt** – mit Bürokratie doppelt; **Kacheln ohne Bürokratie-Zusatz** (Bürokratie: „Hauptstadt produziert doppelt"), der ganze Text nur im Regelbogen (`voll`, `techEffectFull`); **die KI erforscht die Wissenschaftliche Methode vor den übrigen Technologien eines Zugs** (`kiMethodeZuerst`, Neuplanen nach dem Freischalten) – vermeidbar verschenkter Rabatt in 40 Duellen 206 → 0; **laufender Vorrat in der Kopfzeile** beim Nachspielen von KI- und Bot-Zügen, mit „−x"/„+x" unter dem Kästchen (`hudStand`, `animKopf`, `animVorrat`) | Regel + KI + Oberfläche |
+
+Neu in v96: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Eisenbahn +4 · gekaufte Felder zählen zur Hauptstadt · Kacheln ohne Bürokratie-Zusatz ·
+Wissenschaftliche Methode zuerst · laufender Vorrat beim Nachspielen (v96)"), fünf Fragilitäten
+neu, eine ergänzt („Szenen hängen an den Protokollzeilen …"), zwei Einträge in der Bug-Historie,
+die offenen Punkte 50 und 51; `tools_ki.js` hat den Modus `methode`.
+
+Neu in v95: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Je Aktion eine Szene · Animationen langsam, schnell oder keine · Taiga: jedes Feld
+mindestens 1 Nahrung (v95)", dazu Hinweise im Abschnitt v94 und bei den Ertragstechnologien v88),
+die Zeile `js/anim.js` in der Dateitabelle, die Fragilitäten zum Nachspielen und zu Tutorialzahlen
+nachgeführt, zwei Einträge in der Bug-Historie, der offene Punkt 49 (Punkt 48 nachgeführt).
+
+Neu in v94: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Macht fest für die Kampfphase · Züge von KI und Bots nachspielen (v94)", dazu
+Abschnitt 1), die Zeile `js/anim.js` in der Dateitabelle und bei den sieben Listen, drei
+Fragilitäten neu, zwei ergänzt („Kampfreihenfolge und Nachspiel …", „Während `ui.combat` …"),
+zwei Einträge in der Bug-Historie, der offene Punkt 48.
+
+Neu in v93: der erste Punkt unter „Was das Spiel heute kann" (ergänzt), ausführlich in
+`ANNAHMEN.md` (Abschnitt „Erstes Spiel: Seite vor der Partie, Weg von Anfang an, der Würfel im
+Bogen (v93)"), die Zeile `js/firstgame.js` in der Dateitabelle, die Fragilität „Das Erste Spiel
+hängt an seiner Karte …" ergänzt, die offenen Punkte 46 und 47 nachgeführt.
+
+Neu in v92: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Erstes Spiel (v92)"), eine Zeile in der Dateitabelle (`js/firstgame.js`), eine
+Fragilität („Das Erste Spiel hängt an seiner Karte …"), ein Eintrag in der Bug-Historie, die
+offenen Punkte 46 und 47.
+
+Neu in v91: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Städte wieder vor den Flanken (v91)", dazu Abschnitt 1 und ein Vermerk im Abschnitt
+v90), eine Fragilität ergänzt („Kampfreihenfolge und Nachspiel …"), ein Eintrag in der
+Bug-Historie, offener Punkt 44 erledigt.
+
+Neu in v90: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Kampf am Zugende nachgespielt · erst Flanken, dann Städte · Zugfolge nach Plätzen
+(v90)", dazu Abschnitt 1), eine Fragilität geändert („Feste Spielerreihenfolge"), drei neu, die
+offenen Punkte 44 und 45.
+
+Neu in v89: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Doppeltipp auf nachgerückte Knöpfe · Ertragstexte ohne „inkl." · Dampfmaschine:
+ein Wachstum mehr (v89)"), zwei Fragilitäten neu, ein Eintrag in der Bug-Historie, die offenen
+Punkte 42 und 43.
 
 Neu in v88: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Ertragstechnologien schließen die billigeren ein · Belagerungsmaschinen +3 ·
@@ -93,7 +144,12 @@ verlässt die Flanke), seit v77 Punkt 14 (Wirtschaftssieg in Runde 2 im Duell), 
 (Auslegungen zu Wirtschaftssieg, Startausgleich und Rabatten) und 34 (der Startausgleich
 gleicht wenig aus), seit v86 Punkt 36 (Auslegungen zu Bürokratie und Ökologie), seit v87
 Punkt 38 (Auslegungen zu „Fähigkeiten") und 39 (keine Erinnerung vor dem Zugende), seit v88
-Punkt 40 (Auslegungen zu den Ertragstechnologien) und 41 (Balance nur grob gemessen).
+Punkt 40 (Auslegungen zu den Ertragstechnologien) und 41 (Balance nur grob gemessen), seit v89
+Punkt 42 (gemeldetes Wachsen beim Öffnen nur eingegrenzt) und 43 (Auslegungen zu v89), seit v90
+Punkt 45 (Auslegungen zu v90; Punkt 44, die Kampfreihenfolge, hat der Autor in v91 entschieden),
+seit v92 Punkt 46 und 47 (Erstes Spiel), seit v94 Punkt 48 (Auslegungen zu v94), seit v95 Punkt 49
+(Auslegungen zu v95, auch zur Taiga), seit v96 Punkt 50 (Auslegungen zu v96) und 51 (die
+Stärke der neuen Forschungsreihenfolge nur knapp messbar).
 
 ## Wo alles liegt
 
@@ -109,7 +165,7 @@ Punkt 40 (Auslegungen zu den Ertragstechnologien) und 41 (Balance nur grob gemes
   Danach `npm install jsdom --no-fund --no-audit` — für `smoke.js` und `check_single.js` nötig.
   Am besten im **Elternordner** (`cd /home/claude`): Node findet es dort über die
   Verzeichnissuche, und `node_modules` kann gar nicht erst ins Paket rutschen (so in v69).
-- **Deliverables in `/mnt/user-data/outputs/`:** Ordner `hochzeivilization/` (34 Dateien),
+- **Deliverables in `/mnt/user-data/outputs/`:** Ordner `hochzeivilization/` (36 Dateien),
   `hochzeivilization.zip`, und `hochzeivilization-einzeldatei.html` — Letzteres ist, was der
   Autor tatsächlich aufs iPad lädt.
 - **Wichtig beim Paketieren:** `node_modules` und `package*.json` ausschließen
@@ -121,26 +177,28 @@ Punkt 40 (Auslegungen zu den Ertragstechnologien) und 41 (Balance nur grob gemes
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1300 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1637 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 511 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/data.js` | 525 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 157 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
 | `js/tiles.js` | 334 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4), Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2129 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/engine.js` | 2229 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 489 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
-| `js/ki.js` | 1881 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
-| `js/marathon.js` | 302 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
-| `js/ui.js` | 2563 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
-| `js/tutorial.js` | 682 | Geführtes Übungsspiel: **29 Schritte** (19 mit Aufgabe), feste Würfelfolge, Schienen, feste Texte |
-| `test.js` | 6742 | **1722 Assertions**, `node test.js` |
-| `smoke.js` | 3688 | **152 Schritte** durch die echte UI via jsdom, `node smoke.js` |
-| `build_single.py` / `check_single.js` | 21 / 64 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
+| `js/ki.js` | 1921 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
+| `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
+| `js/marathon.js` | 306 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
+| `js/ui.js` | 3066 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
+| `js/tutorial.js` | 692 | Geführtes Übungsspiel: **29 Schritte** (19 mit Aufgabe), feste Würfelfolge, Schienen, feste Texte |
+| `js/firstgame.js` | 1457 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
+| `test.js` | 7677 | **1924 Assertions**, `node test.js` |
+| `smoke.js` | 4827 | **181 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `build_single.py` / `check_single.js` | 21 / 83 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 69 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 72 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
 | `tools_civs.js` | 82 | `data/civs.json` → `js/civs.js` |
-| `tools_ki.js` | 246 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …) |
+| `tools_ki.js` | 372 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase) |
 | `tools_startplaettchen_dump.js` / `tools_startplaettchen_pdf.py` | 34 / 176 | Druckbogen `Startplaettchen.pdf` aus `js/tiles.js` (A4 quer, 3 Seiten, Spieloptik, verzahnt mit 4 mm Luft, ohne Umriss) |
 | `ANNAHMEN.md` | — | **Alle Regelauslegungen und Entscheidungen.** Bei Regelfragen zuerst hier nachsehen. |
 
@@ -163,12 +221,133 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v96 auf einen Blick.** Handelsrouten: `TRADE_ROAD_BONUS` 1, `TRADE_RAIL_BONUS` 4 (data.js) in
+  `tradeRoutes`; Regelbogen und Straßenknöpfe über `%s`, Tutorialtexte fest „+4" (`smoke.js`
+  prüft sie); `kiTechBonus('eisenbahn')` × (4 − 1). Gekaufte Felder: `tileYieldAt` verdoppelt mit
+  Bürokratie auch Felder aus `S.bought[pi]` (mit Hauptstadt; einmal; `pre.kol` als Menge in
+  `incomeBreakdown`), `kiColonySpots` zählt es mit. Texte: `voll` an der Technologie (Bürokratie,
+  Kolonialismus), englisch an dritter Stelle in `DATA_EN.tech`, `applyDataLang`/`snapshotGerman`
+  tragen es; `techEffectFull(t, S)` = `t.voll || techEffect(t, S)` nur in `rulesModal`. KI:
+  `kiMethodeZuerst(S, pi, scored, pick)` liefert den besten Kandidaten, der die Methode bringt
+  (`KI_METHODE`), wenn der Schritt eine Technologie bezahlt (`kiImBuendel` – dieselbe Regel wie das
+  Bündeln); `kiPlan` führt ihn aus und plant neu; das Bündel bricht ab, sobald eine Forschung die
+  Methode verfügbar macht (`kiMethodeOffen`). Beide sind Funktionsdeklarationen – `tools_ki.js
+  methode` schaltet sie je Platz ab (Messhaken, `partie(…, vorbereiten)`). Nachspielen:
+  `animSnap` kopiert `res`; `animKopf(S, s)` → `{ vor, nach, delta, pop, welt }` (js/anim.js);
+  `hudStand()` (ui.js, aus `redraw` ausgelagert) zeigt während `ui.anim` den Stand der Szene;
+  `animFrame` → `animVorrat(kopf, ms)` hängt `.res-delta` (`minus`/`plus`, `still`) an die
+  Kästchen, `endAnim` räumt ab und zeigt den Spielstand. Tests: `test.js` Handelsrouten-,
+  Bürokratie- und Regelbogen-Blöcke, „Gekaufte Felder zählen zur Hauptstadt (v96)", „Kacheln ohne
+  Bürokratie-Zusätze (v96)", „Wissenschaftliche Methode zuerst (v96)" samt Gegenprobe, „Laufender
+  Vorrat in der Kopfzeile (v96)"; `smoke.js` zwei Schritte „v96: …".
+- **v95 auf einen Blick.** `animSzenen` (js/anim.js) macht aus jedem Bild eine Szene `{ art,
+  pi, vor, nach, bild, texte }` – `art` aus der Protokollzeile (`log(S, 'act', satz, art)`, neues
+  viertes Argument, im Eintrag als `e.art`; gesetzt in `spawnFreeArmies` 'gratisarmee', `copyTech`
+  'kopieren', Koloss/Pentagon/`claimOrphanWonders` 'sonst') oder aus `animUnterschied`;
+  `animDetails` sammelt alles, was die Aktion geändert hat; `animText` hat 'gratisarmee',
+  'kopieren' und „baut eine Straße". Gruppen, `ANIM_KARTE`, `animGruppe`, `teile` und die Art
+  'armeen' sind weg. Oberfläche: `prefs.anim` ('langsam' | 'schnell' | 'aus', `ANIM_STUFEN`;
+  `loadPrefs` macht aus `noAnim: true` 'aus'), Auswahl `#opt-anim` in den Einstellungen;
+  `animFaktor(n)` statt `animTempo` (Langsam 1,5; Schnell wie v94 `min(1, max(0.6, 7/n))`),
+  `animAn`/`animBlatt` lesen `prefs.anim`. Taiga: in `tileYield` nach dem Großen Leuchtturm
+  `if (y[1] < 1 && hasAbil(p, 'russland', 'basis')) y[1] = 1` (die Zeile „Wald +1" ist weg);
+  `data/civs.json` → `js/civs.js` (node tools_civs.js), `DATA_EN`, Tipp in `TIPS`/`DATA_EN.tips`,
+  `kiDraftValue` zählt Wald + Gebirge; Tutorialtexte „Die vierte Stadt" (+5 🌾) und „Jede
+  Bevölkerung isst" (20). Tests: `test.js` Taiga-Block bei den Ertragstechnologien, Siedelertrag,
+  Draftwahl, Nachspielen (v94, v95); `smoke.js` Schritte „v95: …", Takt über einen
+  mitschreibenden `setTimeout`, Tutorialzahlen im Tutorial-Durchlauf; `check_single.js` die
+  Auswahl.
+- **v94 auf einen Blick.** Kampf: `combatPhase` nimmt die Macht aller Reiche einmal vor dem
+  ersten Kampf (`macht`) und gibt sie an `attackValue(S, pi, n, pow)` und `defenseValue(S, city,
+  pow)` weiter, Flanken rechnen direkt damit; ohne `pow` rechnen beide wie bisher mit `powerOf`
+  (`tools_ki.js … reihenfolge` rechnet die andere Reihenfolge ebenso, verglichen wird nur sie).
+  Nachspielen: `log` ruft `LOG_HOOK` (engine.js); `animAufnahme(S, fn)` (js/anim.js, neu, ohne
+  Oberfläche, zwischen `marathon.js` und `tutorial.js` geladen) setzt ihn für die Dauer des Zugs
+  und sammelt je `act`-Zeile auf dem echten Spielstand ein Bild `{ m, snap }` (`animSnap`).
+  `animSzenen(rec, pi)` → Szenen `{ art, pi, vor, nach, bild, texte, teile }`: Art je Bild aus
+  `animUnterschied`, Gruppen über `animGruppe` (bauen + ziehen = `armeen`), Forschen/Macht je
+  einmal je Zug; `animDetails` setzt `felder`, `zuege`, `ringe`, `marken`, `n`, `neu`, `techs`,
+  `macht`, `wunder`; `animText` den Satz. Oberfläche: `runBots` nimmt den Zug auf (außer
+  `animBlatt()`: „Keine Animationen" oder Tutorial → wie v93 `botSheet`), `playAnim(szenen,
+  weiter)` setzt `ui.anim`, `animFrame` → `animDraw` (`drawMap` mit `anim`: goldene Felder,
+  gleitende Armeen nicht fest gezeichnet, `animMarks`) + `animCaption` (Toast `.unten.anim`),
+  Zeitgeber `ANIM_MS` × `animTempo(n)` (× 1,4 mit Zügen); `tapHex` → `endAnim`, ein Tipp
+  neben die Felder ebenso (`attachTaps(svg, onTap, daneben)` → `kartenrandTipp`, auch für
+  `endCombat`); danach
+  `playCombat(kaempfe, weiterNachAuto)` → Zugwechsel und nächster `runBots` bis
+  `humanTurnStart` (`ui.autoKette` gegen zu tiefe Aufrufketten ohne Wartezeit). `lockBar` und
+  `endHumanTurn` beachten `ui.anim`; `endTutorialPanel` räumt Zeitgeber, Satz und Sperre ab.
+  Einstellung `prefs.noAnim` (`opt-noanim`, `hochciv.prefs`). Erstes Spiel: `fgAnimAn()` wählt
+  die Texte, `fgWiederDran`/`fgPruefe` warten auf das Ende von `ui.anim`. Tests: `test.js`
+  „Die Macht steht für die ganze Kampfphase fest" und „Züge von KI und Bots nachspielen (v94)",
+  zehn Smoke-Schritte „v94: …" (die älteren laufen mit `prefs.noAnim = true`, `ANIM_MS = 0`).
+- **v93 auf einen Blick.** Erstes Spiel umgebaut. `m-first` → `fgStart()` ohne Weg →
+  `fgSeite()`: Fenster über dem Menü (Steinzeit-Text, drei Wege als `[data-pfad]`, Haken aus
+  `FG_KEY` = `hochciv.fg` über `fgGeschafft`); ein Weg → `fgStart(pfad)` → `fgSetup(pfad)`
+  (`S.fg.v` 2, `pfad` von Anfang an). Schritt „wahl" und Schnappschuss (`fgSchnappschuss`,
+  `fgAndererWeg`, `S.fg.wahl`, `S.fg.geschafft`) sind weg; „Anderen Weg ausprobieren" →
+  `fgAnders` → `fgSeite` (neue Partie); `fgSpielende` merkt den Weg (`fgGeschafftMerken`).
+  Der Weg führt: `fgJe(m, w, s)` in Texten, `fgRestSchritt(runde, st)` baut „rest3"/„rest4"
+  (Ziel, Stand, Vorrang und Nachfrage für `fgRestTech(runde)`). Neuer Schritt „wuerfel" nach
+  „gratis": blasse Kacheln tragen im Ersten Spiel `data-blass` statt `disabled`
+  (`techBoardHTML`), `techModal` → `fgBlass` → Toast `fgBlassText` + `fgSieht('blass')`;
+  `fgMarkUi` leuchtet auch `[data-blass]`. Verfügbarkeit: `fgVerfuegbar` (Antike `FG_ANTIKE`,
+  danach `FG_SPAETER` bzw. für England `fgZahl`), Augen `fgWurf`. Spielstände von v92 ohne Weg:
+  `fgRenderWahl` im Panel, `fgVeto`/`fgZugendeRegel` sperren bis `fgWaehle`.
+- **v92 auf einen Blick.** Neues Modul `js/firstgame.js` (zwischen `tutorial.js` und `ui.js`
+  geladen). `fgSetup` baut die Partie (Karte `FG_ROWS`, Griechenland Mensch gegen England
+  Spielerart „KI", Duell, Platzfolge) und legt `S.fg` an (Schritt, Weg, Merker, Schnappschuss
+  `wahl`); `ui.fg` nur für die Sitzung. Würfel: `d6` → `tutNextDie(ctx)` → `fgNextDie(ctx)`
+  (Antike nach `FG_ANTIKE`, ab dem Mittelalter für Griechenland alles). England: `fgGegnerZug`
+  aus `runBots` statt `kiTurn`, solange `S.fg` steht. Schritte `FG_STEPS` (17 gemeinsam, 2/2/4 je
+  Weg, „ende"): `ziel`, `stand`, `info`, `tipp`, `hl`/`zeige`/`leiste`/`knopf`/`techs`,
+  `fertig`, `gut`, `erlaubt`/`darf`, `zug`/`zugende`, `lassen`, `sofort`, `zurueck`, `loesung`.
+  Schienen: `fgVeto(aktion)` (Oberfläche `fgDarf` vor jeder Aktion in `foundSheet`, `openTile`
+  über `FG_AKTION`, `tapHex`, `techModal`, `powerSheet`, `abilSheet`; `fgZugendeOk` in
+  `endHumanTurn`), dazu `fgSchwellenVeto` (kein Wirtschaftssieg außerhalb des Wirtschaftswegs),
+  `fgNurHauptstadt`, `fgFriedlich`, `fgKeineSingularitaet`. Panel: `fgRenderPanel` aus `redraw`
+  (Rückmeldung, Ziel samt Stand, Tipp, Lage, Wahl-Knöpfe), `fgPruefe` schaltet nach `FG_AUTO_MS`
+  (900, Tests 0) weiter, `fgMarkUi` markiert Knöpfe (aus `sheet()`/`modal()`), `fgHighlight`
+  die Felder. Ende: `gameOver` → `fgSpielende`; „Anderen Weg ausprobieren" → `fgAndererWeg`.
+  Menü `m-first`; Fortsetzen/Laden → `fgFortsetzen`; „Beenden" → `fgBeenden`/`fgAus`.
+  Tests: `test.js` „Erstes Spiel (v92)" (alle Wege, Schienen, Zufallsspiel), acht Smoke-Schritte „v92: …".
+- **v91 auf einen Blick.** `combatPhase` wieder erst die Städte, dann das Flankieren
+  (Flankenpositionen nach den Städten bestimmt) – der Rechenweg ist der von v89, dazu nur die
+  Einträge für das Nachspiel; die Bilder kommen damit von selbst in dieser Reihenfolge.
+  `tools_ki.js … reihenfolge` vergleicht jetzt mit „Flanken zuerst" (`anderePhase`). Tests:
+  `test.js` „Kampfphase (v91)", Smoke-Schritt „v91: … erst die Stadt, dann die Flanke …".
+- **v90 auf einen Blick.** Kampf: `combatPhase(S, pi, rec)` flankiert zuerst, dann die Städte
+  (bis v89 umgekehrt; v91 wieder Städte zuerst); mit `rec` (aus `finishTurn(S, rec)`) je Kampf ein Eintrag – `art`
+  `'flanke'`/`'stadt'`, `pi`, `gegner`, `r`/`c`, `a`, `d`, `sieg`, `von` (`flankersOf` bzw. die
+  Angreifer), bei Städten `zug`/`genommen`/`zerstoert`/`gebrochen` – samt `snap` (Städte,
+  Armeen, Wunder, Reiche vor dem Kampf; `combatEntry`). Jede Flankenstellung ist ein Eintrag,
+  auch ohne Sieg. Oberfläche: `playCombat(kaempfe, weiter)` setzt `ui.combat`, zeigt je Kampf
+  ein Bild (`combatFrame` → `combatDraw` → `drawMap` mit `fight`, gezeichnet von `fightMarks`)
+  für `COMBAT_MS` (1000; smoke 0) und ruft danach `weiter(gezeigt)`. `fightMarks` wählt die Lage
+  der Werte nach verdeckten Angreiferfiguren (sechs Lagen) und skaliert mit dem Kartenmaßstab
+  (`turning()` beachtet). Gesperrt: `lockBar`, `endHumanTurn`, Füttern; `tapHex` überspringt
+  (`endCombat`), ☰ ebenso; `redraw` zeichnet währenddessen das Kampfbild und speichert nicht;
+  `tutMaybeAdvance` wartet. Hinweis ab zwei Kämpfen über der Leiste (`.toast.unten`, `toast()`
+  nimmt die Klasse wieder weg). Eigener Zug: `finishTurn` → Nachspiel → Sieg/Zugwechsel/Bots,
+  die Meldung des letzten Kampfs nur ohne Nachspiel. Bots/KI: Zug, `finishTurn`, `saveGame`,
+  Nachspiel, `botSheet`. Messen: `tools_ki.js … reihenfolge kampflaenge`. Zugfolge: `newGame`
+  mit `cfg.seatOrder` nach Plätzen, sonst `ORDER`; gesetzt aus `platzNummern(mode, mapPick, n)`
+  in `setup-go` und `startFromRecipe`.
+- **v89 auf einen Blick.** Blätter: `sheet()` setzt `sheetCalm.until` (jetzt + `SHEET_CALM_MS`
+  400) und `sheetCalm.key` (beim Neuzeichnen aus einem Tipp der getippte Knopf, beim Öffnen
+  keiner); `sheetCalmGuard` (Erfassung am `#sheet`, in `boot`) verwirft Klicks auf Knöpfe in
+  `#sheet-body` vor ihrem `onclick`, solange das Fenster läuft und der Knopf ein anderer ist
+  (`tapKey`: `data-act`, `data-label`, …), außer im gesperrten Bot-/KI-Blatt. Ein zweiter
+  Listener vergisst den getippten Knopf nach dem Klick. Ertragstexte (TECHS, `DATA_EN`) nur
+  die Summe. `growLimits`: `GROW_EXTRA_PAID = ['keramik', 'dampfmaschine']`, je +1 bezahlter
+  Schritt; Texte Keramik/Dampfmaschine „1× zusätzliches Wachstum pro Stadt"; KI-Zuschlag der
+  Dampfmaschine um den Keramik-Anteil erhöht.
 - **v88 auf einen Blick.** Ertragstechnologien: `YIELD_TECHS` (data.js) nennt je Technologie
   ihr Ziel (Geländeart oder `'pop'`) und ihren eigenen Zuwachs; daraus `YIELD_CHAINS` – je Ziel
   und Feld eine Kette nach `t.c`, jedes Glied mit der Summe bis zu sich. `yieldBonus(p, on, y)`
   (engine.js) nimmt je Kette das höchste erforschte Glied; `tileYield` und `cityPopYield`
   lesen nur noch das (der `switch` je Gelände ist weg), Taiga und Großer Leuchtturm addieren
-  sich weiter. Die Techtexte nennen die Summe und „inkl. …" (deutsch und englisch), der
+  sich weiter (Taiga seit v95 nicht mehr: eine Untergrenze von 1 Nahrung je Feld). Die Techtexte nennen die Summe und „inkl. …" (seit v89 nur die Summe), der
   Regelbogen erklärt es unter der Geländetabelle. `SIEGE_BONUS = 3` (data.js) für `attackValue`
   und `kiAttackPer`; `SINGULARITY_BASE = 120`. `incomeBreakdown` hängt kein `note` mehr an
   (Handelsrouten, Gentechnik), `yieldOverview` zeigt nur den Namen; der Schlüssel
@@ -281,8 +460,8 @@ Gedächtnis rekonstruieren.
   sich ein Fenster, in dem sich die **Bevölkerungskosten** aus Wissenschaft oder Münzen
   bestreiten lassen — höchstens bis zur Höhe dieser Kosten, also kein Umtausch.
 - **Handelsrouten:** Jede eigene Stadt außer der Hauptstadt, die über einen durchgehenden
-  Weg mit ihr verbunden ist, bringt +1 auf alle Erträge; bei reiner Eisenbahn +2. Gemischte
-  Strecken zählen als Straße.
+  Weg mit ihr verbunden ist, bringt +1 auf alle Erträge; bei reiner Eisenbahn +4 (seit v96,
+  vorher +2). Gemischte Strecken zählen als Straße.
 - **Ereignisse** (Erweiterung, hart/leicht) mit Barbaren als neutraler Fraktion.
   Seit v58 ein **Modul**: ab Werk aus, im Hauptmenü unter *Einstellungen* zuschaltbar.
 - **Weltwunder** (Erweiterung) mit Pyramidenregel, Kultursieg und vier eigenen Technologien
@@ -773,10 +952,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 1722 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 1924 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (152 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (181 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -815,8 +994,9 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
   `TUT_AUTO_MS`); das Panel steht quer links neben der Karte.
 - **Protokoll:** Würfe hängen eingeklappt an ihrer Aktionszeile (`logHtml`/`rollsBlock`).
 - **Handelsrouten** (`tradeRoutes` in `engine.js`): Städte, die über einen durchgehenden
-  Weg an der Hauptstadt hängen, bringen +1 (Straße) bzw. +2 (reine Eisenbahn) auf alle
-  Erträge. Zwei getrennte Suchen — daher greift die Mischungsregel von selbst.
+  Weg an der Hauptstadt hängen, bringen +1 (Straße) bzw. +4 (reine Eisenbahn, bis v95 +2) auf
+  alle Erträge (`TRADE_ROAD_BONUS`/`TRADE_RAIL_BONUS`). Zwei getrennte Suchen — daher greift die
+  Mischungsregel von selbst.
 - **Nahrung:** Die Bevölkerungskosten (`popFood`) lassen sich mit Gentechnik/Massenmedien
   aus Wissenschaft oder Münzen bestreiten (`coverPop`/`uncoverPop`), höchstens bis zur
   Höhe der echten Kosten. Das Fenster (`foodSheet`) geht zu Zugbeginn auf.
@@ -836,9 +1016,73 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
 
 - **`sw.js`-Version** nach *jeder* Änderung hochzählen, sonst behält das installierte iPad
   den alten Stand.
-- **Feste Spielerreihenfolge** Russland → Griechenland → England → Wikinger. Die gewünschte
-  Zivilisation landet nicht automatisch auf Index 0; Test-Helfer `normalize()` sortiert um.
-  `cfg.startPlayer` zeigt in die **Aufbau-Liste** (CIVS-Reihenfolge), nicht in die Zugreihenfolge.
+- **Spielerreihenfolge** (seit v90 zweierlei): ohne `cfg.seatOrder` fest Russland → Griechenland
+  → England → Wikinger (klassische Aufstellung, Marathon, Tutorial, Tests, `tools_ki.js`), mit
+  ihm die Reihenfolge der Aufbau-Liste (Plätze; die Oberfläche setzt es über `platzNummern`).
+  Ohne Schalter landet die gewünschte Zivilisation nicht automatisch auf Index 0; Test-Helfer
+  `normalize()` sortiert um. `cfg.startPlayer` zeigt in beiden Fällen in die **Aufbau-Liste**,
+  nicht in die Zugreihenfolge. Wer einen neuen Weg baut, eine Partie zu starten, entscheidet über
+  den Schalter (wie `setup-go` und `startFromRecipe`).
+- **Das Erste Spiel hängt an seiner Karte und an Englands Drehbuch** (seit v92). Die beiden
+  Gründungsrätsel sind nur auf `FG_ROWS` eindeutig (5/5 Nahrung, 2/3 Wissenschaft – `test.js`
+  prüft es), England siedelt auf 6/8 und belagert von 5/6 aus. Wer die Karte, Startwerte des
+  Duells, Kosten, Erträge oder Kampfregeln ändert, lässt `test.js` „Erstes Spiel" laufen:
+  Es spielt alle drei Wege bis zum Sieg (seit v93 jeweils Runde 6) und schlägt an, wenn ein Ziel
+  nicht mehr erreichbar ist, ein Rätsel zwei Lösungen bekommt, ein Sieg auf dem falschen Weg fällt
+  oder eine Lektion ausfällt. Die Texte nennen keine Zahl fest, außer den Staffeln der Regel
+  (1/3/6 … Stadtkosten, 2/4/6/8/10 Methode, +3 Belagerungsmaschinen, 4 Münzen je Macht mit
+  Eisenverarbeitung, 4–6 und 50 % beim Würfeln, 3/4 und 7/10 im Duell) – ändert sich eine davon,
+  den Text mitändern (deutsch in `firstgame.js`, englisch in `UI_EN`). Seit v93 hängt es auch an
+  `FG_SPAETER`: Was ein Ziel oder Tipp nennt, muss dort stehen (`test.js` prüft die genannten),
+  und der Würfel-Schritt rechnet mit Mathematik und Taktik als den ersten freien Technologien.
+- **Kampfreihenfolge und Nachspiel gehören zusammen** (seit v90): Das Nachspiel zeigt die
+  Einträge von `combatPhase` in der Reihenfolge, in der gerechnet wurde, jeden im Stand davor
+  (`snap`). Die Reihenfolge selbst ist Regel des Autors – erst die Städte, dann das Flankieren
+  (v91; `test.js` „Kampfphase (v91)" prüft sie, auch dass eine verteidigte Stadt mit laufender
+  Belagerung hält). Wer die Reihenfolge ändert oder eine neue Kampfart einführt, legt dort den Eintrag
+  an (`combatEntry` vor dem Auflösen) und gibt ihm eine Zeile in `combatCaption`. Was
+  `drawMap` aus dem Spielstand liest und ein Kampf ändern kann, muss in `snap` stehen (heute
+  Städte, Armeen, Wunder, Reiche; Straßen und Karte ändert kein Kampf). Die Macht nimmt
+  `combatPhase` seit v94 einmal für die ganze Phase (`macht`); wer eine neue Kampfart einführt,
+  rechnet mit diesen Werten, nicht mit `powerOf` (`test.js` „Die Macht steht für die ganze
+  Kampfphase fest").
+- **Während `ui.combat` ist der Zug schon gerechnet, aber noch nicht gewechselt** (seit v90):
+  Alles, was in dieser Sekunde je Kampf auf den Spielstand zugreifen könnte (Leiste, Blätter,
+  Tipps, Tutorial, Füttern), ist gesperrt oder wartet; ☰ beendet das Nachspiel zuerst; `redraw`
+  zeichnet das Kampfbild und **speichert nicht** – ein so gespeicherter Stand brächte nach dem
+  Neuladen denselben Kampf ein zweites Mal. Wer einen neuen Weg ins Spiel baut (Knopf, Geste,
+  Zeitgeber) oder irgendwo `saveGame` aufruft, prüft `ui.combat` mit. Tests laufen
+  mit `COMBAT_MS = 0` (synchron wie bis v89); der Smoke-Schritt „v90" schaltet es eigens ein. Seit v94 kommt
+  `ui.anim` dazu (Züge von KI und Bots): Dort ist der Zug schon gerechnet **und gespeichert**
+  (samt `S.autoPlayed`) – `redraw` darf speichern, ein Neuladen zeigt nur die Szenen nicht mehr.
+  Gesperrt ist dasselbe (`lockBar`, `endHumanTurn`); ein neuer Weg ins Spiel prüft beides.
+- **Szenen hängen an den Protokollzeilen der Klasse `act`** (seit v94; seit v95 wird jede Zeile
+  genau eine Szene): `animAufnahme` hält bei jeder solchen Zeile den Stand fest. Eine Aktion muss deshalb erst den Stand ändern und dann ins
+  Protokoll schreiben (sonst zeigt ihr Bild den Stand davor), und was eine KI oder ein Bot tut,
+  braucht eine `act`-Zeile – sonst erscheint es erst in der nächsten Szene und unter deren Satz.
+  Zeigt der Unterschied im Stand etwas anderes, als die Aktion ist (eine geschenkte Armee sähe
+  aus wie gebaut, geschenkte Macht wie gekauft), gibt sie ihre Art mit: `log(S, 'act', satz,
+  art)` – 'sonst' zeigt den Satz selbst.
+  `LOG_HOOK` ist ein einziger globaler Haken: nicht verschachteln, nur über `animAufnahme`.
+  Seit v96 zeigt die Kopfzeile je Szene den Vorrat danach (`animKopf`): Was eine Aktion bezahlt,
+  ohne selbst ins Protokoll zu schreiben (das Füttern mit Gentechnik oder Massenmedien vor dem
+  Gründen), erscheint in der nächsten Szene mit – der Stand stimmt, die Marke fasst zusammen.
+- **Was eine Szene zeigt, muss in `animSnap` stehen** (seit v94): `animDraw` zeichnet
+  `Object.assign({}, S, s.bild)` – Städte, Armeen, Straßen, gekaufte Felder, Wunder und Reiche
+  aus der Szene, alles andere (Gelände, Belagerungen, Ereignis) aus dem Stand nach dem Zug. Wer
+  eine Aktion einführt, die etwas anderes auf der Karte ändert, nimmt es dort auf und gibt ihr in
+  `animUnterschied`/`animDetails`/`animText` eine Art (sonst steht nur ihr Protokollsatz da).
+  Gezeichnet wird `s.bild`, der Stand nach der Aktion.
+- **Die Kette der KI- und Bot-Züge hält erst beim nächsten Menschen** (seit v94):
+  `weiterNachAuto` wechselt den Zug und ruft `runBots`, bis `humanTurnStart`. Ohne Wartezeit
+  (`ANIM_MS = 0`, Tests) ist das ein Aufruf im Aufruf; `ui.autoKette` bricht nach 40 Zügen über
+  einen Zeitgeber ab. Wer in die Kette etwas einbaut, das auf eine Eingabe wartet (ein Fenster im
+  Zug einer KI), muss die Kette danach selbst fortsetzen. `smoke.js` lässt die älteren Schritte
+  mit Animationen „Keine" laufen (`prefs.anim = 'aus'`) – sie prüfen das Blatt; die Schritte
+  „v94: …" und „v95: …" schalten sie ein (`mitAnimation`, ab Werk „Langsam").
+- **Die Werte im Kampfbild messen die Karte auf dem Bildschirm** (seit v90): `fightMarks` liest
+  `getBoundingClientRect` des SVG – gedreht (`turning()`) mit vertauschten Seiten. Wer die
+  Karte anders einpasst (etwa wieder zoomen lässt), passt den Maßstab dort an.
 - **Runde und Ereignis** wechseln beim **Startspieler** (`S.startIdx`), nicht bei Index 0.
 - **`hasWonder` heißt „wirkt für dieses Reich"** und ist für Bots immer falsch; für reines
   Eigentum gibt es `ownsWonder`.
@@ -1024,20 +1268,41 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   passt die Texte an (TECHS und `DATA_EN`; `test.js` rechnet jeden Text aus der Kette nach). Die
   Ketten sind einmal nach `t.c` sortiert – ändert sich die Reihenfolge einer Kette in einem
   Techtree (alter Techtree, Marathon), müssten sie je Partie gebaut werden; der Test
-  „Reihenfolge jeder Kette" schlägt dann an. Boni, die nicht aus Technologien kommen (Taiga,
-  Großer Leuchtturm), addieren sich in `tileYield` – nicht in die Ketten legen.
+  „Reihenfolge jeder Kette" schlägt dann an. Boni, die nicht aus Technologien kommen (Großer
+  Leuchtturm), addieren sich in `tileYield` – nicht in die Ketten legen. Die Taiga (seit v95) ist
+  eine Untergrenze und steht deshalb zuletzt in `tileYield`: wer dort einen Zuschlag einführt,
+  setzt ihn davor, sonst hebt Taiga auf 1 und der Zuschlag kommt obendrauf.
 - **Feste Zahlen in Tutorialtexten** (seit v88 gebunden): „+3 Angriff gegen Städte", „6 statt
   3" (3 Macht + `SIEGE_BONUS`) und „120 Wissenschaft, mit der wissenschaftlichen Methode 110"
   stehen fest im Text, deutsch in `tutorial.js`, englisch in `UI_EN`. `test.js` liest beide
   Quellen und vergleicht mit `SIEGE_BONUS` bzw. `techCost` der Singularität im alten Techtree.
   Wer eine dieser Regeln ändert, ändert beide Texte (der deutsche Satz ist der Schlüssel).
+  Seit v95 prüft `smoke.js` im Tutorial-Durchlauf auch „Die vierte Stadt" (Vorrat, Gründungskosten,
+  Siedelertrag) und „Jede Bevölkerung isst" (Nahrung über den Verbrauch) gegen die Regelmaschine –
+  die Taiga änderte zwei davon, und bis dahin merkte es kein Test. Das Tutorial spielt Russland
+  mit Taiga: Wer Erträge, Fähigkeiten oder Kosten ändert, liest die übrigen Zahlen der Texte nach
+  (etwa die Ertragstabelle in „Woher deine Ressourcen kommen", „Verteidigung 9").
+- **Frisch gezeigte Blätter verwerfen Tipps** (seit v89): 0,4 s nach jedem `sheet()` zählt ein
+  echter Klick auf einen Knopf in `#sheet-body` nur, wenn es der Knopf ist, dessen Tipp gerade
+  neu gezeichnet hat. Folgen: (a) Wer ein Blatt baut, dessen Knöpfe sich wiederholt schnell
+  tippen lassen sollen (wie „+1 Macht"), gibt ihnen eine feste `data-act`/`data-label` – die
+  Zufalls-id ändert sich bei jedem Neuzeichnen und taugt nicht als Kennung (`tapKey`).
+  (b) Tests, die echte Klick-Ereignisse schicken, setzen `sheetCalm.until = 0`, sonst verpufft
+  der Klick; `.onclick()` direkt umgeht die Wache. (c) Ein Blatt ohne Wache braucht die Klasse
+  `locked` (wie das Bot-/KI-Blatt).
+- **Wie oft eine Stadt wächst, steht in `growLimits`** (seit v89 mit `GROW_EXTRA_PAID`): je
+  Technologie dort ein bezahlter Schritt mehr. Die Texte von Keramik und Dampfmaschine sagen
+  „1× zusätzliches Wachstum pro Stadt"; `test.js` hält Liste und Texte zusammen. Die KI wächst
+  über die Regel, ihr fester Zuschlag je Technologie steht in `kiTechBonus`.
 - **Fähigkeitstexte über `abilEffect(a, S)`** (seit v85): im Marathon wirken zwei Fähigkeiten
   anders, die Texte dazu stehen dort (die Methode in `techEffect`). Wer eine Fähigkeit im
   Marathon anders wirken lässt, ergänzt dort den Text – Kopfzeile, Weltblatt, Draft und
   Regelbogen lesen alle diese eine Stelle; `a.e` direkt zeigt den Text des Bogens.
-- **Eine neue JS-Datei muss in sieben Listen** (zuletzt `js/marathon.js`): `index.html`,
+- **Eine neue JS-Datei muss in sieben Listen** (zuletzt `js/anim.js`, v94): `index.html`,
   `sw.js`, `build_single.py`, `smoke.js`, `test.js` (Lade- und Übersetzungsliste),
   `tools_ki.js` – sonst fehlt sie offline, in der Einzeldatei oder in den Prüfprogrammen.
+  `js/firstgame.js` (v92) und `js/anim.js` (v94) stehen wie `js/tutorial.js` in allen außer
+  `tools_ki.js`: die Messreihen laden nur, was die Regelmaschine braucht.
 - **Der Draft zeigt eine Partie ohne Fähigkeiten** (`draftView`, seit v83). Wer in `newGame`
   etwas an Fähigkeiten hängt, sieht es dort nicht – richtig so, gedraftet ist ja noch
   nichts. Die echte Partie entsteht in `draftGo` neu aus `cfg` (gleiche Karte, gleiche Würfe
@@ -1058,6 +1323,32 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   Objekt `hit`): der Schlüssel sind die freien Felder an der Stadt und welche seiner Armeen
   und Städte noch stehen. Wer die Funktion etwas Weiteres lesen lässt (Gelände, Technologien
   …), nimmt es in den Schlüssel auf – sonst rechnet die KI mit alten Plätzen.
+- **Die Zuschläge der Handelsrouten stehen in `TRADE_ROAD_BONUS`/`TRADE_RAIL_BONUS`** (seit v96):
+  `tradeRoutes`, Regelbogen, Straßenknöpfe und `kiTechBonus` lesen sie; die Tutorialtexte nennen
+  „+1"/„+4" fest (deutsch in `tutorial.js`, englisch in `UI_EN` – der deutsche Satz ist der
+  Schlüssel). `smoke.js` vergleicht die Tutorialtexte mit den Konstanten – wer den Zuschlag ändert,
+  ändert dort beide Sprachen.
+- **Kachel `e`, Regelbogen `voll`** (seit v96, Anweisung des Autors): Auf den Kacheln des Bogens
+  und in den Knöpfen, die eine Technologie anbieten, steht `e` – ohne Hinweise, was die Bürokratie
+  mitverdoppelt. Wer einen solchen Hinweis braucht, schreibt den ganzen Text nach `voll` (und
+  englisch an die dritte Stelle von `DATA_EN.tech`); `test.js` prüft, dass keine Kachel die
+  Bürokratie nennt und dass `voll` in beiden Sprachen bei denselben Technologien steht und mit der
+  Kachel beginnt. Nur `rulesModal` liest `techEffectFull`.
+- **Gekaufte Felder zählen zur Hauptstadt – in `tileYieldAt`** (seit v96): Wer Erträge eines
+  Feldes braucht, nimmt `tileYieldAt` (Bürokratie samt Kolonien), nicht `tileYield` (das Gelände).
+  Mit `pre` (aus `incomeBreakdown`) kommen die gekauften Felder aus `pre.kol` – wer `pre` anderswo
+  baut, legt die Menge mit an (ohne `kol` fragt `tileYieldAt` die Liste, langsam, aber richtig).
+- **Die Methode zuerst hängt an zwei Haken in `kiPlan`** (seit v96): `kiMethodeZuerst` (vor der
+  Ausführung) und `kiMethodeOffen` (bricht das Bündel ab). Bündeln heißt `kiImBuendel` – eine Regel
+  für beides; wer das Bündeln ändert, ändert es dort. Eine neue Art, die Methode zu bekommen
+  (eigener Kandidat), gehört in `KI_METHODE`. Eine andere Technologie, die Folgendes verbilligt
+  (etwa Eisenverarbeitung und Gewehre für Macht), hat keinen solchen Vorrang – offener Punkt 51.
+- **Was die Kopfzeile im Nachspiel zeigt, muss in `animSnap` stehen** (seit v96): `animKopf` liest
+  `res`, `foodDeficit`, Macht (über `powerOf`: `power`, Armeen, Städte, Wunder) und Bevölkerung aus
+  den Bildern. `res` wird kopiert; wer etwas Weiteres anzeigt, das sich als Objekt ändert, kopiert
+  es dort ebenso – sonst zeigt jede Szene den Endstand. Und: Eine Aktion muss bezahlen, bevor sie
+  ins Protokoll schreibt (wie für die Karte) – sonst erscheinen ihre Kosten erst in der nächsten
+  Szene.
 - **`tradeRoutes` rechnet mit einer eigenen Stadttabelle** (seit v83, Tempo): wer ändert, wie
   Städte Wege sperren oder als Straße zählen, ändert es dort mit – `effectiveRoad` allein
   reicht nicht. `test.js` vergleicht über eine ganze Marathonpartie mit der Fassung bis v82.
@@ -1142,6 +1433,79 @@ gegen die Fassung davor — identisch).
   Fehlerbehebung, nicht Aufräumen. Ebenso schreibt `mp()` das Dezimalkomma fest.
 
 ## Vollständige Bug-Historie (alle behoben — nicht versehentlich rückgängig machen)
+
+Aus der Sitzung v96:
+- **Die KI erforschte die Wissenschaftliche Methode zu spät** (gemeldet vom Autor: „schlechte
+  Reihenfolge"): andere Technologien zuerst, zum vollen Preis, oder die Methode blieb bezahlbar
+  liegen – in 40 Duellen 23 bzw. 37 Züge. Ursache: Der Planer wählt nach Nutzen je Kosten und
+  bündelt, den Rabatt für alles Folgende sah er nicht; macht eine Forschung die Methode erst
+  verfügbar, lief das geplante Bündel weiter. Jetzt kommt sie zuerst (`kiMethodeZuerst`) bzw. wird
+  neu geplant (`kiMethodeOffen`).
+- **`animSnap` teilte den Vorrat** (latent seit v94, nie sichtbar): Die Kopie eines Reichs nahm
+  `res` als Verweis mit, jedes Bild zeigte also den lebenden Vorrat. Nichts las ihn – erst die
+  laufende Kopfzeile hätte jede Szene mit dem Endstand gezeigt. `res` wird jetzt kopiert.
+
+Aus der Sitzung v95:
+- **Zwei Tutorialzahlen stimmten nach der neuen Taiga nicht mehr** (nie ausgeliefert): Die vierte
+  Stadt bringt +5 🌾 statt +4, in Runde 4 sind es 20 Nahrung über den Verbrauch statt 19. Kein
+  Test prüfte diese Zahlen – gefunden durch einen Vergleich der Tutorialwerte vor und nach der
+  Änderung. Beide Texte angepasst (deutsch und englisch), `smoke.js` prüft sie jetzt.
+- Beim Prüfen in Chromium (nie ausgeliefert): Der eigene Messhaken für die Szenendauer lief nach
+  einem zweiten Start doppelt und meldete Unsinn – das Spiel selbst war richtig.
+
+Aus der Sitzung v94:
+- **Die Macht änderte sich mitten in der Kampfphase** (gemeldet vom Autor): Eroberten die
+  Wikinger mit Kriegerkultur und Burgenbau eine Stadt, flankierten sie im selben Zug schon mit +2;
+  ebenso Zeus und die Bot-Macht (Bevölkerung). Jetzt gilt die Macht vom Anfang der Phase, die neue
+  erst danach.
+- Beim Gegenprobieren gefunden (nie ausgeliefert): Der Test „Fehler im Zug … der Haken ist wieder
+  ab" verglich `LOG_HOOK` über `JSON.stringify` – eine Funktion wird dort zu `null` und sah aus wie
+  ein leerer Haken. Er vergleicht jetzt `LOG_HOOK === null`. Und das Gleiten der Armeen begann in
+  Chromium zuerst gar nicht: Die SMIL-Uhr des SVG läuft seit dem Laden der Seite, ein einmaliges
+  `<animateTransform>` war beim Einfügen schon vorbei – jetzt `begin="indefinite"` und
+  `beginElement()`.
+
+Aus der Sitzung v93:
+- Beim Umbau mit zufälligem Spiel gefunden (nie ausgeliefert): Die Musterlösung des
+  Gegenangriffs stellte die erste Armee auf das einzige Feld, das eine zweite (aus einer
+  zufällig gegründeten Stadt) erreicht hätte, und wollte dann eine dritte bauen. Jetzt zieht die
+  Armee mit den wenigsten erreichbaren Feldern zuerst; eine Armee in einer Stadt gilt nicht als
+  „in Stellung".
+- Protokoll des Ersten Spiels: Die Würfel zeigten nur Sechsen und Einsen (v92) – jetzt 4–6 bzw.
+  1–3, je Technologie fest, und dieselbe Zahl nennt die blasse Kachel.
+
+Aus der Sitzung v92:
+- **Tutorial: „Weiter ›" und „Fertig" auf Englisch deutsch** – `renderTutPanel` setzte die
+  Beschriftung ohne `T()`. Jetzt übersetzt; da das Erste Spiel dasselbe Panel nutzt, setzt das
+  Tutorial auch Kopf, „Tutorial beenden" und die Leiste bei jedem Zeichnen zurück (Smoke-Schritt
+  „v92: das klassische Tutorial hat sein Panel wieder ganz").
+- **Tutorial: „Kosten oben links in der Kachel"** – der Preis steht oben rechts (`.tech .c`
+  rechtsbündig); deutsch und englisch berichtigt.
+- Beim Bauen des Ersten Spiels mit zufälligem Spiel gefunden (nie ausgeliefert): Auf dem
+  Militärweg konnte Englands *andere* Stadt fallen, und Griechenland hatte am Rundenende mehr
+  als 3/4 der Weltbevölkerung – Wirtschaftssieg vor der Hauptstadt; ein langer Militärweg kam an
+  die Singularität heran. Dagegen `fgNurHauptstadt` und `fgKeineSingularitaet`
+  (`ANNAHMEN.md`, „Erstes Spiel (v92)").
+- Ebenfalls vor der Auslieferung, im Browser auf Telefongröße gefunden: Der aufgedeckte Tipp
+  schob im niedrigen Panel (quer) das Ziel aus dem sichtbaren Teil. Jetzt steht der Tipp direkt
+  unter dem Ziel, und `fgTippZeigen` scrollt das Ziel an den oberen Rand des Panels.
+
+Aus der Sitzung v91:
+- **Flanken vor den Städten (v90) zurückgenommen** (Anweisung des Autors): Mit den Flanken
+  zuerst verlor eine Stadt ihre verteidigende Armee, bevor sie angegriffen wurde – Städte, die
+  verteidigt waren, konnten fallen. Nicht wieder einführen: `test.js` „Kampfphase (v91)"
+  (Belagerung 1/2, Armee an der Stadt: die Stadt hält, erst danach fällt die Armee) und der
+  Smoke-Schritt „v91" (erst das Bild der Stadt, dann das der Flanke); Gegenprobe mit den Flanken
+  zuerst schlägt in beiden an.
+
+Aus der Sitzung v89:
+- **Doppeltipp traf einen nachgerückten Knopf** (gemeldet als „beim Öffnen von Fähigkeiten
+  wachsen alle Städte", so nicht nachstellbar; dieser Weg in Chromium nachgestellt): Nach
+  einer Aktion zeichnet sich ein Blatt neu, was oben verschwindet (Liste der Freien
+  Forschung, eine kopierte Technologie, „Kostenlos wachsen"), lässt den Rest nachrücken, und
+  der zweite Tipp traf „Alle Städte wachsen", „Kopieren" bzw. „Bevölkerung wachsen". Nicht
+  wieder einführen: `sheetCalm`/`sheetCalmGuard`; der Smoke-Schritt „v89" tippt mit echten
+  Klick-Ereignissen (Gegenproben: ohne Wache, alles sperren, Bot-Blatt sperren).
 
 Aus der Sitzung v87:
 - **Hochkant lag jedes Blatt außerhalb des Bildschirms** (beim Prüfen in Chromium gefunden):
@@ -1272,7 +1636,8 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
   bestätigungspflichtig. Ausnahme, wenn die Armee gar nicht herauskann.
 
 **Neue Regel**
-- **Handelsrouten** (`tradeRoutes`): +1 bzw. +2 auf alle Erträge je angebundener Stadt.
+- **Handelsrouten** (`tradeRoutes`): +1 bzw. +2 auf alle Erträge je angebundener Stadt (seit
+  v96 +1 bzw. +4).
 
 **Bots**
 - **Armeeprioritäten neu** (neunstufig, siehe ANNAHMEN.md). 1–6 werden in `botPlanArmies`
@@ -1578,7 +1943,7 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    = +2 Nahrung von Fischerei/Segeln + eigene Münze, ebenso Grüne Revolution); Ketten
    verschiedener Felder addieren sich (Astronomie zu Containerlogistik, Papier zu
    Landwirtschaft). (b) „Niedriger" heißt billiger im selben Feld, in allen Techtrees dieselbe
-   Reihenfolge. (c) Taiga und Großer Leuchtturm addieren sich weiter. (d) Ein billigeres Glied,
+   Reihenfolge. (c) Taiga und Großer Leuchtturm addieren sich weiter (Taiga seit v95: Punkt 49). (d) Ein billigeres Glied,
    das nach einem teureren kommt, bringt keinen Ertrag mehr dazu (Mathematik nach KI). (e) Gilt
    sofort auch in gespeicherten Partien. (f) Der Bürokratie-Zusatz fehlt an beiden Zeilen
    (Handelsrouten, Gentechnik); der Regelbogen („Mit Bürokratie zählt das doppelt.") und der
@@ -1592,6 +1957,101 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    Reihen, Tabelle in `ANNAHMEN.md`. Nicht neu abgestimmt: der feste KI-Zuschlag für
    Belagerungsmaschinen (`kiTechBonus` 4). Ob Menschen jetzt Ketten überspringen (etwa gleich
    zur KI statt Mathematik zuerst), zeigt erst das Spielen.
+42. **„Beim Öffnen von Fähigkeiten wachsen alle Städte" – nur eingegrenzt (v89).** Das Öffnen
+   ändert nachweislich nichts am Spielstand (jsdom, 20 Partien × bis zu 8 Züge), ein
+   Doppeltipp auf „Fähigkeiten" erreicht das Blatt nicht (die Leiste liegt darüber). Gefunden
+   und behoben ist nur der Weg über einen zweiten Tipp auf einen nachgerückten Knopf bzw. auf
+   ein noch hereingleitendes Blatt (Bug-Historie v89). Tritt es wieder auf: Reich, Fähigkeit,
+   was davor getippt wurde und ob die Städte einmal oder mehrfach wuchsen, dazu das Protokoll
+   („Stadt wächst …"-Zeilen zeigen, über welchen Weg).
+43. **Getroffene Auslegungen (v89) – zum Ändern angeboten.** (a) 0,4 s Wartezeit nach dem
+   Öffnen/Neuzeichnen, für alle Blätter außer dem Bot-/KI-Blatt; derselbe Knopf sofort. (b)
+   Keine Rückfrage vor „Alle Städte wachsen". (c) „inkl. …" ist aus den Techtexten ganz
+   entfernt, also auch aus der Technologieliste des Regelbogens (eine Textquelle); der Absatz
+   unter der Geländetabelle erklärt die Regel weiter. (d) Der zusätzliche Schritt der
+   Dampfmaschine ist ein bezahlter (je Stadt und Runde), für den die Dampfmaschine wie
+   gewohnt keine Münzen verlangt. (e) Keramik heißt jetzt „1× zusätzliches Wachstum pro
+   Stadt" – gleiche Wirkung wie „Bevölkerung 2× pro Runde wachsen lassen". (f) Gemessen
+   (`tools_ki.js`, Startwerte wie v88): gegen Bots gewinnt die KI so oft wie vorher (29 → 30 von
+   60 gegen David, 14 → 14 von 40 gegen drei Könige); KI gegen KI enden mehr Duelle mit dem
+   Wirtschaftssieg (29 → 36 von 100). Tabelle in `ANNAHMEN.md`.
+44. **Erledigt (v91): Kampfreihenfolge.** v90 hatte auf Flanken vor den Städten umgestellt (der
+   Wunsch zum Nachspiel nannte diese Reihenfolge). Der Autor hat entschieden: erst die Städte,
+   dann das Flankieren – sonst fielen verteidigte Städte. v91 rechnet wieder wie bis v89, das
+   Nachspiel folgt (Bug-Historie v91, `ANNAHMEN.md` Abschnitt v91).
+45. **Getroffene Auslegungen (v90) – zum Ändern angeboten.** (a) 1 s je Kampf auch bei vielen
+   Kämpfen (gemessen meist 1–2 je Zug, selten über 10, höchstens 16); ein Tipp auf die Karte
+   überspringt den Rest. (b) Auch Flanken, für die die Macht
+   nicht reicht, sind ein Bild („hält"); Belagerungen ohne Angreifer nicht. (c) Die Werte
+   stehen neben dem Kampffeld (mit Strich), nicht darauf. (d) Dazu eine Zeile mit Nummer und
+   Ausgang. (e) Auch die Kämpfe von Bots und KI, vor ihrem Blatt. (f) Ab zwei Kämpfen ein
+   Hinweis über der Leiste; die Meldung des letzten Kampfs nach dem eigenen Zugende entfällt.
+   (g) Zugfolge nach Plätzen nur, wo der Aufbau Plätze nummeriert – klassisch und Marathon
+   bleiben bei Russland → Griechenland → England → Wikinger. (h) Die Beutezüge der Wikinger
+   erscheinen nicht im Nachspiel, nur im Protokoll.
+
+46. **Getroffene Auslegungen (v92/v93, Erstes Spiel) – zum Ändern angeboten.** (a) Griechenland
+   gegen England, Griechenland wegen der kostenlosen Technologien in Runde 1. (b) Verfügbarkeit:
+   die Antike fest ausgewählt; ab dem Mittelalter (seit v93, auf Rückfrage „fest, etwa die Hälfte
+   fehlt") 24 von 46 – was Ziele und Tipps nennen, ist dabei, was das Erste Spiel nicht erklärt,
+   fehlt; die Würfel im Protokoll passen dazu. (c) England nach Drehbuch, ab Runde 5 wachsen
+   seine Städte wieder. (d) Schienen durch Ablehnen mit Begründung statt gesperrter Knöpfe;
+   Zugende nur dort hart gesperrt, wo es nicht umkehrbar wäre (belagerte Stadt, englische Armee),
+   sonst eine Nachfrage. (e) Ziel oben im Panel, Tipp direkt darunter, Lage danach; weiter nach
+   0,9 s ohne „Weiter"-Knopf. (f) Seit v93: die Seite vor der Partie ist ein Fenster über dem
+   Menü (Schließen = zurück ins Menü); der Weg prägt Runde 1–4 über Texte und die Technologie in
+   Runde 3/4 (Militär Belagerungsmaschinen/Eisenverarbeitung, Wirtschaft Keramik/Demokratie,
+   Forschung Schrift/Papier), die Lektionen bleiben für alle dieselben (auf Rückfrage „gemeinsame
+   Grundlagen, vom Weg geführt"). (g) „Anderen Weg ausprobieren" beginnt eine neue Partie; welche
+   Wege gewonnen sind, merkt sich das Gerät. (h) Der Wirtschaftsweg darf die Schwelle jederzeit
+   reißen (vor dem Ende von Runde 4 reicht es nicht). (i) Das Tutorial bleibt („vorerst") – ob und
+   wann es geht, entscheidet der Autor.
+47. **Nicht im Ersten Spiel** (bewusst, es sollte eine erste Partie bleiben): Eisenbahn,
+   Kontrollzone (Schießpulver), Kopieren (Spionage, Kundschafterei, Internet), Sklaverei,
+   Kolonialismus, Atomwaffen, die alternativen Fähigkeiten, Ereignisse und Weltwunder, Marathon.
+   Der Schlusstext nennt sie und verweist auf „Regeln & Technologien"; seit v93 sind die
+   Technologien davon in der Partie gar nicht verfügbar (`FG_SPAETER`). Möglich wäre ein zweites
+   Szenario für Fortgeschrittene.
+48. **Getroffene Auslegungen (v94) – zum Ändern angeboten.** (a) „Macht" fest heißt der Machtwert
+   je Armee (`powerOf`); wer mitkämpft (eine eroberte Burgstadt als Flankenposition), ergibt sich
+   weiter aus dem Stand. Auf die Balance nicht gemessen. (b) Ein Tipp auf die Karte überspringt
+   den Rest eines Zugs, nicht alle bis zum nächsten Menschen. (c) Forschen und Macht zeigen nur
+   ihren Satz, je einmal je Zug; Armeen bauen und ziehen ist eine Szene. (d) 0,9 s je Szene (mit
+   Zügen 1,26 s), ab 8 Szenen schneller, höchstens bis 60 % – in Chromium dauerte eine Runde mit
+   drei KI-Gegnern in Runde 3–5 meist 6–10 s; auf dem iPad nicht gemessen. (e) „Keine
+   Animationen" bringt genau v93 zurück, das Nachspiel der Kämpfe (v90) bleibt also. (f) Das
+   klassische Tutorial behält immer das Blatt. Seit v95 überholt: (b) und (c) – je Aktion eine
+   Szene, nichts mehr zusammengefasst; (d) – die Auswahl Langsam/Schnell/Keine (Punkt 49).
+49. **Getroffene Auslegungen (v95) – zum Ändern angeboten.** (a) „Etwa um die Hälfte langsamer"
+   als das 1,5-Fache gelesen: 1,35 s je Szene, mit gezogener Armee 1,89 s; halbes Tempo wären 1,8
+   bzw. 2,5 s. (b) Langsam kürzt lange Züge nicht – ein später KI-Zug mit über 40 Aktionen dauert
+   dann eine Minute (gemessen: Median 9,4 s, 9 von 10 Zügen höchstens 23,5 s); Schnell kürzt wie
+   v94. (c) Je Protokollzeile eine Szene: „Alle Städte wachsen" eines Menschen wären mehrere (die
+   KI und Bots nutzen es nicht). (d) Taiga: Untergrenze nach Technologien und Leuchtturm, nicht für
+   Vulkan und lahmgelegtes Gelände, Bürokratie verdoppelt danach; „alle Felder" = alle, die
+   Erträge bringen (Umland, gekaufte Felder). (e) Der Grundwert der Taiga für die Draftwahl der KI
+   im Marathon ist noch der alte (0) – die neue Taiga ist stärker, nicht neu gemessen; die Balance
+   der Änderung auch nicht.
+
+50. **Getroffene Auslegungen (v96) – zum Ändern angeboten.** (a) Gekaufte Felder: einmal doppelt,
+   auch am Umland der Hauptstadt; ohne Hauptstadt einfach; bei einer Revolution produzieren sie
+   weiter (wie die Handelsrouten seit v86). (b) „Kacheln" sind alle knappen Angebote einer
+   Technologie (Bogen, Knöpfe unter „Fähigkeiten", Fenster der Wunder-Technologien); den ganzen
+   Text hat nur der Regelbogen. Kolonialismus nennt dort ebenfalls, dass gekaufte Felder zur
+   Hauptstadt zählen. (c) Die Methode zuerst gilt auf allen Stufen und auf jedem Weg zu ihr (auch
+   Freie Forschung, Rückschau, Kopie); sie lohnt, wenn ihr eigener Nutzen positiv ist – es kann
+   also einen Zug geben, in dem die KI sie nimmt, wo sie bis v95 zwei andere Technologien genommen
+   hätte. (d) Kopfzeile: die Zahl springt mit der Szene auf den Stand danach, die Marke erklärt den
+   Sprung; keine eigene Szene „Einkommen" vorweg. Auch die Macht und die Bevölkerung laufen mit.
+   (e) Der Zuschlag der KI für die Technologie Eisenbahn ist aus dem Verhältnis abgeleitet (× 3),
+   nicht gemessen.
+51. **Wie viel stärker die KI mit der neuen Reihenfolge ist, ist nur knapp messbar.** Gepaart, KI
+   Schwer gegen die Fassung bis v95: zu viert 217 : 183 in 400 Partien (p ≈ 0,09), im Duell siehe
+   `ANNAHMEN.md`; klar ist der Unterschied in der Forschung (gut eine halbe Technologie mehr nach
+   Runde 4 bei gleich viel Wissenschaft). Ähnliche Reihenfolgefehler sind denkbar, wo eine
+   Technologie die übrigen Aktionen desselben Zugs verbilligt – Eisenverarbeitung und Gewehre vor
+   dem Machtkauf, Dampfmaschine vor dem Wachsen, Demokratie und Nationalismus vor dem Armeebau –,
+   nicht nachgestellt.
 
 ## Arbeitsweise, die der Autor schätzt
 

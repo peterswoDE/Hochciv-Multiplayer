@@ -3349,27 +3349,27 @@ step('Marathon (v84): höchstens fünf Gründungen je Zug, eroberte Hauptstädte
   } finally { delete p.capTaken; kap.cap = true; }
   G('redraw')();
 });
-step('Marathon (v85): Regelbogen mit doppeltem Rabatt, Freier Forschung bis ins Mittelalter, Startausgleich', () => {
+step('Marathon (v85, v97): Regelbogen mit doppeltem Rabatt, Freie Forschung wie sonst, Startausgleich', () => {
   const S = G('S');
   if (!S.marathon) throw new Error('kein Marathon');
   const soll = {
-    de: ['Techs 2/4/6/8/10 günstiger (je Zeitalter, im Marathon doppelt)',
-      'Technologie des Mittelalters oder früher umsonst erforschen (Marathon)',
-      'Techkosten −4/−8/−12/−16/−20 (je Zeitalter, im Marathon doppelt)',
+    de: ['Techs 2/2/4/4/10 günstiger (je Zeitalter, im Marathon doppelt)',
+      '2× pro Partie eine verfügbare Technologie beliebigen Zeitalters umsonst erforschen (nicht die Singularität)',
+      'Techkosten −4/−6/−8/−10/−20 (je Zeitalter, im Marathon doppelt)',
       'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte',
       'geprüft am Ende jeder Runde, wenn alle gleich oft gezogen haben',
-      'Griechenlands Freie Forschung reicht nur bis ins Mittelalter'],
-    en: ['Techs 2/4/6/8/10 cheaper (by age, doubled in marathon)',
-      'technology of the Middle Ages or earlier for free (marathon)',
-      'Tech costs −4/−8/−12/−16/−20 (by age, doubled in marathon)',
+      'Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Höchstens'],
+    en: ['Techs 2/2/4/4/10 cheaper (by age, doubled in marathon)',
+      'Twice per game, research one available technology of any age for free (not the Singularity)',
+      'Tech costs −4/−6/−8/−10/−20 (by age, doubled in marathon)',
       'Starting compensation: on their very first turn',
       'checked at the end of every round, when everyone has had the same number of turns',
-      'free research only reaches the Middle Ages'],
+      'the scientific method take off twice as much. At most'],
   };
   const lesen = () => { G('rulesModal')(); const t = $('ov-body').textContent.replace(/\s+/g, ' '); G('closeModal')(); return t; };
   const de = lesen();
   for (const t of soll.de) if (!de.includes(t)) throw new Error('fehlt: ' + t);
-  if (de.includes('Industrialisierung oder früher umsonst')) throw new Error('alter Text der Freien Forschung');
+  if (/oder früher umsonst|reicht nur bis ins Mittelalter|2\/4\/6\/8\/10 günstiger|−4\/−8\/−12/.test(de)) throw new Error('alter Text im Regelbogen');
   G('switchLang')('en');
   try {
     G('clearMissing')();
@@ -3426,8 +3426,11 @@ step('Normales Spiel (v85): Griechenland und Methode wie bisher, Startausgleich 
   G('rulesModal')();
   const txt = $('ov-body').textContent.replace(/\s+/g, ' ');
   G('closeModal')();
-  for (const t of ['Techs 1/2/3/4/5 günstiger', 'Technologie der Industrialisierung oder früher umsonst erforschen',
-    'Techkosten −2/−4/−6/−8/−10 (je Zeitalter)', 'Startausgleich: Im allerersten Zug'])
+  for (const t of ['Techs 1/1/2/2/5 günstiger', '2× pro Partie eine verfügbare Technologie beliebigen Zeitalters umsonst erforschen',
+    'Techkosten −2/−3/−4/−5/−10 (je Zeitalter)',
+    'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge 2, 4 bzw. 6 Münzen dazu – zu zweit bekommt der Zweite 4.',
+    'Bevölkerungswachstum kostet keine Nahrung; 1× zusätzliches Wachstum pro Stadt',
+    'wachsen zum Preis einer um 1 kleineren Stadt', 'Jede eigene Armee gibt +1 Macht'])
     if (!txt.includes(t)) throw new Error('fehlt: ' + t);
   if (/im Marathon doppelt|des Mittelalters oder früher/.test(txt)) throw new Error('Marathontext im normalen Spiel');
   // der Mensch beginnt; nach einer Runde stehen die beiden KI mit ihrem Platz im Protokoll,
@@ -3543,11 +3546,21 @@ step('Fähigkeiten: Freie Forschung und Rückschau leben hier, nicht mehr im Tec
   const soll = G('freeTechOptions')(S, pi).map(t => t.k);
   const ist = [...$('sheet-body').querySelectorAll('[data-act^="forschung:"]')].map(b => b.dataset.act.slice(10));
   if (!soll.length || ist.join() !== soll.join()) throw new Error('zur Wahl ' + ist + ' statt ' + soll);
+  // seit v97 zweimal je Partie: der Rest steht da, die zweite geht im selben Zug, danach keine mehr
+  if (!/Noch 2 von 2 kostenlosen Forschungen in dieser Partie/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „noch 2 von 2"');
   $('sheet-body').querySelector(`[data-act="forschung:${ist[0]}"]`).onclick();
   if (!p.techs[ist[0]]) throw new Error('nicht erforscht');
-  if ($('sheet-body').querySelector('[data-act^="forschung:"]')) throw new Error('ein zweites Mal in derselben Runde');
-  if (!/schon genutzt/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „schon genutzt"');
-  if (zahlAbil()) throw new Error('Zahl bleibt nach der Freien Forschung');
+  if (!/Noch 1 von 2/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „noch 1 von 2"');
+  if (zahlAbil() !== 1) throw new Error('mit einer offenen Freien Forschung Zahl ' + zahlAbil());
+  const zweite = $('sheet-body').querySelector('[data-act^="forschung:"]');
+  if (!zweite) throw new Error('die zweite Freie Forschung fehlt');
+  const k2 = zweite.dataset.act.slice(10);
+  G('sheetCalm').until = 0;
+  zweite.onclick();
+  if (!p.techs[k2]) throw new Error('die zweite nicht erforscht');
+  if ($('sheet-body').querySelector('[data-act^="forschung:"]')) throw new Error('eine dritte Freie Forschung');
+  if (!/Die kostenlosen Forschungen dieser Partie sind verbraucht/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „verbraucht"');
+  if (zahlAbil()) throw new Error('Zahl bleibt nach beiden Freien Forschungen');
   G('closeSheet')();
   // Rückschau: eine Technologie des Mittelalters erforschen – die Wahl steht unter „Fähigkeiten"
   const S2 = griechenSpiel('rueckschau'), p2 = G('P')(S2);
@@ -5130,6 +5143,72 @@ step('v96: laufender Vorrat in der Kopfzeile – je Szene der Stand danach und e
     if (!gm.includes('coins:+7:gruen:hud-coins') || !gm.includes('power:+2:gruen:hud-power')) throw new Error('Gewinn: ' + gm.join());
     console.log(`       ${werIst(a.szenen[0].pi)}: ${bericht.join(' · ')} · danach wieder der eigene Stand`);
   });
+});
+
+/* ======================================================= v97 (Anweisung des Autors) */
+// Russland als einziger Mensch auf der Originalkarte, mit dieser Fähigkeit, am Zug
+const russenSpiel = abil => {
+  $('m-new').onclick();
+  G('setupSetMode')('vier');
+  $('setup-map').value = '0'; $('setup-map').onchange();
+  const ri = [...$('setup-list').children].findIndex(x => x.dataset.civ === 'russland');
+  [0, 1, 2, 3].forEach(i => $('setup-list').children[i].querySelector(i === ri ? '[data-kind="human"]' : '[data-kind="ki"]').onclick());
+  const sel = $('setup-list').children[ri].querySelector('[data-abil]');
+  sel.value = abil; sel.onchange();
+  $('setup-start').value = String(ri); $('setup-start').onchange();
+  const mitEreignis = $('setup-events').checked;
+  $('setup-events').checked = false; $('setup-events').onchange();
+  mitBots(() => $('setup-go').onclick());
+  $('setup-events').checked = mitEreignis; $('setup-events').onchange();
+  const S = G('S'), p = G('P')(S);
+  if (p.civ !== 'russland' || p.ability !== abil || p.kind !== 'human')
+    throw new Error(`am Zug: ${p.civ}/${p.ability}/${p.kind} statt Russland/${abil}`);
+  S.map.rows = S.map.rows.map(z => z.replace(/[^X]/g, 'G'));     // Nahrungsgrenze weit weg
+  G('redraw')();
+  return S;
+};
+step('v97: Siedlertrecks wachsen zum Preis der kleineren Stadt, Fruchtbarkeit zweimal je Runde – am Stadtknopf', () => {
+  const knopf = () => $('sheet-body').querySelector('.opt[data-label="Bevölkerung wachsen"]');
+  const preis = () => knopf().querySelector('.cost').textContent;
+  // Siedlertrecks: die Hauptstadt hat 2 Bevölkerung, wachsen kostet 1 und 1
+  let S = russenSpiel('siedler'), p = G('P')(S);
+  const cap = G('capitalOf')(S, S.cur);
+  p.res = { sci: 0, food: 10, coins: 10 };
+  G('tapHex')(cap.r, cap.c);
+  const vorher = preis();
+  if (cap.pop !== 2 || vorher !== '1🌾 1🪙') throw new Error(`Siedlertrecks: Bevölkerung ${cap.pop}, Knopf ${vorher}`);
+  knopf().onclick();
+  if (cap.pop !== 3 || p.res.food !== 9 || p.res.coins !== 9) throw new Error(`gewachsen auf ${cap.pop}, Vorrat ${p.res.food}/${p.res.coins}`);
+  if (!knopf().disabled) throw new Error('ohne Keramik ein zweites Wachstum');
+  G('closeSheet')();
+  // Fruchtbarkeit: keine Nahrung, zweimal je Runde – ohne Keramik
+  S = russenSpiel('wachstum'); p = G('P')(S);
+  const c2 = G('capitalOf')(S, S.cur);
+  p.res = { sci: 0, food: 0, coins: 10 };
+  G('tapHex')(c2.r, c2.c);
+  const erst = preis();
+  knopf().onclick();
+  const dann = preis();
+  if (c2.pop !== 2 || knopf().disabled) throw new Error(`Fruchtbarkeit: nach dem ersten Wachstum ${c2.pop}, zweites ${knopf().disabled ? 'gesperrt' : 'frei'}`);
+  knopf().onclick();
+  if (c2.pop !== 3 || p.res.coins !== 7 || p.res.food !== 0) throw new Error(`zweimal gewachsen auf ${c2.pop}, Vorrat ${p.res.food}/${p.res.coins}`);
+  if (!knopf().disabled || !/schon gewachsen/.test(knopf().textContent)) throw new Error('ein drittes Mal: ' + knopf().textContent);
+  G('closeSheet')();
+  // Regelbogen englisch: die geänderten Texte, nichts unübersetzt
+  G('switchLang')('en');
+  try {
+    G('clearMissing')();
+    G('rulesModal')();
+    const txt = $('ov-body').textContent.replace(/\s+/g, ' ');
+    G('closeModal')();
+    for (const t of ['Techs cost 1/1/2/2/5 less', 'Twice per game, research one available technology of any age for free (not the Singularity)',
+      'Population growth costs no food; one extra growth per city', 'grow at the price of a city one size smaller',
+      'Each of your armies grants +1 power', 'Tech costs −2/−3/−4/−5/−10 (by age)'])
+      if (!txt.includes(t)) throw new Error('fehlt auf Englisch: ' + t);
+    const fehlt = G('missingStrings')();
+    if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
+  } finally { G('switchLang')('de'); }
+  console.log(`       Siedlertrecks 2 → 3: ${vorher} · Fruchtbarkeit 1 → 2 → 3: ${erst}, ${dann}, dann gesperrt · Regelbogen englisch`);
 });
 
 step('kein abgefangener Fehler im Zugablauf', () => {

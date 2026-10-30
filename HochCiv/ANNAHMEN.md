@@ -4865,8 +4865,9 @@ Zivilisationsfarbe, dann `EXTRA_COLORS` (Orange, Gold, Magenta, Schiefer – deu
 verschieden von den vier Zivilisationsfarben und dem Braun der Barbaren). Die Regel dafür
 (`markDoubles`) liegt jetzt in engine.js und gilt im Browser wie auf dem Server.
 
-**Startausgleich ab fünf Reichen:** die Reihe des Autors (Zweiter 1, Dritter 2, Vierter 3
-Münzen) geht weiter – Fünfter 4 … Achter 7. *Annahme*, nicht Anweisung des Autors.
+**Startausgleich ab fünf Reichen:** die Reihe des Autors (seit v98 Zweiter 2, Dritter 4,
+Vierter 6 Münzen; bis v97 1/2/3) geht weiter – Fünfter 8 … Achter 14. *Annahme*, nicht
+Anweisung des Autors.
 
 **Plättchenkarte für 5–8.** Die Vierer-Form (zwei Reihen zu fünf Dreiecken) wird verlängert:
 zwei Reihen zu 7 Dreiecken für 5 und 6 Reiche (14 Plättchen), zu 9 für 7 und 8 (18 – der
@@ -5622,3 +5623,217 @@ In Chromium (iPad quer und hochkant, Telefon quer, deutsch und englisch): eine R
 bei „Langsam" – die Kopfzeile zählt Szene für Szene herunter, die Marken stehen unter den
 Kästchen (hochkant mitgedreht); der Technologiebogen mit der kurzen Kachel der Bürokratie, der
 Regelbogen mit beiden ganzen Texten – ohne Seitenfehler.
+
+## Siedlertrecks und Fruchtbarkeit · Günstige und Freie Forschung · Wissenschaftliche Methode · Kriegerkultur (v97)
+
+Sechs Anweisungen des Autors (30.10., auf Englisch, hier übersetzt):
+
+1. „Russlands ‚Siedlertrecks' sollen nicht nur jede Stadt mit 2 Bevölkerung beginnen lassen –
+   auch das Wachstum soll kosten wie in einer um eins kleineren Stadt."
+2. „Russlands ‚Fruchtbarkeit' soll zusätzlich ein weiteres Wachstum bringen (wie das von Keramik)."
+3. „Griechenlands ‚Günstige Forschung' soll die Kosten um 1/1/2/2/5 senken statt um 1/2/3/4/5."
+4. „Griechenlands ‚Freie Forschung' soll zwei freie Forschungen in der ganzen Partie erlauben
+   (jede Technologie) statt einer je Runde (höchstens Industrialisierung)."
+5. „Die Wissenschaftliche Methode soll die Technologiekosten um 2/3/4/5/10 senken statt um
+   2/4/6/8/10."
+6. „Die ‚Kriegerkultur' der Wikinger soll nur +1 Macht je Armee bringen statt +2."
+
+Die Zahlen stehen als `GREEK_DISCOUNT`, `METHOD_DISCOUNT`, `OLD_METHOD_DISCOUNT`, `FREE_TECH_USES`
+und `WARRIOR_POWER` in `js/data.js`; die beiden Wachstumsregeln haben keine eigene Zahl
+(`growPrice`, `growLimits` in `js/engine.js`). Die Texte (`data/civs.json` → `js/civs.js`, `TECHS`,
+`DATA_EN`) nennen dieselben Zahlen – ein Test hält sie zusammen.
+
+### Siedlertrecks: Wachstum zum Preis der kleineren Stadt
+
+`growPrice` zieht für Siedlertrecks eine Bevölkerung ab, bevor es je Bevölkerung 1 Nahrung und
+1 Münze rechnet; alles andere wie bisher (Kolonisten das Doppelte, Fruchtbarkeit ohne Nahrung,
+Dampfmaschine ohne Münzen). Von 2 auf 3 kostet 1 und 1, von 5 auf 6 4 und 4. Der Knopf im
+Stadtblatt, „Alle Städte wachsen", die Anzeige mit Umtausch und die KI lesen alle `growPrice`.
+
+Auslegung (zum Ändern angeboten): Wörtlich genommen wächst eine Stadt mit 1 Bevölkerung – nach
+Sklaverei, einer Eroberung oder einem Ereignis – für 0; der bezahlte Schritt der Runde ist damit
+trotzdem verbraucht. Mit der Sklaverei (einmal je Stadt und Runde) heißt das: opfern (+7 Münzen)
+und für 0 zurückwachsen, wo es sonst 1 Nahrung und 1 Münze kostet. Wer eine Untergrenze will
+(Wachstum kostet mindestens das einer Stadt mit 1 Bevölkerung): `Math.max(1, …)` in `growPrice`.
+
+### Fruchtbarkeit: ein Wachstum mehr
+
+`growLimits` zählt für Fruchtbarkeit einen bezahlten Schritt mehr, wie Keramik und Dampfmaschine:
+ohne Technologie zwei je Stadt und Runde, mit Keramik drei, mit Keramik und Dampfmaschine vier,
+mit Verbundwerkstoffen dazu einer kostenlos. Der Wortlaut folgt der Keramik („1× zusätzliches
+Wachstum pro Stadt"). Im Marathon gedraftet wirkt es bei jeder Zivilisation (`isAbil`), auch
+zusammen mit Siedlertrecks (dann Wachstum ohne Nahrung, Münzen der kleineren Stadt, zweimal je
+Runde).
+
+### Günstige Forschung 1/1/2/2/5 · Wissenschaftliche Methode 2/3/4/5/10
+
+`techCost` liest die Rabatte je Zeitalter aus `GREEK_DISCOUNT` und `METHOD_DISCOUNT`; an fünfter
+Stelle steht die Singularität (weiter 5 bzw. 10, 120 → 105 mit beidem). Im Marathon doppelt
+(v85): 2/2/4/4/10 und 4/6/8/10/20 – `abilEffect` und `techEffect` rechnen die Marathontexte aus
+denselben Zahlen. Das Erste Spiel (Griechenland mit Günstiger Forschung) erklärt den Rabatt jetzt
+mit `GREEK_DISCOUNT` statt mit festen Zahlen.
+
+**Der alte Techtree behält die Methode von bis v96** (`OLD_METHOD_DISCOUNT`, `methodDiscount(S)`;
+gilt mit `S.oldTree`, also im Tutorial und in Partien von vor v82). Grund: Das Tutorial läuft auf
+Schienen mit festen Zahlen. Mit der neuen Methode kostete Burgenbau (Mittelalter, 7) dort 4 statt 3,
+und am Ende des Zugs fehlte genau die 1 Wissenschaft fürs Rad („Übrig ist 1 Wissenschaft – genau
+der Preis für Rad"), die Straßen danach und alles Weitere. Vorbild ist v84, als das Tutorial seine
+alten Militärkosten behielt. Der Bogen nennt im alten Techtree deshalb „Techkosten
+−2/−4/−6/−8/−10" (`techEffect`), die Tutorialtexte („2 in der Antike, 4 im Mittelalter …",
+„2/4/6/8", „Burgenbau (3)") bleiben richtig – `test.js` bindet sie an `OLD_METHOD_DISCOUNT`.
+Griechenlands Rabatt gilt auch im alten Techtree neu; im Tutorial ist Griechenland ein Bot.
+
+Das Beispiel aus dem Regelheft (Test „Griechische Technologiekosten aus dem Beispiel", alter
+Techtree) rechnet mit dem alten Rabatt: Papier und Alchemie kosten jetzt 5 und 7 statt 4 und 6,
+Biologie mit der Methode 7 statt 6. Der Test nennt beide Zahlen.
+
+**Erstes Spiel:** Der Forschungsweg siegt mit der Musterlösung in **Runde 7** statt 6. Nachgestellt
+(Musterlösung, Runde für Runde): Zu Beginn von Runde 6 stehen alle vier Felder in der
+Industrialisierung statt in der Moderne – Mittelalter, Industrialisierung und Moderne kosten
+Griechenland mit der Methode je 2–5 mehr, in Runde 5 reicht es nicht mehr für die Moderne in allen
+Feldern; in Runde 6 kommt die Moderne, in Runde 7 die Singularität (105). Erst forschen, dann
+wachsen half nicht (in Runde 6 fehlte dann das Einkommen). Militär- und Wirtschaftsweg siegen
+weiter in Runde 6. Kein Text der Partie nennt eine Runde.
+
+**KI:** Der feste Zuschlag der Methode in `kiTechBonus` schrumpft im Verhältnis ihres Rabatts ab
+dem Mittelalter (`kiMethodeAnteil`: 3 + 4 + 5 = 12 statt 4 + 6 + 8 = 18, also zwei Drittel; im
+alten Techtree 1) – abgeleitet, nicht gemessen. Die Reihenfolge „Methode zuerst" (v96) bleibt.
+
+### Freie Forschung: zweimal je Partie
+
+`freeTechOptions`: Solange von `FREE_TECH_USES` (2) eine offen ist, steht jede verfügbare, noch
+nicht erforschte Technologie zur Wahl – aus jedem Zeitalter, im Marathon genauso (dort reichte
+sie v85–v96 nur bis ins Mittelalter; `MARATHON_FREE_TECH_AGE` und `freeTechMaxAge` sind weg).
+Gezählt wird in `p.freeTechsUsed` (`freeTechsLeft`); `migrateState` löscht das alte
+`p.freeTechUsed` (die Runde der letzten Nutzung) – ein Spielstand von v96 hat danach beide offen.
+
+Auslegungen (zum Ändern angeboten):
+
+* (a) „Jede Technologie" heißt jede **verfügbare** (ausgewürfelte): Das „jede" steht gegen
+  „höchstens Industrialisierung", und die Rückschau sagt eigens „auch nicht freigeschaltete".
+* (b) **Nicht die Singularität:** Wie bei der Raumfahrt („eine Technologie gratis") holt sie nur
+  Oxford gratis, das sie ausdrücklich nennt. Sonst wäre die zweite Freie Forschung fast immer die
+  Singularität (105–120 Wissenschaft und der Sieg). Wer sie zulassen will: `researchable` statt
+  `techPool` in `freeTechOptions`.
+* (c) Beide dürfen in denselben Zug.
+* (d) Die Zahl an „Fähigkeiten" zählt die Freie Forschung weiter, solange eine offen ist und etwas
+  zur Wahl steht – nach der Regel von v87 („was gerade gratis offensteht"). Weil sie nicht mehr
+  verfällt, steht die Zahl bei diesem Griechenland oft die halbe Partie. Wer das nicht will:
+  `freeActions`.
+* (e) Ein Dunkles Zeitalter sperrt sie wie jede Forschung (wie bisher).
+
+Das Blatt „Fähigkeiten" nennt den Rest: „Noch 2 von 2 kostenlosen Forschungen in dieser Partie."
+bzw. „Die kostenlosen Forschungen dieser Partie sind verbraucht." (bis v96 „Diese Runde schon
+genutzt."). Der Spieltipp „Mit Griechenlands freier Forschung ist ein explosiver Start ein Muss."
+stimmte nicht mehr; jetzt (deutsch und englisch an derselben Stelle): „Griechenlands Freie
+Forschung gibt es nur zweimal je Partie. Hebe sie für teure Technologien der Moderne auf, statt
+sie früh für billige auszugeben."
+
+**KI:** Bis v96 war die Freie Forschung jede Runde zu nutzen, die KI nahm sie einfach mit. Jetzt
+fehlt, was früh verbraucht wird, später bei einer teureren Technologie – und das sieht die
+Bewertung nicht (übrige Ressourcen zählen in `kiValue` nicht, eine aufgesparte Freie Forschung
+ebenso wenig). `kiFreeTechChoices`: Die KI erwägt sie nur für Technologien der Moderne (die
+teuersten, und je Feld eine verlangt die Singularität) – oder gegen Ende, wenn nicht mehr Runden
+bleiben (`K.R`) als Freie Forschungen offen sind, für alles, was geht. Gemessen (KI Schwer gegen KI
+Schwer im Duell, Plättchenkarte, ein Platz Griechenland mit Freier Forschung): In 60 Partien
+(dieselben Startwerte, die Gegner mit wechselnder Zivilisation und Fähigkeit) nutzte sie in 53
+beide, in 3 eine, in 4 keine
+(dort war die Partie vorher aus); 101 der 109 Nutzungen galten der Moderne, die übrigen kamen über
+die Regel fürs Ende (5 Industrialisierung, 2 Mittelalter, 1 Antike), alle in Runde 3–5 (Median 4;
+die Partien enden im Median in Runde 6). Griechenland gewann 25 der 60 – mit den Regeln von v96
+(Freie Forschung jede Runde) 36, dort 3–8 Nutzungen je Partie, ab Runde 1, fast alle in Antike und
+Mittelalter. Die übrigen Änderungen von v97 wirken in beiden Läufen auf die Gegner mit; die
+Messung zeigt, dass die KI die Freie Forschung sinnvoll aufhebt und dass die Fähigkeit deutlich
+schwächer ist, nicht, wie stark genau (60 Partien, Standardfehler gut 6 Prozentpunkte).
+
+### Kriegerkultur +1
+
+`powerBonus` und `kiPowerBonus` rechnen `WARRIOR_POWER` (1) je Armee, mit Burgenbau auch je
+Stadt. Auslegung (zum Ändern angeboten): Die Anweisung nennt nur die Armeen; die Städte mit
+Burgenbau bringen dasselbe wie eine Armee – so steht es seit v83 im Text („Jede eigene Armee gibt
++2 Macht – mit Burgenbau auch jede eigene Stadt"), also jetzt auch +1. Wer die Städte bei +2 lassen
+will: in `warriorUnits` die Städte doppelt zählen. Die Bewertung der KI für Burgenbau mit
+Kriegerkultur schrumpft im selben Verhältnis (0,75 je Punkt und Stadt statt 1,5 je Stadt). Der Test
+„Die Macht steht für die ganze Kampfphase fest" (v94) baut seine Lagen jetzt aus `WARRIOR_POWER`:
+Die Gegenseite hat genau die Macht vom Anfang der Phase (Gleichstand hält), mit dem Wert danach
+fiele die Entscheidung anders.
+
+### Draftwerte im Marathon
+
+`KI_DRAFT_BASE`: Fünf der gemessenen Werte (v85, 200 Marathonpartien) passen nicht mehr. Geschätzt,
+**nicht gemessen** – das Werkzeug dafür liegt nicht im Paket (`tools_ki.js` kennt den Marathon
+nicht): Freie Forschung 8,5 → 4,5 (der frühe, sich aufschaukelnde Vorsprung fällt weg), Günstige
+Forschung 5 → 4, Kriegerkultur 3,5 → 2,5, Siedlertrecks 3 → 5,5, Fruchtbarkeit 5 → 7.
+
+### Balance
+
+Auf die Balance gemessen ist nur, was oben bei der Freien Forschung steht. Wie stark Siedlertrecks
+und Fruchtbarkeit jetzt sind, wie viel Griechenland und die Wikinger verlieren – nicht gemessen.
+
+### Abgesichert (v97)
+
+`test.js`: das Beispiel aus dem Regelheft mit den neuen Zahlen; Techtree (Antike je 1, Industrialisierung
+je 2 weniger, Methode −4 in der Industrialisierung); Marathon (Papier 18 − 2, mit der Methode 18 − 6,
+beides bei Chemie, Singularität 105 bzw. 270, die Texte 2/2/4/4/10 und −4/−6/−8/−10/−20, die Freie
+Forschung mit dem Text des Bogens, der Zuschlag der KI doppelt); die Zahlen in den Texten, deutsch und
+englisch, samt dem Satz im Ersten Spiel; Kriegerkultur (+1 je Armee, Machtverlust, mit Burgenbau +3 bei
+einer Armee und zwei Städten, die KI genauso) und die Kampfphase von v94 aus `WARRIOR_POWER`;
+„Russland: Alternativen" – Siedlertrecks 2 → 3 für 1/1, 5 → 6 für 4/4, 1 → 2 für 0 (der Schritt ist
+verbraucht), bezahlt wird der Preis der kleineren Stadt, die Grundfähigkeit wie bisher; Fruchtbarkeit
+zwei bezahlte Schritte (mit Keramik drei, mit allem vier und einer kostenlos), zweimal in einer Runde
+ohne Nahrung, ein drittes Mal nicht; gedraftet beides zusammen und mit den Kolonisten; Freie
+Forschung – zwei, jedes Zeitalter, nur Verfügbares, beide im selben Zug, danach nie wieder, keine
+Singularität, ohne die Fähigkeit nichts, ein Spielstand von v96 hat beide offen; die Zahl an
+„Fähigkeiten" bis beide verbraucht sind; der alte Techtree (Burgenbau 3 statt 4, Robotik, Singularität,
+Text des Bogens, englisch) und die Tutorialtexte an `OLD_METHOD_DISCOUNT`; KI (Anteil der Methode, früh
+nur die Moderne, gegen Ende alles, ein Zug nimmt Robotik umsonst, früh ohne Moderne keine, in der
+letzten erwarteten Runde eine); Erstes Spiel: der Forschungsweg siegt in Runde 7. `smoke.js`: Regelbogen
+im Marathon (deutsch und englisch, kein alter Text) und im normalen Spiel mit allen sechs neuen Texten;
+die Freie Forschung im Blatt „Fähigkeiten" – „Noch 2 von 2", die zweite im selben Zug, „verbraucht",
+die Zahl an der Leiste erst danach weg; „v97: …" – Stadtknopf mit Siedlertrecks (2 → 3 für 1🌾 1🪙,
+danach gesperrt) und Fruchtbarkeit (1 → 2 → 3 ohne Nahrung, dann „schon gewachsen"), Regelbogen
+englisch ohne fehlende Übersetzung.
+Gegenproben (je eine Stelle absichtlich falsch, 15 Stück): Siedlertrecks ohne Abzug, Siedlertrecks mit
+Untergrenze 1, Fruchtbarkeit ohne das Wachstum, Freie Forschung ohne Zähler, mit der Singularität, bis
+zur Industrialisierung wie bis v96, die KI ohne Aufheben, die KI ohne die Regel fürs Ende, der alte
+Techtree mit der neuen Methode, Griechenland mit 1/2/3/4/5, die Methode mit 2/4/6/8/10, Kriegerkultur
++2, Burgstädte doppelt, die KI mit +2, `migrateState` ohne Aufräumen – `test.js` schlägt bei jeder an
+(ohne die Zeitmessung, die bei parallelen Läufen ohnehin anschlug).
+In Chromium (Einzeldatei; iPad quer, Telefon quer): das Blatt „Fähigkeiten" mit der Freien Forschung
+(„Noch 2 von 2 …", nach einer „Noch 1 von 2 …", die Zahl an der Leiste bleibt), das Stadtblatt mit
+Siedlertrecks (1🌾 1🪙), der Regelbogen englisch mit den sechs Texten – ohne Seitenfehler.
+
+## Startausgleich 2/4/6, zu zweit 4 (v98)
+
+Anweisung des Autors (30.10., auf Englisch, hier übersetzt): „Den Münzausgleich für den Zweiten,
+Dritten und Vierten auf 2/4/6 Münzen erhöhen. Zu zweit soll der Zweite 4 Münzen bekommen."
+
+* `START_BONUS_COINS` = [0, 2, 4, 6] (bis v97 [0, 1, 2, 3]) und `START_BONUS_DUEL` = 4 (bis v97 galt
+  auch zu zweit die Reihe, also 1). `startBonus` fragt die Zahl der Reiche (`empireCount`, ohne
+  Barbaren – dieselbe Zählung wie `turnPosition`): bei zweien bekommt der Zweite `START_BONUS_DUEL`,
+  sonst gilt die Reihe – zu dritt 2 und 4, zu viert 2, 4 und 6. Im Protokoll wie bisher
+  („Startausgleich: +4 Münzen (2. in der Zugfolge).").
+* Der Satz im Regelbogen kommt jetzt aus den Zahlen (`startBonusText`): „Startausgleich: Im
+  allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge 2, 4 bzw. 6 Münzen dazu – zu
+  zweit bekommt der Zweite 4." (englisch entsprechend).
+* **Auslegungen** (zum Ändern angeboten): (a) „Zu zweit" heißt zwei Reiche, nicht nur der Modus
+  „1 gegen 1" – im Aufbau ist das dasselbe, in Tests und Werkzeugen nicht immer; wer es an den Modus
+  binden will, nimmt `S.duel`. (b) Zu dritt gilt die Reihe (2 und 4) – genannt waren nur der Zweite bis
+  Vierte und das Spiel zu zweit. (c) Bots bekommen weiter nichts, ihr Platz zählt mit: Ist ein Bot
+  Startspieler eines Duells, bekommt der Mensch als Zweiter 4. (d) Das Erste Spiel ist ein Duell –
+  England (KI) bekommt als Zweite jetzt 4 statt 1 Münze. Sein Drehbuch gründet in Runde 1 und lässt die
+  Hauptstadt wachsen, mehr gibt es nicht aus: Die Musterlösungen aller drei Wege laufen Schritt für
+  Schritt wie in v97 (verglichen über die Spur je Runde).
+* **Nicht gemessen.** Am nächsten liegt die Empfindlichkeit aus v85 (KI gegen KI, Regeln von damals,
+  Abschnitt v85): im Duell gewann der Startspieler mit +1 für den Zweiten 72,0 %, mit +3 68,4 %; zu
+  viert mit 0/2/4/6 37,7 / 31,5 / 25,3 / 5,5 % statt 37,5 / 34,7 / 21,8 / 6,0 % mit 0/1/2/3 – der
+  doppelte Ausgleich half dort dem Dritten, nicht dem Vierten.
+
+### Abgesichert (v98)
+
+`test.js` „Startausgleich": die Zahlen, zu viert ab Russland 0/2/4/6 im ersten Zug und nichts in Runde 2,
+die drei Protokollsätze, Startspieler England (4/6/0/2), zu zweit 4 für den Zweiten – in beiden
+Richtungen –, im Duell auch für die KI, zu dritt 2 und 4, Bots nichts (die KI als Dritte 4), zu zweit
+gegen einen Bot als Startspieler 4 für den Menschen, der Satz des Regelbogens deutsch und englisch.
+`smoke.js`: der ganze Satz im Regelbogen des normalen Spiels, im Marathon deutsch und englisch, die
+Protokollsätze der beiden KI. Das Erste Spiel: alle drei Wege wie in v97.

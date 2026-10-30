@@ -570,9 +570,12 @@ function kiTechBonus(S, pi, k, K, y) {
   switch (k) {
     case 'keramik': return 0.5 * H * Math.min(cities, 6);
     case 'verbundwerkstoffe': return cities * H * Math.max(1, H) / 3;
-    case 'dampfmaschine': return 0.35 * H * cities * Math.max(1, popOf(S, pi) / Math.max(1, cities));
+    // keine Münzkosten fürs Wachsen, seit v89 dazu ein bezahlter Schritt mehr – der gewichtet wie Keramik
+    case 'dampfmaschine': return 0.35 * H * cities * Math.max(1, popOf(S, pi) / Math.max(1, cities)) +
+      0.5 * H * Math.min(cities, 6);
     case 'rad': return 1.2 * H * Math.max(0, cities - 1) + 2;
-    case 'eisenbahn': return 1.0 * H * Math.max(0, cities - 1) + 2;
+    // Je Stadt das, was die Bahn über die Straße hinaus bringt (seit v96 +4 statt +2, also 3 statt 1)
+    case 'eisenbahn': return 1.0 * (TRADE_RAIL_BONUS - TRADE_ROAD_BONUS) * H * Math.max(0, cities - 1) + 2;
     case 'navigation': return 5;
     case 'kartografie': return 1.5 * Math.max(0, 7 - cities) + 1;
     case 'alchemie': return 0.12 * H * Math.max(0, y.sci) + 2;
@@ -847,9 +850,9 @@ function kiWonderValue(S, pi, K) {
   return v;
 }
 
-/* Bewertung nach dem Zug: auf einer Wegwerfkopie die Kampfphase durchrechnen
-   (Belagerungen, Flankieren, Wirtschaftssieg), dann kiValue. So sieht die Bewertung, was
-   eine Aktion am Zugende auslöst. X wird dabei verändert – nur mit Kopien aufrufen. */
+/* Bewertung nach dem Zug: auf einer Wegwerfkopie die Kampfphase durchrechnen (Belagerungen,
+   dann Flankieren; dazu der Wirtschaftssieg), dann kiValue. So sieht die Bewertung, was eine
+   Aktion am Zugende auslöst. X wird dabei verändert – nur mit Kopien aufrufen. */
 function kiScore(X, pi, K) {
   if (!X.over) combatPhase(X, pi);
   // Wirtschaftssieg: geprüft am Rundenende (v85). Wer die Runde beschließt, für den ist das
@@ -1181,16 +1184,19 @@ function kiBuildRoadPlan(S, pi, plan) {
   }
   return null;
 }
-/* Herrenlose Felder mit dem besten Ertrag (Kolonialismus). */
+/* Herrenlose Felder mit dem besten Ertrag (Kolonialismus). Seit v96 zählen gekaufte Felder zur
+   Hauptstadt und bringen mit Bürokratie das Doppelte (tileYieldAt) – so auch hier; an der
+   Reihenfolge ändert das nichts, nur an der Schwelle. */
 function kiColonySpots(S, pi) {
   const owned = new Set();
   S.players.forEach((_, i) => controlledTiles(S, i).forEach(k => owned.add(k)));
   const out = [];
+  const f = has(S.players[pi], 'buerokratie') && capitalOf(S, pi) ? 2 : 1;
   for (let r = 0; r < S.map.rows.length; r++) for (let c = 0; c < S.map.rows[r].length; c++) {
     const t = terrainAt(S, r, c);
     if (!t || isOff(t) || TERRAIN[t].block || cityAt(S, r, c) || owned.has(key(r, c))) continue;
     const y = tileYield(S, pi, t);
-    const v = y[0] + y[1] + y[2];
+    const v = f * (y[0] + y[1] + y[2]);
     if (v >= 2) out.push([r, c, v]);
   }
   return out.sort((a, b) => b[2] - a[2]);
@@ -1664,6 +1670,32 @@ const KI_RESEARCH_TAG = /^(tech|free|back|pick|copyf|copyp):/;
      zwanzig Armeen im Rahmen. Gezählt wird, nicht gestoppt – das Ergebnis hängt also nicht
      davon ab, wie schnell das Gerät ist. */
 const KI_BATCH = /^(grow|gfree|tech|free|back|pick|copyf|copyp|road|col):/;
+// Wird `x` im selben Schritt wie `pick` gebündelt ausgeführt? (eine Regel für kiPlan und kiMethodeZuerst)
+const kiImBuendel = (x, pick) => x !== pick && KI_BATCH.test(pick.c.tag) && KI_BATCH.test(x.c.tag) && x.ratio >= pick.ratio * 0.6;
+/* Wissenschaftliche Methode zuerst (v96, Anweisung des Autors: „sie hatte da eine schlechte
+   Reihenfolge"). Die Methode verbilligt jede Technologie, die danach im selben Zug bezahlt wird
+   (−2/−4/−6/−8/−10 je Zeitalter, techCost). Der Planer wählt nach Nutzen je Kosten und sah das
+   nicht: billigere oder lohnendere Technologien kamen zuerst, die Methode danach oder gar nicht.
+   Nachgestellt (KI Schwer gegen sich selbst, 40 Duelle, Planer bis v95): in 23 Zügen bezahlte sie
+   Technologien, während die Methode schon verfügbar war, und nahm sie erst danach (206
+   Wissenschaft verschenkt); in 37 weiteren war sie bezahlbar und blieb liegen, während voll
+   bezahlt wurde – Zahlen und Messung in ANNAHMEN.md, Abschnitt v96.
+   Bezahlt ein Planungsschritt eine Technologie – als beste Aktion oder gebündelt – und lohnt die
+   Methode für sich (sie steht unter den bewerteten Kandidaten), kommt sie zuerst: auf dem Weg
+   mit dem besten Verhältnis, den der Planer gefunden hat (bezahlt, Freie Forschung, Rückschau,
+   gratis, Kopie). Danach plant er neu, mit den neuen Preisen (kiPlan). Zurück kommt dieser
+   Kandidat oder null. Wer weniger sieht (Stufe Leicht, `see`), übersieht auch sie öfter. */
+const KI_METHODE = /^(tech|free|back|pick|copyf|copyp):wiss_methode$/;
+// Ließe sich die Methode erforschen? (verfügbar und noch nicht erforscht)
+function kiMethodeOffen(S, pi) { return !!S.players[pi].avail.wiss_methode && !S.players[pi].techs.wiss_methode; }
+function kiMethodeZuerst(S, pi, scored, pick) {
+  if (KI_METHODE.test(pick.c.tag)) return null;                    // ist schon die Wahl
+  const zahlt = x => /^tech:/.test(x.c.tag);
+  if (!zahlt(pick) && !scored.some(x => zahlt(x) && kiImBuendel(x, pick))) return null;
+  let best = null;
+  for (const x of scored) if (KI_METHODE.test(x.c.tag) && (!best || x.ratio > best.ratio)) best = x;
+  return best;
+}
 function kiPlan(S, pi, K, notes, memo) {
   const p = S.players[pi];
   const lvl = K.lvl;
@@ -1713,8 +1745,12 @@ function kiPlan(S, pi, K, notes, memo) {
     // Leichte Stufen vergreifen sich gelegentlich
     if (lvl.slip && scored.length > 1 && kiRandom(p) < lvl.slip)
       pick = scored[Math.min(scored.length - 1, 1 + Math.floor(kiRandom(p) * Math.min(4, scored.length - 1)))];
+    // Die Wissenschaftliche Methode vor jeder anderen Technologie dieses Zugs (v96)
+    const methode = kiMethodeZuerst(S, pi, scored, pick);
+    if (methode) pick = methode;
     const military = /^(strike|defend|flank)/.test(pick.c.tag);
     const before = military ? new Map(armiesOf(S, pi).map(a => [a.id, a.r + ',' + a.c])) : null;
+    const methodeVorher = kiMethodeOffen(S, pi);
     const err = pick.c.run(S);
     if (err) { failed.add(pick.c.tag); continue; }
     if (military) {
@@ -1728,11 +1764,15 @@ function kiPlan(S, pi, K, notes, memo) {
       }
     }
     if (notes && military) notes.push(pick.c.label());
-    // Bündeln: weitere unabhängige Aktionen gleich hinterher
+    // Nach der vorgezogenen Methode neu planen: die übrigen Technologien sind jetzt billiger (v96)
+    if (methode) continue;
+    // Bündeln: weitere unabhängige Aktionen gleich hinterher – außer, eine Forschung hat eben die
+    // Methode verfügbar gemacht (die erste Technologie eines Zeitalters würfelt das nächste aus):
+    // dann neu planen, damit sie vor den übrigen Technologien kommt (v96)
     if (KI_BATCH.test(pick.c.tag)) {
       for (const x of scored) {
-        if (x === pick || !KI_BATCH.test(x.c.tag) || x.ratio < pick.ratio * 0.6) continue;
-        if (S.over) break;
+        if (!kiImBuendel(x, pick)) continue;
+        if (S.over || (!methodeVorher && kiMethodeOffen(S, pi))) break;
         x.c.run(S);
       }
     }

@@ -211,15 +211,19 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 /* --- Griechische Technologiekosten aus dem Beispiel
    Das Beispiel im Regelheft rechnet mit den alten Kosten (Schrift 1, Biologie 15). Die gelten
    seit v82 nur noch im Tutorial – das Beispiel läuft deshalb im alten Techtree. Dieselben
-   Abzüge auf die heutigen Kosten prüft der Abschnitt „Techtree" weiter unten. */
+   Abzüge auf die heutigen Kosten prüft der Abschnitt „Techtree" weiter unten.
+   Seit v97 (Anweisung des Autors) zieht Griechenland 1/1/2/2/5 ab statt 1/2/3/4/5 wie im
+   Regelheft: Papier und Alchemie (Mittelalter) kosten 1 mehr als dort, Biologie
+   (Industrialisierung) ebenso. Die Methode zieht im alten Techtree weiter 2/4/6/8/10 ab
+   (OLD_METHOD_DISCOUNT). */
 {
   const S = mk('griechenland'); S.oldTree = true;
   eq(techCost(S, 0, TECH_BY_KEY.schrift), 0, 'Schrift kostet Griechenland 0');
   eq(techCost(S, 0, TECH_BY_KEY.eisenverarbeitung), 1, 'Eisenverarbeitung kostet 1');
-  eq(techCost(S, 0, TECH_BY_KEY.papier), 4, 'Papier kostet 4');
-  eq(techCost(S, 0, TECH_BY_KEY.alchemie), 6, 'Alchemie kostet 6');
+  eq(techCost(S, 0, TECH_BY_KEY.papier), 5, 'Papier kostet 5 (Regelheft bis v96: 4)');
+  eq(techCost(S, 0, TECH_BY_KEY.alchemie), 7, 'Alchemie kostet 7 (Regelheft bis v96: 6)');
   S.players[0].techs.wiss_methode = true;
-  eq(techCost(S, 0, TECH_BY_KEY.biologie), 15 - 3 - 6, 'Biologie mit Wiss. Methode');
+  eq(techCost(S, 0, TECH_BY_KEY.biologie), 15 - 2 - 6, 'Biologie mit Wiss. Methode (alter Techtree: −6)');
 }
 
 /* --- Stadtgründungskosten: Grundkosten 1/3/6/10 + Distanz */
@@ -624,11 +628,13 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 
 /* --- Die Macht steht für die ganze Kampfphase fest (v94, Anweisung des Autors): „wenn die
    Wikinger mit ihrer Fähigkeit eine Stadt erobern und Burgenbau haben, ändert sich ihre Macht
-   mitten in der Phase". Kriegerkultur zählt mit Burgenbau je Stadt +2, ein Bot hat seine
-   Bevölkerung als Macht – bis v93 rechnete die Flanke nach einer Eroberung schon mit dem
-   neuen Wert. Lage je Fall: eine Stadt X, zwei Armeen A1/A2 daneben (nebeneinander), die
-   gegnerische Armee E auf dem anderen gemeinsamen Nachbarn von A1 und A2 – zwei Felder von X,
-   also keine Helferin der Stadt. Die Belagerung von X läuft schon (1/2): der Angriff erobert. */
+   mitten in der Phase". Kriegerkultur zählt mit Burgenbau je Stadt WARRIOR_POWER (seit v97 +1,
+   bis v96 +2), ein Bot hat seine Bevölkerung als Macht – bis v93 rechnete die Flanke nach einer
+   Eroberung schon mit dem neuen Wert. Lage je Fall: eine Stadt X, zwei Armeen A1/A2 daneben
+   (nebeneinander), die gegnerische Armee E auf dem anderen gemeinsamen Nachbarn von A1 und A2 –
+   zwei Felder von X, also keine Helferin der Stadt. Die Belagerung von X läuft schon (1/2): der
+   Angriff erobert. Die Zahlen hängen an WARRIOR_POWER; die Gegenseite hat genau die Macht vom
+   Anfang der Phase – Gleichstand hält, mit dem Wert danach fiele die Entscheidung anders. */
 {
   const lageFinden = S => {
     const frei = (r, c) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c);
@@ -660,26 +666,30 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     finishTurn(S, rec);
     return { S, X, E, rec, flanke: rec.find(e => e.art === 'flanke'), stadt: rec.find(e => e.art === 'stadt' && e.r === X.r && e.c === X.c) };
   };
-  // 1 Die Wikinger greifen an: Kriegerkultur mit Burgenbau, 1 + 2 × (2 Armeen + 1 Stadt) = 7,
-  //   nach der Eroberung von X wären es 9 – England hält mit 8
+  const kk = WARRIOR_POWER;
+  // 1 Die Wikinger greifen an: Kriegerkultur mit Burgenbau, 1 + kk × (2 Armeen + 1 Stadt) (v97: 4),
+  //   nach der Eroberung von X wären es 1 + kk × 4 (v97: 5) – England hält mit dem Wert vom Anfang
+  const vor1 = 1 + 3 * kk, nach1 = 1 + 4 * kk;
   const w = fall([{ civ: 'wikinger', kind: 'human', ability: 'armeemacht' }, { civ: 'england', kind: 'human' }], S => {
     Object.assign(S.players[0].techs, { burgenbau: true, taktik: true });
-    S.players[0].power = 1; S.players[1].power = 8;
+    S.players[0].power = 1; S.players[1].power = vor1;
   });
-  eq([w.X.owner, w.stadt.a, w.stadt.d, !!w.stadt.genommen], [0, 14, 3, true], 'Wikinger erobern X: Angriff 2 × 7 = 14 gegen 3');
-  eq([w.flanke.a, w.flanke.d, w.flanke.sieg, w.S.armies.includes(w.E)], [7, 8, false, true],
-    'die Flanke danach rechnet mit 7 vom Anfang der Phase, nicht mit 9 – Englands Armee hält (7 ≤ 8)');
-  eq(powerOf(w.S, 0), 9, 'nach der Phase gilt die neue Macht: 9');
-  // 2 Die Wikinger verteidigen: England erobert ihre Stadt; ihre Macht fiele von 6 auf 4 – die
-  //   Flanke gegen ihre Armee rechnet weiter mit 6
+  eq([w.X.owner, w.stadt.a, w.stadt.d, !!w.stadt.genommen], [0, 2 * vor1, 3, true], `Wikinger erobern X: Angriff 2 × ${vor1} = ${2 * vor1} gegen 3`);
+  eq([w.flanke.a, w.flanke.d, w.flanke.sieg, w.S.armies.includes(w.E)], [vor1, vor1, false, true],
+    `die Flanke danach rechnet mit ${vor1} vom Anfang der Phase, nicht mit ${nach1} – Englands Armee hält (${vor1} ≤ ${vor1})`);
+  eq(powerOf(w.S, 0), nach1, `nach der Phase gilt die neue Macht: ${nach1}`);
+  // 2 Die Wikinger verteidigen: England erobert ihre Stadt; ihre Macht fiele von kk × 3 auf kk × 2
+  //   (v97: 3 auf 2) – die Flanke gegen ihre Armee rechnet weiter mit dem Wert vom Anfang
+  const vor2 = 3 * kk, nach2 = 2 * kk;
   const v = fall([{ civ: 'england', kind: 'human' }, { civ: 'wikinger', kind: 'human', ability: 'armeemacht' }], S => {
     Object.assign(S.players[0].techs, { taktik: true, belagerung: true });
     Object.assign(S.players[1].techs, { burgenbau: true });
-    S.players[0].power = 5; S.players[1].power = 0;
+    S.players[0].power = vor2; S.players[1].power = 0;
   });
-  eq([v.X.owner, v.stadt.a, v.stadt.d], [0, 16, 9], 'England erobert die Wikingerstadt: 2 × (5 + 3) = 16 gegen 3 + 6 (Burgenbau)');
-  eq([v.flanke.a, v.flanke.d, v.flanke.sieg, v.S.armies.includes(v.E), powerOf(v.S, 1)], [5, 6, false, true, 4],
-    'die Wikingerarmee hält mit 6 vom Anfang der Phase (5 ≤ 6) – erst danach gilt 4');
+  eq([v.X.owner, v.stadt.a, v.stadt.d], [0, 2 * (vor2 + SIEGE_BONUS), 3 + vor2],
+    `England erobert die Wikingerstadt: 2 × (${vor2} + ${SIEGE_BONUS}) gegen 3 + ${vor2} (Burgenbau)`);
+  eq([v.flanke.a, v.flanke.d, v.flanke.sieg, v.S.armies.includes(v.E), powerOf(v.S, 1)], [vor2, vor2, false, true, nach2],
+    `die Wikingerarmee hält mit ${vor2} vom Anfang der Phase (${vor2} ≤ ${vor2}) – erst danach gilt ${nach2}`);
   // 3 Ein Bot (Macht = Bevölkerung) erobert: 4 vor der Eroberung, 5 danach – der Mensch hält mit 4
   const b = fall([{ civ: 'england', kind: 'bot', diff: 'prinz' }, { civ: 'griechenland', kind: 'human' }], S => {
     Object.assign(S.players[0].techs, { taktik: true, belagerung: true });
@@ -1195,7 +1205,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(availBonus(S.players[0]), 0, 'kein Würfelbonus für Griechenland');
   S.players[0].techs.philosophie = true;
   eq(availBonus(S.players[0]), 1, 'Philosophie gibt weiter +1');
-  eq(techCost(S, 0, TECH_BY_KEY.papier), 4, 'Kostenrabatt bleibt (Papier 6−2)');
+  eq(techCost(S, 0, TECH_BY_KEY.papier), 5, 'Kostenrabatt bleibt (Papier 6 − 1, seit v97)');
 }
 
 /* Keramik und Theologie sind Teil der normalen Techliste */
@@ -3185,9 +3195,9 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const kosten3 = S => DREI.map(k => techCost(S, 0, TECH_BY_KEY[k]));
   eq(kosten3(STD), [15, 11, 12], 'Standard: Wiss. Methode 15, Chemie 11, Biologie 12');
   eq(kosten3(OLD), [11, 12, 15], 'alter Techtree: Wiss. Methode 11, Chemie 12, Biologie 15');
-  eq(kosten3(mkT('griechenland', false)), [12, 8, 9], 'Griechenland: in der Industrialisierung je 3 weniger');
-  eq(kosten3(mkT('england', false, ['wiss_methode'])).slice(1), [5, 6],
-    'mit Wissenschaftlicher Methode: Chemie 5, Biologie 6 (−6 in der Industrialisierung)');
+  eq(kosten3(mkT('griechenland', false)), [13, 9, 10], 'Griechenland: in der Industrialisierung je 2 weniger (seit v97; bis v96 3)');
+  eq(kosten3(mkT('england', false, ['wiss_methode'])).slice(1), [7, 8],
+    'mit Wissenschaftlicher Methode: Chemie 7, Biologie 8 (−4 in der Industrialisierung, seit v97; bis v96 −6)');
   {
     const S = mkT('england', false), p = S.players[0];
     S.cur = 0;
@@ -3342,7 +3352,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   eq(techCost(G, gi, TECH_BY_KEY.papier), 6, '… und ohne die griechische Grundfähigkeit kein Rabatt');
   const W = zwei('wikinger', ['griechenland:basis', 'griechenland:basis']);
   const wi = W.players.findIndex(p => p.kind === 'human');
-  eq(techCost(W, wi, TECH_BY_KEY.papier), 4, 'doppelt gedraftet wirkt einfach (Papier 6 − 2, nicht − 4)');
+  eq(techCost(W, wi, TECH_BY_KEY.papier), 5, 'doppelt gedraftet wirkt einfach (Papier 6 − 1, nicht − 2)');
   eq(armiesOf(W, wi).length, 0, 'Wikinger ohne Seefahrer: keine Gratisarmee');
   const K = zwei('russland', ['england:gruenden', 'russland:wachstum']);
   const ki = K.players.findIndex(p => p.civ === 'russland');
@@ -3398,7 +3408,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   eq([techCost(M, 0, SINGULARITY), techCost(N, 0, SINGULARITY)], [300, 120], 'Singularität 300 (v84; v83: 250), normal 120 (v88)');
   const gr = M.players.findIndex(p => p.civ === 'griechenland');
   M.players[gr].drafted = ['griechenland:basis', 'russland:basis'];
-  eq(techCost(M, gr, TECH_BY_KEY.papier), 6 * 3 - 4, 'Rabatte ziehen danach ab, im Marathon doppelt (v85: Papier 18 − 2 × 2)');
+  eq(techCost(M, gr, TECH_BY_KEY.papier), 6 * 3 - 2, 'Rabatte ziehen danach ab, im Marathon doppelt (v85; seit v97 Papier 18 − 2 × 1)');
   M.players[gr].techs.spionage = true;
   ['schrift', 'papier'].forEach(k => { M.players[(gr + 1) % 4].techs[k] = true; });
   eq(['schrift', 'papier'].map(k => copyableTechs(M, gr).find(o => o.tech.k === k).paidCoins), [8, 18],
@@ -3801,7 +3811,7 @@ const duellKarte = (civA, civB, seed) => {
   eq(rates(S, en).foodToCoins, Infinity, 'Bot-England hat keinen Nahrung→Münzen-Kurs');
   eq(tileYield(S, S.players.findIndex(p => p.civ === 'russland'), 'W')[1], 0, 'Bot-Russland ohne Waldbonus');
   const gr = S.players.findIndex(p => p.civ === 'griechenland');
-  eq(techCost(S, gr, TECH_BY_KEY.papier), 4, 'menschliches Griechenland behält den Rabatt');
+  eq(techCost(S, gr, TECH_BY_KEY.papier), 5, 'menschliches Griechenland behält den Rabatt');
   const S2 = newGame({ seed: 3, players: [{ civ: 'griechenland', kind: 'bot' }, { civ: 'england', kind: 'human' }] });
   eq(techCost(S2, S2.players.findIndex(p => p.civ === 'griechenland'), TECH_BY_KEY.papier), 6,
     'Bot-Griechenland ohne Kostenrabatt');
@@ -3817,40 +3827,42 @@ const duellKarte = (civA, civB, seed) => {
   eq(armyCost(B, 0), 5, 'Alternative: normale Armeekosten');
 }
 
-/* Wikinger "Kriegerkultur": +1 Macht je Armee, Zuschlag geht nicht verloren */
+/* Wikinger "Kriegerkultur": +1 Macht je Armee (seit v97, Anweisung des Autors; bis v96 +2),
+   Zuschlag geht nicht verloren */
 {
+  eq(WARRIOR_POWER, 1, 'Kriegerkultur: +1 Macht je Armee (v97)');
   const S = mkA('wikinger', 'armeemacht');
   const cap = capitalOf(S, 0), sp = spotBy(S, cap);
   S.armies.push({ id: 90, owner: 0, r: sp[0], c: sp[1], mp: 0, born: 0 });
-  eq(powerOf(S, 0), 2, 'eine Armee gibt +2 Macht');
+  eq(powerOf(S, 0), 1, 'eine Armee gibt +1 Macht');
   S.armies.push({ id: 89, owner: 0, r: sp[0], c: sp[1] + 1, mp: 0, born: 0 });
-  eq(powerOf(S, 0), 4, 'zwei Armeen geben +4 Macht');
+  eq(powerOf(S, 0), 2, 'zwei Armeen geben +2 Macht');
   S.armies.pop();
   S.players[0].power = 4;
-  eq(powerOf(S, 0), 6, 'Machtwert = eigene Macht + 2 je Armee');
+  eq(powerOf(S, 0), 5, 'Machtwert = eigene Macht + 1 je Armee');
   beginTurn(S);
-  eq(S.players[0].power, 1, 'Machtverlust rechnet mit 6 (halbiert 3) auf die eigene Macht');
-  eq(powerOf(S, 0), 3, 'der Armeezuschlag bleibt erhalten');
+  eq(S.players[0].power, 1, 'Machtverlust rechnet mit 5 (die Hälfte aufgerundet: 3) auf die eigene Macht');
+  eq(powerOf(S, 0), 2, 'der Armeezuschlag bleibt erhalten');
 }
 
 /* Kriegerkultur mit Burgenbau (v83, Anweisung des Autors): mit Burgenbau steht in jeder Stadt
-   eine unbewegliche Armee – sie zählt für Kriegerkultur wie eine echte, +2 Macht je Stadt.
-   Für die Baukosten weiterer Armeen zählt sie nicht. */
+   eine unbewegliche Armee – sie zählt für Kriegerkultur wie eine echte, seit v97 +1 Macht je
+   Stadt (bis v96 +2, wie die Armeen). Für die Baukosten weiterer Armeen zählt sie nicht. */
 {
   const S = mkA('wikinger', 'armeemacht');
   const cap = capitalOf(S, 0), sp = spotBy(S, cap);
   S.armies.push({ id: 90, owner: 0, r: sp[0], c: sp[1], mp: 0, born: 0 });
   S.cities.push({ id: 91, owner: 0, r: cap.r + 3, c: cap.c, pop: 1, cap: false, grown: 0, born: -1 });
-  eq(powerOf(S, 0), 2, 'ohne Burgenbau: nur die Armee (+2)');
+  eq(powerOf(S, 0), 1, 'ohne Burgenbau: nur die Armee (+1)');
   S.players[0].techs.burgenbau = true;
-  eq([powerBonus(S, 0), powerOf(S, 0)], [6, 6], 'mit Burgenbau: Armee + zwei Städte = +6');
+  eq([powerBonus(S, 0), powerOf(S, 0)], [3, 3], 'mit Burgenbau: Armee + zwei Städte = +3');
   eq(armyCost(S, 0), 10, 'die Stadtarmeen zählen nicht für die Baukosten (zweite Armee 10)');
-  eq(kiPowerBonus(S, 0, 1), 6, 'die KI rechnet genauso (eine Armee, zwei Städte)');
-  eq(kiPowerBonus(S, 0, 3), 10, '… und mit geplanten Armeen (drei Armeen, zwei Städte)');
+  eq(kiPowerBonus(S, 0, 1), 3, 'die KI rechnet genauso (eine Armee, zwei Städte)');
+  eq(kiPowerBonus(S, 0, 3), 5, '… und mit geplanten Armeen (drei Armeen, zwei Städte)');
   // die Stadt verteidigt mit dem ganzen Machtwert – der Zuschlag steckt darin
   const vorher = S.players[0].power;
   S.players[0].power = 4;
-  eq(powerOf(S, 0), 10, 'Machtwert = eigene Macht 4 + Zuschlag 6');
+  eq(powerOf(S, 0), 7, 'Machtwert = eigene Macht 4 + Zuschlag 3');
   S.players[0].power = vorher;
   // ohne Kriegerkultur bringt Burgenbau keinen Zuschlag
   const B = mkA('wikinger', 'basis');
@@ -3942,23 +3954,53 @@ const duellKarte = (civA, civB, seed) => {
   eq(b.preview.some(e => /Beutez/.test(e.name)), true, 'sie erscheint als Vorschauzeile');
 }
 
-/* Griechenland: Alternativen ersetzen den Kostenrabatt */
+/* Griechenland: Alternativen ersetzen den Kostenrabatt.
+   Freie Forschung seit v97 (Anweisung des Autors): zweimal je Partie eine verfügbare Technologie
+   aus jedem Zeitalter, auch beide im selben Zug – bis v96 einmal je Runde und nur bis zur
+   Industrialisierung. Die Singularität nicht (wie bei der Raumfahrt). */
 {
-  const S = mkA('griechenland', 'gratistech');
+  const S = mkA('griechenland', 'gratistech'), p = S.players[0];
   eq(techCost(S, 0, TECH_BY_KEY.papier), 6, 'Alternative: kein Kostenrabatt mehr');
-  S.players[0].avail.papier = true;
+  eq([FREE_TECH_USES, freeTechsLeft(p)], [2, 2], 'zwei Freie Forschungen je Partie, beide offen');
+  p.avail.papier = true; p.avail.robotik = true;
   eq(freeTechOptions(S, 0).some(t => t.k === 'papier'), true, 'verfügbare Tech ist gratis erforschbar');
+  eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), true, 'auch aus der Moderne (bis v96 nur bis Industrialisierung)');
+  eq(freeTechOptions(S, 0).some(t => t.k === 'chemie'), false, 'nur Verfügbares (Chemie ist nicht ausgewürfelt)');
+  eq(useFreeTech(S, 0, 'chemie'), T('Nicht möglich.'), '… und nicht Verfügbares geht auch nicht');
+  const vorrat = JSON.stringify(p.res);
   eq(useFreeTech(S, 0, 'papier'), null, 'Gratisforschung klappt');
-  eq(has(S.players[0], 'papier'), true, 'Tech ist erforscht');
-  eq(freeTechOptions(S, 0).length, 0, 'nur einmal pro Runde');
-  S.players[0].avail.robotik = true;
-  S.round++;
-  eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), false, 'nur bis Industrialisierung (Robotik ist Moderne)');
+  eq([has(p, 'papier'), JSON.stringify(p.res) === vorrat, freeTechsLeft(p), p.freeTechsUsed], [true, true, 1, 1], 'Tech ist erforscht, nichts bezahlt, eine bleibt');
+  eq(freeTechOptions(S, 0).map(t => t.k).includes('papier'), false, 'Erforschtes steht nicht mehr zur Wahl');
+  eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), true, 'die zweite geht im selben Zug');
+  eq(useFreeTech(S, 0, 'robotik'), null, 'zweite Gratisforschung: Robotik (Moderne)');
+  eq([has(p, 'robotik'), freeTechsLeft(p)], [true, 0], 'erforscht, keine mehr offen');
+  p.avail.chemie = true;
+  S.round += 3;
+  eq([freeTechOptions(S, 0).length, useFreeTech(S, 0, 'chemie')], [0, T('Nicht möglich.')],
+    'danach nie wieder – auch Runden später nicht');
+  // die Singularität nicht, auch wenn sie erforschbar wäre
+  const G = mkA('griechenland', 'gratistech'), q = G.players[0];
+  for (const f of [0, 1, 2, 3]) q.techs[TECHS.find(t => t.f === f && t.age === 3).k] = true;
+  eq(researchable(G, 0).some(t => t.k === 'singularitaet'), true, 'Ausgangslage: die Singularität ist erforschbar');
+  eq([freeTechOptions(G, 0).some(t => t.k === 'singularitaet'), useFreeTech(G, 0, 'singularitaet')], [false, T('Nicht möglich.')],
+    'die Singularität gibt es nicht umsonst');
+  // ohne die Fähigkeit nichts, Bots auch nicht
+  const N = mkA('griechenland', 'basis');
+  N.players[0].avail.papier = true;
+  eq(freeTechOptions(N, 0).length, 0, 'ohne Freie Forschung keine Gratiswahl');
+  // ein Spielstand von v96 hatte die Runde der letzten Nutzung – migrateState räumt sie ab
+  const A = mkA('griechenland', 'gratistech');
+  A.players[0].freeTechUsed = A.round;
+  A.players[0].avail.papier = true;
+  migrateState(A);
+  eq(['freeTechUsed' in A.players[0], freeTechsLeft(A.players[0]), freeTechOptions(A, 0).some(t => t.k === 'papier')], [false, 2, true],
+    'Spielstand von v96: die alte Runde verschwindet, beide Freien Forschungen sind offen');
 }
 
 /* Marathon (v85, Anweisung des Autors): Griechenlands Günstige Forschung und die
-   Wissenschaftliche Methode ziehen doppelt ab, die Freie Forschung reicht nur bis ins
-   Mittelalter. Im normalen Spiel bleibt alles, wie es war. */
+   Wissenschaftliche Methode ziehen doppelt ab – seit v97 also 2/2/4/4/10 bzw. 4/6/8/10/20. Die
+   Freie Forschung reichte im Marathon nur bis ins Mittelalter; seit v97 gilt sie überall gleich
+   (zweimal je Partie, jedes Zeitalter). Im normalen Spiel zieht nichts doppelt ab. */
 {
   const spiel = (marathon, ab) => {
     const S = newGame({ seed: 7, map: marathon ? marathonMap(7) : undefined, marathon,
@@ -3972,31 +4014,29 @@ const duellKarte = (civA, civB, seed) => {
   const papier = TECH_BY_KEY.papier, chemie = TECH_BY_KEY.chemie;
   {
     const n = spiel(false, 'basis'), m = spiel(true, 'basis');
-    eq([techCost(n.S, n.gr, papier), techCost(m.S, m.gr, papier)], [6 - 2, 18 - 4],
-      'Günstige Forschung: Papier normal 6 − 2, im Marathon 18 − 4 (doppelt)');
+    eq([techCost(n.S, n.gr, papier), techCost(m.S, m.gr, papier)], [6 - 1, 18 - 2],
+      'Günstige Forschung: Papier normal 6 − 1, im Marathon 18 − 2 (doppelt)');
     eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [120 - 5, 300 - 10],
       'Singularität: normal 120 − 5, im Marathon 300 − 10');
     eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6, 18], 'ohne die Fähigkeit kein Rabatt');
     [n, m].forEach(x => { x.S.players[x.ru].techs.wiss_methode = true; x.S.players[x.gr].techs.wiss_methode = true; });
-    eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6 - 4, 18 - 8],
-      'Wissenschaftliche Methode: Papier normal 6 − 4, im Marathon 18 − 8 (doppelt)');
+    eq([techCost(n.S, n.ru, papier), techCost(m.S, m.ru, papier)], [6 - 3, 18 - 6],
+      'Wissenschaftliche Methode: Papier normal 6 − 3, im Marathon 18 − 6 (doppelt)');
     const ch = x => techBase(x.S, chemie);
     eq([techCost(n.S, n.gr, chemie), techCost(m.S, m.gr, chemie)],
-      [Math.max(0, ch(n) - 3 - 6), Math.max(0, ch(m) - 6 - 12)],
-      `beides zusammen, Chemie: normal ${ch(n)} − 3 − 6, im Marathon ${ch(m)} − 6 − 12`);
+      [Math.max(0, ch(n) - 2 - 4), Math.max(0, ch(m) - 4 - 8)],
+      `beides zusammen, Chemie: normal ${ch(n)} − 2 − 4, im Marathon ${ch(m)} − 4 − 8`);
     eq([techCost(n.S, n.gr, SINGULARITY), techCost(m.S, m.gr, SINGULARITY)], [120 - 5 - 10, 300 - 10 - 20],
       'Singularität mit beidem: normal 105, im Marathon 270');
     // Texte: Bogen, Draft und HUD lesen abilEffect, der Techbaum techEffect
     const ab = abilById('griechenland:basis'), gt = abilById('griechenland:gratistech');
-    eq(abilEffect(ab, m.S), 'Techs 2/4/6/8/10 günstiger (je Zeitalter, im Marathon doppelt)', 'Fähigkeitstext im Marathon');
+    eq(abilEffect(ab, m.S), 'Techs 2/2/4/4/10 günstiger (je Zeitalter, im Marathon doppelt)', 'Fähigkeitstext im Marathon');
     eq([abilEffect(ab, n.S), abilEffect(ab, null)], [ab.e, ab.e], 'sonst der Text des Zivilisationsbogens');
-    eq(abilEffect(gt, m.S), '1× pro Runde eine verfügbare Technologie des Mittelalters oder früher umsonst erforschen (Marathon)',
-      'Freie Forschung im Marathon: bis Mittelalter');
-    eq(abilEffect(gt, n.S), gt.e, 'normal: bis Industrialisierung');
+    eq([abilEffect(gt, m.S), abilEffect(gt, n.S)], [gt.e, gt.e], 'Freie Forschung: im Marathon derselbe Text wie sonst (seit v97)');
     eq(abilEffect(abilById('england:gruenden'), m.S), abilById('england:gruenden').e, 'andere Fähigkeiten unverändert');
-    eq(techEffect(TECH_BY_KEY.wiss_methode, m.S), 'Techkosten −4/−8/−12/−16/−20 (je Zeitalter, im Marathon doppelt)',
+    eq(techEffect(TECH_BY_KEY.wiss_methode, m.S), 'Techkosten −4/−6/−8/−10/−20 (je Zeitalter, im Marathon doppelt)',
       'Techtext der Wissenschaftlichen Methode im Marathon');
-    eq(techEffect(TECH_BY_KEY.wiss_methode, n.S), TECH_BY_KEY.wiss_methode.e, 'normal der alte Text');
+    eq(techEffect(TECH_BY_KEY.wiss_methode, n.S), TECH_BY_KEY.wiss_methode.e, 'normal der Text des Bogens');
     // die KI wertet die Methode im Marathon doppelt (ihr fester Zuschlag sieht die Kosten nicht)
     const K = kiContext(n.S, n.ru);
     eq(kiTechBonus(m.S, m.ru, 'wiss_methode', K, {}), 2 * kiTechBonus(n.S, n.ru, 'wiss_methode', K, {}),
@@ -4007,17 +4047,43 @@ const duellKarte = (civA, civB, seed) => {
     const drei = ['papier', 'chemie', 'robotik'];
     [n, m].forEach(x => drei.forEach(k => { x.S.players[x.gr].avail[k] = true; }));
     const frei = x => freeTechOptions(x.S, x.gr).map(t => t.k).filter(k => drei.includes(k)).sort();
-    eq(frei(n), ['chemie', 'papier'], 'Freie Forschung normal: bis Industrialisierung (Chemie ja, Robotik nein)');
-    eq(frei(m), ['papier'], 'im Marathon nur bis ins Mittelalter (Papier ja, Chemie nicht)');
-    eq(useFreeTech(m.S, m.gr, 'chemie'), 'Nicht möglich.', 'Chemie gibt es im Marathon nicht umsonst');
-    eq([useFreeTech(m.S, m.gr, 'papier'), has(m.S.players[m.gr], 'papier')], [null, true], 'Papier schon');
+    eq([frei(n), frei(m)], [['chemie', 'papier', 'robotik'], ['chemie', 'papier', 'robotik']],
+      'Freie Forschung: jedes Zeitalter, im Marathon genauso (bis v96 dort nur bis ins Mittelalter)');
+    eq([useFreeTech(m.S, m.gr, 'chemie'), has(m.S.players[m.gr], 'chemie')], [null, true], 'Chemie gibt es im Marathon jetzt umsonst');
     eq(techCost(m.S, m.gr, papier), techBase(m.S, papier), 'die Alternative hat keinen Kostenrabatt, auch im Marathon nicht');
   }
 }
 
+/* Die Zahlen der Fähigkeiten und der Methode (v97) stehen in den Texten – deutsch (data/civs.json →
+   js/civs.js, TECHS) und englisch (DATA_EN) dieselben wie in den Konstanten. */
+{
+  const ab = id => abilById(id);
+  const en = (c, k) => DATA_EN.abil[c][k][1];
+  const zahlen = GREEK_DISCOUNT.join('/');
+  eq([ab('griechenland:basis').e.includes(zahlen + ' günstiger'), en('griechenland', 'basis').includes(zahlen + ' less')], [true, true],
+    `Günstige Forschung nennt ${zahlen}, deutsch und englisch`);
+  const minus = METHOD_DISCOUNT.map(n => '−' + n).join('/');
+  eq([TECH_BY_KEY.wiss_methode.e.includes(minus), DATA_EN.tech.wiss_methode[1].includes(minus)], [true, true],
+    `Wissenschaftliche Methode nennt ${minus}, deutsch und englisch`);
+  eq([ab('griechenland:gratistech').e.startsWith(FREE_TECH_USES + '× pro Partie'), FREE_TECH_USES === 2 && en('griechenland', 'gratistech').startsWith('Twice per game')],
+    [true, true], 'Freie Forschung nennt, wie oft je Partie');
+  eq([ab('wikinger:armeemacht').e.includes('+' + WARRIOR_POWER + ' Macht'), en('wikinger', 'armeemacht').includes('+' + WARRIOR_POWER + ' power')],
+    [true, true], `Kriegerkultur nennt +${WARRIOR_POWER} Macht`);
+  eq([ab('russland:wachstum').e, en('russland', 'wachstum')].map(t => /zusätzliches Wachstum|extra growth/.test(t)), [true, true],
+    'Fruchtbarkeit nennt das zusätzliche Wachstum');
+  eq([ab('russland:siedler').e, en('russland', 'siedler')].map(t => /kleineren Stadt|one size smaller/.test(t)), [true, true],
+    'Siedlertrecks nennen den Preis der kleineren Stadt');
+  // das Erste Spiel (Griechenland, Grundfähigkeit) erklärt den Rabatt mit denselben Zahlen
+  eq(FG_BY_ID.faehigkeit.gut(), T('Griechenland forscht günstiger: Jede Technologie kostet %s weniger in der Antike, %s im Mittelalter, %s in der Industrialisierung und %s in der Moderne (die Singularität %s).', ...GREEK_DISCOUNT),
+    'Erstes Spiel: der Satz zur Fähigkeit liest GREEK_DISCOUNT');
+  eq(/1 weniger in der Antike, 1 im Mittelalter, 2 in der Industrialisierung und 2 in der Moderne \(die Singularität 5\)/.test(FG_BY_ID.faehigkeit.gut()), true,
+    '… 1/1/2/2/5');
+}
+
 /* Startausgleich (v85, Anweisung des Autors): im allerersten Zug bekommt der Zweite in der
-   Zugfolge 1 Münze, der Dritte 2, der Vierte 3 – zu zweit nur der Zweite 1, zu dritt 1 und 2.
-   Gezählt ab dem Startspieler, nicht nach Zivilisation. Bots bekommen nichts. */
+   Zugfolge Münzen, der Dritte und der Vierte mehr – seit v98 2/4/6 (bis v97 1/2/3), zu zweit der
+   Zweite 4 (bis v97 1), zu dritt 2 und 4. Gezählt ab dem Startspieler, nicht nach Zivilisation.
+   Bots bekommen nichts. */
 {
   // spielt eine Runde und notiert je Reich: Münzen zu Zugbeginn minus Einkommen
   const extra = (players, startPlayer, runden = 1) => {
@@ -4034,28 +4100,45 @@ const duellKarte = (civA, civB, seed) => {
   const ZUGFOLGE = ['russland', 'griechenland', 'england', 'wikinger'];
   {
     const { S, out } = extra(ZUGFOLGE.map(mensch), 0, 2);
-    eq(ZUGFOLGE.map(k => out[k]), [[0, 0], [1, 0], [2, 0], [3, 0]],
-      'zu viert ab Russland: 0/1/2/3 Münzen im ersten Zug, in Runde 2 nichts mehr');
-    eq(S.log.filter(e => /^Startausgleich/.test(e.m)).map(e => e.m), ['Startausgleich: +1 Münze (2. in der Zugfolge).',
-      'Startausgleich: +2 Münzen (3. in der Zugfolge).', 'Startausgleich: +3 Münzen (4. in der Zugfolge).'],
+    eq([START_BONUS_COINS.slice(0, 4), START_BONUS_DUEL], [[0, 2, 4, 6], 4], 'Startausgleich 2/4/6, zu zweit 4 (v98)');
+    eq(ZUGFOLGE.map(k => out[k]), [[0, 0], [2, 0], [4, 0], [6, 0]],
+      'zu viert ab Russland: 0/2/4/6 Münzen im ersten Zug, in Runde 2 nichts mehr');
+    eq(S.log.filter(e => /^Startausgleich/.test(e.m)).map(e => e.m), ['Startausgleich: +2 Münzen (2. in der Zugfolge).',
+      'Startausgleich: +4 Münzen (3. in der Zugfolge).', 'Startausgleich: +6 Münzen (4. in der Zugfolge).'],
       'das Protokoll nennt Betrag und Platz, nur in Runde 1');
   }
   {
     // Startspieler England: England 0, Wikinger 1, Russland 2, Griechenland 3
     const { out } = extra(ZUGFOLGE.map(mensch), 2);
-    eq(ZUGFOLGE.map(k => out[k][0]), [2, 3, 0, 1], 'Startspieler England: gezählt ab dem Startspieler');
+    eq(ZUGFOLGE.map(k => out[k][0]), [4, 6, 0, 2], 'Startspieler England: gezählt ab dem Startspieler');
   }
   {
     const { out } = extra([mensch('griechenland'), mensch('wikinger')], 1);
-    eq([out.wikinger[0], out.griechenland[0]], [0, 1], 'zu zweit: nur der Zweite bekommt 1 Münze');
+    eq([out.wikinger[0], out.griechenland[0]], [0, 4], 'zu zweit: nur der Zweite bekommt 4 Münzen (v98, bis v97 1)');
+    const zwei = extra([mensch('griechenland'), mensch('wikinger')], 0);
+    eq([zwei.out.griechenland[0], zwei.out.wikinger[0]], [0, 4], '… auch andersherum gezählt ab dem Startspieler');
+    const duell = newGame({ seed: 21, duel: true, startPlayer: 0, players: [mensch('england'), { civ: 'russland', kind: 'ki' }] });
+    endTurn(duell);
+    eq(duell.players[duell.cur].res.coins - income(duell, duell.cur).coins, 4, 'im Duell bekommt auch die KI als Zweite 4');
     const drei = extra([mensch('russland'), mensch('england'), mensch('wikinger')], 0);
-    eq(['russland', 'england', 'wikinger'].map(k => drei.out[k][0]), [0, 1, 2], 'zu dritt: 1 und 2');
+    eq(['russland', 'england', 'wikinger'].map(k => drei.out[k][0]), [0, 2, 4], 'zu dritt: 2 und 4');
   }
   {
     const { out } = extra([mensch('russland'), { civ: 'griechenland', kind: 'bot', diff: 'david' },
       { civ: 'england', kind: 'ki' }, { civ: 'wikinger', kind: 'bot', diff: 'david' }], 0);
-    eq([out.russland[0], out.griechenland[0], out.england[0], out.wikinger[0]], [0, 0, 2, 0],
-      'Bots bekommen nichts, die KI schon (England als Dritter: 2)');
+    eq([out.russland[0], out.griechenland[0], out.england[0], out.wikinger[0]], [0, 0, 4, 0],
+      'Bots bekommen nichts, die KI schon (England als Dritter: 4)');
+    // zu zweit mit einem Bot als Zweitem: niemand bekommt etwas; ist der Mensch Zweiter, bekommt er 4
+    const b = extra([{ civ: 'griechenland', kind: 'bot', diff: 'david' }, mensch('wikinger')], 0);
+    eq([b.out.griechenland[0], b.out.wikinger[0]], [0, 4], 'zu zweit gegen einen Bot: der Mensch als Zweiter 4, der Bot nichts');
+    // der Satz im Regelbogen kommt aus den Zahlen, deutsch und englisch
+    eq(startBonusText(), 'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge 2, 4 bzw. 6 Münzen dazu – zu zweit bekommt der Zweite 4.',
+      'Regelbogen: 2, 4 bzw. 6, zu zweit 4');
+    setLang('en');
+    try {
+      eq(startBonusText(), 'Starting compensation: on their very first turn, the second, third and fourth in turn order get 2, 4 and 6 extra coins – with two empires, the second gets 4.',
+        '… englisch');
+    } finally { setLang('de'); }
   }
 }
 {
@@ -4119,6 +4202,51 @@ const duellKarte = (civA, civB, seed) => {
   S.players[0].res = { sci: 0, food: 99, coins: 99 };
   eq(foundCity(S, 0, spot[0], spot[1]), null, 'Stadt gegründet');
   eq(cityAt(S, spot[0], spot[1]).pop, 2, 'neue Städte starten mit 2 Bevölkerung');
+}
+/* Siedlertrecks und Fruchtbarkeit seit v97 (Anweisung des Autors):
+   · Siedlertrecks: Wachstum kostet wie in einer Stadt mit einer Bevölkerung weniger – von 2 auf 3
+     also 1 Nahrung und 1 Münze. Wörtlich: eine Stadt mit 1 Bevölkerung wächst für 0 (der bezahlte
+     Schritt ist trotzdem verbraucht).
+   · Fruchtbarkeit: dazu ein bezahltes Wachstum mehr je Stadt und Runde, wie Keramik. */
+{
+  const gras = X => { X.map.rows = X.map.rows.map(z => 'G'.repeat(z.length)); return X; };   // Nahrungsgrenze weit weg
+  const S = gras(mkA('russland', 'siedler')), p = S.players[0], cap = capitalOf(S, 0);
+  eq([cap.pop, growPrice(S, 0, cap)], [2, { food: 1, coins: 1 }], 'Siedlertrecks: von 2 auf 3 für 1 Nahrung und 1 Münze');
+  cap.pop = 5;
+  eq(growPrice(S, 0, cap), { food: 4, coins: 4 }, '… von 5 auf 6 für 4 und 4');
+  cap.pop = 1;
+  eq(growPrice(S, 0, cap), { food: 0, coins: 0 }, '… eine Stadt mit 1 Bevölkerung wächst für 0');
+  p.res = { sci: 0, food: 0, coins: 0 };
+  eq([growCity(S, 0, cap, 'paid'), cap.pop, cap.grown], [null, 2, 1], 'sie wächst ohne Vorrat – der bezahlte Schritt ist verbraucht');
+  eq(canGrowPaid(S, 0, cap), T('Diese Runde schon gewachsen.'), 'ein zweites Mal nicht (ohne Keramik)');
+  cap.pop = 3; cap.grown = 0; p.res = { sci: 0, food: 10, coins: 10 };
+  eq([growCity(S, 0, cap), p.res.food, p.res.coins], [null, 8, 8], 'gezahlt wird der Preis der kleineren Stadt (3 → 4: je 2)');
+  // ohne Siedlertrecks wie bisher
+  const B = mkA('russland', 'basis'), bc = capitalOf(B, 0);
+  bc.pop = 2;
+  eq(growPrice(B, 0, bc), { food: 2, coins: 2 }, 'Grundfähigkeit: 2 auf 3 kostet 2 und 2');
+  // Fruchtbarkeit: keine Nahrung, ein Wachstum mehr
+  const F = gras(mkA('russland', 'wachstum')), fp = F.players[0], fc = capitalOf(F, 0);
+  eq([growLimits(F, 0).paid, growLimits(B, 0).paid], [2, 1], 'Fruchtbarkeit: zwei bezahlte Schritte je Stadt und Runde, sonst einer');
+  fp.techs.keramik = true;
+  eq(growLimits(F, 0).paid, 3, 'mit Keramik drei');
+  fp.techs.dampfmaschine = true; fp.techs.verbundwerkstoffe = true;
+  eq(growLimits(F, 0), { max: 5, paid: 4, free: 1 }, 'mit Keramik, Dampfmaschine und Verbundwerkstoffen: 4 bezahlte und 1 kostenloser');
+  delete fp.techs.keramik; delete fp.techs.dampfmaschine; delete fp.techs.verbundwerkstoffe;
+  fp.res = { sci: 0, food: 0, coins: 10 };
+  fc.pop = 1;
+  eq([growCity(F, 0, fc), growCity(F, 0, fc), fc.pop, fp.res.coins], [null, null, 3, 10 - 1 - 2],
+    'ohne Keramik zweimal in einer Runde: 1 → 2 → 3 für 1 und 2 Münzen, keine Nahrung');
+  eq(canGrowPaid(F, 0, fc), T('Diese Runde schon gewachsen.'), 'ein drittes Mal nicht');
+  // im Marathon gedraftet wirkt beides bei jeder Zivilisation, auch zusammen und mit den Kolonisten
+  const zwei = drafted => newGame({ seed: 7, map: marathonMap(7), marathon: true,
+    players: CIVS.map(c => ({ civ: c.k, kind: 'human', drafted: c.k === 'griechenland' ? drafted : ['england:basis', 'wikinger:basis'] })) });
+  const M = zwei(['russland:siedler', 'russland:wachstum']), mg = M.players.findIndex(q => q.civ === 'griechenland');
+  const mc = capitalOf(M, mg);
+  eq([mc.pop, growPrice(M, mg, mc), growLimits(M, mg).paid], [2, { food: 0, coins: 1 }, 2],
+    'Griechenland mit Siedlertrecks und Fruchtbarkeit: Hauptstadt 2, Wachstum 0 Nahrung und 1 Münze, zweimal je Runde');
+  const K = zwei(['russland:siedler', 'england:gruenden']), kg = K.players.findIndex(q => q.civ === 'griechenland');
+  eq(growPrice(K, kg, capitalOf(K, kg)), { food: 2, coins: 2 }, 'mit den Kolonisten: das Doppelte der kleineren Stadt (2 × 1)');
 }
 
 /* ==================================================== Ereignisse */
@@ -4969,10 +5097,15 @@ const duellKarte = (civA, civB, seed) => {
 {
   const art = (S) => freeActions(S, 0);
   // Griechenland, Freie Forschung
+  // (seit v97 zweimal je Partie: die Zahl steht, bis beide verbraucht sind)
   const S = mkA('griechenland', 'gratistech');
   eq(art(S), ['forschung'], 'Freie Forschung offen: eine Art');
   eq(useFreeTech(S, 0, freeTechOptions(S, 0)[0].k), null, 'Freie Forschung genutzt');
-  eq(art(S), [], 'danach nichts mehr – bis zur nächsten Runde');
+  eq(art(S), ['forschung'], 'eine bleibt – weiter eine Art');
+  eq(useFreeTech(S, 0, freeTechOptions(S, 0)[0].k), null, 'die zweite genutzt');
+  eq(art(S), [], 'danach nichts mehr');
+  S.round++;
+  eq(art(S), [], '… auch in der nächsten Runde nicht');
   // Verbundwerkstoffe in drei Städten: EINE Art; an der Nahrungsgrenze keine
   const W = mkA('russland', 'basis', ['verbundwerkstoffe']);
   W.map.rows = W.map.rows.map(z => 'G'.repeat(z.length));
@@ -5442,8 +5575,10 @@ const FG_GEMEINSAM = FG_STEPS.filter(st => !st.pfad && !st.ende).map(st => st.id
   eq(fgWegFelder(), [[5, 3], [5, 4]], 'die Straße gehört auf die beiden Felder zwischen den Städten');
 }
 /* Jeder Weg mit der Musterlösung: Sieg auf diesem Weg, in dieser Runde – zweimal gespielt
-   genau gleich (die Würfel hängen nur am Anlass, nicht an der Reihenfolge). */
-for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft', /^Wirtschaftssieg/, 6], ['wissenschaft', /^Forschungssieg/, 6]]) {
+   genau gleich (die Würfel hängen nur am Anlass, nicht an der Reihenfolge). Der Forschungsweg
+   siegt seit v97 in Runde 7 (bis v96 in Runde 6): Griechenlands Rabatt und die Wissenschaftliche
+   Methode ziehen weniger ab, in Runde 5 reicht es nicht mehr für die Moderne in allen vier Feldern. */
+for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft', /^Wirtschaftssieg/, 6], ['wissenschaft', /^Forschungssieg/, 7]]) {
   const spur = fgLauf(pfad);
   eq([S.over && S.over.winner, art.test(S.over && S.over.how), S.round], [FG_ICH, true, runde],
     `Erstes Spiel, ${pfad}: Sieg auf diesem Weg in Runde ${runde} (${S.over && S.over.how})`);
@@ -7575,7 +7710,7 @@ function kiAbwehrLage(popKI, gross) {
   const C = { alchemie: true, universitaet: true, papier: true, buchdruck: true };
   const kurz = f => f.map(([k, c]) => k + '(' + c + ')').join(' → ');
   const a = lage(A, 45), c = lage(C, 60, true);
-  eq([a[0][0], a.length >= 3, a.slice(1).every(([k, cost, basis]) => cost === Math.max(0, basis - 2 * (TECH_BY_KEY[k].age + 1)))],
+  eq([a[0][0], a.length >= 3, a.slice(1).every(([k, cost, basis]) => cost === Math.max(0, basis - METHOD_DISCOUNT[TECH_BY_KEY[k].age]))],
     ['wiss_methode', true, true], `die Methode zuerst, alles danach mit ihrem Rabatt: ${kurz(a)}`);
   eq([TECH_BY_KEY[c[0][0]].f === 0 && TECH_BY_KEY[c[0][0]].age === 1, c[1] && c[1][0]], [true, 'wiss_methode'],
     `macht eine Forschung die Methode erst verfügbar, kommt sie gleich danach: ${kurz(c)}`);
@@ -7585,6 +7720,57 @@ function kiAbwehrLage(popKI, gross) {
   try { a0 = lage(A, 45); c0 = lage(C, 60, true); } finally { kiMethodeZuerst = zuerst; kiMethodeOffen = offen; }
   eq([a0[0][0] !== 'wiss_methode', c0.findIndex(([k]) => k === 'wiss_methode') > 1], [true, true],
     `Gegenprobe – die Reihenfolge bis v95: ${kurz(a0)} · ${kurz(c0)}`);
+}
+{
+  /* --- v97: die Wissenschaftliche Methode zieht 2/3/4/5/10 ab – im alten Techtree (Tutorial) weiter
+     2/4/6/8/10, sonst ginge sein fester Ablauf nicht auf: Burgenbau (Mittelalter, 7) kostet dort mit
+     der Methode 3, und die Texte des Tutorials nennen 2/4/6/8 und „Burgenbau (3)". */
+  const mit = oldTree => {
+    const S = newGame({ seed: 7, oldTree, players: [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }] });
+    S.players[0].techs.wiss_methode = true;
+    return S;
+  };
+  const N = mit(false), O = mit(true), burg = TECH_BY_KEY.burgenbau;
+  eq([techCost(N, 0, burg), techCost(O, 0, burg)], [7 - 3, 7 - 4], 'Burgenbau mit der Methode: 4, im alten Techtree 3');
+  eq([techCost(N, 0, TECH_BY_KEY.robotik), techCost(O, 0, TECH_BY_KEY.robotik)], [19 - 5, 19 - 8], 'Robotik (Moderne): 19 − 5, im alten Techtree 19 − 8');
+  eq([techCost(N, 0, SINGULARITY), techCost(O, 0, SINGULARITY)], [110, 110], 'die Singularität in beiden −10');
+  eq([techEffect(TECH_BY_KEY.wiss_methode, N), techEffect(TECH_BY_KEY.wiss_methode, O)],
+    [TECH_BY_KEY.wiss_methode.e, 'Techkosten −2/−4/−6/−8/−10 (je Zeitalter)'], 'der Bogen nennt, was gilt – im alten Techtree die alte Methode');
+  eq(UI_EN['Techkosten %s (je Zeitalter)'], 'Tech costs %s (by age)', '… auch englisch');
+  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
+  const d = OLD_METHOD_DISCOUNT;
+  eq([tut.includes(`<b>${d[0]} in der Antike, ${d[1]} im Mittelalter, ${d[2]} in der Industrialisierung, ${d[3]} in der Moderne</b>`),
+    tut.includes(`um ${d.slice(0, 4).join('/')} (je Zeitalter)`), /<b>Burgenbau<\/b> \(3\)/.test(tut)], [true, true, true],
+    'die Tutorialtexte (lang und kurz) nennen die Methode des alten Techtrees, Burgenbau 3');
+  eq(/function tutorialSetup[\s\S]*?newGame\(\{[\s\S]*?oldTree: true/.test(tut), true, 'das Tutorial spielt im alten Techtree');
+  // die KI wertet die Methode im Verhältnis ihres Rabatts ab dem Mittelalter (bis v96 4 + 6 + 8 = 18)
+  eq([kiMethodeAnteil(N), kiMethodeAnteil(O)], [12 / 18, 1], 'KI: Zuschlag der Methode auf zwei Drittel, im alten Techtree wie bisher');
+}
+{
+  /* --- v97: Freie Forschung zweimal je Partie – die KI hebt sie für die Moderne auf (kiFreeTechChoices)
+     und nimmt gegen Ende, was geht: dann bleiben nicht mehr Runden, als Freie Forschungen offen sind. */
+  const lage = (runde, avail) => {
+    const S = newGame({ seed: 5, players: [{ civ: 'griechenland', kind: 'ki', kiLevel: 'schwer', ability: 'gratistech' }, { civ: 'england', kind: 'bot' }] });
+    const pi = S.players.findIndex(p => p.kind === 'ki'), p = S.players[pi];
+    S.cur = pi; S.round = runde;
+    Object.assign(p.avail, avail);
+    return { S, pi, p };
+  };
+  const a = lage(2, { robotik: true });
+  const K = kiContext(a.S, a.pi);
+  const wahl = kiFreeTechChoices(a.S, a.pi, K).map(t => t.k);
+  eq([K.R > 2, wahl, freeTechOptions(a.S, a.pi).length > 1], [true, ['robotik'], true],
+    'früh in der Partie: nur die Moderne zur Wahl (Robotik), obwohl mehr ginge');
+  K.R = 2;
+  eq(kiFreeTechChoices(a.S, a.pi, K).length, freeTechOptions(a.S, a.pi).length, 'bleiben so viele Runden wie Freie Forschungen: alles');
+  kiTurn(a.S, a.pi);
+  eq([has(a.p, 'robotik'), freeTechsLeft(a.p)], [true, 1], 'ein Zug der KI: Robotik umsonst, eine bleibt');
+  const b = lage(2, {});
+  kiTurn(b.S, b.pi);
+  eq(freeTechsLeft(b.p), 2, 'ohne Moderne verbraucht die KI früh keine Freie Forschung');
+  const c = lage(KI_W.endRound, {});
+  kiTurn(c.S, c.pi);
+  eq(freeTechsLeft(c.p) < 2, true, 'in der letzten erwarteten Runde nimmt sie, was geht');
 }
 {
   // --- Entschlossener Angreifer (Menschen): sein Budget enthält Alchemie, wenn er sie diesen
@@ -7761,12 +7947,12 @@ function kiAbwehrLage(popKI, gross) {
     'ohne Doppelung: keine Ziffer, eigene Farbe');
 }
 {
-  // --- Startausgleich bei acht Reichen (Mehrspieler-Erweiterung): dieselbe Reihe weiter, der Achte bekommt 7
+  // --- Startausgleich bei acht Reichen (Mehrspieler-Erweiterung): dieselbe Reihe weiter, der Achte bekommt 14
   const civs = Array.from({ length: 8 }, (_, i) => CIVS[i % 4].k);
   const S = newGame({ seed: 3, map: tileMap((() => { const pl = tilePlan(civs, 9); const r = mapRng(1); pl.seats.forEach(st => botPlaceSeat(pl, st, r)); return pl; })()),
     players: markDoubles(civs.map(civ => ({ civ, kind: 'human' }))) });
-  eq(S.players.map((_, pi) => startBonus(S, (pi + S.startIdx) % 8)), [0, 1, 2, 3, 4, 5, 6, 7],
-    'acht Reiche: Startausgleich 0, 1, 2 … 7 Münzen nach Platz in der Zugfolge');
+  eq(S.players.map((_, pi) => startBonus(S, (pi + S.startIdx) % 8)), [0, 2, 4, 6, 8, 10, 12, 14],
+    'acht Reiche: Startausgleich 0, 2, 4 … 14 Münzen nach Platz in der Zugfolge');
 }
 {
   // --- Acht Reiche mit der KI (Mehrspieler-Erweiterung): die Partie läuft, kein Zug dauert unvertretbar lange
