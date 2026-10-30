@@ -19,7 +19,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 9 | F11 | [Chat: report and block](#f11-chat-report-and-block) | ✔ | ✔ | ✅ |
 | 10 | F12 | [Chat: word filter, guests emote-only](#f12-chat-word-filter-and-guests-emote-only) | ✔ | ✔ | ✅ |
 | 11 | F13 | [Overall statistics](#f13-overall-statistics) | ✔ | ✔ | ✅ |
-| 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | 🔨 |
+| 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | ✅ |
 | later | F8 | [Friends list](#f8-friends-list) | | | later |
 | later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
 
@@ -332,7 +332,7 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Tests:** `tests/timer` covers the skip on a timed turn. `tests/scenes/scenes.test.js`: recording with the engine (the chain rebuilds the engine's snapshot after every turn, actions / battles / silent frames, the same game with and without recording, trim, v93 records nothing), a live game (the KI's and the other human's actions are played, one's own not, the turn starts after them, a tap skips the queue, spectators see everything, *Keine* plays nothing) and a Rundenspiel (opening it in one's turn plays the other human's research and the KI's turn, then "Seit deinem letzten Zug"; opened again, nothing is played twice).
 
-**Status:** 🔨 in progress
+**Status:** ✅ on `development`
 
 ---
 
