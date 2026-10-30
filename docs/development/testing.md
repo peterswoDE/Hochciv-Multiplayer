@@ -34,6 +34,7 @@ Tests create their own test accounts and delete them afterwards.
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
 | `i18n/english.test.js` | every screen in English, no German left | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
+| `loading/loading.test.js` | fast page load: content hashes, year-long caching, gzip, page files without session queries | default |
 | `match/match.test.js` | ranked matchmaking | `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000` |
 | `mobile/mobile.test.js` | mobile layer (touch, zoom, narrow layout) | default |
 | `push/push.test.js` | push notifications | override file with an FCM stub (see header) |
@@ -67,4 +68,5 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 | `client/mobile/` | `mobile` |
 | new or changed texts | `i18n` |
 | a feature from [TASKS.md](../../TASKS.md) | that feature's test (named in its section) |
-| auth, origin check, sessions | `security`, `auth` |
+| auth, origin check, sessions | `security`, `auth`, `loading` |
+| `server.js` middleware order, `inject.js`, static files | `loading` |

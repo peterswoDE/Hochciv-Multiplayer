@@ -93,8 +93,11 @@ async function live(browser, errors, user) {
     const br = await rawGet(`${BASE}/api/games/${record.id}/replay`, 'gzip, deflate, br');
     ok(br.status === 200 && br.headers['content-encoding'] === 'br', 'API: Brotli as stored when accepted', `${br.body.length} bytes`);
     const doc = JSON.parse(zlib.brotliDecompressSync(br.body).toString('utf8'));
-    const plain = await rawGet(`${BASE}/api/games/${record.id}/replay`, 'gzip, deflate');
-    ok(plain.status === 200 && !plain.headers['content-encoding'] && JSON.parse(plain.body).frames.length === doc.frames.length, 'API: decompressed for others');
+    // without br it is decompressed – gzipped by the server's compression when accepted
+    const gz = await rawGet(`${BASE}/api/games/${record.id}/replay`, 'gzip, deflate');
+    ok(gz.status === 200 && gz.headers['content-encoding'] === 'gzip' && JSON.parse(zlib.gunzipSync(gz.body)).frames.length === doc.frames.length, 'API: decompressed for others (gzip)');
+    const plain = await rawGet(`${BASE}/api/games/${record.id}/replay`, 'identity');
+    ok(plain.status === 200 && !plain.headers['content-encoding'] && JSON.parse(plain.body).frames.length === doc.frames.length, 'API: decompressed for others (plain)');
     ok((await rawGet(`${BASE}/api/games/${crypto.randomUUID()}/replay`)).status === 404, 'API: 404 without a replay');
     const keys = doc.frames.map(S => `${S.round}:${S.cur}`);
     const ordered = doc.frames.every((S, k) => k === 0 || S.round > doc.frames[k - 1].round || (S.round === doc.frames[k - 1].round && S.cur !== doc.frames[k - 1].cur) || S.over);

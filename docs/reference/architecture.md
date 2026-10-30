@@ -8,7 +8,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 
 | Path | Purpose |
 |---|---|
-| `server.js` | Entry point: security headers, origin check, sessions (stored in PostgreSQL via `connect-pg-simple`), Passport, routes, static files, Socket.IO, database sync |
+| `server.js` | Entry point: gzip, security headers, origin check, static files (before the session, so the page's files cost no database queries; hashed files cached for a year), sessions (stored in PostgreSQL via `connect-pg-simple`), Passport, routes, Socket.IO, database sync |
 | `config.js` | Central settings: port, `BASE_URL` (checked at startup), WebAuthn origin, limits, turn-timer factors |
 | `engine-adapter.js` | Loads the game engine into Node (one sandbox per game version, `GAME_DIRS`) and wraps it: new game, apply/validate actions, KI turns, start-tile placement, Marathon draft, the per-player view of the state, custom-map check |
 | `sessions.js` | In-memory store of live lobbies and games: create, join, spectate, kick, config, rematch reset, public list, cleanup |
@@ -22,7 +22,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `models/` | Database models – see [Database](database.md) |
 | `elevate.js` | Command-line tool to assign admin roles |
 | `scripts/` | `build-public.js` (game folders → `public/`), `dedupe-constraints.js` (database cleanup) |
-| `inject.js` | Adds the multiplayer scripts to each copy's `index.html` |
+| `inject.js` | Adds the multiplayer scripts to each copy's `index.html` and writes the content hash into every script and stylesheet tag |
 | `entrypoint.sh`, `Dockerfile` | Container start (build `public/`, start the server) and image build (including the Activity bundle) |
 
 ### `utils/`
@@ -38,6 +38,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `mmr.js`, `score.js` | MMR calculation and end-of-game points ([Points and MMR](ranking.md)) |
 | `chat.js`, `profanity.js`, `reports.js` | Chat messages and rate limit, word filter, reports and blocks |
 | `stats.js`, `summary.js`, `replay.js` | Statistics over the rounds, "since your last turn", replays |
+| `assets.js` | Content hashes of the page's scripts and styles (`inject.js`), and whether a request may be cached for a year (`server.js`) |
 | `scenes.js` | What happened as scenes for the clients (actions and battles as a chain of map diffs) |
 | `deleteAccount.js`, `detachUser.js`, `rename.js`, `mergeAccounts.js` | Deleting/banning accounts, removing names from game states, merging Discord Activity accounts |
 | `serverState.js` | Maintenance mode, registration switch, metrics (in memory) |

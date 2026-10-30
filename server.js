@@ -1,5 +1,8 @@
 const express = require('express');
+const compression = require('compression');
+const fs = require('fs');
 const http = require('http');
+const path = require('path');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const config = require('./config');
@@ -18,6 +21,7 @@ const { Op } = require('sequelize');
 const { refreshOAuthStrategies } = require('./utils/oauth');
 const { str } = require('./utils/auth');
 const { checkOrigin, allowSocket } = require('./utils/origin');
+const Assets = require('./utils/assets');
 
 // ── Passport Configuration ──────────────────────────────────────────────────
 passport.use(new LocalStrategy(
@@ -81,6 +85,8 @@ if (process.env.NODE_ENV === 'production') {
 
 const pgPool = new pg.Pool({ connectionString: dbUrl });
 
+// gzip for pages, scripts and API answers (Socket.IO handles its own traffic before Express)
+app.use(compression());
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
 // Changing requests only from this site's pages (utils/origin.js): staging is the same site
 app.use(checkOrigin);
@@ -100,6 +106,55 @@ app.use((req, res, next) => {
 if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
+
+// ── Static files ─────────────────────────────────────────────────────────────
+// Before the session: the page's ~30 files would otherwise each read the session, the user and
+// update the session in the database. None of them depends on who is logged in.
+
+// Scripts and styles with the current content hash (?v=…, written by inject.js) are kept for a year
+const staticOpts = { setHeaders: (res, file, stat) => { if (Assets.isCurrent(res.req, file, stat)) res.set('Cache-Control', Assets.YEAR); } };
+app.use('/client', express.static(path.join(__dirname, 'client'), staticOpts));
+
+// Explicit routes for legal pages at root
+app.get('/impressum.html', (req, res) => res.sendFile(path.join(__dirname, 'client/impressum.html')));
+app.get('/datenschutz.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
+app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
+app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
+app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
+
+// The older versions (/v96/, /v93/, /v83/ – Rundenspiele started on them) get the same no-op service
+// worker and Activity bridge
+const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
+app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
+    res.type('application/javascript');
+    res.send(`
+        self.addEventListener('install', e => { self.skipWaiting(); });
+        self.addEventListener('activate', e => {
+            e.waitUntil(
+                caches.keys().then(cacheNames => {
+                    return Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+                })
+            );
+            self.clients.claim();
+        });
+        self.addEventListener('fetch', e => {});
+    `);
+});
+
+// Discord Activity bridge, bundled by activity/build.js (does nothing outside Discord)
+const { OUT_FILE: ACTIVITY_BUNDLE } = require('./activity/build');
+if (!fs.existsSync(ACTIVITY_BUNDLE)) {
+    console.warn('[Activity] Bridge bundle missing – run "npm run build:activity". The Discord Activity is unavailable.');
+}
+app.get(OLD_GAME_PATHS.map(p => p + '/js/activity.js'), (req, res) => {
+    res.set('Cache-Control', Assets.isCurrent(req, ACTIVITY_BUNDLE) ? Assets.YEAR : 'no-cache');
+    res.sendFile(ACTIVITY_BUNDLE, err => {
+        if (err && !res.headersSent) res.type('application/javascript').send('/* Discord Activity bundle not built */');
+    });
+});
+
+// The game with mp.js (public/, scripts/build-public.js) – this makes the game the root /
+app.use(express.static(path.join(__dirname, 'public'), staticOpts));
 
 const sessionMiddleware = session({
     store: new pgSession({ pool: pgPool, tableName: 'session' }),
@@ -170,53 +225,6 @@ app.use('/api/push', require('./routes/push'));
 app.use('/api/maps', require('./routes/maps'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
-
-// Host static frontend files 
-const path = require('path');
-app.use('/client', express.static(path.join(__dirname, 'client')));
-
-// Explicit routes for legal pages at root
-app.get('/impressum.html', (req, res) => res.sendFile(path.join(__dirname, 'client/impressum.html')));
-app.get('/datenschutz.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
-app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/datenschutzerklaerung.html')));
-app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
-app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
-
-// The older versions (/v96/, /v93/, /v83/ – Rundenspiele started on them) get the same no-op service
-// worker and Activity bridge
-const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
-app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
-    res.type('application/javascript');
-    res.send(`
-        self.addEventListener('install', e => { self.skipWaiting(); });
-        self.addEventListener('activate', e => {
-            e.waitUntil(
-                caches.keys().then(cacheNames => {
-                    return Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
-                })
-            );
-            self.clients.claim();
-        });
-        self.addEventListener('fetch', e => {});
-    `);
-});
-
-// Discord Activity bridge, bundled by activity/build.js (does nothing outside Discord)
-const { OUT_FILE: ACTIVITY_BUNDLE } = require('./activity/build');
-const fs = require('fs');
-if (!fs.existsSync(ACTIVITY_BUNDLE)) {
-    console.warn('[Activity] Bridge bundle missing – run "npm run build:activity". The Discord Activity is unavailable.');
-}
-app.get(OLD_GAME_PATHS.map(p => p + '/js/activity.js'), (req, res) => {
-    res.set('Cache-Control', 'no-cache');
-    res.sendFile(ACTIVITY_BUNDLE, err => {
-        if (err && !res.headersSent) res.type('application/javascript').send('/* Discord Activity bundle not built */');
-    });
-});
-
-// 3. Serve public game assets (js, css) as a fallback (this makes the game the root /)
-app.use(express.static(path.join(__dirname, 'public')));
-
 
 // ── HTTP + Socket.IO ─────────────────────────────────────────────────────────
 
