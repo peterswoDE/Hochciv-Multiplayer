@@ -157,7 +157,7 @@ function makeAdmin() {
         await acc.goto(BASE + '/client/account.html');
         await acc.locator('[data-target="tab-admin-oauth"]').waitFor({ state: 'visible' });
         await acc.waitForTimeout(1500);
-        for (const tab of ['tab-profile', 'tab-history', 'tab-admin-dashboard', 'tab-admin-lobbies', 'tab-admin-running', 'tab-admin-games', 'tab-admin-users', 'tab-admin-oauth']) {
+        for (const tab of ['tab-profile', 'tab-history', 'tab-bots', 'tab-admin-dashboard', 'tab-admin-lobbies', 'tab-admin-running', 'tab-admin-games', 'tab-admin-users', 'tab-admin-oauth']) {
             await acc.click(`[data-target="${tab}"]`);
             await acc.waitForTimeout(1200);
             await clean(acc, `account page: ${tab}`, `#${tab}`);

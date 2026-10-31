@@ -20,6 +20,7 @@ const { sequelize, User } = require('./models');
 const { Op } = require('sequelize');
 const { refreshOAuthStrategies } = require('./utils/oauth');
 const { str } = require('./utils/auth');
+const { botUsable } = require('./utils/bots');
 const { checkOrigin, allowSocket } = require('./utils/origin');
 const Assets = require('./utils/assets');
 
@@ -54,8 +55,14 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
     try {
         const user = await User.findByPk(id);
-        // A banned (or deleted) user is logged out on the next request
-        done(null, user && !user.isBanned ? user : false);
+        // A banned (or deleted) user is logged out on the next request – a bot also when its
+        // owner is banned or may no longer run bots (utils/bots.js)
+        if (!user || user.isBanned) return done(null, false);
+        if (user.accountType === 'bot') {
+            const owner = user.ownerId ? await User.findByPk(user.ownerId) : null;
+            if (botUsable(user, owner)) return done(null, false);
+        }
+        done(null, user);
     } catch (err) {
         done(err);
     }
@@ -209,6 +216,8 @@ const accountRoutes = require('./routes/account');
 const adminRoutes = require('./routes/admin');
 const mfaRoutes = require('./routes/mfa');
 app.use('/api/account', accountRoutes);
+// Bot accounts of the logged-in owner (routes/bots.js)
+app.use('/api/bots', require('./routes/bots'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/mfa', mfaRoutes);
 // Public player profiles (client/profile.js)

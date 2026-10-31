@@ -14,6 +14,9 @@
  *
  * Whoever doesn't confirm (declines, lets the time run out, disconnects) leaves the queue; the
  * others go back to it with their waiting time. Queue and pending matches live in memory.
+ *
+ * Bot accounts (utils/bots.js) queue like players. A player who joins with { allowBots: true }
+ * may get bots in the game; a group with a bot has only such players (or bots only).
  */
 const crypto = require('crypto');
 const sessions = require('../sessions');
@@ -34,17 +37,21 @@ const queue = new Map();                   // userId → { userId, name, mmr, so
 const matches = new Map();                 // matchId → { id, users, accepted, timer }
 
 /** The lobby settings of a matched game: original map, random nations, KI at its hardest, 3 minutes per turn. */
-function matchConfig() {
+function matchConfig(withBots = false) {
     const levels = engine.engineConst('KI_LEVELS') || [{ k: 'schwer' }];
     return {
         mapKey: '0', playerCount: EMPIRES, kiCount: 0, randomCivs: true, ranked: true,
         difficulty: levels[levels.length - 1].k, turnTime: 180,
         events: false, eventMode: 'hard', wonders: false, isPublic: false,
         seed: crypto.randomInt(2 ** 31), matchmaking: true,
+        playerBots: withBots, playerBotLimit: null,
     };
 }
 
 const windowOf = (e, now) => Math.min(WINDOW_MAX, WINDOW_START + WINDOW_STEP * Math.floor((now - e.since) / WINDOW_EVERY_MS));
+
+/** May `o` join `group`? A bot only with players who allow bots, a player who doesn't only without bots. */
+const fitsBots = (group, o) => (o.isBot ? group.every(g => g.isBot || g.allowBots) : o.allowBots || !group.some(g => g.isBot));
 
 module.exports = function registerMatchHandlers(io) {
     const emitTo = (socketId, event, data) => { if (socketId) io.to(socketId).emit(event, data); };
@@ -57,9 +64,10 @@ module.exports = function registerMatchHandlers(io) {
         for (const e of list) {
             if (used.has(e.userId)) continue;
             const w = windowOf(e, now);
-            const fit = list.filter(o => o !== e && !used.has(o.userId) && Math.abs(o.mmr - e.mmr) <= Math.min(w, windowOf(o, now)))
-                .sort((a, b) => Math.abs(a.mmr - e.mmr) - Math.abs(b.mmr - e.mmr))
-                .slice(0, MAX_HUMANS - 1);
+            const near = list.filter(o => o !== e && !used.has(o.userId) && Math.abs(o.mmr - e.mmr) <= Math.min(w, windowOf(o, now)))
+                .sort((a, b) => Math.abs(a.mmr - e.mmr) - Math.abs(b.mmr - e.mmr));
+            const fit = [];
+            for (const o of near) if (fit.length < MAX_HUMANS - 1 && fitsBots([e, ...fit], o)) fit.push(o);
             const size = fit.length + 1;
             if (size >= MAX_HUMANS || (size >= MIN_HUMANS && now - e.since >= GROUP_WAIT_MS)) {
                 const group = [e, ...fit];
@@ -78,7 +86,7 @@ module.exports = function registerMatchHandlers(io) {
         matches.set(match.id, match);
         match.timer = setTimeout(() => cancel(match, group.filter(u => !match.accepted.has(u.userId)).map(u => u.userId),
             'Nicht rechtzeitig bestätigt.'), CONFIRM_MS);
-        const players = group.map(u => ({ name: u.name, mmr: u.mmr }));
+        const players = group.map(u => ({ name: u.name, mmr: u.mmr, isBot: !!u.isBot }));
         group.forEach(u => emitTo(u.socketId, 'match:found', { matchId: match.id, players, confirmMs: CONFIRM_MS }));
         console.log(`[Match] Proposed ${match.id}: ${group.map(u => `${u.name} (${u.mmr})`).join(', ')}`);
     }
@@ -104,12 +112,14 @@ module.exports = function registerMatchHandlers(io) {
         matches.delete(match.id);
         const ids = new Map(match.users.map(u => [u.userId, crypto.randomUUID()]));
         const [host, ...rest] = match.users;
-        const r = sessions.createSession(matchConfig(), { name: host.name, clientId: ids.get(host.userId) });
+        // a bot's seat is bound to its account, as when it joins a lobby (sessions.js)
+        const info = u => ({ name: u.name, clientId: ids.get(u.userId), botUserId: u.isBot ? u.userId : undefined });
+        const r = sessions.createSession(matchConfig(match.users.some(u => u.isBot)), info(host));
         if (typeof r === 'string') {
             match.users.forEach(u => { queue.set(u.userId, u); emitTo(u.socketId, 'match:cancelled', { reason: r, requeued: true }); });
             return;
         }
-        for (const u of rest) sessions.joinSession(r.joinCode, r.password, { name: u.name, clientId: ids.get(u.userId) });
+        for (const u of rest) sessions.joinSession(r.joinCode, r.password, info(u));
         const session = sessions.getSession(r.sessionId);
         session.match = {
             id: match.id,
@@ -155,13 +165,16 @@ module.exports = function registerMatchHandlers(io) {
     io.on('connection', socket => {
         const user = () => socket.request.user || null;
 
-        on(socket, 'match:join', () => {
+        on(socket, 'match:join', data => {
             const u = user();
             if (!u) return { error: 'Für gewertete Spiele musst du angemeldet sein.' };
             if (serverState.state.maintenanceMode) return { error: 'Der Server befindet sich im Wartungsmodus.' };
             for (const m of matches.values()) if (m.users.some(x => x.userId === u.id)) return { ok: true, pending: true };
             const was = queue.get(u.id);
-            queue.set(u.id, { userId: u.id, name: u.username, mmr: u.mmr || 1000, socketId: socket.id, since: was ? was.since : Date.now() });
+            queue.set(u.id, {
+                userId: u.id, name: u.username, mmr: u.mmr || 1000, socketId: socket.id, since: was ? was.since : Date.now(),
+                isBot: u.accountType === 'bot', allowBots: data.allowBots === true,
+            });
             socket.data.matchUserId = u.id;
             return { ok: true, queued: queue.size };
         });
@@ -212,3 +225,4 @@ module.exports = function registerMatchHandlers(io) {
 // for tests
 module.exports.windowOf = windowOf;
 module.exports.matchConfig = matchConfig;
+module.exports.fitsBots = fitsBots;

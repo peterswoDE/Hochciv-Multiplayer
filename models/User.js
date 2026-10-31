@@ -76,10 +76,32 @@ module.exports = (sequelize) => {
         resetCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
         emailOtpCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
         emailChangeCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
+        // 'user' | 'botcreator' (may create bot accounts) | 'admin' | 'superadmin'
         role: {
             type: DataTypes.STRING,
             defaultValue: 'user',
             allowNull: false,
+        },
+        // 'human' or 'bot' (utils/bots.js): a bot has an owner and logs in with a token only –
+        // no e-mail, password or second factor
+        accountType: {
+            type: DataTypes.STRING,
+            defaultValue: 'human',
+            allowNull: false,
+        },
+        ownerId: {
+            type: DataTypes.UUID,
+            allowNull: true,
+        },
+        // SHA-256 of the bot's token; the token itself is shown once when created or renewed
+        botTokenHash: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        // How many bots this bot creator may own; null = config.BOTS_PER_OWNER (set by admins)
+        botLimit: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
         },
         isBanned: {
             type: DataTypes.BOOLEAN,
@@ -154,6 +176,7 @@ module.exports = (sequelize) => {
         indexes: [
             { name: 'users_username_key', unique: true, fields: ['username'] },
             { name: 'users_email_key', unique: true, fields: ['email'] },
+            { name: 'users_bot_token_key', unique: true, fields: ['botTokenHash'] },
         ],
         timestamps: true,
     });

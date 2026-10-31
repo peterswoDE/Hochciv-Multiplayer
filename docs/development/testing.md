@@ -30,6 +30,7 @@ Tests create their own test accounts and delete them afterwards.
 | `admin/running-games.test.js` | admin tab *Laufende Spiele* | default |
 | `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
+| `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups | default |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
 | `i18n/english.test.js` | every screen in English, no German left | default |
@@ -69,4 +70,5 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 | new or changed texts | `i18n` |
 | a feature from [TASKS.md](../../TASKS.md) | that feature's test (named in its section) |
 | auth, origin check, sessions | `security`, `auth`, `loading` |
+| bot accounts, player-bots | `bots`, `match`, `security` |
 | `server.js` middleware order, `inject.js`, static files | `loading` |

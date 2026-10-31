@@ -17,8 +17,17 @@ const { engineVersionOf } = require('../async/logic');
 const GameStats = require('../utils/gamestats');
 const Facts = require('../utils/facts');
 const { query: statsQuery } = require('./stats');
+const Bots = require('../utils/bots');
 
-const ROLES = ['user', 'admin', 'superadmin'];
+/** Banned, deleted or no longer allowed to run bots: their bots leave games and connections too. */
+async function detachBotsOf(io, ownerId) {
+    for (const bot of await User.findAll({ where: { accountType: 'bot', ownerId }, attributes: ['id'] })) {
+        await destroyOtherSessions(sequelize, bot.id);
+        await detachUser(io, bot.id);
+    }
+}
+
+const ROLES = ['user', 'botcreator', 'admin', 'superadmin'];
 const isPrivileged = role => role === 'admin' || role === 'superadmin';
 
 /**
@@ -67,10 +76,26 @@ router.post('/config', (req, res) => {
 router.get('/users', async (req, res) => {
     try {
         const users = await User.findAll({
-            attributes: ['id', 'username', 'email', 'mmr', 'gamesPlayed', 'isActive', 'isBanned', 'role', 'createdAt'],
+            attributes: ['id', 'username', 'email', 'mmr', 'gamesPlayed', 'isActive', 'isBanned', 'role', 'createdAt',
+                'accountType', 'ownerId', 'botLimit'],
             order: [['createdAt', 'DESC']]
         });
-        res.json(users);
+        // bot accounts: their owner's name; bot creators: how many bots they have and may have
+        const byId = new Map(users.map(u => [u.id, u]));
+        const owned = {};
+        users.forEach(u => { if (u.accountType === 'bot' && u.ownerId) owned[u.ownerId] = (owned[u.ownerId] || 0) + 1; });
+        res.json(users.map(u => {
+            const j = u.toJSON();
+            if (u.accountType === 'bot') {
+                const owner = byId.get(u.ownerId) || null;
+                j.owner = owner ? { id: owner.id, username: owner.username } : null;
+                j.botDisabled = Bots.botUsable(u, owner);
+            } else if (Bots.canCreateBots(u)) {
+                const limit = Bots.botLimitOf(u);
+                j.bots = { count: owned[u.id] || 0, limit: limit === Infinity ? null : limit };
+            }
+            return j;
+        }));
     } catch (err) {
         res.status(500).json({ error: 'Serverfehler' });
     }
@@ -140,11 +165,17 @@ router.post('/users/:id/action', async (req, res) => {
 
         let logoutEverywhere = false;
         let detach = false;
+        let detachBots = false;
+        const bot = Bots.isBot(targetUser);
+        if (bot && ['force_password', 'make_admin', 'set_role', 'reset_mfa', 'set_bot_limit'].includes(action)) {
+            return res.status(400).json({ error: 'Das geht bei Bot-Konten nicht.' });
+        }
         if (action === 'ban') {
             if (targetUser.id === req.user.id) return res.status(400).json({ error: 'Du kannst dich nicht selbst bannen.' });
             targetUser.isBanned = true;
             logoutEverywhere = true;
             detach = true;              // also out of running games and open connections
+            detachBots = true;          // … and so are the bots it owns (utils/bots.js)
         } else if (action === 'unban') {
             targetUser.isBanned = false;
         } else if (action === 'set_mmr') {
@@ -163,7 +194,15 @@ router.post('/users/:id/action', async (req, res) => {
                 return res.status(403).json({ error: 'Nur Super-Administratoren vergeben Admin-Rechte.' });
             }
             if (targetUser.id === req.user.id) return res.status(400).json({ error: 'Du kannst deine eigene Rolle nicht ändern.' });
+            // without bot rights the bots stop; they work again when the rights come back
+            detachBots = Bots.canCreateBots(targetUser) && !Bots.BOT_CREATOR_ROLES.includes(role);
             targetUser.role = role;
+        } else if (action === 'set_bot_limit') {
+            // null: back to the default (config.BOTS_PER_OWNER)
+            const value = req.body.botLimit;
+            if (value === null || value === '') targetUser.botLimit = null;
+            else if (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1000) targetUser.botLimit = Number(value);
+            else return res.status(400).json({ error: 'Ungültige Anzahl.' });
         } else if (action === 'reset_mfa') {
             targetUser.totpEnabled = false;
             targetUser.totpSecret = null;
@@ -177,6 +216,7 @@ router.post('/users/:id/action', async (req, res) => {
         await targetUser.save();
         if (logoutEverywhere) await destroyOtherSessions(sequelize, targetUser.id);
         if (detach) await detachUser(req.app.locals.io, targetUser.id);
+        if (detachBots) await detachBotsOf(req.app.locals.io, targetUser.id);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: 'Serverfehler' });

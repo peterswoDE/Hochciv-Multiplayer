@@ -16,7 +16,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 |---|---|---|---|
 | `session:connect` | `{ sessionId, password, clientId }` | player or spectator | Bind the socket to the seat whose `clientId` matches (or the spectator). Also used for reconnects. Ack: `playerIndex`, `status`, `players`, `gameConfig`, `hostIndex`, `spectators`. |
 | `session:kick` | `{ playerIndex }` | host | Remove a player from the lobby |
-| `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, …); a custom map is checked with `checkCustomMap` |
+| `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, …); a custom map is checked with `checkCustomMap` |
 | `lobby:player:update` | `{ civ, ability }` | player | Own nation and ability in the lobby |
 | `game:start` | – | host | Start the game |
 | `draft:pick` | `{ id }` | player | Marathon draft: pick an ability |
@@ -73,7 +73,7 @@ Handled by `sockets/match.js`; login required. Queue and pending matches live in
 
 | Event | Direction | Payload | Purpose |
 |---|---|---|---|
-| `match:join` | → server | – | Enter the queue (refused in maintenance mode) |
+| `match:join` | → server | `{ allowBots }` | Enter the queue (refused in maintenance mode); `allowBots`: player-bots may be in the game ([Bot accounts](bot-accounts.md#matchmaking)) |
 | `match:leave` | → server | – | Leave the queue |
 | `match:accept` / `match:decline` | → server | `{ matchId }` | Answer a found match |
 | `match:status` | → client | `{ waiting, window, queued }` | While in the queue |

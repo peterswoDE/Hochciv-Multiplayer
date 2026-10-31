@@ -16,8 +16,15 @@ const MATCH = {
     progress: null,         // { accepted, total }
     timer: null,
 
+    /** May the search put player-bots (bot accounts) into my game? The checkbox in the menu, remembered. */
+    allowBots: function () {
+        const box = $('mpm-allow-bots');
+        if (box) try { localStorage.setItem('hochciv.matchBots', box.checked ? '1' : '0'); } catch (_) { }
+        try { return localStorage.getItem('hochciv.matchBots') === '1'; } catch (_) { return !!(box && box.checked); }
+    },
+
     attach: function (socket) {
-        socket.on('connect', () => { if (this.state === 'queue') socket.emit('match:join', {}); });     // back after a reconnect
+        socket.on('connect', () => { if (this.state === 'queue') socket.emit('match:join', { allowBots: this.allowBots() }); });     // back after a reconnect
         // only the numbers – a closed dialog stays closed (the search goes on; "found" opens it again)
         socket.on('match:status', s => { if (this.state !== 'queue') return; this.status = Object.assign(s, { at: Date.now() }); this.tickView(); });
         socket.on('match:found', f => {
@@ -40,7 +47,7 @@ const MATCH = {
         await MP.fetchUser();
         if (!MP.user) { toast(TX('Für gewertete Spiele musst du angemeldet sein.')); return MP.showAuthModal(); }
         await MP.connect();
-        MP.socket.emit('match:join', {}, res => {
+        MP.socket.emit('match:join', { allowBots: this.allowBots() }, res => {
             if (res && res.error) return toast(TXS(res.error));
             this.state = 'queue';
             this.status = { waiting: 0, window: 100, queued: res.queued || 1, at: Date.now() };
@@ -101,7 +108,7 @@ const MATCH = {
         } else {
             const f = this.found, p = this.progress || { accepted: 0, total: f.players.length };
             h = `<p><b>${TX('Spiel gefunden!')}</b> ${TX('Mitspieler:')}</p>
-                <ul class="mpm-players">${f.players.map(x => `<li>${escHtml(x.name)} <small>(${escHtml(x.mmr)} MMR)</small></li>`).join('')}</ul>
+                <ul class="mpm-players">${f.players.map(x => `<li>${escHtml(x.name)} ${x.isBot ? MP.botBadge() : ''} <small>(${escHtml(x.mmr)} MMR)</small></li>`).join('')}</ul>
                 <div class="mpm-bar"><div id="mpm-left"></div></div>
                 <p class="sub" id="mpm-progress">${TX('%s von %s haben bestätigt.', p.accepted, p.total)}</p>
                 ${this.state === 'found'
