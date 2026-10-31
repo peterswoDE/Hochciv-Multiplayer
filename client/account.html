@@ -138,6 +138,15 @@
             color: white;
         }
 
+        .badge.bot {
+            background: #3b5f7d;
+            color: white;
+        }
+
+        /* Bot accounts: the token, shown once */
+        .bot-token { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+        .bot-token code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: rgba(0,0,0,0.06); padding: 6px 8px; border-radius: 4px; font-size: 13px; }
+
         /* Blocked players (profile) and chat reports (admin) */
         .blocked-list { list-style: none; padding: 0; margin: 10px 0 0; }
         .blocked-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #eee; }
@@ -196,6 +205,7 @@
             <div class="nav-tabs">
                 <button class="nav-tab active" data-target="tab-profile">Profil</button>
                 <button class="nav-tab" data-target="tab-history">Spielhistorie</button>
+                <button class="nav-tab bots-tab" data-target="tab-bots" style="display:none;">Meine Bots</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-dashboard"
                     style="display:none; color: var(--red);">Server-Status</button>
                 <button class="nav-tab admin-tab" data-target="tab-admin-lobbies"
@@ -328,6 +338,45 @@
                                 <td colspan="4">Lade Historie...</td>
                             </tr>
                         </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bot accounts (client/account.js, routes/bots.js) -->
+            <div id="tab-bots" class="tab-content">
+                <h2 style="font-family: Georgia, serif;">Meine Bots</h2>
+                <p style="color: #666; font-size: 14px;">Bot-Konten spielen wie Spieler – in Lobbys und Rundenspielen, deren Host
+                    Spieler-Bots erlaubt, und in der Spielsuche mit Spielern, die Bots zulassen. Ein Bot meldet sich mit
+                    seinem Token an (POST /api/auth/bot), nicht mit einem Passwort.</p>
+                <p id="bots-count" style="font-size: 14px;"></p>
+                <form id="form-bot-create" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin: 15px 0;">
+                    <div class="form-group" style="margin:0; flex:1; min-width:200px;">
+                        <label>Name des neuen Bots</label>
+                        <input type="text" id="input-bot-name" maxlength="30" autocomplete="off" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Bot erstellen</button>
+                </form>
+                <p id="msg-bots" style="font-size:14px;"></p>
+                <div id="bot-token-box" style="display:none; padding: 10px 12px; border: 1px solid var(--red); border-radius: 6px; margin-bottom: 15px;">
+                    <strong id="bot-token-title"></strong>
+                    <p style="font-size: 13px; color: #666; margin: 4px 0;">Speichere es jetzt – es wird nur dieses eine Mal angezeigt.</p>
+                    <div class="bot-token"><code id="bot-token-value" data-i18n-ignore></code>
+                        <button type="button" class="btn small" id="btn-bot-token-copy">Kopieren</button></div>
+                </div>
+                <label id="bots-all-row" style="display:none; font-size: 14px; margin-bottom: 10px;">
+                    <input type="checkbox" id="bots-all"> Alle Bots anzeigen (Admin)</label>
+                <div style="overflow-x: auto;">
+                    <table id="table-bots">
+                        <thead>
+                            <tr>
+                                <th>Bot</th>
+                                <th>Besitzer</th>
+                                <th>MMR</th>
+                                <th>Spiele</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>

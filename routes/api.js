@@ -13,6 +13,9 @@ const lobbyLimit = rateLimitLib({
     legacyHeaders: false
 });
 
+/** The id of the logged-in bot account, undefined for humans and guests. */
+const botId = req => (req.user && req.user.accountType === 'bot' ? req.user.id : undefined);
+
 // ── POST /api/sessions — create a new session ───────────────────────────────
 router.post('/sessions', lobbyLimit, (req, res) => {
     if (serverState.state.maintenanceMode) {
@@ -26,7 +29,8 @@ router.post('/sessions', lobbyLimit, (req, res) => {
     if (config != null && (typeof config !== 'object' || Array.isArray(config))) {
         return res.status(400).json({ error: 'Ungültige Konfiguration.' });
     }
-    const result = sessions.createSession(config || {}, host);
+    // a bot account plays its seat itself (sessions.js playerBotPolicy)
+    const result = sessions.createSession(config || {}, { ...host, botUserId: botId(req) });
     if (typeof result === 'string') return res.status(503).json({ error: result });
     res.status(201).json(result);
 });
@@ -38,7 +42,7 @@ router.post('/sessions/join', lobbyLimit, (req, res) => {
         || typeof player.name !== 'string' || typeof player.clientId !== 'string' || !player.name || !player.clientId) {
         return res.status(400).json({ error: 'joinCode, password, player.name und player.clientId sind erforderlich.' });
     }
-    const result = sessions.joinSession(joinCode, password, player);
+    const result = sessions.joinSession(joinCode, password, { ...player, botUserId: botId(req) });
     if (typeof result === 'string') {
         return res.status(400).json({ error: result });
     }
@@ -96,12 +100,14 @@ router.delete('/sessions/:id', (req, res) => {
     res.json({ ok: true });
 });
 
-// ── GET /api/leaderboard — global ranking ──────────────────────────────────
+// ── GET /api/leaderboard[?type=bot] — global ranking ────────────────────────
+// Humans and bot accounts share the MMR, but each has its own list (utils/bots.js)
 const { User } = require('../models');
 
 router.get('/leaderboard', async (req, res) => {
     try {
         const users = await User.findAll({
+            where: { accountType: req.query.type === 'bot' ? 'bot' : 'human' },
             attributes: ['id', 'username', 'mmr', 'gamesPlayed'],
             order: [['mmr', 'DESC']],
             limit: 100

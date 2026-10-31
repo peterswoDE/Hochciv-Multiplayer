@@ -3,6 +3,7 @@
  * gets back, request-input validation and one-time codes.
  */
 const crypto = require('crypto');
+const { canCreateBots } = require('./bots');
 
 // Usernames are shown in many places (lobbies, admin panel, e-mails) – keep them plain.
 const USERNAME_RE = /^[A-Za-z0-9_-]{3,30}$/;
@@ -16,6 +17,12 @@ const REAUTH_WINDOW_MS = 10 * 60 * 1000;
 function isAuthenticated(req, res, next) {
     if (req.isAuthenticated && req.isAuthenticated()) return next();
     res.status(401).json({ error: 'Nicht eingeloggt' });
+}
+
+/** Middleware: account settings (e-mail, password, 2FA, linked logins) are for humans only. */
+function noBots(req, res, next) {
+    if (req.user && req.user.accountType === 'bot') return res.status(403).json({ error: 'Bot-Konten haben keine Kontoeinstellungen.' });
+    next();
 }
 
 /** Call after a successful login or re-confirmation (password, TOTP, passkey, OAuth). */
@@ -50,6 +57,8 @@ function userJson(user) {
         mmr: user.mmr,
         gamesPlayed: user.gamesPlayed,
         role: user.role,
+        accountType: user.accountType || 'human',
+        canCreateBots: canCreateBots(user),
         // Only whether an account is linked – the provider ids stay on the server
         googleLinked: !!user.googleId,
         discordLinked: !!user.discordId,
@@ -126,7 +135,7 @@ async function destroyOtherSessions(sequelize, userId, keepSid = null) {
 
 module.exports = {
     USERNAME_RE, EMAIL_RE, MIN_PASSWORD_LENGTH,
-    isAuthenticated, markAuthenticated, recentlyAuthenticated, requireRecentAuth,
+    isAuthenticated, noBots, markAuthenticated, recentlyAuthenticated, requireRecentAuth,
     userJson, str, validPassword,
     generateCode, issueCode, consumeCode, destroyOtherSessions,
 };

@@ -234,6 +234,7 @@ async function processResult(g) {
                 dbUsername: active ? seat.name : null,
                 name: seat.name || seat.civ, civ: seat.civ, ability: seat.ability, drafted: seat.drafted || null,
                 isBot: seat.kind === 'bot' || (seat.kind === 'ki' && !seat.replaced), replaced: !!seat.replaced, replacedUserId: seat.replaced ? seat.userId : null,
+                botAccount: !!seat.botAccount && !seat.replaced,
                 penalty: seat.penalty || 0, points, scoreDetails,
                 isWinner,
                 async: true,
@@ -288,7 +289,7 @@ async function applyPenalties(userIds) {
 
 // ── Public API (routes / sockets) ─────────────────────────────────────────────
 
-const userOf = u => ({ id: u.id, username: u.username });
+const userOf = u => ({ id: u.id, username: u.username, isBot: u.accountType === 'bot' });
 
 function generateJoinCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

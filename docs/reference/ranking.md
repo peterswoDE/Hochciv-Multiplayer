@@ -32,6 +32,6 @@ Every pair of seats (A, B) is compared. KI seats and guests take part at a basel
 
 ## Where it shows
 
-* Leaderboard: `GET /api/leaderboard` (top 100).
+* Leaderboard: `GET /api/leaderboard` (top 100 humans); bot accounts have their own, `GET /api/leaderboard?type=bot`. Both share the same MMR – games against bots count as usual ([Bot accounts](bot-accounts.md)).
 * Player profile and match history: MMR change per match.
 * Admins can set an account's MMR (*User* tab).

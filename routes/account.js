@@ -8,11 +8,11 @@ const { sendMail } = require('../utils/mailer');
 const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
 const {
-    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, markAuthenticated, requireRecentAuth,
+    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
 
-router.use(isAuthenticated);
+router.use(isAuthenticated, noBots);
 
 // Password / code guesses and e-mails sent: limit per IP
 const rateLimit = rateLimitLib({

@@ -4,10 +4,10 @@ const { User, Passkey, TotpToken } = require('../models');
 const totp = require('../utils/totp');
 const qrcode = require('qrcode');
 const { generateRegistrationOptions, verifyRegistrationResponse } = require('@simplewebauthn/server');
-const { isAuthenticated, requireRecentAuth, str } = require('../utils/auth');
+const { isAuthenticated, noBots, requireRecentAuth, str } = require('../utils/auth');
 const { rp } = require('../utils/webauthn');
 
-router.use(isAuthenticated);
+router.use(isAuthenticated, noBots);
 // Adding or removing a factor changes how the account logs in: needs a recent login/re-confirmation
 router.use((req, res, next) => (req.method === 'GET' ? next() : requireRecentAuth(req, res, next)));
 

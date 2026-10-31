@@ -13,6 +13,7 @@ All endpoints take and return JSON (request body limit 20 KB). Logins are cookie
 | POST | `/register` | public | Create an account (username, password, e-mail); sends an activation code. Refused while registration is off. |
 | POST | `/activate` | public | Activate with the e-mailed code |
 | POST | `/login` | public | Username + password. With 2FA, answers which second factors are needed. |
+| POST | `/bot` | public | Bot account login: `{ token }` or `Authorization: Bearer <token>` → session ([Bot accounts](bot-accounts.md)) |
 | POST | `/login/email-otp/request` | public | Send the e-mail code (second factor) |
 | POST | `/login/email-otp/verify` | public | Check the e-mail code |
 | POST | `/login/totp` | public | Check the authenticator code |
@@ -30,6 +31,18 @@ All endpoints take and return JSON (request body limit 20 KB). Logins are cookie
 | GET | `/google/callback`, `/discord/callback` | public | OAuth callback; returns to `/?oauth=<result>` |
 | GET | `/google/app-config` | public | Android app: web client ID and a one-time nonce |
 | POST | `/google/idtoken` | public | Android app: `{ idToken }` → `{ ok, linked }` or `{ ok: false, reason }` |
+
+## Bot accounts – `/api/bots` (login, not for bots)
+
+For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on every bot.
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| GET | `/[?all=1]` | login | Own bots (admins with `all=1`: every bot), `{ canCreate, limit, own, bots }` |
+| POST | `/` | recent | Create a bot `{ username }` → `{ bot, token }` – the token is shown only now |
+| POST | `/:id/token` | recent | New token → `{ token }`; the old one and its sessions end |
+| POST | `/:id/transfer` | recent | Hand the bot over `{ username }` to another bot creator |
+| DELETE | `/:id` | login | Delete the bot |
 
 ## Account – `/api/account` (login)
 
@@ -63,13 +76,13 @@ All endpoints take and return JSON (request body limit 20 KB). Logins are cookie
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| POST | `/sessions` | public | Create a lobby: `{ config, host: { name, clientId, civ, ability } }` → `{ sessionId, joinCode, password }`. Refused in maintenance mode. |
-| POST | `/sessions/join` | public | Join: `{ joinCode, password, player: { name, clientId, civ, ability } }` → `{ sessionId, playerIndex }` |
+| POST | `/sessions` | public | Create a lobby: `{ config, host: { name, clientId, civ, ability } }` → `{ sessionId, joinCode, password }`. Refused in maintenance mode. A logged-in bot account hosts as a player-bot. |
+| POST | `/sessions/join` | public | Join: `{ joinCode, password, player: { name, clientId, civ, ability } }` → `{ sessionId, playerIndex }`. A logged-in bot account joins as a player-bot, if the lobby allows them ([Bot accounts](bot-accounts.md)). |
 | POST | `/sessions/watch` | public | Watch as a spectator: `{ joinCode, password, viewer: { name, clientId } }` |
 | GET | `/public-sessions` | public | Public lobbies and running public games |
 | GET | `/sessions/:id` | public | Lobby info |
 | DELETE | `/sessions/:id` | host (`{ clientId }`) | Cancel the lobby |
-| GET | `/leaderboard` | public | Top 100 accounts by MMR |
+| GET | `/leaderboard[?type=bot]` | public | Top 100 human accounts by MMR; `type=bot`: top 100 bot accounts |
 
 The `clientId` is a secret the browser generates and keeps; the game itself then runs over [Socket.IO](socket-events.md#live-games), where the seat is found by that `clientId`, never by an index the client picks.
 
@@ -131,16 +144,16 @@ Only public data goes out: names, nations, points, MMR – no e-mail, role or ac
 
 ## Admin – `/api/admin`
 
-All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage accounts with the role `user`.
+All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage accounts with the role `user` or `botcreator`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/metrics` | Uptime, memory, CPU, maintenance/registration state, lobbies and players online |
 | POST | `/config` | `{ maintenanceMode?, registrationEnabled? }` |
-| GET | `/users` | All accounts |
+| GET | `/users` | All accounts; bots with `owner` and `botDisabled`, bot creators with `bots { count, limit }` |
 | GET | `/users/:id/mfa` | A user's second factors |
 | DELETE | `/users/:id/mfa/:type/:tokenId?` | Remove a second factor |
-| POST | `/users/:id/action` | `{ action }`: `ban`, `unban`, `set_mmr` (`mmr`), `force_password` (`newPassword`), `make_admin`, `set_role` (`role`), `reset_mfa` |
+| POST | `/users/:id/action` | `{ action }`: `ban`, `unban`, `set_mmr` (`mmr`), `force_password` (`newPassword`), `make_admin`, `set_role` (`role`), `reset_mfa`, `set_bot_limit` (`botLimit`, null = default). Bots: only ban/unban and `set_mmr`. |
 | DELETE | `/users/:id` | Delete the account |
 | GET | `/reports` | Chat reports |
 | POST | `/reports/:id` | Handle a report: `{ status, note }` |

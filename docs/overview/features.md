@@ -38,6 +38,7 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 ## Accounts
 
 * **Accounts:** Registration with e-mail activation, password reset, Google and Discord login, two-factor authentication (authenticator app, passkeys, e-mail code), MMR ranking and match history. Players can change e-mail and password, link and unlink Google/Discord, and delete their account.
+* **Bot accounts:** Accounts for programs that play like players (e.g. an AI client). Bot creators (a role admins grant) and admins create them on the account page; a bot logs in with a token. Hosts allow player-bots in their lobbies and Rundenspiele (off by default, with an optional limit); in matchmaking, players opt in. Bots share the MMR but have their own leaderboard. See [Bot accounts](../reference/bot-accounts.md).
 * **Guests:** Everybody can play live games without an account. Matchmaking, MMR, Rundenspiele, custom maps in the account and chat texts need one.
 * **Discord Activity accounts:** Players inside Discord get an account automatically; linking that Discord account to a real account later merges the two (history, Rundenspiele, MMR).
 

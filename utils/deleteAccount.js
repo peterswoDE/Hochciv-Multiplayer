@@ -24,6 +24,13 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
     if (user.role === 'superadmin' && (await User.count({ where: { role: 'superadmin' } })) <= 1) {
         return 'Das ist der letzte Super-Administrator. Ernenne zuerst einen anderen.';
     }
+    // An owner's bots go with the account (utils/bots.js)
+    if (user.accountType !== 'bot') {
+        for (const bot of await User.findAll({ where: { accountType: 'bot', ownerId: user.id } })) {
+            const err = await deleteAccount(bot, { io, byAdmin });
+            if (err) return err;
+        }
+    }
     const removed = await asyncService.removeUser(user.id);
     if (removed.error) return removed.error;
 

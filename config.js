@@ -39,4 +39,6 @@ module.exports = {
     TURN_TIMER_SCALE: Number(process.env.TURN_TIMER_SCALE) > 0 ? Number(process.env.TURN_TIMER_SCALE) : 1,
     // … and after this many timed-out turns in a row the KI keeps the seat (tests: 2 – shorter games)
     TURN_TIMER_AFK_AFTER: Number(process.env.TURN_TIMER_AFK_AFTER) >= 1 ? Number(process.env.TURN_TIMER_AFK_AFTER) : 3,
+    // Bot accounts (utils/bots.js) a bot creator may own; admins raise it per user, admins have no limit
+    BOTS_PER_OWNER: 4,
 };

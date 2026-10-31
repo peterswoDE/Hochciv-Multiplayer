@@ -70,6 +70,12 @@ module.exports = function registerHandlers(io) {
                 ? (s.spectators || []).find(w => w.clientId === data.clientId) : null;
             if (spectator) return watch(s, spectator, ack);
             if (!player) return ack({ error: 'Ungültiger Spieler. Bitte erneut beitreten.' });
+            // A bot account plays only the seat it joined as a bot, and that seat only it
+            // (sessions.js playerBotPolicy) – a bot can't come in as a guest and log in afterwards
+            const u = socket.request.user;
+            const isBotUser = !!u && u.accountType === 'bot';
+            if (isBotUser !== !!player.playerBot || (player.playerBot && player.botUserId !== u.id))
+                return ack({ error: isBotUser ? 'Bot-Konten treten nur als Spieler-Bot bei.' : 'Dieser Platz gehört einem Spieler-Bot.' });
 
             sessionId = s.id;
             session = s;
@@ -200,6 +206,9 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.kiCount !== undefined) newConfig.kiCount = int(newConfig.kiCount, 0, 7);
                 if (newConfig.randomCivs !== undefined) newConfig.randomCivs = !!newConfig.randomCivs;
                 if (newConfig.turnTime !== undefined) newConfig.turnTime = TURN_TIMES.includes(newConfig.turnTime) ? newConfig.turnTime : 0;
+                // player-bots (sessions.js playerBotPolicy): on/off, at most so many (null = no limit)
+                if (newConfig.playerBots !== undefined) newConfig.playerBots = newConfig.playerBots === true;
+                if (newConfig.playerBotLimit !== undefined) newConfig.playerBotLimit = int(newConfig.playerBotLimit, 1, 8) || null;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -497,6 +506,10 @@ module.exports = function registerHandlers(io) {
 function startGame(io, session) {
     if (session.players.filter(p => p.kind === 'human').length < 1)
         return 'Mindestens ein Spieler nötig.';
+    // the host turned player-bots off or lowered the limit after they joined: kick them first
+    const bots = sessions.playerBotPolicy(session);
+    if (bots.count > 0 && !bots.allowed) return 'In der Lobby sitzen Spieler-Bots, obwohl sie nicht erlaubt sind.';
+    if (bots.free < 0) return `In der Lobby sitzen ${bots.count} Spieler-Bots – erlaubt sind ${bots.limit}.`;
     sessions.recordActivity(session.id);
 
     const gc = session.gameConfig;
@@ -715,6 +728,7 @@ function publicPlayers(session) {
         mmr: p.mmr || 1000,
         userId: p.dbUserId || null,     // account for the player profile (client/profile.js)
         kind: p.kind,                   // 'human' | 'ki' (the client places KI seats like the server)
+        botAccount: !!p.playerBot,      // a bot account plays this human seat (utils/bots.js)
         isBot: p.kind === 'bot' || p.kind === 'ki',     // computer seat (KI fill-in)
         afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
     }));
@@ -907,6 +921,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                 ability: lp.ability,
                 drafted: lp.drafted || null,
                 isBot: lp.kind === 'bot' || lp.kind === 'ki',
+                botAccount: !!lp.playerBot,
                 points: points,
                 scoreDetails: scoreDetails,
                 isWinner: isWinner
