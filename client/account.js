@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Declared before the first await: loadHistory() can resolve while init is still running
     let historyGames = [];
     let adminUsers = [];           // last loaded admin user list (adminDeleteUser)
+    let myBots = [];               // last loaded bot list (loadBots runs before init is done)
 
     // --- Tab Logic ---
     const tabs = document.querySelectorAll('.nav-tab');
@@ -43,6 +44,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load History
         loadHistory();
         loadBlocked();
+
+        // Bot accounts: bot creators and admins (utils/bots.js)
+        if (data.canCreateBots) {
+            document.querySelectorAll('.bots-tab').forEach(el => el.style.display = 'block');
+            loadBots();
+        }
 
         // Admin mode
         if (data.role === 'admin' || data.role === 'superadmin') {
@@ -649,25 +656,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             const uBody = document.querySelector('#table-admin-users tbody');
             uBody.innerHTML = users.map(u => {
                 const id = esc(u.id);
+                const isBotUser = u.accountType === 'bot';
                 let badges = '';
                 if (u.isBanned) badges += `<span class="badge banned">${tx('Gesperrt')}</span> `;
-                return `
-                <tr>
-                    <td>${esc(u.username)} <br><small>${esc(u.email)}</small></td>
-                    <td>
+                if (isBotUser) {
+                    badges += `<span class="badge bot">${tx('Bot')}</span> `;
+                    if (u.botDisabled) badges += `<br><small style="color:var(--red);">${esc(txs(u.botDisabled))}</small>`;
+                }
+                // bot accounts: whose bot it is; bot creators: how many bots, and the limit
+                const sub = isBotUser ? tx('Besitzer: %s', u.owner ? u.owner.username : '–') : (u.email || '');
+                const botLimit = !u.bots ? '' : `<br><small>${u.bots.limit == null ? tx('%s Bots (ohne Obergrenze)', u.bots.count) : tx('%s von %s Bots', u.bots.count, u.bots.limit)}</small>
+                        ${u.bots.limit == null ? '' : `<button onclick="adminBotLimit('${id}')" class="btn small" style="margin-top:4px;">${tx('Bot-Limit')}</button>`}`;
+                const roleSelect = isBotUser ? '' : `
                         <select onchange="adminChangeRole('${id}', this.value)" style="margin-right:8px; padding:2px; border-radius:4px; font-size:12px; background:var(--bg); border:1px solid #ccc; color:var(--text);">
                             <option value="user" ${u.role === 'user' ? 'selected' : ''}>${tx('User')}</option>
+                            <option value="botcreator" ${u.role === 'botcreator' ? 'selected' : ''}>${tx('Bot-Ersteller')}</option>
                             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                             <option value="superadmin" ${u.role === 'superadmin' ? 'selected' : ''}>${tx('Super Admin')}</option>
-                        </select>
+                        </select>`;
+                return `
+                <tr>
+                    <td>${esc(u.username)} <br><small>${esc(sub)}</small></td>
+                    <td>
+                        ${roleSelect}
                         ${badges}
+                        ${botLimit}
                     </td>
                     <td>${esc(u.gamesPlayed)}</td>
                     <td>${esc(u.mmr)}</td>
                     <td>
                         <button onclick="adminAction('user', '${id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? tx('Entbannen') : tx('Bannen')}</button>
-                        <button onclick="adminAction('user', '${id}', 'force_password')" class="btn small">${tx('PW Reset')}</button>
-                        <button onclick="toggleAdminUserMfa('${id}')" class="btn small" style="margin-top: 4px;">${tx('MFA Verwalten')}</button>
+                        ${isBotUser ? '' : `<button onclick="adminAction('user', '${id}', 'force_password')" class="btn small">${tx('PW Reset')}</button>
+                        <button onclick="toggleAdminUserMfa('${id}')" class="btn small" style="margin-top: 4px;">${tx('MFA Verwalten')}</button>`}
                         ${u.id === currentUser.id ? '' : `<button onclick="adminDeleteUser('${id}')" class="btn small btn-primary" style="margin-top: 4px;">${tx('Konto löschen')}</button>`}
                         <div id="admin-user-mfa-${id}" style="display:none; margin-top: 10px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 4px; font-size: 13px;"></div>
                     </td>
@@ -767,6 +787,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // How many bots a bot creator may own; empty = the default again
+    window.adminBotLimit = async (id) => {
+        const u = adminUsers.find(x => x.id === id);
+        if (!u || !u.bots) return;
+        const value = prompt(tx('Wie viele Bots darf %s besitzen? (leer = Standard)', u.username), String(u.bots.limit));
+        if (value === null) return;
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_bot_limit', botLimit: value.trim() === '' ? null : Number(value) })
+        });
+        if (res.ok) {
+            loadAdminData();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            alert(tx('Fehler: %s', err.error ? txs(err.error) : tx('Unbekannt')));
+        }
+    };
+
     window.toggleConfig = async (key, val) => {
         await fetch('/api/admin/config', {
             method: 'POST',
@@ -840,6 +879,97 @@ document.addEventListener('DOMContentLoaded', async () => {
         const res = await fetch('/api/account/blocks/' + encodeURIComponent(btn.dataset.unblock), { method: 'DELETE' }).catch(() => null);
         if (res && res.ok) renderBlocked((await res.json()).list || []);
         else { btn.disabled = false; alert(tx('Netzwerkfehler.')); }
+    });
+
+    // --- Bot accounts (routes/bots.js): create, new token, hand over, delete ---
+    async function loadBots() {
+        const all = document.getElementById('bots-all').checked;
+        const tbody = document.querySelector('#table-bots tbody');
+        try {
+            const res = await fetch('/api/bots' + (all ? '?all=1' : ''));
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            myBots = data.bots;
+            document.getElementById('bots-count').textContent = data.limit == null
+                ? tx('Du hast %s Bots (ohne Obergrenze).', data.own)
+                : tx('Du hast %s von %s Bots.', data.own, data.limit);
+            document.getElementById('bots-all-row').style.display = currentUser.role === 'admin' || currentUser.role === 'superadmin' ? 'block' : 'none';
+            tbody.innerHTML = myBots.length ? myBots.map(b => {
+                const id = esc(b.id);
+                const status = b.disabled ? `<br><small style="color:var(--red);">${esc(txs(b.disabled))}</small>` : '';
+                return `<tr>
+                    <td>${nameLink(b.username, b.id)}${status}</td>
+                    <td>${b.owner ? esc(b.owner.username) : '–'}</td>
+                    <td>${esc(b.mmr)}</td>
+                    <td>${esc(b.gamesPlayed)}</td>
+                    <td>
+                        <button class="btn small" data-bot-token="${id}">${tx('Neues Token')}</button>
+                        <button class="btn small" data-bot-transfer="${id}">${tx('Übergeben')}</button>
+                        <button class="btn small error" data-bot-delete="${id}">${tx('Löschen')}</button>
+                    </td>
+                </tr>`;
+            }).join('') : `<tr><td colspan="5">${tx('Noch keine Bots.')}</td></tr>`;
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5">${tx('Fehler beim Laden.')}</td></tr>`;
+        }
+    }
+    function showBotToken(name, token) {
+        document.getElementById('bot-token-title').textContent = tx('Token für %s', name);
+        document.getElementById('bot-token-value').textContent = token;
+        document.getElementById('bot-token-box').style.display = 'block';
+    }
+    const botMsg = (text, okay) => {
+        const el = document.getElementById('msg-bots');
+        el.textContent = text;
+        el.style.color = okay ? 'green' : 'var(--red)';
+    };
+    const postJson = (url, body) => authFetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
+    });
+    document.getElementById('bots-all').addEventListener('change', loadBots);
+    document.getElementById('btn-bot-token-copy').addEventListener('click', () => {
+        const token = document.getElementById('bot-token-value').textContent;
+        (navigator.clipboard ? navigator.clipboard.writeText(token) : Promise.reject()).then(
+            () => botMsg(tx('Token kopiert.'), true), () => botMsg(tx('Kopieren ging nicht – bitte von Hand markieren.')));
+    });
+    document.getElementById('form-bot-create').addEventListener('submit', async e => {
+        e.preventDefault();
+        const input = document.getElementById('input-bot-name');
+        const res = await postJson('/api/bots', { username: input.value.trim() }).catch(() => null);
+        const data = res ? await res.json().catch(() => ({})) : {};
+        if (!res || !res.ok) return botMsg(data.error ? txs(data.error) : tx('Netzwerkfehler.'));
+        input.value = '';
+        botMsg(tx('Bot %s erstellt.', data.bot.username), true);
+        showBotToken(data.bot.username, data.token);
+        loadBots();
+    });
+    document.getElementById('table-bots').addEventListener('click', async e => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const id = btn.dataset.botToken || btn.dataset.botTransfer || btn.dataset.botDelete;
+        const bot = myBots.find(b => b.id === id);
+        if (!bot) return;
+        let res, data = {};
+        if (btn.dataset.botToken) {
+            if (!confirm(tx('Neues Token für %s? Das alte funktioniert dann nicht mehr.', bot.username))) return;
+            res = await postJson(`/api/bots/${encodeURIComponent(id)}/token`).catch(() => null);
+        } else if (btn.dataset.botTransfer) {
+            const to = prompt(tx('An wen soll %s gehen? Benutzername:', bot.username));
+            if (!to) return;
+            res = await postJson(`/api/bots/${encodeURIComponent(id)}/transfer`, { username: to.trim() }).catch(() => null);
+        } else {
+            const typed = prompt(tx('Bot „%s“ endgültig löschen? Gib zur Bestätigung seinen Namen ein:', bot.username));
+            if (typed === null) return;
+            if (typed.trim() !== bot.username) return botMsg(tx('Der Name stimmt nicht – nichts gelöscht.'));
+            res = await fetch(`/api/bots/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+        }
+        if (res) data = await res.json().catch(() => ({}));
+        if (!res || !res.ok) botMsg(data.error ? txs(data.error) : tx('Netzwerkfehler.'));
+        else {
+            botMsg(tx('Erledigt.'), true);
+            if (data.token) showBotToken(bot.username, data.token);
+        }
+        loadBots();
     });
 
     // --- Admin: chat reports (routes/admin.js /reports) ---

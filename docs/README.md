@@ -43,6 +43,7 @@ Documentation of the Hochciv multiplayer server. Start with **[How it works](ove
 | [Database](reference/database.md) | Tables (Sequelize models) and what they hold |
 | [Rundenspiele](reference/rundenspiele.md) | Lifecycle, timeouts, KI takeover of asynchronous games |
 | [Points and MMR](reference/ranking.md) | End-of-game points, the MMR formula, penalties |
+| [Bot accounts](reference/bot-accounts.md) | Accounts for programs, their owners and tokens; player-bots in lobbies, Rundenspiele and matchmaking |
 | [Security](reference/security.md) | Origin check, second factor, rate limits, bans |
 
 ## Other documents

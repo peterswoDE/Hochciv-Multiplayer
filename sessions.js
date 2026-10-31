@@ -72,6 +72,7 @@ function createSession(gameConfig, hostInfo) {
                 kind: 'human',
                 connected: false,
                 socketId: null,
+                ...botSeat(hostInfo),
             },
         ],
         state: null,                  // filled when game starts
@@ -106,6 +107,11 @@ function joinSession(joinCode, password, playerInfo) {
 
     if (session.status !== 'lobby') return 'Spiel hat bereits begonnen. Wenn du dich wiederverbinden willst, musst du deinen exakten, ursprünglichen Spielernamen verwenden.';
     if (session.players.length >= humanSeats(session)) return 'Sitzung ist voll.';
+    if (playerInfo.botUserId) {
+        const policy = playerBotPolicy(session);
+        if (!policy.allowed) return 'In dieser Lobby sind keine Spieler-Bots erlaubt.';
+        if (policy.free <= 0) return 'In dieser Lobby ist kein Platz mehr für Spieler-Bots.';
+    }
 
     const playerIndex = session.players.length;
     let fallbackName = cleanName(playerInfo.name, `Spieler ${playerIndex + 1}`);
@@ -126,6 +132,7 @@ function joinSession(joinCode, password, playerInfo) {
         kind: 'human',
         connected: false,
         socketId: null,
+        ...botSeat(playerInfo),
     });
 
     return { sessionId, playerIndex };
@@ -156,6 +163,28 @@ function addSpectator(joinCode, password, info) {
 
 function spectatorCount(session) {
     return (session.spectators || []).filter(w => w.connected).length;
+}
+
+/**
+ * Player-bots (bot accounts, utils/bots.js) sit on human seats – first come, first served – and
+ * never on the KI seats. The host allows them (gameConfig.playerBots) and may limit them
+ * (gameConfig.playerBotLimit, null = every free human seat). A bot hosting the lobby always
+ * allows them and doesn't count itself. A seat of a bot account is bound to that account
+ * (botUserId, checked by sockets/game.js session:connect).
+ */
+function botSeat(info) {
+    return info && typeof info.botUserId === 'string' ? { playerBot: true, botUserId: info.botUserId } : {};
+}
+
+function playerBotPolicy(session) {
+    const cfg = session.gameConfig || {};
+    const host = session.players[session.hostIndex];
+    const hostIsBot = !!(host && host.playerBot);
+    const allowed = hostIsBot || cfg.playerBots === true;
+    const limit = Number.isInteger(cfg.playerBotLimit) && cfg.playerBotLimit > 0 ? cfg.playerBotLimit : null;
+    const count = session.players.filter(p => p.playerBot && p !== host).length;
+    const free = !allowed ? 0 : limit == null ? Infinity : limit - count;
+    return { allowed, limit, count, free, hostIsBot };
 }
 
 /**
@@ -311,6 +340,7 @@ function getPublicSessions() {
     for (const [id, s] of sessions) {
         // nobody connected: abandoned, removed by the next cleanup – nothing to join or watch
         if (!s.isPublic || s.status === 'finished' || !s.players.some(p => p.connected)) continue;
+        const bots = playerBotPolicy(s);
         list.push({
             id: s.id,
             joinCode: s.joinCode,
@@ -322,6 +352,9 @@ function getPublicSessions() {
             mapKey: s.gameConfig.mapKey || '0',
             round: s.state ? s.state.round : null,
             spectators: spectatorCount(s),
+            // player-bots: allowed at all, and how many more may join (null = no limit)
+            playerBots: bots.allowed,
+            playerBotsFree: bots.free === Infinity ? null : Math.max(0, bots.free),
         });
     }
     return list;
@@ -340,6 +373,7 @@ module.exports = {
     joinSession,
     addSpectator,
     spectatorCount,
+    playerBotPolicy,
     getSession,
     getSessionByCode,
     removeSession,

@@ -835,6 +835,8 @@ const MP = {
                 h = `
           <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">${TX('Neues Spiel hosten (Server)')}</button>
           ${typeof MATCH !== 'undefined' ? `<button class="btn wide" style="margin-bottom:10px" onclick="MATCH.start()" ${this.user ? '' : 'disabled'}>🔥 ${TX('Gewertetes Spiel suchen')}</button>
+          <label class="row" style="margin:-4px 0 10px; font-size:13px"><span>🤖 ${TX('Spieler-Bots als Mitspieler zulassen')}</span>
+            <input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''} ${this.user ? '' : 'disabled'}></label>
           ${this.user ? '' : `<p class="sub" style="margin:-4px 0 10px">${TX('Für gewertete Spiele musst du angemeldet sein.')}</p>`}` : ''}
           <button class="btn wide" onclick="MP.setMode('public-list')">${TX('Öffentliche Lobbys suchen')}</button>
           <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">${TX('Privatem Spiel beitreten')}</button>
@@ -881,7 +883,7 @@ const MP = {
                                     const running = l.status && l.status !== 'lobby';
                                     const info = running
                                         ? (l.round ? TX('Läuft · Runde %s', escHtml(l.round)) : TX('Läuft')) + (l.spectators ? ` · 👁 ${escHtml(l.spectators)}` : '')
-                                        : TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers));
+                                        : TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers)) + (l.playerBots ? ` · 🤖 ${TX('Spieler-Bots erlaubt')}` : '');
                                     const btn = running
                                         ? `<button class="btn small" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, ($('mp-pln') || {}).value)">${TX('Zuschauen')}</button>`
                                         : `<button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>`;
@@ -931,7 +933,7 @@ const MP = {
 
                     return `
                     <tr>
-                        <td><b>${escHtml(p.name)}</b> ${isPlayerHost ? `(${TX('Host')})` : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${escHtml(p.mmr)} MMR]</span>` : ''}</td>
+                        <td><b>${escHtml(p.name)}</b> ${p.botAccount ? this.botBadge() : ''} ${isPlayerHost ? `(${TX('Host')})` : ''} ${p.mmr ? `<span style="font-size:11px; opacity:0.6">[${escHtml(p.mmr)} MMR]</span>` : ''}</td>
                         <td style="padding: 4px;">
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-civ-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${civOpts}</select>
                             <br/>
@@ -1004,6 +1006,7 @@ const MP = {
                 </select>
               </label>
               ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
+              ${this.playerBotRows(cnt.total - cnt.ki)}
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
                 <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('min 2 H-Spieler, KI auf schwer')})</small></span>
                 <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
@@ -1018,6 +1021,32 @@ const MP = {
         this.setMode = (m) => { mode = m; render(); };
         this.renderLobby = render; // Export render method to dynamically update when lobby state changes
         render();
+    },
+
+    /** "🤖 Bot" next to the name of a seat a bot account plays (utils/bots.js). */
+    botBadge: function () {
+        return `<span class="mp-bot-badge" title="${escHtml(TX('Bot-Konto: ein Programm, das wie ein Spieler spielt'))}">🤖 ${TX('Bot')}</span>`;
+    },
+
+    /**
+     * Lobby rows for player-bots: allowed or not, and at most how many of the `seats` human seats
+     * they may take (sessions.js playerBotPolicy). A bot as host always allows them.
+     */
+    playerBotRows: function (seats) {
+        const host = (this.players || [])[this.hostIndex];
+        const hostIsBot = !!(host && host.botAccount);
+        const on = hostIsBot || this.gameConfig.playerBots === true;
+        const limit = this.gameConfig.playerBotLimit || '';
+        const opts = [`<option value="" ${limit ? '' : 'selected'}>${TX('Unbegrenzt')}</option>`]
+            .concat(Array.from({ length: Math.max(1, seats) }, (_, i) => i + 1).map(n => `<option value="${n}" ${n === limit ? 'selected' : ''}>${n}</option>`)).join('');
+        return `
+              <label class="row"><span>🤖 ${TX('Spieler-Bots erlauben')}</span>
+                <input type="checkbox" id="mp-set-bots" onchange="MP.updateLobbyConfig()" ${on ? 'checked' : ''} ${hostIsBot ? 'disabled' : ''}>
+              </label>
+              ${on ? `<label class="row"><span>${TX('Höchstens so viele Spieler-Bots')}</span>
+                <select id="mp-set-botlimit" onchange="MP.updateLobbyConfig()">${opts}</select>
+              </label>` : ''}
+              ${on ? `<p class="hint" style="margin:4px 0 8px">${TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.')}</p>` : ''}`;
     },
 
     updateLobbyConfig: function () {
@@ -1046,6 +1075,9 @@ const MP = {
             randomCivs: !!($('mp-set-random') && $('mp-set-random').checked),
             turnTime: $('mp-set-turntime') ? +$('mp-set-turntime').value : 0,
             noKi: false,
+            // player-bots (bot accounts, sessions.js playerBotPolicy); null = no limit
+            playerBots: $('mp-set-bots') ? $('mp-set-bots').checked : undefined,
+            playerBotLimit: $('mp-set-botlimit') ? (+$('mp-set-botlimit').value || null) : undefined,
         };
         // a map with fewer empires: keep the numbers within what it allows
         const old = this.gameConfig;
@@ -1858,7 +1890,7 @@ const ASYNC = {
     seatsHtml: function (seats, mySlot) {
         return `<div class="mpa-seats">${seats.map(s => {
             const who = s.kind === 'bot' ? TX('Bot') : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
-                : s.name ? this.esc(s.name) : `<i>${TX('frei')}</i>`;
+                : s.name ? this.esc(s.name) + (s.botAccount ? ' 🤖' : '') : `<i>${TX('frei')}</i>`;
             return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
         }).join('')}</div>`;
     },
@@ -1974,6 +2006,7 @@ const ASYNC = {
         const f = this.form = this.form || {
             mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
             events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '',
+            playerBots: false, playerBotLimit: '',
         };
         const civ = this.civ(f.civ) || CIVS[0];
         // how many empires the chosen map allows (mapLimits in the game's engine.js)
@@ -2027,6 +2060,10 @@ const ASYNC = {
               ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
             <label class="row"><span>🔥 ${TX('Gewertet')} <small>(${TX('KI auf schwerster Stufe')})</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
             <label class="row"><span>${TX('Öffentlich auffindbar')}</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
+            <label class="row"><span>🤖 ${TX('Spieler-Bots erlauben')}</span><input type="checkbox" id="mpa-bots" ${f.playerBots ? 'checked' : ''}></label>
+            ${f.playerBots ? `<label class="row"><span>${TX('Höchstens so viele Spieler-Bots')}</span><select id="mpa-botlimit">
+              ${opt('', f.playerBotLimit, TX('Unbegrenzt'))}${Array.from({ length: Math.max(1, humans - 1) }, (_, i) => i + 1).map(n => opt(n, f.playerBotLimit, n)).join('')}</select></label>
+            <p class="sub">${TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.')}</p>` : ''}
             <label class="row"><span>${TX('Einladen')} <small>(${TX('Benutzernamen, mit Komma')})</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
           </div>
           <p class="sub">${hint}</p>
@@ -2045,6 +2082,7 @@ const ASYNC = {
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
             customName: v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
             invite: v('mpa-invite') || '',
+            playerBots: c('mpa-bots'), playerBotLimit: v('mpa-botlimit') || '',
         });
         if (f.civ !== civBefore) f.ability = 'basis';
         if (rerender) this.showCreate();
@@ -2087,6 +2125,7 @@ const ASYNC = {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
                     wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic,
+                    playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },
                 civ: f.civ, ability: f.ability,
@@ -2515,6 +2554,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mpa-c { float:right; font-family:monospace; opacity:.6; }
         .mpa-seats { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; margin:4px 0; }
         .mpa-seat.me { font-weight:bold; }
+        .mp-bot-badge { display:inline-block; font-size:11px; padding:1px 5px; border-radius:4px; background:#3b5f7d; color:#fff; vertical-align:1px; }
         .mpa-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; }
         .mpa-foot .btn { width:auto; margin:0; }
         .mpa-notify { margin-top:14px; border-top:1px solid rgba(0,0,0,.1); padding-top:10px; }

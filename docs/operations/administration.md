@@ -7,7 +7,8 @@
 | Role | Can |
 |---|---|
 | `user` | play, manage their own account |
-| `admin` | everything in the admin tabs below except *OAuth*; manages users with the role `user` only |
+| `botcreator` | like `user`, plus own up to 4 [bot accounts](../reference/bot-accounts.md) (tab *Meine Bots*); granted by admins |
+| `admin` | everything in the admin tabs below except *OAuth*; manages users with the role `user` or `botcreator` only; owns bots without a limit |
 | `superadmin` | everything, including granting `admin`/`superadmin`, managing other admins and the *OAuth* tab |
 
 The first superadmin is set on the command line, after registering the account in the game:
@@ -28,7 +29,7 @@ The admin tabs appear on the account page (*Account & Admin* in the game menu) f
 | **Lobbys** | Live lobbies and games in memory. *Close* ends a lobby and disconnects everyone in it; *broadcast* sends a system message to everyone in it. |
 | **Laufende Spiele** | Running live games and Rundenspiele with the game version each one runs on – check this before dropping an old game version ([Updating the game](../development/updating-the-game.md)). |
 | **Spiele** | Finished matches, newest first, with a player search. |
-| **User** | All accounts, newest first. Per user: ban / unban, set MMR, set a new password, change the role, show and remove second factors (authenticator apps, passkeys, e-mail code), delete the account. |
+| **User** | All accounts, newest first. Per user: ban / unban, set MMR, set a new password, change the role, show and remove second factors (authenticator apps, passkeys, e-mail code), delete the account. Bot accounts show a *Bot* badge and their owner (only ban, MMR and delete apply); bot creators show their bots and *Bot-Limit* to change how many they may own. |
 | **Meldungen** | Chat reports from players and from the word filter, with the message and the game's chat history; mark them handled with a note. Also the admins' own entries for the **word filter** ('ban' words – whole word or part of a word – and 'allow' words) and a field to try a text against the filter. |
 | **OAuth** (superadmin) | Client ID, secret and *Aktiviert* for Google and Discord, the Discord bot token for the Activity, and the callback URLs the server uses. See [Google and Discord login](login-providers.md). |
 
@@ -40,7 +41,8 @@ The admin tabs appear on the account page (*Account & Admin* in the game menu) f
 
 ### Bans and deleted accounts
 
-* A ban logs the account out everywhere, closes its open game connections and takes it off its live seats (the seat plays on as a guest's) – `utils/detachUser.js`.
+* A ban logs the account out everywhere, closes its open game connections and takes it off its live seats (the seat plays on as a guest's) – `utils/detachUser.js`. The bots of a banned owner stop the same way until the ban is lifted; so do they when the owner loses the role `botcreator`.
+* Deleting a bot owner deletes their bots as well.
 * Deleting an account (by the user or an admin, `utils/deleteAccount.js`) keeps the game history for the other players, but anonymizes its seats; running Rundenspiele go on without it, and its name is removed from their game states and replay frames. Its custom maps and push devices are deleted.
 
 ## Command-line tools

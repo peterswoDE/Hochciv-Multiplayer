@@ -141,6 +141,11 @@ function create(host, opts) {
     if (cErr) return { error: cErr };
     if (total - ki < 2) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };
     Object.assign(config, { playerCount: total, humanCount: total - ki, noKi: ki === 0 });
+    // Player-bots (bot accounts, utils/bots.js) take human seats like players, never the KI's;
+    // the host allows them and may limit them (null = no limit). A bot as host always allows them.
+    const botLimit = parseInt(raw.playerBotLimit, 10);
+    config.playerBots = !!host.isBot || raw.playerBots === true;
+    config.playerBotLimit = Number.isInteger(botLimit) && botLimit >= 1 ? Math.min(botLimit, total) : null;
 
     const g = {
         engine: engine.version(),           // played with this engine version to the end
@@ -192,7 +197,7 @@ function create(host, opts) {
         if (!isMarathon(g)) g.seats[hostSlot].ability = resolveAbility(civ, opts.ability) || 'basis';
     }
 
-    Object.assign(g.seats[hostSlot], { userId: host.id, name: host.username, joinedAt: Date.now() });
+    Object.assign(g.seats[hostSlot], { userId: host.id, name: host.username, joinedAt: Date.now(), botAccount: !!host.isBot });
     config.startPlayer = hostSlot;          // the host always moves first
 
     /* Start right away (the host plays turn 1 while the others join) when the seats are
@@ -222,6 +227,14 @@ function markStarted(g) {
 // ── Joining and leaving ───────────────────────────────────────────────────────
 
 /** Which seats can a joiner take right now? (for the join dialog) */
+/** null if one more player-bot may join, else why not (the host's own bot seat doesn't count). */
+function playerBotRoom(g) {
+    if (!g.config.playerBots) return 'In diesem Rundenspiel sind keine Spieler-Bots erlaubt.';
+    const count = g.seats.filter(s => s.botAccount && s.userId && !s.replaced && s.userId !== g.hostUserId).length;
+    if (g.config.playerBotLimit != null && count >= g.config.playerBotLimit) return 'In diesem Rundenspiel ist kein Platz mehr für Spieler-Bots.';
+    return null;
+}
+
 function freeSeats(g) {
     if (!['setup', 'playing'].includes(g.status) || claimedCount(g) >= g.config.humanCount) return [];
     if (g.config.civMode === 'random') return [nextRandomSeat(g)].filter(Boolean).map(s => ({ slot: s.slot, civ: s.civ }));
@@ -242,6 +255,10 @@ function join(g, user, opts) {
     if (g.seats.some(s => s.userId === user.id)) return 'Du bist schon in diesem Spiel.';
     if (!['setup', 'playing'].includes(g.status)) return 'Diesem Spiel kann man nicht mehr beitreten.';
     if (claimedCount(g) >= g.config.humanCount) return 'Das Spiel ist schon voll.';
+    if (user.isBot) {
+        const why = playerBotRoom(g);
+        if (why) return why;
+    }
 
     let seat, ability;
     if (g.config.civMode === 'random') {
@@ -263,7 +280,7 @@ function join(g, user, opts) {
     if (!seat) return 'Kein freier Platz mehr.';
     if (!ability) return 'Unbekannte Fähigkeit.';
 
-    Object.assign(seat, { userId: user.id, name: user.username, ability, joinedAt: Date.now() });
+    Object.assign(seat, { userId: user.id, name: user.username, ability, joinedAt: Date.now(), botAccount: !!user.isBot });
     const inv = g.invites.find(i => i.userId === user.id);
     if (inv) inv.status = 'accepted';
 
@@ -719,7 +736,7 @@ function publicSeats(g) {
     return g.seats.map(s => ({
         slot: s.slot, civ: s.civ, kind: s.kind, name: s.name, userId: s.userId,
         ability: s.ability, drafted: s.drafted || null, roman: s.roman, color: s.color,
-        replaced: !!s.replaced, started: !!s.started,
+        replaced: !!s.replaced, started: !!s.started, botAccount: !!s.botAccount,
     }));
 }
 

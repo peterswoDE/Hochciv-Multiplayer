@@ -30,6 +30,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | File | Purpose |
 |---|---|
 | `auth.js` | Login guard, the user object sent to the client, input validation, one-time codes, recent-login check |
+| `bots.js` | Bot accounts: who may own bots and how many, tokens, whether a bot may play ([Bot accounts](bot-accounts.md)) |
 | `oauth.js`, `discordStrategy.js` | Google/Discord login strategies from the database configuration |
 | `totp.js`, `webauthn.js` | Authenticator codes; passkey relying party from `BASE_URL` |
 | `origin.js` | Which web pages may use a visitor's login ([Security](security.md#origin-check)) |

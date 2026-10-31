@@ -17,6 +17,7 @@ const {
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
+const Bots = require('../utils/bots');
 
 const rateLimitLib = require('express-rate-limit');
 
@@ -148,6 +149,33 @@ router.post('/login', rateLimit, (req, res, next) => {
             res.status(500).json({ error: 'Internal Server Error' });
         }
     })(req, res, next);
+});
+
+// Bot accounts (utils/bots.js): { token } in the body or "Authorization: Bearer <token>" → a normal
+// session, so the bot's socket connections are logged in like a player's
+// own limit: one owner may run several bots from one address; a token can't be guessed anyway
+const botRateLimit = rateLimitLib({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+router.post('/bot', botRateLimit, async (req, res) => {
+    try {
+        const header = /^Bearer\s+(\S+)$/i.exec(req.get('authorization') || '');
+        const token = str(req.body && req.body.token, 200) || (header && header[1].length <= 200 ? header[1] : null);
+        if (!token) return res.status(400).json({ error: 'Token fehlt.' });
+        const bot = await User.findOne({ where: { botTokenHash: Bots.hashToken(token), accountType: 'bot' } });
+        if (!bot) return res.status(401).json({ error: 'Ungültiges Bot-Token.' });
+        const owner = bot.ownerId ? await User.findByPk(bot.ownerId) : null;
+        const why = Bots.botUsable(bot, owner);
+        if (why) return res.status(403).json({ error: why });
+        finishLogin(req, res, bot);
+    } catch (err) {
+        console.error('Bot login error', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 // --- MFA Login Routes ---
@@ -481,6 +509,7 @@ router.post('/google/idtoken', rateLimit, async (req, res) => {
             emails: payload.email ? [{ value: payload.email, verified: payload.email_verified === true }] : [],
             photos: payload.picture ? [{ value: payload.picture }] : [],
         };
+        if (Bots.isBot(req.user)) return res.status(403).json({ ok: false, reason: 'failed' });
         const linking = req.isAuthenticated();
         oauth.handleOAuthProfile(req, 'google', 'googleId', profile, (err, user, info) => {
             if (err) {
@@ -530,6 +559,7 @@ for (const provider of ['google', 'discord']) {
     const label = provider === 'google' ? 'Google' : 'Discord';
 
     router.get(`/${provider}`, (req, res, next) => {
+        if (Bots.isBot(req.user)) return res.status(403).json({ error: 'Bot-Konten haben keine Kontoeinstellungen.' });
         if (!oauth.isEnabled(provider)) {
             return res.status(404).json({ error: `${label} Login ist nicht konfiguriert.` });
         }

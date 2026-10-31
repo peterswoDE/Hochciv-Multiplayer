@@ -33,7 +33,8 @@ Relations: a `User` has many `Passkey`, `TotpToken` and `DeviceToken` rows (devi
 | `id` (UUID), `username`, `email`, `origin` | Identity; `origin` is e.g. `activity` for accounts created by the Discord Activity |
 | `password_hash` | bcrypt; empty for Google/Discord/passkey-only accounts |
 | `mmr` (default 1000), `gamesPlayed` | Ranking |
-| `role` (`user`/`admin`/`superadmin`), `isActive`, `isBanned` | Rights and state |
+| `role` (`user`/`botcreator`/`admin`/`superadmin`), `isActive`, `isBanned` | Rights and state |
+| `accountType` (`human`/`bot`), `ownerId`, `botTokenHash`, `botLimit` | [Bot accounts](bot-accounts.md): a bot's owner and the SHA-256 of its token; how many bots a bot creator may own (null = default) |
 | `googleId`, `discordId`, `avatarUrl` | Linked providers |
 | `activationCode…`, `resetCode…`, `pendingEmail`, `emailChangeCode…` | One-time codes with expiry and attempt counters |
 | `totpSecret`, `totpEnabled`, `totpAttempts`, `totpLockedUntil` | Authenticator (and its lockout) |

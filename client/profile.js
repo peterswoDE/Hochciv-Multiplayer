@@ -46,6 +46,8 @@
         .hcp-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .hcp-name { font-family: var(--serif, Georgia, serif); font-size: 24px; font-weight: 700; word-break: break-word; }
         .hcp-sub { color: var(--ink-soft, #6f6551); font-size: 13px; }
+        .hcp-bot { font-family: var(--sans, sans-serif); font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+            background: #3b5f7d; color: #fff; vertical-align: 4px; }
         .hcp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
         .hcp-stat { background: var(--paper-2, #efe6ce); border-radius: 8px; padding: 8px 6px; text-align: center; }
         .hcp-stat b { display: block; font-size: 20px; font-family: var(--serif, Georgia, serif); }
@@ -160,7 +162,7 @@
         const type = (g.async ? tx('Rundenspiel') : tx('Live')) + (g.ranked ? ', ' + tx('gewertet') : '');
         const players = [...g.players].sort((a, b) => b.points - a.points);
         const rows = players.map(p => `<tr class="${p.isWinner ? 'win' : ''}">
-                <td>${p.userId === ownerId ? esc(p.name) : link(p.name, p.userId)}${p.isBot ? ` <small>(${tx('Bot')})</small>` : ''}</td>
+                <td>${p.userId === ownerId ? esc(p.name) : link(p.name, p.userId)}${p.isBot ? ` <small>(${tx('Bot')})</small>` : p.botAccount ? ' 🤖' : ''}</td>
                 <td>${esc(p.civ || '–')}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.pop) : '–'}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.wonders) : '–'}</td>
@@ -192,8 +194,9 @@
         body.innerHTML = `
             <div class="hcp-top">
               <div class="hcp-avatar">${esc((data.username || '?').charAt(0).toUpperCase())}</div>
-              <div><div class="hcp-name">${esc(data.username)}</div>
-                <div class="hcp-sub">${tx('Dabei seit %s', esc(fmtDate(data.memberSince)))}</div></div>
+              <div><div class="hcp-name">${esc(data.username)}${data.isBotAccount ? ` <span class="hcp-bot">🤖 ${tx('Bot')}</span>` : ''}</div>
+                <div class="hcp-sub">${tx('Dabei seit %s', esc(fmtDate(data.memberSince)))}</div>
+                ${data.isBotAccount && data.owner ? `<div class="hcp-sub">${tx('Bot von %s', link(data.owner.username, data.owner.id))}</div>` : ''}</div>
             </div>
             <div class="hcp-stats">
               <div class="hcp-stat"><b>${esc(data.mmr)}</b><span>MMR</span></div>

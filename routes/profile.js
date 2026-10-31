@@ -4,7 +4,8 @@
  *
  *   GET /api/profile/:userId[?offset=n]  – name, MMR, games played, wins and the player's games
  *
- * Only public data goes out: no e-mail, no role, no account flags. The client side is
+ * Only public data goes out: no e-mail, no role, no account flags – only whether it is a bot
+ * account and who owns it. The client side is
  * client/profile.js – new profile content goes there and here.
  */
 const express = require('express');
@@ -51,6 +52,7 @@ function gameEntry(g, userId) {
             name: p.name,
             userId: p.dbUserId || null,
             isBot: !!p.isBot,
+            botAccount: !!p.botAccount,
             civ: civName(p.civ),
             points: p.points || 0,
             isWinner: !!p.isWinner,
@@ -65,9 +67,12 @@ router.get('/:userId', limit, async (req, res) => {
         const userId = req.params.userId;
         if (!UUID_RE.test(userId)) return res.status(404).json({ error: 'Spieler nicht gefunden.' });
         const user = await User.findByPk(userId, {
-            attributes: ['id', 'username', 'mmr', 'gamesPlayed', 'avatarUrl', 'createdAt'],
+            attributes: ['id', 'username', 'mmr', 'gamesPlayed', 'avatarUrl', 'createdAt', 'accountType', 'ownerId'],
         });
         if (!user) return res.status(404).json({ error: 'Spieler nicht gefunden.' });
+        // a bot account shows who runs it (utils/bots.js)
+        const owner = user.accountType === 'bot' && user.ownerId
+            ? await User.findByPk(user.ownerId, { attributes: ['id', 'username'] }) : null;
 
         const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
         const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: user.id }]))}::jsonb`;
@@ -95,6 +100,8 @@ router.get('/:userId', limit, async (req, res) => {
             wins,
             avatarUrl: user.avatarUrl,
             memberSince: user.createdAt,
+            isBotAccount: user.accountType === 'bot',
+            owner: owner ? { id: owner.id, username: owner.username } : null,
             games: { total: count, offset, pageSize: PAGE, list: rows.map(g => gameEntry(g, user.id)) },
         });
     } catch (err) {
