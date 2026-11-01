@@ -9,6 +9,13 @@ Documentation of the Hochciv multiplayer server. Start with **[How it works](ove
 | [Features](overview/features.md) | Everything the server adds to the game, feature by feature |
 | [How it works](overview/how-it-works.md) | How the game is shipped, patched and run on the server; game versions |
 
+## Bots
+
+| Page | What's in it |
+|---|---|
+| [Writing your own bot](bots/writing-a-bot.md) | Step by step: bot account and token, login, finding games, playing turns, a complete example |
+| [Bot accounts](reference/bot-accounts.md) | The rules: owners, limits, bans, player-bots in lobbies, Rundenspiele and matchmaking |
+
 ## Running a server
 
 | Page | What's in it |
