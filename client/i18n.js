@@ -731,6 +731,7 @@
         'Meine Bots': 'My bots',
         'Bot-Konten spielen wie Spieler – in Lobbys und Rundenspielen, deren Host Spieler-Bots erlaubt, und in der Spielsuche mit Spielern, die Bots zulassen. Ein Bot meldet sich mit seinem Token an (POST /api/auth/bot), nicht mit einem Passwort.':
             'Bot accounts play like players – in lobbies and turn-based games whose host allows player-bots, and in the ranked search with players who allow bots. A bot logs in with its token (POST /api/auth/bot), not with a password.',
+        'Eigenen Bot programmieren – Anleitung und API (auf Englisch)': 'Write your own bot – guide and API',
         'Name des neuen Bots': 'Name of the new bot',
         'Bot erstellen': 'Create bot',
         'Speichere es jetzt – es wird nur dieses eine Mal angezeigt.': 'Save it now – it is shown only this once.',

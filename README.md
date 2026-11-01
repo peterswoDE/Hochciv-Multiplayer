@@ -45,6 +45,7 @@ docker compose -f docker-compose.local.yml up -d --build
 | | |
 |---|---|
 | **Overview** | [Features](docs/overview/features.md) · [How it works](docs/overview/how-it-works.md) |
+| **Bots** | [Writing your own bot](docs/bots/writing-a-bot.md) · [Bot accounts](docs/reference/bot-accounts.md) |
 | **Running a server** | [Deployment](docs/operations/deployment.md) · [Configuration](docs/operations/configuration.md) · [Staging](docs/operations/staging.md) · [Google/Discord login](docs/operations/login-providers.md) · [Discord Activity](docs/operations/discord-activity.md) · [Push notifications](docs/operations/push-notifications.md) · [Administration](docs/operations/administration.md) · [Troubleshooting](docs/operations/troubleshooting.md) |
 | **Development** | [Local setup](docs/development/local-setup.md) · [Branches and release flow](docs/development/release-flow.md) · [Updating the game](docs/development/updating-the-game.md) · [Testing](docs/development/testing.md) · [Languages](docs/development/languages.md) · [Mobile layer](docs/development/mobile-layer.md) |
 | **Reference** | [Architecture](docs/reference/architecture.md) · [REST API](docs/reference/rest-api.md) · [Socket.IO events](docs/reference/socket-events.md) · [Database](docs/reference/database.md) · [Rundenspiele](docs/reference/rundenspiele.md) · [Points and MMR](docs/reference/ranking.md) · [Security](docs/reference/security.md) |

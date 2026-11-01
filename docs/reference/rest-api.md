@@ -34,7 +34,7 @@ All endpoints take and return JSON (request body limit 20 KB). Logins are cookie
 
 ## Bot accounts – `/api/bots` (login, not for bots)
 
-For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on every bot.
+For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on every bot. How a bot uses the API: [Writing your own bot](../bots/writing-a-bot.md).
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|

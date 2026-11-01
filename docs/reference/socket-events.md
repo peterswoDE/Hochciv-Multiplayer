@@ -6,6 +6,8 @@ One Socket.IO connection per browser tab carries live games, the open Rundenspie
 
 The server is authoritative: the client sends intentions (`action`), the server applies them with the game engine and sends the new state to everyone. Each player gets their own view of the state (`engine.stateForPlayer`).
 
+Bots use the same events; [Writing your own bot](../bots/writing-a-bot.md) walks through them in the order a bot needs them.
+
 ## Live games
 
 Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `sessionId`. The lobby is created and joined over REST first ([REST API](rest-api.md#live-lobbies--api)).
