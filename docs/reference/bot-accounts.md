@@ -4,6 +4,8 @@
 
 A **bot account** is an account for a program that plays like a player – for example the neural-network client in `Hochciv-KI`. It sits between a human and the built-in KI: it takes a human seat and plays it over the same API as the game page, but it is not a person. In a game, a seat played by a bot account is called a **player-bot**.
 
+This page is about the rules. **To write a bot, start with [Writing your own bot](../bots/writing-a-bot.md).**
+
 Code: `utils/bots.js` (rules), `routes/bots.js` (owner's management), `routes/auth.js` `POST /bot` (login), `sessions.js` `playerBotPolicy` (live lobbies), `async/logic.js` `playerBotRoom` (Rundenspiele), `sockets/match.js` `fitsBots` (matchmaking). Test: `tests/bots/bots.test.js`.
 
 ## Accounts and login
