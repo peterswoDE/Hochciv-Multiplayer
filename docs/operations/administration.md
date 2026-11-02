@@ -21,15 +21,15 @@ docker exec hochciv-multiplayer node elevate.js <username> [admin|superadmin]   
 
 ## Admin panel
 
-The admin tabs appear on the account page (*Account & Admin* in the game menu) for admins. All of them use `/api/admin/*` ([REST API](../reference/rest-api.md#admin--apiadmin)).
+Admins open the admin page from their account page (*Mein Konto* in the game menu → *Admin-Bereich*), or directly at `/client/admin.html`; players without the role are sent back to their account page. Each section has its own address (`/client/admin.html#users`). All of them use `/api/admin/*` ([REST API](../reference/rest-api.md#admin--apiadmin)).
 
-| Tab | What it does |
+| Section | What it does |
 |---|---|
-| **Server-Status** | Uptime, memory, CPU load, active lobbies and players online. Switches for **maintenance mode** and **registration**. |
-| **Lobbys** | Live lobbies and games in memory. *Close* ends a lobby and disconnects everyone in it; *broadcast* sends a system message to everyone in it. |
+| **Übersicht** | Uptime, active lobbies and players online (refreshed every 10 seconds while open). Switches for **maintenance mode** and **registration**. The live lobbies and games in memory: *Schließen* ends a lobby and disconnects everyone in it; *Rundruf* sends a system message to everyone in it. |
 | **Laufende Spiele** | Running live games and Rundenspiele with the game version each one runs on – check this before dropping an old game version ([Updating the game](../development/updating-the-game.md)). |
-| **Spiele** | Finished matches, newest first, with a player search. |
-| **User** | All accounts, newest first. Per user: ban / unban, set MMR, set a new password, change the role, show and remove second factors (authenticator apps, passkeys, e-mail code), delete the account. Bot accounts show a *Bot* badge and their owner (only ban, MMR and delete apply); bot creators show their bots and *Bot-Limit* to change how many they may own. |
+| **Beendete Spiele** | Finished matches, newest first, with a player search. |
+| **Statistiken** | The overall statistics with the admin details. |
+| **Nutzer** | All accounts, newest first, with a filter by name or e-mail. Per user: ban / unban, set a new password, change the role, show and remove second factors (authenticator apps, passkeys, e-mail code), delete the account. Bot accounts show a *Bot* badge and their owner (only ban and delete apply); bot creators show their bots and *Bot-Limit* to change how many they may own. |
 | **Meldungen** | Chat reports from players and from the word filter, with the message and the game's chat history; mark them handled with a note. Also the admins' own entries for the **word filter** ('ban' words – whole word or part of a word – and 'allow' words) and a field to try a text against the filter. |
 | **OAuth** (superadmin) | Client ID, secret and *Aktiviert* for Google and Discord, the Discord bot token for the Activity, and the callback URLs the server uses. See [Google and Discord login](login-providers.md). |
 

@@ -2,7 +2,7 @@
 
 # Languages
 
-Everything this server adds follows the game's language buttons (🇩🇪/🇬🇧): menus, lobby, Rundenspiele, player profile, login and account pages including the admin tabs, and the messages the server sends back.
+Everything this server adds follows the game's language buttons (🇩🇪/🇬🇧): menus, lobby, Rundenspiele, player profile, login, account and admin pages, and the messages the server sends back.
 
 ## How it works
 
@@ -16,7 +16,7 @@ German is the source text and the key; the English is in the table `EN` in `clie
 
 Numbers and names inside a server message stay as they are; the rest is translated by the table.
 
-`client/i18n.js` is loaded on the game page before `profile.js` and `mp.js` (see `inject.js`), and on the account page (`client/account.html`) and the portal page (`client/index.html`).
+`client/i18n.js` is loaded on the game page before `profile.js` and `mp.js` (see `inject.js`), on the account and admin pages (`client/account.html`, `client/admin.html`) and the portal page (`client/index.html`).
 
 ## Adding a text
 

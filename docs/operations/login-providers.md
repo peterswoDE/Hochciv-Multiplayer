@@ -10,7 +10,7 @@ Players can log in with Google or Discord next to username and password. The pro
 2. Register these redirect URLs exactly, with your domain:
    * Google Cloud Console → Credentials → OAuth client → *Authorized redirect URIs*: `https://<your-domain>/api/auth/google/callback`
    * Discord Developer Portal → your app → OAuth2 → *Redirects*: `https://<your-domain>/api/auth/discord/callback`
-3. As superadmin, open *Account & Admin → OAuth*, enter client ID and secret, tick *Aktiviert* and save. The tab shows the callback URLs the server really uses and warns if they do not match the address you opened the page with.
+3. As superadmin, open *Mein Konto → Admin-Bereich → OAuth*, enter client ID and secret, tick *Aktiviert* and save. The tab shows the callback URLs the server really uses and warns if they do not match the address you opened the page with.
 
 After logging in or linking an account, players return to the game with a short confirmation message (`/?oauth=<result>`).
 

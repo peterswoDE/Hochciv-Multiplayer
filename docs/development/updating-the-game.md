@@ -28,7 +28,7 @@ The game in `HochCiv/` is upstream [timooom-hash/Hochciv](https://github.com/tim
 
 ## Keeping or dropping an old version
 
-Running Rundenspiele are not affected by a new version only if their version is kept. Before replacing `HochCiv/`, check in the admin tab *Laufende Spiele* which versions running games use.
+Running Rundenspiele are not affected by a new version only if their version is kept. Before replacing `HochCiv/`, check on the admin page under *Laufende Spiele* which versions running games use.
 
 **To keep the version** that production runs now, copy the old `HochCiv/` to `HochCiv-<version>/` before replacing it and add it everywhere the other old versions appear:
 

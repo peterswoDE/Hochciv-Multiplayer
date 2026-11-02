@@ -149,19 +149,30 @@ function makeAdmin() {
         await clean(page, 'player profile', '#hcp-box');
         await page.evaluate(() => PROFILE.close());
 
-        // ── account page with every tab (admin included) ─────────────────────────────────
+        // ── account page with every tab, then the admin page with every tab ──────────────
         const acc = await ctx.newPage();
         acc.on('pageerror', e => errors.push(e.message));
         await acc.goto(BASE + '/client/account.html');
-        await acc.locator('[data-target="tab-admin-oauth"]').waitFor({ state: 'visible' });
+        await acc.locator('[data-target="tab-bots"]').waitFor({ state: 'visible' });
         await acc.waitForTimeout(1500);
-        for (const tab of ['tab-profile', 'tab-history', 'tab-bots', 'tab-admin-dashboard', 'tab-admin-lobbies', 'tab-admin-running', 'tab-admin-games', 'tab-admin-users', 'tab-admin-oauth']) {
+        for (const tab of ['tab-profile', 'tab-security', 'tab-history', 'tab-bots']) {
             await acc.click(`[data-target="${tab}"]`);
             await acc.waitForTimeout(1200);
             await clean(acc, `account page: ${tab}`, `#${tab}`);
         }
-        await clean(acc, 'account page: tab row and header', '.nav-tabs');
-        ok(/Account overview/.test(await acc.title()) || /Account/.test(await acc.title()), 'account page title', await acc.title());
+        await clean(acc, 'account page: navigation and top bar', '.acc-nav');
+        await clean(acc, 'account page: top bar', '.acc-top');
+        ok(/Account/.test(await acc.title()), 'account page title', await acc.title());
+        await acc.goto(BASE + '/client/admin.html');
+        await acc.locator('[data-target="tab-admin-oauth"]').waitFor({ state: 'visible' });
+        await acc.waitForTimeout(1500);
+        for (const tab of ['tab-admin-dashboard', 'tab-admin-running', 'tab-admin-games', 'tab-admin-users', 'tab-admin-reports', 'tab-admin-oauth']) {
+            await acc.click(`[data-target="${tab}"]`);
+            await acc.waitForTimeout(1200);
+            await clean(acc, `admin page: ${tab}`, `#${tab}`);
+        }
+        await clean(acc, 'admin page: navigation', '.acc-nav');
+        ok(/Admin/.test(await acc.title()), 'admin page title', await acc.title());
         await acc.click('[data-target="tab-admin-users"]');
         await acc.waitForTimeout(600);
         await acc.evaluate(id => window.toggleAdminUserMfa(id), admin.id);

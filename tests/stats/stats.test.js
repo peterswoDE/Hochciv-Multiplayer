@@ -110,9 +110,9 @@ async function live(browser, errors) {
         await page.goto(BASE + '/');
         await page.waitForFunction(() => typeof MP !== 'undefined' && typeof STATS !== 'undefined');
         await page.evaluate(async name => {
-            localStorage.setItem('mp-name', name);           // the lobby name (the legend shows it)
             await MP.showLobby();
             MP.setMode('host');
+            $('mp-n').value = name;                          // the lobby name (the legend shows it)
             await MP.host();
         }, 'Gastgeber');
         await page.waitForFunction(() => MP.active && MP.lobbyIndex === 0);
