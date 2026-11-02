@@ -342,6 +342,10 @@ function getPublicSessions() {
         // nobody connected: abandoned, removed by the next cleanup – nothing to join or watch
         if (!s.isPublic || s.status === 'finished' || !s.players.some(p => p.connected)) continue;
         const bots = playerBotPolicy(s);
+        const cfg = s.gameConfig;
+        // empires in all as the lobby shows them (mp.js lobbyCounts); a new lobby has none set yet
+        const empires = Math.min(config.MAX_PLAYERS, Number.isInteger(cfg.playerCount) ? cfg.playerCount
+            : cfg.noKi ? s.players.length : Math.max(4, s.players.length));
         list.push({
             id: s.id,
             joinCode: s.joinCode,
@@ -356,6 +360,17 @@ function getPublicSessions() {
             // player-bots: allowed at all, and how many more may join (null = no limit)
             playerBots: bots.allowed,
             playerBotsFree: bots.free === Infinity ? null : Math.max(0, bots.free),
+            // the lobby's settings, for the filters of the list (mp.js lobbyTraits)
+            customMapName: cfg.mapKey === 'eigene' && cfg.customMap ? cfg.customMap.name : null,
+            empires,
+            kiCount: Math.max(0, Math.min(empires - 1, Number.isInteger(cfg.kiCount) ? cfg.kiCount : 0)),
+            difficulty: cfg.difficulty || null,
+            randomCivs: !!cfg.randomCivs,
+            events: !!cfg.events,
+            eventMode: cfg.eventMode === 'easy' ? 'easy' : 'hard',
+            wonders: !!cfg.wonders,
+            ranked: !!cfg.ranked,
+            turnTime: cfg.turnTime || 0,
         });
     }
     return list;

@@ -107,6 +107,11 @@ function makeAdmin() {
         await page.waitForSelector('#overlay.show, .overlay.show, #ov-body', { state: 'visible' });
         await page.waitForTimeout(800);
         await clean(page, 'multiplayer menu, open games', '#ov-body');
+        await page.click('.mph-f-toggle');
+        await page.selectOption('#mph-f-grid select[data-f="events"]', 'hard');
+        await clean(page, 'multiplayer menu, filters of the open games', '#ov-body');
+        await page.click('#mph-f-grid .mph-f-foot .btn');
+        await page.click('.mph-f-toggle');
         await page.click('.mph-tab[data-tab="running"]');
         await clean(page, 'multiplayer menu, running games', '#ov-body');
         await page.fill('#mp-n', 'Tester');

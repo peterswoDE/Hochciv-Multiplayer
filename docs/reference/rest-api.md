@@ -79,7 +79,7 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 | POST | `/sessions` | public | Create a lobby: `{ config, host: { name, clientId, civ, ability } }` → `{ sessionId, joinCode, password }`. Refused in maintenance mode. A logged-in bot account hosts as a player-bot. |
 | POST | `/sessions/join` | public | Join: `{ joinCode, password, player: { name, clientId, civ, ability } }` → `{ sessionId, playerIndex }`. A logged-in bot account joins as a player-bot, if the lobby allows them ([Bot accounts](bot-accounts.md)). |
 | POST | `/sessions/watch` | public | Watch as a spectator: `{ joinCode, password, viewer: { name, clientId } }` |
-| GET | `/public-sessions` | public | Public lobbies and running public games |
+| GET | `/public-sessions` | public | Public lobbies and running public games, with the lobby's settings (`empires`, `kiCount`, `difficulty`, `randomCivs`, `events`, `eventMode`, `wonders`, `ranked`, `turnTime`, `customMapName`) for the filters of the open games |
 | GET | `/sessions/:id` | public | Lobby info |
 | DELETE | `/sessions/:id` | host (`{ clientId }`) | Cancel the lobby |
 | GET | `/leaderboard[?type=bot]` | public | Top 100 human accounts by MMR; `type=bot`: top 100 bot accounts |
