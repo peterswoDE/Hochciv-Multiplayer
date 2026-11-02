@@ -768,6 +768,7 @@
         'Bot erstellen': 'Create bot',
         'Speichere es jetzt – es wird nur dieses eine Mal angezeigt.': 'Save it now – it is shown only this once.',
         'Kopieren': 'Copy',
+        'Kopiert': 'Copied',
         'Alle Bots anzeigen (Admin)': 'Show all bots (admin)',
         'Besitzer': 'Owner',
         'Du hast %s Bots (ohne Obergrenze).': 'You have %s bots (no limit).',

@@ -316,11 +316,22 @@
 
                 <div class="acc-card" style="margin-top:16px;">
                     <h2>Callback URLs</h2>
-                    <p class="acc-desc" style="margin:4px 0 0;">
-                        Trage diese URLs in den jeweiligen Developer-Portalen als Redirect URIs ein:<br>
-                        <code id="oauth-callback-google" data-i18n-ignore style="user-select:all;">Loading...</code><br>
-                        <code id="oauth-callback-discord" data-i18n-ignore style="user-select:all;">Loading...</code>
-                    </p>
+                    <p class="acc-desc" style="margin:4px 0 12px;">Trage diese URLs in den jeweiligen Developer-Portalen als Redirect URIs ein:</p>
+                    <!-- one field per URL: a click selects just the URL, the button copies it -->
+                    <div class="form-group">
+                        <label for="oauth-callback-google">Google</label>
+                        <div class="acc-copy">
+                            <input type="text" id="oauth-callback-google" readonly value="Loading..." onfocus="this.select()">
+                            <button type="button" class="btn" data-copy="oauth-callback-google">Kopieren</button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="oauth-callback-discord">Discord</label>
+                        <div class="acc-copy">
+                            <input type="text" id="oauth-callback-discord" readonly value="Loading..." onfocus="this.select()">
+                            <button type="button" class="btn" data-copy="oauth-callback-discord">Kopieren</button>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
