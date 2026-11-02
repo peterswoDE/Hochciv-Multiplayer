@@ -102,7 +102,7 @@ function makeRundenspiele(host) {
         const page = await ctx.newPage();
         const errors = [];
         page.on('pageerror', e => errors.push(e.message));
-        await page.goto(BASE + '/client/account.html');
+        await page.goto(BASE + '/client/admin.html');
         const tab = page.locator('[data-target="tab-admin-running"]');
         await tab.waitFor({ state: 'visible' });
         ok(await tab.isVisible(), 'tab "Laufende Spiele" is shown to admins');

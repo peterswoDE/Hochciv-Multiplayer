@@ -8,7 +8,7 @@ The game runs as a [Discord Activity](https://discord.com/developers/docs/activi
 
 It uses the same Discord application as the [Discord login](login-providers.md):
 
-1. Set up Discord login (client ID and secret in *Account & Admin → OAuth*). The Activity only needs ID and secret; *Aktiviert* only controls the website login.
+1. Set up Discord login (client ID and secret in *Mein Konto → Admin-Bereich → OAuth*). The Activity only needs ID and secret; *Aktiviert* only controls the website login.
 2. Discord Developer Portal → your app:
    * **Activities → Settings:** enable Activities.
    * **Activities → URL Mappings:** prefix `/` → target your domain without the scheme, e.g. `hochciv.example`.

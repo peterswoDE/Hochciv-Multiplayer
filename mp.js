@@ -786,7 +786,7 @@ const MP = {
             authContainer.innerHTML = `
                 <div class="mp-auth">
                     <span>${TX('Eingeloggt als %s (%s MMR, %s Spiele)', `<b>${escHtml(this.user.username)}</b>`, escHtml(this.user.mmr), escHtml(this.user.gamesPlayed))}</span>
-                    <button class="btn small" onclick="MP.showAccountModal()">${TX('Account & Admin')}</button>
+                    <button class="btn small" onclick="MP.showAccountModal()">${TX('Mein Konto')}</button>
                     <button class="btn small ghost" onclick="MP.logout()">${TX('Abmelden')}</button>
                 </div>
             `;
@@ -808,11 +808,9 @@ const MP = {
         }
     },
 
-    showAccountModal: function () {
-        if (typeof modal === 'function') {
-            modal(TX('Account Übersicht'), '<iframe src="/client/account.html?modal=true" style="width:100%; height:80vh; min-height:600px; border:none; background:transparent;"></iframe>');
-            document.getElementById('overlay').classList.add('wide');
-        }
+    /** The account page (client/account.html) – a page of its own; `section` e.g. 'history'. */
+    showAccountModal: function (section) {
+        location.href = '/client/account.html' + (section ? '#' + section : '');
     },
 
     logout: async function () {
@@ -1065,7 +1063,7 @@ const MP = {
         const watch = liveRunning.map(l => this.liveRow(l)).concat((rs && rs.watch || []).map(g => ASYNC.row(g)));
         run += liveErr + section(TX('Zuschauen'), watch, TX('Gerade läuft kein öffentliches Spiel.'));
         if (rs) run += `<div class="mph-async">
-            <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="#" onclick="MP.showAccountModal(); return false;">${TX('Spielhistorie')}</a>`)}</p>
+            <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="/client/account.html#history">${TX('Spielhistorie')}</a>`)}</p>
             <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
               <input type="checkbox" ${rs.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>
             ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>${TX('Push-Nachricht, wenn ich am Zug bin')}</span>

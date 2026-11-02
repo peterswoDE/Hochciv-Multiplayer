@@ -200,8 +200,8 @@ async function live(browser, users, sources, errors) {
 
     const acc = await ca.newPage();
     acc.on('pageerror', e => errors.push(`account: ${e.message}`));
-    await acc.goto(BASE + '/client/account.html');
-    await acc.waitForFunction(() => document.querySelector('[data-target="tab-admin-reports"]').style.display === 'block');
+    await acc.goto(BASE + '/client/admin.html');
+    await acc.waitForFunction(() => !document.querySelector('[data-target="tab-admin-reports"]').hidden);
     await acc.click('[data-target="tab-admin-reports"]');
     await acc.waitForSelector('.report-card');
     await acc.waitForSelector('#table-admin-words tbody tr td strong');

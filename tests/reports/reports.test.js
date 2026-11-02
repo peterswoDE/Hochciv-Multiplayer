@@ -211,8 +211,8 @@ async function run(browser, users, sources) {
 
     // ── Admin tab ──
     sql(`UPDATE users SET role = 'admin' WHERE id = '${ua.id}'`);
-    await acc.reload();
-    await acc.waitForFunction(() => document.querySelector('[data-target="tab-admin-reports"]').style.display === 'block');
+    await acc.goto(BASE + '/client/admin.html');
+    await acc.waitForFunction(() => !document.querySelector('[data-target="tab-admin-reports"]').hidden);
     await until(async () => (await acc.textContent('#admin-reports-badge')) === '2');
     ok((await acc.textContent('#admin-reports-badge')) === '2', 'admin: the tab shows 2 open reports', await acc.textContent('#admin-reports-badge'));
     await acc.click('[data-target="tab-admin-reports"]');
