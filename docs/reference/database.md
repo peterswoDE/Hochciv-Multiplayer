@@ -16,6 +16,7 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `replays` | `Replay` | Replays of finished matches |
 | `replay_frames` | `ReplayFrame` | Turn states of Rundenspiele that are still running |
 | `custom_maps` | `CustomMap` | Custom maps in accounts |
+| `map_favorites` | `MapFavorite` | Players' favorites among the published maps |
 | `passkeys` | `Passkey` | Passkeys (WebAuthn) |
 | `TotpTokens` | `TotpToken` | Authenticator apps (several per account; table name from Sequelize's default) |
 | `device_tokens` | `DeviceToken` | Android devices for push |
@@ -59,11 +60,12 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 
 ## Other tables
 
-* **`custom_maps`:** `ownerId`, `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null), `publishedAt`, `loads`.
+* **`custom_maps`:** `ownerId`, `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null – every published map is in the map browser), `publishedAt`, `loads` (loaded by code or picked in the browser, by others), `favorites` (count of `map_favorites` rows, for sorting).
+* **`map_favorites`:** `userId`, `mapId` (unique together). A favorite of an unpublished map stays and shows again when it is published again; it goes when the map or the account is deleted, and moves when accounts are merged.
 * **`oauth_providers`:** `provider` (`google`/`discord`), `clientId`, `clientSecret`, `botToken` (Discord Activity), `enabled`.
 * **`passkeys`:** `credentialID`, `credentialPublicKey`, `counter`, `transports`.
 * **`device_tokens`:** `token`, `platform`, `lastSeenAt`.
-* **`reports`:** `kind`, `status`, `source`/`sourceId` (live game or Rundenspiel), reporter and reported (id and name), `reason`, `message`, `context` (the game's chat history from the server's copy), `auto` (word filter), `matches`, `penalty`, `note`, `handledBy`, `handledAt`. Reports about an existing account are kept as long as it exists; the others for `REPORT_KEEP_YEARS` (3).
+* **`reports`:** `kind` (`chat` or `map`), `status`, `source`/`sourceId` (live game or Rundenspiel; for a map `map` and the map's id), reporter and reported (id and name), `reason`, `message`, `context` (the game's chat history from the server's copy; for a map report the map as it was), `auto` (word filter), `matches`, `penalty`, `note`, `handledBy`, `handledAt`. Reports about an existing account are kept as long as it exists; the others for `REPORT_KEEP_YEARS` (3).
 * **`banned_words`:** `word` (normalized: lower case, ä → ae, ß → ss), `kind` (`ban`/`allow`), `match` (`word` – whole word, or `part` – anywhere), `addedBy`.
 
 ## Maintenance

@@ -4156,6 +4156,7 @@ step('Karteneditor: Einstellungen – Max. Reiche gibt die Startpunkte vor, Mara
   for (const id of ['ed-name', 'ed-max', 'ed-marathon', 'ed-rows', 'ed-cols', 'ed-size', 'ed-save', 'ed-publish', 'ed-status'])
     if (!$(id)) throw new Error(id + ' fehlt');
   $('ed-new').onclick();
+  $('ov-body').querySelector('[data-tpl="0"]').onclick();
   const m = () => G('__get')('editMap');
   if (m().spawns.length !== 4) throw new Error('Vorlage mit ' + m().spawns.length + ' Startpunkten');
   if (!/Spielbar/.test($('ed-status').textContent)) throw new Error('Vorlage nicht spielbar: ' + $('ed-status').textContent);
@@ -4211,6 +4212,55 @@ step('Karteneditor: der Code steht im Fenster und am Knopf', () => {
   G('closeModal')();
   if (!/ABC234/.test($('ed-publish').textContent)) throw new Error('Knopf: ' + $('ed-publish').textContent);
   G('__set')('mapAccount', null);
+});
+step('Karteneditor: Werkzeuge – Pinselgröße, Füllen, Rückgängig und Wiederholen', () => {
+  $('ed-new').onclick();
+  if (!$('ov-body').querySelector('.ed-tpl svg path')) throw new Error('Vorlagen ohne Vorschau');
+  $('ed-new-rows').value = '10'; $('ed-new-cols').value = '12'; $('ed-new-fill').value = 'M';
+  $('ed-new-empty').onclick();
+  const m = () => G('__get')('editMap');
+  if (m().rows.length !== 10 || m().rows[0] !== 'MMMMMMMMMMMM' || m().spawns.some(Boolean)) throw new Error('leere Karte: ' + m().rows[0]);
+  if (!/Startpunkt 1 fehlt/.test($('ed-status').textContent)) throw new Error('Prüfzeile: ' + $('ed-status').textContent);
+  if (!$('ed-undo').disabled) throw new Error('Rückgängig ohne Änderung');
+  // Pinsel 7 Felder: das Feld und seine sechs Nachbarn
+  G('edSetBrush')(1); G('__set')('edTool', 'G'); G('edTap')(5, 5);
+  const gras = () => m().rows.join('').split('').filter(t => t === 'G').length;
+  if (gras() !== 7) throw new Error('Pinsel: ' + gras() + ' Felder');
+  if ($('ed-undo').disabled || !$('ed-save').classList.contains('dirty')) throw new Error('Änderung nicht vermerkt');
+  // Füllen: das ganze Meer um die Insel wird Wald, die Insel bleibt
+  G('edSetMode')('fill'); G('__set')('edTool', 'W'); G('edTap')(0, 0);
+  if (gras() !== 7 || m().rows[0][0] !== 'W' || m().rows.join('').includes('M')) throw new Error('Füllen: ' + m().rows.join('/'));
+  // Rückgängig: erst das Füllen, dann der Pinsel; Wiederholen bringt das Füllen zurück
+  G('editorUndo')();
+  if (m().rows[0][0] !== 'M' || gras() !== 7) throw new Error('Rückgängig (Füllen)');
+  G('editorUndo')();
+  if (gras() !== 0 || !$('ed-undo').disabled) throw new Error('Rückgängig (Pinsel)');
+  G('editorRedo')(); G('editorRedo')();
+  if (m().rows[0][0] !== 'W' || !$('ed-redo').disabled) throw new Error('Wiederholen');
+  // Startpunkte gehen mit Rückgängig zurück, ebenso Max. Reiche
+  G('edSetMode')('paint'); G('edSetBrush')(0);
+  G('__set')('edTool', 'spawn:0'); G('edTap')(5, 5);
+  if (!m().spawns[0] || G('edTool') !== 'spawn:1') throw new Error('Startpunkt');
+  $('ed-max').value = '5'; $('ed-max').onchange();
+  G('editorUndo')();
+  if (m().spawns.length !== 4) throw new Error('Max. Reiche nicht zurückgenommen');
+  G('editorUndo')();
+  if (m().spawns[0]) throw new Error('Startpunkt nicht zurückgenommen');
+  // Malen in Ziehen entscheidet die Mobilschicht über edOwnsDrag: Verschieben gibt den Finger frei
+  G('edSetMode')('pan');
+  if (G('edOwnsDrag')()) throw new Error('Verschieben malt');
+  G('edSetMode')('paint');
+  if (!G('edOwnsDrag')()) throw new Error('Malen verschiebt');
+  // Zurück mit ungespeicherten Änderungen fragt nach (hier: nein – der Editor bleibt)
+  const ja = window.confirm; window.confirm = () => false;
+  G('__set')('edTool', 'B'); G('edTap')(1, 1);
+  $('ed-back').onclick();
+  window.confirm = ja;
+  if (!$('screen-editor').classList.contains('show')) throw new Error('ohne Nachfrage verlassen');
+  // Meine Karten zeigt Kacheln mit Vorschau
+  $('ed-maps').onclick();
+  if (!$('ov-body').querySelector('.mymap .map-thumb path')) throw new Error('Meine Karten ohne Vorschau');
+  G('closeModal')();
 });
 step('Eigene Marathonkarte für sechs: im Aufbau 2–6 Reiche, Start mit Draft auf dieser Karte', () => {
   $('m-new').onclick();

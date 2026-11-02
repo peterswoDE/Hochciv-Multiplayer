@@ -7,6 +7,8 @@ const { DataTypes } = require('sequelize');
  * Publishing gives the map a 6-character `code`; with it anybody can load the map (also without
  * an account) and play it. The code always points to the current version – saving the map again
  * under the same name updates what the code delivers. Unpublishing sets the code back to null.
+ * Every published map is listed in the map browser (client/maps); an admin can unpublish it
+ * there or from a player's report.
  */
 module.exports = (sequelize) => {
     const CustomMap = sequelize.define('CustomMap', {
@@ -36,8 +38,14 @@ module.exports = (sequelize) => {
             type: DataTypes.DATE,
             allowNull: true,
         },
-        // how often the map was loaded by its code (by others)
+        // how often the map was loaded by its code or picked in the map browser (by others)
         loads: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0,
+        },
+        // how many players have it as a favorite (MapFavorite) – the browser sorts by it
+        favorites: {
             type: DataTypes.INTEGER,
             allowNull: false,
             defaultValue: 0,
@@ -50,6 +58,7 @@ module.exports = (sequelize) => {
         indexes: [
             { name: 'custom_maps_owner_name_key', unique: true, fields: ['ownerId', 'name'] },
             { name: 'custom_maps_code_key', unique: true, fields: ['code'] },
+            { name: 'custom_maps_published', fields: ['publishedAt'] },
         ],
     });
 

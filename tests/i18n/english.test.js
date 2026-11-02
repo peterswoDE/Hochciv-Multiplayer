@@ -143,6 +143,21 @@ function makeAdmin() {
         const msg = await page.evaluate(async () => { try { await ASYNC.api('/code/XXXXXX'); return ''; } catch (e) { return e.message; } });
         ok(msg && !/[äöü]|Kein|Spiel/.test(msg), 'server message translated', msg);
 
+        // ── map editor, "My maps", new map, map browser ─────────────────────────────────
+        await page.evaluate(() => { closeModal(); show('screen-menu'); document.getElementById('m-editor').click(); });
+        await page.waitForTimeout(600);
+        await clean(page, 'map editor', '#screen-editor');
+        await page.evaluate(() => document.getElementById('ed-maps').click());
+        await page.waitForTimeout(400);
+        await clean(page, 'my maps', '#ov-body');
+        await page.evaluate(() => document.getElementById('ed-new').click());
+        await page.waitForTimeout(400);
+        await clean(page, 'new map dialog', '#ov-body');
+        await page.evaluate(() => { closeModal(); MAPBROWSER.open(); });
+        await page.waitForFunction(() => !document.querySelector('#mb-grid .mb-ghost'), null, { timeout: 15000 });
+        await clean(page, 'map browser', '#mb');
+        await page.evaluate(() => { MAPBROWSER.close(); show('screen-menu'); });
+
         // ── player profile ───────────────────────────────────────────────────────────────
         await page.evaluate(id => PROFILE.open(id), admin.id);
         await page.waitForFunction(() => /Member since/.test(document.getElementById('hcp-body').textContent), null, { timeout: 15000 });

@@ -8,6 +8,8 @@
  *     reported, and its sender can't write texts for 5 minutes – after a second one, for the
  *     rest of the game. Emotes and pings stay possible.
  *   · Guests (no account) can't write texts at all, only emotes and pings.
+ *   · Map report: a logged-in player reports a published map of the map browser (reportMap).
+ *     The map is stored with it as it was; the admin can unpublish it from the report.
  *   · Block: a player stops seeing an account's messages and pings. The list is kept with the
  *     account (users.blockedPlayers), for guests on the device; the client hides the messages
  *     (client/chat.js). Guests can't be blocked – only muted for the running game, on the device.
@@ -45,10 +47,7 @@ async function report({ source, sourceId, history, msgId, reporter, reason }) {
     const where = { kind: 'chat', source, sourceId, 'message.id': msgId };
     if (reporter.id) where.reporterId = reporter.id; else where.reporterName = reporter.name;
     if (await Report.count({ where })) return { error: 'Du hast diese Nachricht schon gemeldet.' };
-    const now = Date.now();
-    const times = (recent.get(key) || []).filter(t => now - t < RATE_WINDOW_MS);
-    if (times.length >= RATE_COUNT) return { error: 'Zu viele Meldungen – versuche es später noch einmal.' };
-    recent.set(key, times.concat(now));
+    if (rateLimited(key)) return { error: 'Zu viele Meldungen – versuche es später noch einmal.' };
 
     const text = typeof reason === 'string' ? reason.replace(/\s+/g, ' ').trim().slice(0, MAX_REASON) : '';
     await Report.create({
@@ -60,6 +59,38 @@ async function report({ source, sourceId, history, msgId, reporter, reason }) {
         context: history.filter(m => m && m.kind !== 'ping'),
     });
     console.log(`[Reports] ${reporter.name} reported a message of ${msg.name} (${source} ${sourceId}).`);
+    return { ok: true };
+}
+
+/** Too many reports from this reporter in the last hour? Counts this one if not. */
+function rateLimited(key) {
+    const now = Date.now();
+    const times = (recent.get(key) || []).filter(t => now - t < RATE_WINDOW_MS);
+    if (times.length >= RATE_COUNT) return true;
+    recent.set(key, times.concat(now));
+    return false;
+}
+
+/**
+ * Report a published map of the map browser. `map`: maps/service.js forReport(), `reporter`: the
+ * logged-in user. Returns { ok } or { error }.
+ */
+async function reportMap({ map, reporter, reason }) {
+    if (!map) return { error: 'Diese Karte ist nicht mehr veröffentlicht.' };
+    if (map.ownerId === reporter.id) return { error: 'Deine eigene Karte kannst du nicht melden.' };
+    if (await Report.count({ where: { kind: 'map', sourceId: map.id, reporterId: reporter.id, status: 'open' } }))
+        return { error: 'Du hast diese Karte schon gemeldet.' };
+    if (rateLimited(reporter.id)) return { error: 'Zu viele Meldungen – versuche es später noch einmal.' };
+    const text = typeof reason === 'string' ? reason.replace(/\s+/g, ' ').trim().slice(0, MAX_REASON) : '';
+    await Report.create({
+        kind: 'map', source: 'map', sourceId: map.id,
+        reporterId: reporter.id, reporterName: reporter.username,
+        reportedId: map.ownerId, reportedName: map.ownerName,
+        reason: text || null,
+        message: { id: map.id, name: map.name, code: map.code },
+        context: map.map,
+    });
+    console.log(`[Reports] ${reporter.username} reported the map „${map.name}" (${map.code}) of ${map.ownerName}.`);
     return { ok: true };
 }
 
@@ -206,6 +237,6 @@ function startCleanup() {
 }
 
 module.exports = {
-    report, moderate, muteActive, block, unblock, publicBlocks, list, update, removeUser, cleanup, startCleanup,
+    report, reportMap, moderate, muteActive, block, unblock, publicBlocks, list, update, removeUser, cleanup, startCleanup,
     KEEP_YEARS, MUTE_MS, STATUSES, GUEST_TEXT, AUTO_REPORTER,
 };

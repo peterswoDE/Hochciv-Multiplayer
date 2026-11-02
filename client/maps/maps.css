@@ -1,0 +1,91 @@
+/* HochCiv map browser – styles for client/maps/maps.js. Uses the game's palette (style.css).
+   An own overlay above the game's dialog (30) and below its toasts (40). */
+
+.mb{position:fixed;inset:0;z-index:35;display:none;align-items:center;justify-content:center;
+  background:rgba(40,34,20,.45);padding:calc(12px + var(--safe-t, 0px)) 12px calc(12px + var(--safe-b, 0px))}
+.mb.show{display:flex}
+.mb-box{position:relative;display:flex;flex-direction:column;width:min(1080px,100%);height:min(860px,100%);
+  background:var(--paper);border-radius:16px;box-shadow:0 18px 50px rgba(40,30,10,.35);overflow:hidden}
+.mb-head{display:flex;align-items:center;gap:8px;padding:10px 10px 4px 18px}
+.mb-head h3{flex:1;margin:0;font:600 21px/1.2 var(--serif)}
+.mb-bar{display:flex;gap:8px;padding:6px 16px}
+.mb-bar input,.mb-bar select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--paper-2);color:var(--ink);min-width:0}
+.mb-bar input{flex:1}
+.mb-bar input:focus,.mb-bar select:focus{outline:none;border-color:var(--ink-soft)}
+.mb-tabs{display:flex;gap:4px;padding:6px 16px 10px;overflow-x:auto;border-bottom:1px solid var(--rule);scrollbar-width:none}
+.mb-tab{flex:0 0 auto;padding:7px 13px;border:1px solid var(--rule);border-radius:999px;background:var(--paper-2);
+  color:var(--ink-soft);font:600 13px/1.2 var(--sans);cursor:pointer}
+.mb-tab[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.mb-tab[hidden]{display:none}
+.mb-pickhint{margin:0;padding:8px 18px;font-size:13px;background:#f8efd7;border-bottom:1px solid var(--rule)}
+.mb-pickhint[hidden]{display:none}
+.mb-scroll{flex:1;overflow-y:auto;padding:14px 16px 18px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.mb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.mb-card{position:relative;display:flex;flex-direction:column;border:1px solid var(--rule);border-radius:12px;
+  background:var(--paper-2);overflow:hidden;transition:box-shadow .15s,border-color .15s}
+.mb-card:hover{border-color:var(--ink-soft);box-shadow:0 4px 14px rgba(60,48,20,.12)}
+.mb-thumb{height:140px;padding:10px;border:0;border-bottom:1px solid var(--rule);background:#e4dbbe;cursor:pointer;display:block;width:100%}
+.mb-thumb .map-thumb{width:100%;height:100%}
+.mb-info{display:flex;flex-direction:column;gap:2px;padding:8px 12px 10px;cursor:pointer;min-width:0}
+.mb-info b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:4px}
+.mb-info small{font-size:12px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mb-own{display:inline-block;padding:0 6px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:10px;font-weight:600}
+.mb-stats{display:flex;gap:12px;margin-top:3px;font-size:12px;color:var(--ink-soft)}
+.mb-fav{position:absolute;top:8px;right:8px;width:36px;height:36px;display:grid;place-items:center;padding:0;
+  border:1px solid var(--rule);border-radius:50%;background:rgba(245,239,223,.92);color:var(--ink-soft);
+  font-size:19px;line-height:1;cursor:pointer}
+.mb-fav:hover{color:var(--ink)}
+.mb-fav.on{color:#b8860b;border-color:#d8b45a}
+.mb-use{margin:0 12px 12px}
+.mb-empty{margin:28px 0;text-align:center;color:var(--ink-soft);font-size:14px}
+.mb-empty[hidden]{display:none}
+.mb-more{display:block;margin:16px auto 0}
+.mb-more[hidden]{display:none}
+.mb-ghost{pointer-events:none}
+.mb-ghost .mb-thumb,.mb-ghost b,.mb-ghost small{background:linear-gradient(90deg,#ece2c8,#f3ebd6,#ece2c8);
+  background-size:200% 100%;animation:mb-shine 1.2s linear infinite}
+.mb-ghost b{height:14px;width:60%;border-radius:4px}
+.mb-ghost small{height:11px;width:40%;border-radius:4px;margin-top:4px}
+@keyframes mb-shine{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.mb-ghost .mb-thumb,.mb-ghost b,.mb-ghost small{animation:none}}
+
+/* detail view: over the list, inside the box */
+.mb-detail{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--paper);z-index:2}
+.mb-detail[hidden]{display:none}
+.mb-d-top{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--rule)}
+.mb-d-top h4{flex:1;margin:0;font:600 19px/1.25 var(--serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mb-d-top .mb-fav{position:static}
+.mb-d-body{flex:1;display:flex;gap:18px;padding:16px;overflow-y:auto;min-height:0}
+.mb-d-thumb{flex:1.5;min-width:0;display:flex;padding:14px;border-radius:12px;background:#e4dbbe}
+.mb-d-thumb .map-thumb{width:100%;height:100%;max-height:640px}
+.mb-d-side{flex:1;min-width:240px;max-width:380px;display:flex;flex-direction:column;gap:6px}
+.mb-d-side p{margin:0}
+.mb-d-meta{font-size:14px;color:var(--ink-soft)}
+.mb-d-side .mb-stats{font-size:13px;margin:4px 0}
+.mb-d-code{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:8px 0 !important;font-size:14px}
+.mb-d-code .mapcode{font-size:16px;letter-spacing:2px}
+.mb-d-acts{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.mb-d-acts .btn{width:100%}
+.mb-d-foot{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:16px}
+.mb-d-code .btn,.mb-d-foot .btn{flex:0 0 auto}
+.mb-d-foot .btn.error{color:var(--red);border-color:var(--red-soft)}
+
+/* phones: the whole screen, detail stacked */
+@media (max-width:719px){
+  .mb{padding:0}
+  .mb-box{width:100%;height:100%;border-radius:0;padding-top:var(--safe-t, 0px)}
+  .mb-head{padding:6px 6px 2px 14px}
+  .mb-bar{padding:6px 12px}
+  .mb-bar select{max-width:42%}
+  .mb-tabs{padding:4px 12px 8px}
+  .mb-scroll{padding:10px 12px calc(16px + var(--safe-b, 0px))}
+  .mb-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .mb-thumb{height:108px;padding:6px}
+  .mb-info{padding:6px 9px 8px}
+  .mb-info b{font-size:13px}
+  .mb-fav{width:32px;height:32px;font-size:17px;top:6px;right:6px}
+  .mb-d-body{flex-direction:column;padding:12px 12px calc(16px + var(--safe-b, 0px))}
+  .mb-d-thumb{flex:0 0 auto;height:46vh;padding:8px}
+  .mb-d-side{max-width:none;min-width:0}
+}

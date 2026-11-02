@@ -1,8 +1,8 @@
 /**
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
- *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the Discord Activity bridge and the
- *     mobile layer (client/mobile) to index.html,
+ *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the Discord Activity bridge, the
+ *     map browser (client/maps) and the mobile layer (client/mobile) to index.html,
  *   • points mp.js at this server,
  *   • writes a content hash into every script and stylesheet tag (utils/assets.js), so browsers
  *     keep these files until they change.
@@ -37,6 +37,9 @@ const REPLAY = '<script src="/client/replay.js"></script>';
 // Ranked matchmaking (after mp.js)
 const MATCH = '<script src="/client/matchmaking.js"></script>';
 const ACTIVITY = '<script src="js/activity.js"></script>';
+// Map browser (client/maps): published maps and favorites. After mp.js, whose MAPACCOUNT it uses.
+const MAPS_CSS = '<link rel="stylesheet" href="/client/maps/maps.css">';
+const MAPS_JS = '<script src="/client/maps/maps.js"></script>';
 // Mobile layer (client/mobile): zoomable maps, compact layout on phones. After mp.js – it wraps
 // game functions and styles mp.js's widgets.
 const MOBILE_CSS = '<link rel="stylesheet" href="/client/mobile/mobile.css">';
@@ -61,8 +64,9 @@ if (fs.existsSync(htmlPath)) {
     // without the hashes of an earlier run, so the tags below are found again
     html = html.replace(/(\s(?:src|href)="[^"?#]+\.(?:js|css))\?v=[^"]*"/g, '$1"');
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
+    if (!html.includes(MAPS_CSS)) html = html.replace('</head>', MAPS_CSS + '\n</head>');
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, I18N, PROFILE, MP, SCENES, CHAT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, PROFILE, MP, SCENES, CHAT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     html = Assets.versioned(html, fileOf);
     fs.writeFileSync(htmlPath, html, 'utf8');
