@@ -824,84 +824,54 @@ const MP = {
         }
     },
 
-    showLobby: async function () {
+    /**
+     * The multiplayer menu: live games and Rundenspiele in one place, in two tabs – "Laufend"
+     * (your Rundenspiele, public games to watch) and "Offen" (lobbies and Rundenspiele with a free
+     * seat, invitations, join by code). Hosting goes straight into the lobby. Later modes of the
+     * same dialog: 'waiting' (own lobby), 'watching' (lobby as a spectator).
+     */
+    showLobby: async function (tab) {
         await this.fetchUser();
         let mode = 'menu';
+        if (tab) this.hubTab = tab;
         const render = () => {
             if (this._publicListTimer) clearInterval(this._publicListTimer);
             let h = '';
 
             if (mode === 'menu') {
+                const name = localStorage.getItem('mp-name') || (this.user && this.user.username) || TX('Spieler');
+                const tabBtn = (k, label) => `<button type="button" class="mph-tab" data-tab="${k}" onclick="MP.hubShow('${k}')">${label} <span class="mph-count" id="mph-count-${k}"></span></button>`;
                 h = `
-          <button class="btn wide primary" style="margin-bottom:10px" onclick="MP.setMode('host')">${TX('Neues Spiel hosten (Server)')}</button>
-          ${typeof MATCH !== 'undefined' ? `<button class="btn wide" style="margin-bottom:10px" onclick="MATCH.start()" ${this.user ? '' : 'disabled'}>🔥 ${TX('Gewertetes Spiel suchen')}</button>
-          <label class="row" style="margin:-4px 0 10px; font-size:13px"><span>🤖 ${TX('Spieler-Bots als Mitspieler zulassen')}</span>
-            <input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''} ${this.user ? '' : 'disabled'}></label>
-          ${this.user ? '' : `<p class="sub" style="margin:-4px 0 10px">${TX('Für gewertete Spiele musst du angemeldet sein.')}</p>`}` : ''}
-          <button class="btn wide" onclick="MP.setMode('public-list')">${TX('Öffentliche Lobbys suchen')}</button>
-          <button class="btn wide ghost" style="margin-top:10px" onclick="MP.setMode('join')">${TX('Privatem Spiel beitreten')}</button>
+          <div class="mph-new">
+            <button class="btn primary" onclick="MP.host()">${TX('Live-Spiel hosten')}</button>
+            <button class="btn mph-async" onclick="ASYNC.newGame()">${TX('Neues Rundenspiel')}</button>
+            ${typeof MATCH !== 'undefined' ? `<button class="btn" onclick="MATCH.start()" ${this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`}>🔥 ${TX('Gewertetes Spiel suchen')}</button>` : ''}
+          </div>
+          <div class="mph-opts">
+            <label class="mph-name"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${escHtml(name)}" maxlength="24"></label>
+            ${typeof MATCH !== 'undefined' && this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots als Mitspieler zulassen')}</label>` : ''}
+          </div>
+          <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
+          <div class="mph-pane" data-pane="running">
+            <div id="mph-running"><p class="sub">${TX('Lade...')}</p></div>
+          </div>
+          <div class="mph-pane" data-pane="open">
+            <div class="mph-code">
+              <input type="text" id="mp-c" placeholder="${escHtml(TX('Code'))}" maxlength="8">
+              <input type="number" id="mp-p" placeholder="${escHtml(TX('Passwort'))}">
+              <button class="btn small primary" onclick="MP.hubJoinCode()">${TX('Beitreten')}</button>
+              <button class="btn small ghost" onclick="MP.watch($('mp-c').value.trim(), $('mp-p').value.trim(), $('mp-n').value.trim())">${TX('Zuschauen')}</button>
+            </div>
+            <p class="sub mph-codehint">${TX('Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.')}</p>
+            <div id="mph-open"><p class="sub">${TX('Lade...')}</p></div>
+          </div>
         `;
-            } else if (mode === 'join') {
-                const savedName = localStorage.getItem('mp-name') || TX('Spieler');
-                h = `
-          <label class="row"><span>${TX('Beitrittscode')}</span><input type="text" id="mp-c" style="width:100px;text-transform:uppercase"></label>
-          <label class="row"><span>${TX('Passwort')}</span><input type="number" id="mp-p" style="width:100px"></label>
-          <label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${savedName}"></label>
-          <button class="btn wide primary" style="margin-top:20px" onclick="MP.join()">${TX('Beitreten')}</button>
-          <button class="btn wide ghost" onclick="MP.watch($('mp-c').value.trim(), $('mp-p').value.trim(), $('mp-n').value.trim())">${TX('Zuschauen')}</button>
-        `;
-            } else if (mode === 'host') {
-                const savedName = localStorage.getItem('mp-name') || 'Host';
-                h = `
-          <label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-hn" value="${savedName}"></label>
-          <label class="row" style="margin-top:10px"><span>${TX('Öffentlich')}</span><input type="checkbox" id="mp-is-public" checked></label>
-          <p class="sub">${TX('Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.')}</p>
-          <button class="btn wide primary" style="margin-top:20px" onclick="MP.host()">${TX('Hosten')}</button>
-        `;
-            } else if (mode === 'public-list') {
-                const savedName = localStorage.getItem('mp-name') || TX('Spieler');
-                h = `
-          <label class="row" style="margin-bottom:15px"><span>${TX('Dein Name')}</span><input type="text" id="mp-pln" value="${savedName}"></label>
-          <h3 style="margin-bottom:10px">${TX('Öffentliche Lobbys')}</h3>
-          <div id="mp-pl-container">${TX('Lade...')}</div>
-          <button class="btn wide ghost" style="margin-top:20px" onclick="MP.setMode('menu')">${TX('Zurück')}</button>
-        `;
-
-                const fetchList = () => {
-                    fetch(`${this.serverUrl}/api/public-sessions`)
-                        .then(r => r.json())
-                        .then(list => {
-                            const c = $('mp-pl-container');
-                            if (!c) return;
-                            if (list.length === 0) {
-                                c.innerHTML = `<p class="sub">${TX('Keine öffentlichen Lobbys gefunden.')}</p>`;
-                                return;
-                            }
-                            // lobbies to join, and running games to watch (spectator mode)
-                            c.innerHTML = '<table style="width:100%; text-align:left; border-collapse:collapse;">' +
-                                list.map(l => {
-                                    const running = l.status && l.status !== 'lobby';
-                                    const info = running
-                                        ? (l.round ? TX('Läuft · Runde %s', escHtml(l.round)) : TX('Läuft')) + (l.spectators ? ` · 👁 ${escHtml(l.spectators)}` : '')
-                                        : TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers)) + (l.playerBots ? ` · 🤖 ${TX('Spieler-Bots erlaubt')}` : '');
-                                    const btn = running
-                                        ? `<button class="btn small" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, ($('mp-pln') || {}).value)">${TX('Zuschauen')}</button>`
-                                        : `<button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>`;
-                                    return `
-                                <tr style="border-bottom:1px solid #ccc;">
-                                    <td style="padding: 8px 4px;"><b>${escHtml(l.hostName)}</b><br><small>${info}</small></td>
-                                    <td style="padding: 8px 4px; text-align:right;">${btn}</td>
-                                </tr>`;
-                                }).join('') + '</table>';
-                        })
-                        .catch(() => {
-                            const c = $('mp-pl-container');
-                            if (c) c.innerHTML = `<p class="sub error">${TX('Fehler beim Laden.')}</p>`;
-                        });
-                };
-
-                fetchList();
-                this._publicListTimer = setInterval(fetchList, 5000);
+                modal(TX('Multiplayer'), h);
+                $('overlay').classList.add('wide');
+                this.hubShow(this.hubTab || 'open', true);
+                this.hubLoad();
+                this._publicListTimer = setInterval(() => this.hubLoad(), 8000);
+                return;
             } else if (mode === 'watching') {
                 // spectator of a live game that has not started yet
                 h = `
@@ -1007,6 +977,9 @@ const MP = {
               </label>
               ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
               ${this.playerBotRows(cnt.total - cnt.ki)}
+              <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span>
+                <input type="checkbox" id="mp-set-public" onchange="MP.updateLobbyConfig()" ${this.gameConfig.isPublic ? 'checked' : ''}>
+              </label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
                 <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('min 2 H-Spieler, KI auf schwer')})</small></span>
                 <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
@@ -1018,9 +991,103 @@ const MP = {
             }
             modal(TX('Multiplayer'), h);
         };
-        this.setMode = (m) => { mode = m; render(); };
+        this.setMode = (m) => {
+            // the former sub-menus are parts of the menu now
+            if (m === 'host' || m === 'join' || m === 'public-list') { this.hubTab = m === 'host' ? this.hubTab : 'open'; m = 'menu'; }
+            mode = m; render();
+        };
         this.renderLobby = render; // Export render method to dynamically update when lobby state changes
         render();
+    },
+
+    /** Menu: show one of the tabs ('running' | 'open'); `auto` = not picked by the player. */
+    hubShow: function (tab, auto) {
+        this.hubTab = tab;
+        if (!auto) this.hubPicked = true;
+        document.querySelectorAll('.mph-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+        document.querySelectorAll('.mph-pane').forEach(p => { p.hidden = p.dataset.pane !== tab; });
+    },
+
+    /** Menu: load public live games and (logged in) the Rundenspiele, then draw both tabs. */
+    hubLoad: async function () {
+        if (!$('mph-tabs')) { clearInterval(this._publicListTimer); return; }
+        const [live, rs] = await Promise.all([
+            fetch(`${this.serverUrl}/api/public-sessions`).then(r => r.json()).catch(() => null),
+            this.user ? ASYNC.api('').catch(() => null) : Promise.resolve(null),
+        ]);
+        if (!$('mph-tabs')) return;
+        if (rs) ASYNC.data = rs;
+        this.hubDraw(live, rs);
+    },
+
+    hubDraw: function (live, rs) {
+        const section = (title, rows, empty, cls) => `<div class="${cls || ''}"><h4 class="mpa-h">${title}</h4>` +
+            (rows.length ? rows.join('') : `<p class="sub">${empty}</p>`) + '</div>';
+        const loginBox = `<div class="mph-async mph-login"><p class="sub">${TX('Rundenspiele gibt es nur mit Anmeldung.')}</p>
+            <button class="btn small" onclick="MP.showAuthModal()">${TX('Anmelden')}</button></div>`;
+        const liveErr = live ? '' : `<p class="sub error">${TX('Fehler beim Laden.')}</p>`;
+        live = live || [];
+        const lobbies = live.filter(l => !l.status || l.status === 'lobby');
+        const liveRunning = live.filter(l => l.status && l.status !== 'lobby');
+
+        // Laufend: own Rundenspiele, then public games to watch
+        let run = '', mine = 0, turn = [];
+        if (rs) {
+            const active = rs.mine.filter(g => ['setup', 'placement', 'draft', 'playing'].includes(g.status) && !g.replaced);
+            turn = active.filter(g => g.yourTurn);
+            const waiting = active.filter(g => !g.yourTurn);
+            const takenOver = rs.mine.filter(g => !active.includes(g));
+            mine = active.length;
+            run += `<p class="sub mph-async">${TX('Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer %s Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).', rs.timeoutDays)}</p>`
+                + section(TX('Du bist am Zug'), turn.map(g => ASYNC.row(g)), TX('Gerade nirgends.'), 'mph-async')
+                + section(TX('Warten auf andere'), waiting.map(g => ASYNC.row(g)), TX('Keine.'), 'mph-async')
+                + (takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15).map(g => ASYNC.row(g)), '', 'mph-async') : '');
+        } else if (!this.user) run += loginBox;
+        const watch = liveRunning.map(l => this.liveRow(l)).concat((rs && rs.watch || []).map(g => ASYNC.row(g)));
+        run += liveErr + section(TX('Zuschauen'), watch, TX('Gerade läuft kein öffentliches Spiel.'));
+        if (rs) run += `<div class="mph-async">
+            <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="#" onclick="MP.showAccountModal(); return false;">${TX('Spielhistorie')}</a>`)}</p>
+            <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
+              <input type="checkbox" ${rs.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>
+            ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>${TX('Push-Nachricht, wenn ich am Zug bin')}</span>
+              <input type="checkbox" ${rs.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}</div>`;
+
+        // Offen: invitations, lobbies and Rundenspiele with a free seat
+        const invites = rs ? rs.invites : [], openRs = rs ? rs.open : [];
+        let open = (invites.length ? section(TX('Einladungen'), invites.map(g => ASYNC.row(g)), '', 'mph-async') : '')
+            + liveErr + section(TX('Live-Lobbys'), lobbies.map(l => this.liveRow(l)), TX('Keine öffentlichen Lobbys gefunden.'))
+            + (rs ? section(TX('Rundenspiele'), openRs.map(g => ASYNC.row(g)), TX('Keine öffentlichen Spiele mit freiem Platz.'), 'mph-async')
+                : this.user ? '' : `<h4 class="mpa-h mph-async">${TX('Rundenspiele')}</h4>` + loginBox);
+
+        $('mph-running').innerHTML = run;
+        $('mph-open').innerHTML = open;
+        const count = (k, n, hot) => { const el = $('mph-count-' + k); if (el) { el.textContent = n || ''; el.classList.toggle('hot', !!hot); } };
+        count('running', turn.length || mine, turn.length);
+        count('open', lobbies.length + openRs.length + invites.length, invites.length);
+        // until the player picks a tab: open on "Laufend" when one of their Rundenspiele runs
+        if (!this.hubPicked && mine) this.hubShow('running', true);
+        ASYNC.badgeCount = turn.length;
+        ASYNC.drawBadge();
+    },
+
+    /** Menu: a public live game – lobby to join, or running game to watch. */
+    liveRow: function (l) {
+        const running = l.status && l.status !== 'lobby';
+        const info = running
+            ? (l.round ? TX('Läuft · Runde %s', escHtml(l.round)) : TX('Läuft')) + (l.spectators ? ` · 👁 ${escHtml(l.spectators)}` : '')
+            : TX('%s/%s Spieler', escHtml(l.playersCount), escHtml(l.maxPlayers)) + (l.playerBots ? ` · 🤖 ${TX('Spieler-Bots erlaubt')}` : '');
+        const btn = running
+            ? `<button class="btn small" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, ($('mp-n') || {}).value)">${TX('Zuschauen')}</button>`
+            : `<button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>`;
+        return `<div class="mpa-row"><div class="mpa-title"><span class="mph-kind live">${TX('Live')}</span> <b>${escHtml(l.hostName)}</b> · ${ASYNC.mapName(l.mapKey || '0', {})}</div>
+            <div class="mpa-foot"><span>${info}</span><span>${btn}</span></div></div>`;
+    },
+
+    /** Menu: join by code – with a password a live game, without one a Rundenspiel. */
+    hubJoinCode: function () {
+        if (!$('mp-c').value.trim()) return toast(TX('Bitte einen Code eingeben.'));
+        if ($('mp-p').value.trim()) return this.join();
+        ASYNC.joinByCode($('mp-c').value);
     },
 
     /** "🤖 Bot" next to the name of a seat a bot account plays (utils/bots.js). */
@@ -1078,6 +1145,7 @@ const MP = {
             // player-bots (bot accounts, sessions.js playerBotPolicy); null = no limit
             playerBots: $('mp-set-bots') ? $('mp-set-bots').checked : undefined,
             playerBotLimit: $('mp-set-botlimit') ? (+$('mp-set-botlimit').value || null) : undefined,
+            isPublic: $('mp-set-public') ? $('mp-set-public').checked : undefined,
         };
         // a map with fewer empires: keep the numbers within what it allows
         const old = this.gameConfig;
@@ -1206,7 +1274,7 @@ const MP = {
     },
 
     joinPublic: async function (joinCode, password) {
-        const nameInput = $('mp-pln');
+        const nameInput = $('mp-n');
         if (!nameInput) return;
         const name = nameInput.value.trim();
         if (!name) return toast(TX('Bitte Namen eingeben.'));
@@ -1260,9 +1328,10 @@ const MP = {
     },
 
     host: async function () {
-        const name = $('mp-hn').value.trim();
-        const isPublicCheckbox = $('mp-is-public');
-        const isPublic = isPublicCheckbox ? isPublicCheckbox.checked : false;
+        const name = $('mp-n') ? $('mp-n').value.trim() : (localStorage.getItem('mp-name') || 'Host');
+        if (!name) return toast(TX('Bitte Namen eingeben.'));
+        // straight into the lobby: public by default, the host can switch it there
+        const isPublic = true;
         localStorage.setItem('mp-name', name);
 
         // Create local config with valid defaults (since Singleplayer UI is bypassed)
@@ -1912,9 +1981,9 @@ const ASYNC = {
         return false;
     },
 
-    // ── Menu button with "your turn" badge ───────────────────────────────────
+    // ── "Your turn" badge on the Multiplayer button ───────────────────────────────────
     refreshBadge: async function () {
-        const btn = $('mp-async-btn');
+        const btn = $('mp-live-btn');
         if (!btn) return;
         let n = 0;
         if (MP.user) {
@@ -1924,41 +1993,18 @@ const ASYNC = {
         this.drawBadge();
     },
     drawBadge: function () {
-        const btn = $('mp-async-btn'), n = this.badgeCount || 0;
-        if (btn) btn.innerHTML = TX('Rundenspiele') + (n ? ` <span class="mpa-badge">${n}</span>` : '');
+        const btn = $('mp-live-btn'), n = this.badgeCount || 0;
+        if (btn) btn.innerHTML = TX('Multiplayer') + (n ? ` <span class="mpa-badge">${n}</span>` : '');
     },
 
-    // ── List ─────────────────────────────────────────────────────────────────
-    showList: async function () {
-        if (!(await this.requireLogin())) return;
-        try { this.data = await this.api(''); } catch (e) { return toast(e.message); }
-        const d = this.data;
-        const active = d.mine.filter(g => ['setup', 'placement', 'draft', 'playing'].includes(g.status) && !g.replaced);
-        const turn = active.filter(g => g.yourTurn);
-        const waiting = active.filter(g => !g.yourTurn);
-        const takenOver = d.mine.filter(g => !active.includes(g));
-        const section = (title, list, empty) => `<h4 class="mpa-h">${title}</h4>` +
-            (list.length ? list.map(g => this.row(g)).join('') : `<p class="sub">${empty}</p>`);
-        modal(TX('Rundenspiele'), `
-            <div class="mpa-top">
-              <button class="btn primary" onclick="ASYNC.showCreate()">${TX('Neues Rundenspiel')}</button>
-              <span class="mpa-code"><input id="mpa-code" placeholder="${TX('Code')}" maxlength="8">
-              <button class="btn small" onclick="ASYNC.joinByCode()">${TX('Beitreten')}</button></span>
-            </div>
-            <p class="sub">${TX('Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer %s Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).', d.timeoutDays)}</p>
-            ${section(TX('Du bist am Zug'), turn, TX('Gerade nirgends.'))}
-            ${section(TX('Warten auf andere'), waiting, TX('Keine.'))}
-            ${section(TX('Einladungen'), d.invites, TX('Keine offenen Einladungen.'))}
-            ${section(TX('Offene Spiele'), d.open, TX('Keine öffentlichen Spiele mit freiem Platz.'))}
-            ${(d.watch || []).length ? section(TX('Laufende öffentliche Spiele – zuschauen'), d.watch, '') : ''}
-            ${takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15), '') : ''}
-            <p class="sub">${TX('Beendete Rundenspiele findest du in deiner %s.', `<a href="#" onclick="MP.showAccountModal(); return false;">${TX('Spielhistorie')}</a>`)}</p>
-            <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
-              <input type="checkbox" ${d.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>
-            ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>${TX('Push-Nachricht, wenn ich am Zug bin')}</span>
-              <input type="checkbox" ${d.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}`);
-        $('overlay').classList.add('wide');
-        this.refreshBadge();
+    // ── List: a part of the multiplayer menu (MP.showLobby) ──────────────────
+    showList: function (tab) {
+        return MP.showLobby(tab);
+    },
+
+    /** "Neues Rundenspiel" in the menu: only with an account. */
+    newGame: async function () {
+        if (await this.requireLogin()) this.showCreate();
     },
 
     row: function (g) {
@@ -1982,7 +2028,7 @@ const ASYNC = {
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
+            <div class="mpa-title"><span class="mph-kind">${TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
               <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
             ${this.seatsHtml(g.seats, g.mySlot)}
             <div class="mpa-foot"><span>${info}</span><span>${btns.join(' ')}</span></div></div>`;
@@ -2137,8 +2183,8 @@ const ASYNC = {
     },
 
     // ── Join / invite / decline ──────────────────────────────────────────────
-    joinByCode: async function () {
-        const code = ($('mpa-code') && $('mpa-code').value || '').trim().toUpperCase();
+    joinByCode: async function (code) {
+        code = (code || '').trim().toUpperCase();
         if (!code) return toast(TX('Bitte einen Code eingeben.'));
         try {
             const g = await this.api('/code/' + encodeURIComponent(code));
@@ -2457,17 +2503,9 @@ if (originalSwitchLang) {
     };
 }
 
-// Menu button "Rundenspiele" (after "Multiplayer"), and ?async=<id> links from e-mails
+// ?async=<id> links from e-mails; Rundenspiele are in the multiplayer menu (MP.showLobby)
 window.addEventListener('DOMContentLoaded', () => {
     const mNew = $('m-new');
-    if (mNew && !$('mp-async-btn')) {
-        const btn = document.createElement('button');
-        btn.className = 'btn primary';
-        btn.id = 'mp-async-btn';
-        btn.textContent = TX('Rundenspiele');
-        btn.onclick = () => ASYNC.showList();
-        mNew.parentNode.insertBefore(btn, $('m-continue'));
-    }
     // Menu button "Statistiken": win rates over all matches (client/gamestats.js)
     if (mNew && !$('mp-overall-btn') && typeof GAMESTATS !== 'undefined') {
         const btn = document.createElement('button');
@@ -2482,7 +2520,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const cred = $('mp-cred-wrapper');
     if (cred) cred.addEventListener('click', () => {
         if (!MP.asyncId) return;
-        ASYNC.close(); show('screen-menu'); ASYNC.showList();
+        ASYNC.close(); show('screen-menu'); ASYNC.showList('running');
     });
     // In-game menu (☰) of a multiplayer game: "Zurück zum Hauptmenü" instead of "Spiel beenden"
     // (which would wipe the local single-player save). A Rundenspiel goes on without us, a live
@@ -2543,10 +2581,28 @@ window.addEventListener('DOMContentLoaded', () => {
     const style = document.createElement('style');
     style.textContent = `
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
-        .mpa-top { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
-        .mpa-top .btn { width:auto; margin:0; }
-        .mpa-code { display:flex; gap:4px; align-items:center; margin-left:auto; }
-        .mpa-code input { width:90px; text-transform:uppercase; }
+        /* Multiplayer menu (MP.showLobby): new games on top, then the tabs "Laufend" / "Offen" */
+        .mph-new { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+        .mph-new .btn { width:auto; flex:1 1 160px; margin:0; }
+        .mph-opts { display:flex; gap:6px 16px; align-items:center; flex-wrap:wrap; font-size:13px; margin-bottom:10px; }
+        .mph-name { display:flex; gap:6px; align-items:center; }
+        .mph-name input { width:140px; }
+        .mph-bots { display:flex; gap:4px; align-items:center; }
+        .mph-tabs { display:flex; border-bottom:2px solid #a89f91; margin-bottom:8px; }
+        .mph-tab { flex:1; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-2px; padding:8px 6px; font:inherit; font-weight:600; color:#6f6551; cursor:pointer; }
+        .mph-tab.on { color:#9d3b2f; border-bottom-color:#9d3b2f; }
+        .mph-count:not(:empty) { display:inline-block; min-width:18px; border-radius:9px; padding:0 5px; font-size:12px; line-height:18px; background:#e4dbbe; color:#6f6551; }
+        .mph-count.hot { background:#c0392b; color:#fff; }
+        .mph-pane[hidden] { display:none; }
+        .mph-code { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+        .mph-code input { width:100px; }
+        .mph-code #mp-c { text-transform:uppercase; }
+        .mph-code .btn { width:auto; flex:0 0 auto; margin:0; }
+        .mph-codehint { margin:4px 0 0; }
+        .mph-login { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .mph-login .btn { width:auto; flex:0 0 auto; margin:0; }
+        .mph-kind { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; background:#e4dbbe; color:#6f6551; vertical-align:1px; }
+        .mph-kind.live { background:#3b7d4f; color:#fff; }
         .mpa-h { margin:14px 0 6px; }
         .mpa-row { border:1px solid rgba(0,0,0,.15); border-radius:6px; padding:8px 10px; margin-bottom:8px; background:rgba(255,255,255,.4); }
         .mpa-row.turn { border-color:#c0392b; box-shadow:0 0 0 1px #c0392b inset; }

@@ -96,7 +96,7 @@ async function live(browser, users, sources, errors) {
     };
     const a = await newPage(ca, 'A'), b = await newPage(cb, 'B'), g = await newPage(cg, 'G');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', ua.name);
+    await a.fill('#mp-n', ua.name);
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');

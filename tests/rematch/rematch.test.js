@@ -71,7 +71,7 @@ const emit = (page, ev, data) => page.evaluate(([ev, data]) => new Promise(r => 
     try {
         const a = await newPage('A'), b = await newPage('B'), c = await newPage('C');
         await a.evaluate(() => MP.setMode('host'));
-        await a.fill('#mp-hn', 'RematchA');
+        await a.fill('#mp-n', 'RematchA');
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-p-civ-0');
         await a.selectOption('#mp-p-civ-0', 'random');

@@ -274,6 +274,7 @@ function updateConfig(sessionId, newConfig) {
     if (JSON.stringify(newConfig).length > 10000) return false;
     const { map, setup, ...allowed } = newConfig;      // both are set by the server at game start
     session.gameConfig = { ...session.gameConfig, ...allowed };
+    if (typeof allowed.isPublic === 'boolean') session.isPublic = allowed.isPublic;   // the host switches it in the lobby
     return session.gameConfig;
 }
 

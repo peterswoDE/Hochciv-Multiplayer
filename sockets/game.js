@@ -209,6 +209,7 @@ module.exports = function registerHandlers(io) {
                 // player-bots (sessions.js playerBotPolicy): on/off, at most so many (null = no limit)
                 if (newConfig.playerBots !== undefined) newConfig.playerBots = newConfig.playerBots === true;
                 if (newConfig.playerBotLimit !== undefined) newConfig.playerBotLimit = int(newConfig.playerBotLimit, 1, 8) || null;
+                if (newConfig.isPublic !== undefined) newConfig.isPublic = newConfig.isPublic === true;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {

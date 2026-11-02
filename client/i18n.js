@@ -47,18 +47,18 @@
         'Bitte bestätige zuerst auf der Kontoseite deine Identität und verknüpfe danach erneut.': 'Please confirm your identity on the account page first, then link again.',
         'Bei der Anmeldung ist ein Fehler aufgetreten. Bitte versuche es erneut.': 'Something went wrong while logging in. Please try again.',
 
+        // ── Multiplayer menu: live games and turn-based games in two tabs ────────────────
+        'Live-Spiel hosten': 'Host a live game',
+        'Live-Lobbys': 'Live lobbies',
+        'Gerade läuft kein öffentliches Spiel.': 'No public game is running right now.',
+        'Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.': 'Live game: code and password. Turn-based game: just the code.',
+        'in der Liste offener Spiele': 'listed under open games',
+
         // ── Live game: lobby ─────────────────────────────────────────────────────────────
-        'Neues Spiel hosten (Server)': 'Host a new game (server)',
-        'Öffentliche Lobbys suchen': 'Find public lobbies',
-        'Privatem Spiel beitreten': 'Join a private game',
-        'Beitrittscode': 'Join code',
         'Passwort': 'Password',
         'Dein Name': 'Your name',
         'Beitreten': 'Join',
         'Öffentlich': 'Public',
-        'Nach dem Hosten kannst du die Zivilisation, deren Fähigkeiten und weitere Einstellungen in der Lobby festlegen.': 'After hosting you can choose the civilisation, its abilities and further settings in the lobby.',
-        'Hosten': 'Host',
-        'Öffentliche Lobbys': 'Public lobbies',
         'Lade...': 'Loading…',
         'Zurück': 'Back',
         'Keine öffentlichen Lobbys gefunden.': 'No public lobbies found.',
@@ -251,7 +251,6 @@
         'Das Spiel beginnt, sobald der Host es startet – du siehst es dann von Anfang an.': 'The game begins when the host starts it – you will see it from the start.',
         'Die Spieler legen ihre Startplättchen. Die Karte erscheint, sobald alle gelegt haben.': 'The players are placing their start tiles. The map appears once everyone has placed theirs.',
         'Läuft · Runde %s': 'Running · round %s',
-        'Laufende öffentliche Spiele – zuschauen': 'Public games in progress – watch',
         'Liste': 'List',
         'Zuschauer können nicht schreiben.': 'Spectators cannot write.',
         'Es schauen schon zu viele zu.': 'Too many people are watching already.',

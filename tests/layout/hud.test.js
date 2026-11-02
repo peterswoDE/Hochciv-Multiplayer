@@ -60,7 +60,7 @@ async function run(browser, [w, h]) {
     };
     const a = await newPage(), b = await newPage();
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', 'LayoutA');
+    await a.fill('#mp-n', 'LayoutA');
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');

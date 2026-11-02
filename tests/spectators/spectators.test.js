@@ -75,10 +75,10 @@ async function live(browser, errors) {
     };
     const a = await newPage('A'), v1 = await newPage('V1');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', 'SpecHost');
-    await a.check('#mp-is-public');
+    await a.fill('#mp-n', 'SpecHost');
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
+    if (!(await a.isChecked('#mp-set-public'))) throw new Error('a hosted lobby should be public');   // switchable in the lobby
     await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 1, mapKey: 'gross' }));
     await a.waitForFunction(() => MP.gameConfig.playerCount === 2);
     const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password, sessionId: MP.sessionId }));
@@ -88,7 +88,7 @@ async function live(browser, errors) {
     await v1.fill('#mp-c', cred.code);
     await v1.fill('#mp-p', cred.pw);
     await v1.fill('#mp-n', 'Watcher1');
-    await v1.click('text=Zuschauen');
+    await v1.click('.mph-code button:has-text("Zuschauen")');
     await v1.waitForSelector('text=Du schaust zu');
     ok(await v1.evaluate(() => MP.spectator && MP.lobbyIndex === null), 'lobby: V1 watches without a seat');
     ok((await a.evaluate(() => MP.players.length)) === 1, 'lobby: V1 takes no seat');
@@ -112,15 +112,15 @@ async function live(browser, errors) {
     await v1.click('#mp-chat');
     ok(await v1.isHidden('#mp-chat-form'), 'client: the chat can be read, not written');
 
-    // V2 finds the running game in the public list and watches mid-game
+    // V2 finds the running game in the menu's "Laufende Spiele" and watches mid-game
     const v2 = await newPage('V2');
-    await v2.evaluate(() => MP.setMode('public-list'));
+    await v2.click('.mph-tab[data-tab="running"]');
     const row = await until(() => v2.evaluate(code => {
-        const btn = document.querySelector(`#mp-pl-container button[data-code="${code}"]`);
-        return btn && btn.textContent.trim() === 'Zuschauen' && btn.closest('tr').textContent.replace(/\s+/g, ' ').trim();
+        const btn = document.querySelector(`#mph-running button[data-code="${code}"]`);
+        return btn && btn.textContent.trim() === 'Zuschauen' && btn.closest('.mpa-row').textContent.replace(/\s+/g, ' ').trim();
     }, cred.code));
     ok(!!row && /Läuft · Runde \d+ · 👁 1/.test(row), 'public list: the running game with "Zuschauen"', row);
-    await v2.click(`#mp-pl-container button[data-code="${cred.code}"]`);
+    await v2.click(`#mph-running button[data-code="${cred.code}"]`);
     await inGame(v2);
     ok(await v2.evaluate(() => MP.spectator && MP.playerIndex === -1 && S.round >= 1), 'public list: V2 watches mid-game');
     ok(!!(await until(() => a.evaluate(() => /👁 2/.test(document.getElementById('mp-players-title').textContent)))), 'game: "👁 2"');
@@ -196,9 +196,8 @@ async function rundenspiel(browser, errors) {
         c.on('pageerror', e => errors.push(`C: ${e.message}`));
         await c.goto(BASE + '/');
         await c.waitForFunction(() => typeof ASYNC !== 'undefined' && typeof MP !== 'undefined');
-        await c.evaluate(() => ASYNC.showList());
-        await c.waitForSelector('text=Laufende öffentliche Spiele – zuschauen');
-        await c.click(`.mpa-row:has-text("Zuschauen") button:has-text("Zuschauen")`);
+        await c.evaluate(() => ASYNC.showList('running'));
+        await c.click(`#mph-running button[onclick*="${pub}"]:has-text("Zuschauen")`);
         await c.waitForFunction(id => MP.asyncId === id && document.getElementById('screen-game').classList.contains('show'), pub, { timeout: 20000 });
         const st = await c.evaluate(() => ({ spectator: MP.spectator, me: MP.playerIndex, waiting: document.body.classList.contains('mp-waiting'), toast: document.querySelector('.mp-waiting-toast').textContent }));
         ok(st.spectator && st.me === -1 && st.waiting && st.toast === 'Du schaust zu', 'Rundenspiel: opened read-only', JSON.stringify(st));

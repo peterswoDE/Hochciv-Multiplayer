@@ -85,34 +85,31 @@ function makeAdmin() {
         await page.goto(BASE + '/');
         await page.waitForFunction(() => document.getElementById('mp-main-auth-container') && document.getElementById('mp-main-auth-container').textContent.trim());
         const menu = await page.evaluate(() => ({
-            live: document.getElementById('mp-live-btn').textContent, async: document.getElementById('mp-async-btn').textContent,
+            live: document.getElementById('mp-live-btn').textContent, async: !!document.getElementById('mp-async-btn'),
             auth: document.getElementById('mp-main-auth-container').textContent.replace(/\s+/g, ' ').trim(),
             footer: document.getElementById('mp-legal-footer').textContent.replace(/\s+/g, ' ').trim(),
         }));
-        ok(menu.async === 'Turn-based games', 'menu: turn-based games button', menu.async);
+        ok(menu.live === 'Multiplayer' && !menu.async, 'menu: one multiplayer button (turn-based games inside)', menu.live);
         ok(/Guest/.test(menu.auth) && /Log in/.test(menu.auth), 'menu: login bar in English', menu.auth);
         ok(/Privacy policy \(German\)/.test(menu.footer) && /All rights reserved/.test(menu.footer), 'menu: legal footer says the texts are German', menu.footer);
         await clean(page, 'main menu: no German left', '#screen-menu');
 
         // ── flag buttons: German and back, mp.js texts follow ────────────────────────────
         await page.click('#m-lang [data-lang="de"]');
-        const de = await page.evaluate(() => [document.getElementById('mp-async-btn').textContent, document.getElementById('mp-main-auth-container').textContent.replace(/\s+/g, ' ').trim()]);
-        ok(de[0] === 'Rundenspiele' && /Gast/.test(de[1]) && /Anmelden/.test(de[1]), 'switch to German: menu texts German', de.join(' / '));
+        const de = await page.evaluate(() => [document.getElementById('mp-overall-btn').textContent, document.getElementById('mp-main-auth-container').textContent.replace(/\s+/g, ' ').trim()]);
+        ok(de[0] === 'Statistiken' && /Gast/.test(de[1]) && /Anmelden/.test(de[1]), 'switch to German: menu texts German', de.join(' / '));
         await page.click('#m-lang [data-lang="en"]');
-        const en = await page.evaluate(() => document.getElementById('mp-async-btn').textContent);
-        ok(en === 'Turn-based games', 'switch back to English', en);
+        const en = await page.evaluate(() => document.getElementById('mp-overall-btn').textContent);
+        ok(en === 'Statistics', 'switch back to English', en);
 
         // ── live lobby: host a game ──────────────────────────────────────────────────────
         await page.click('#mp-live-btn');
         await page.waitForSelector('#overlay.show, .overlay.show, #ov-body', { state: 'visible' });
-        await clean(page, 'multiplayer menu', '#ov-body');
-        await page.evaluate(() => MP.setMode('host'));
-        await clean(page, 'host form', '#ov-body');
-        await page.evaluate(() => MP.setMode('public-list'));
         await page.waitForTimeout(800);
-        await clean(page, 'public lobby list', '#ov-body');
-        await page.evaluate(() => MP.setMode('host'));
-        await page.fill('#mp-hn', 'Tester');
+        await clean(page, 'multiplayer menu, open games', '#ov-body');
+        await page.click('.mph-tab[data-tab="running"]');
+        await clean(page, 'multiplayer menu, running games', '#ov-body');
+        await page.fill('#mp-n', 'Tester');
         await page.evaluate(() => MP.host());
         await page.waitForFunction(() => /Game settings/.test(document.getElementById('ov-body').textContent), null, { timeout: 15000 });
         await clean(page, 'lobby (host view)', '#ov-body');
@@ -131,9 +128,10 @@ function makeAdmin() {
         await page.goto(BASE + '/');
         await page.waitForFunction(() => /Logged in as/.test(document.getElementById('mp-main-auth-container').textContent), null, { timeout: 15000 });
         await clean(page, 'main menu, logged in', '#screen-menu');
-        await page.click('#mp-async-btn');
-        await page.waitForFunction(() => /New turn-based game/.test(document.getElementById('ov-body').textContent), null, { timeout: 15000 });
-        await clean(page, 'turn-based games list', '#ov-body');
+        await page.click('#mp-live-btn');
+        await page.waitForFunction(() => /New turn-based game/.test(document.getElementById('ov-body').textContent) && /E-mail/i.test(document.getElementById('ov-body').textContent), null, { timeout: 15000 });
+        await page.click('.mph-tab[data-tab="running"]');
+        await clean(page, 'multiplayer menu with turn-based games', '#ov-body');
         await page.evaluate(() => ASYNC.showCreate());
         await clean(page, 'turn-based game form', '#ov-body');
         for (const [sel, val] of [['#mpa-map', 'plaettchen'], ['#mpa-map', 'marathon'], ['#mpa-mode', 'random']]) {
