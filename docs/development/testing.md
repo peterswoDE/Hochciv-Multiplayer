@@ -31,6 +31,7 @@ Tests create their own test accounts and delete them afterwards.
 | `admin/running-games.test.js` | admin page *Laufende Spiele* | default |
 | `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
+| `lobbies/lobby-filter.test.js` | filters of the open games: every lobby setting in `/api/public-sessions`, each filter and combinations on live lobbies and Rundenspiele, search, reset, kept filters, phone | default |
 | `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups | default |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |

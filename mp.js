@@ -888,6 +888,7 @@ const MP = {
               </div>
               <p class="sub mph-codehint">${TX('Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.')}</p>
             </div>
+            ${this.filterHtml()}
             <div id="mph-open"><p class="sub mph-empty">${TX('Lade...')}</p></div>
           </div>
           </div>
@@ -1089,12 +1090,23 @@ const MP = {
             ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>${TX('Push-Nachricht, wenn ich am Zug bin')}</span>
               <input type="checkbox" ${rs.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}</div>`;
 
-        // Offen: invitations, lobbies and Rundenspiele with a free seat
-        const invites = rs ? rs.invites : [], openRs = rs ? rs.open : [];
+        // Offen: invitations, lobbies and Rundenspiele with a free seat – the last two through the
+        // filters (invitations always show)
+        const invites = rs ? rs.invites : [], allRs = rs ? rs.open : [];
+        const f = this.filterValues(), on = this.filterCount(f);
+        const shownLobbies = lobbies.filter(l => this.filterMatch(this.lobbyTraits(l, true), f));
+        const openRs = allRs.filter(g => this.filterMatch(this.lobbyTraits(g, false), f));
+        const noMatch = `${TX('Nichts passt zu deinen Filtern.')} <a href="#" onclick="MP.filterReset();return false">${TX('Filter zurücksetzen')}</a>`;
+        const showLive = f.kind !== 'async', showRs = f.kind !== 'live';
         let open = (invites.length ? section(TX('Einladungen'), invites.map(g => ASYNC.row(g)), '', 'mph-async') : '')
-            + liveErr + section(TX('Live-Lobbys'), lobbies.map(l => this.liveRow(l)), TX('Keine öffentlichen Lobbys gefunden.'))
-            + (rs ? section(TX('Rundenspiele'), openRs.map(g => ASYNC.row(g)), TX('Keine öffentlichen Spiele mit freiem Platz.'), 'mph-async')
+            + (showLive ? liveErr + section(TX('Live-Lobbys'), shownLobbies.map(l => this.liveRow(l)),
+                on && lobbies.length ? noMatch : TX('Keine öffentlichen Lobbys gefunden.')) : '')
+            + (!showRs ? '' : rs ? section(TX('Rundenspiele'), openRs.map(g => ASYNC.row(g)),
+                on && allRs.length ? noMatch : TX('Keine öffentlichen Spiele mit freiem Platz.'), 'mph-async')
                 : this.user ? '' : `<h4 class="mpa-h mph-async">${TX('Rundenspiele')}</h4>` + loginBox);
+        const shown = (showLive ? shownLobbies.length : 0) + (showRs ? openRs.length : 0);
+        const res = $('mph-f-result');
+        if (res) res.textContent = on ? TX('%s von %s', shown, lobbies.length + allRs.length) : '';
 
         // the 8-second refresh only touches the page when something changed (no flicker, focus
         // and hover stay)
@@ -1103,11 +1115,156 @@ const MP = {
         put('mph-open', open);
         const count = (k, n, hot) => { const el = $('mph-count-' + k); if (el) { el.textContent = n || ''; el.classList.toggle('hot', !!hot); } };
         count('running', turn.length || mine, turn.length);
-        count('open', lobbies.length + openRs.length + invites.length, invites.length);
+        count('open', shown + invites.length, invites.length);
         // until the player picks a tab: open on "Laufend" when one of their Rundenspiele runs
         if (!this.hubPicked && mine) this.hubShow('running', true);
         ASYNC.badgeCount = turn.length;
         ASYNC.drawBadge();
+    },
+
+    // ── Filters of the open games ──────────────────────────────────────────────
+    // Live lobbies and open Rundenspiele through the same filters, one per lobby setting; they
+    // stay in localStorage. '' = any.
+    FILTER_KEYS: ['kind', 'map', 'empires', 'ki', 'level', 'civs', 'events', 'wonders', 'ranked', 'turn', 'bots'],
+
+    filterDefs: function () {
+        const maps = [['0', TX('Originalkarte')], ['gross', TX('Große Karte')], ['plaettchen', TX('Plättchenkarte')]]
+            .concat(typeof marathonMap === 'function' ? [['marathon', TX('Marathon')]] : [])
+            .concat(typeof checkCustomMap === 'function' ? [['eigene', TX('Eigene Karte')]] : []);
+        return {
+            kind: [TX('Art'), [['live', TX('Live-Spiele')], ['async', TX('Rundenspiele')]]],
+            map: [TX('Karte'), maps],
+            empires: [TX('Reiche insgesamt'), [2, 3, 4, 5, 6, 7, 8].map(n => [String(n), String(n)])],
+            ki: [TX('KI-Plätze'), [['none', TX('Ohne KI')], ['some', TX('Mit KI')]]],
+            level: [TX('KI-Stufe'), KI_LEVELS.map(l => [l.k, l.n])],
+            civs: [TX('Nationen'), [['fixed', TX('Feste Nationen')], ['random', TX('Zufallsnationen')]]],
+            events: [TX('Ereignisse'), [['off', TX('Ohne')], ['easy', TX('Leicht (selten)')], ['hard', TX('Hart (jede Runde)')]]],
+            wonders: [TX('Weltwunder'), [['on', TX('Mit')], ['off', TX('Ohne')]]],
+            ranked: [TX('Gewertet'), [['yes', TX('Gewertet')], ['no', TX('Ungewertet')]]],
+            turn: [TX('Zeit pro Zug'), [['free', TX('Unbegrenzt')], ['timed', TX('Mit Zeitlimit')]]],
+            bots: [TX('Spieler-Bots'), [['yes', TX('Erlaubt')], ['no', TX('Nicht erlaubt')]]],
+        };
+    },
+
+    filterValues: function () {
+        if (!this._filter) {
+            try { this._filter = JSON.parse(localStorage.getItem('mp-open-filter')) || {}; } catch (e) { this._filter = {}; }
+            if (typeof this._filter !== 'object' || Array.isArray(this._filter)) this._filter = {};
+        }
+        return this._filter;
+    },
+
+    /** How many filters are on (the search counts too). */
+    filterCount: function (f, noSearch) {
+        return this.FILTER_KEYS.filter(k => f[k]).length + (f.free ? 1 : 0) + (!noSearch && f.q && f.q.trim() ? 1 : 0);
+    },
+
+    filterHtml: function () {
+        const f = this.filterValues(), defs = this.filterDefs(), n = this.filterCount(f, true);
+        const sel = k => `<label><span>${defs[k][0]}</span><select data-f="${k}" onchange="MP.filterSet(this)" class="${f[k] ? 'set' : ''}">
+              <option value="">${TX('Egal')}</option>
+              ${defs[k][1].map(([v, label]) => `<option value="${v}" ${f[k] === v ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+        return `<div class="mph-filter${this._filterOpen ? ' open' : ''}" id="mph-filter">
+              <div class="mph-f-bar">
+                <input type="search" id="mph-f-q" data-f="q" value="${escHtml(f.q || '')}" placeholder="${escHtml(TX('Host, Spieler oder Karte suchen'))}" oninput="MP.filterSet(this)" autocomplete="off">
+                <button type="button" class="btn small ghost mph-f-toggle" aria-expanded="${!!this._filterOpen}" aria-controls="mph-f-grid" onclick="MP.filterToggle()">${TX('Filter')} <span class="mph-count${n ? ' hot' : ''}" id="mph-f-count">${n || ''}</span></button>
+              </div>
+              <div class="mph-f-grid" id="mph-f-grid">
+                ${this.FILTER_KEYS.map(sel).join('')}
+                <label class="mph-f-check"><input type="checkbox" data-f="free" onchange="MP.filterSet(this)" ${f.free ? 'checked' : ''}> ${TX('Nur mit freiem Platz')}</label>
+                <div class="mph-f-foot"><span class="sub" id="mph-f-result"></span>
+                  <button type="button" class="btn small ghost" onclick="MP.filterReset()">${TX('Zurücksetzen')}</button></div>
+              </div>
+            </div>`;
+    },
+
+    filterToggle: function () {
+        this._filterOpen = !this._filterOpen;
+        const box = $('mph-filter');
+        if (!box) return;
+        box.classList.toggle('open', this._filterOpen);
+        box.querySelector('.mph-f-toggle').setAttribute('aria-expanded', String(this._filterOpen));
+    },
+
+    filterSet: function (el) {
+        const f = this.filterValues(), k = el.dataset.f;
+        if (el.type === 'checkbox') f[k] = el.checked || undefined;
+        else f[k] = el.value || undefined;
+        if (el.tagName === 'SELECT') el.classList.toggle('set', !!el.value);
+        this.filterSave();
+    },
+
+    filterReset: function () {
+        this._filter = {};
+        const box = $('mph-filter');
+        if (box) box.querySelectorAll('[data-f]').forEach(el => {
+            if (el.type === 'checkbox') el.checked = false; else el.value = '';
+            el.classList.remove('set');
+        });
+        this.filterSave();
+    },
+
+    filterSave: function () {
+        const f = this.filterValues();
+        Object.keys(f).forEach(k => f[k] === undefined && delete f[k]);
+        try { localStorage.setItem('mp-open-filter', JSON.stringify(f)); } catch (e) { /* private mode */ }
+        const n = this.filterCount(f, true), c = $('mph-f-count');
+        if (c) { c.textContent = n || ''; c.classList.toggle('hot', !!n); }
+        if (this._hubLast) this.hubDraw(...this._hubLast);
+    },
+
+    /** One shape for a live lobby (/api/public-sessions) and an open Rundenspiel (ASYNC.row's g). */
+    lobbyTraits: function (x, live) {
+        if (live) return {
+            kind: 'live', map: x.mapKey === 'random' ? 'plaettchen' : String(x.mapKey || '0'),
+            customMapName: x.customMapName, empires: x.empires || x.maxPlayers, ki: x.kiCount || 0,
+            level: this.kiLevel(x.difficulty), civs: x.randomCivs ? 'random' : 'fixed',
+            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off',
+            ranked: x.ranked ? 'yes' : 'no', turn: x.turnTime ? 'timed' : 'free', turnTime: x.turnTime || 0,
+            bots: x.playerBots ? 'yes' : 'no', free: x.playersCount < x.maxPlayers,
+            names: [x.hostName],
+        };
+        const c = x.config || {};
+        const empires = c.playerCount || (c.noKi ? c.humanCount : 4);
+        return {
+            kind: 'async', map: c.mapKey === 'random' ? 'plaettchen' : String(c.mapKey || '0'),
+            customMapName: c.customMapName, empires, ki: Math.max(0, empires - (c.humanCount || empires)),
+            level: this.kiLevel(c.difficulty), civs: c.civMode === 'random' ? 'random' : 'fixed',
+            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off',
+            // Rundenspiele have days per turn, no turn timer
+            ranked: c.ranked ? 'yes' : 'no', turn: 'free', turnTime: 0,
+            bots: c.playerBots ? 'yes' : 'no', free: !!(x.freeSeats && x.freeSeats.length),
+            names: (x.seats || []).map(s => s.name).filter(Boolean),
+        };
+    },
+
+    filterMatch: function (t, f) {
+        for (const k of this.FILTER_KEYS) {
+            const v = f[k];
+            if (!v) continue;
+            if (k === 'ki') { if ((v === 'none') !== (t.ki === 0)) return false; }
+            else if (k === 'level') { if (!t.ki || t.level !== v) return false; }   // only games with KI seats have a level
+            else if (String(t[k]) !== v) return false;
+        }
+        if (f.free && !t.free) return false;
+        const q = (f.q || '').trim().toLowerCase();
+        if (q) {
+            const hay = t.names.concat([ASYNC.mapName(t.map, t).replace(/<[^>]*>/g, ''), t.customMapName || '']).join(' ').toLowerCase();
+            if (!hay.includes(q)) return false;
+        }
+        return true;
+    },
+
+    /** The settings of an open game in one line (both kinds). */
+    traitsHtml: function (t) {
+        const lvl = (KI_LEVELS.find(l => l.k === t.level) || {}).n || t.level;
+        const parts = [TX('%s Reiche', t.empires) + (t.ki ? ` (${TX('%s KI', t.ki)}, ${lvl})` : ` (${TX('ohne KI')})`),
+            t.civs === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')];
+        if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
+        if (t.wonders === 'on') parts.push(TX('Weltwunder'));
+        if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
+        if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
+        return `<div class="mpa-traits">${parts.join(' · ')}</div>`;
     },
 
     /** Menu: a public live game – lobby to join, or running game to watch. */
@@ -1119,7 +1276,8 @@ const MP = {
         const btn = running
             ? `<button class="btn small" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, ($('mp-n') || {}).value)">${TX('Zuschauen')}</button>`
             : `<button class="btn small primary" data-code="${escHtml(l.joinCode)}" data-pw="${escHtml(l.password)}" onclick="MP.joinPublic(this.dataset.code, this.dataset.pw)">${TX('Beitreten')}</button>`;
-        return `<div class="mpa-row"><div class="mpa-title"><span class="mph-kind live">${TX('Live')}</span> <b>${escHtml(l.hostName)}</b> · ${ASYNC.mapName(l.mapKey || '0', {})}</div>
+        return `<div class="mpa-row"><div class="mpa-title"><span class="mph-kind live">${TX('Live')}</span> <b>${escHtml(l.hostName)}</b> · ${ASYNC.mapName(l.mapKey || '0', l)}</div>
+            ${running ? '' : this.traitsHtml(this.lobbyTraits(l, true))}
             <div class="mpa-foot"><span>${info}</span><span>${btn}</span></div></div>`;
     },
 
@@ -1983,7 +2141,7 @@ const ASYNC = {
     },
     mapName: function (k, c) {
         if (k === 'eigene') return TX('Eigene Karte „%s"', this.esc((c && c.customMapName) || '?'));
-        return ({ '0': TX('Originalkarte'), gross: TX('Große Karte'), plaettchen: TX('Plättchenkarte'), marathon: TX('Marathon') })[k] || k;
+        return ({ '0': TX('Originalkarte'), gross: TX('Große Karte'), plaettchen: TX('Plättchenkarte'), random: TX('Plättchenkarte'), marathon: TX('Marathon') })[k] || k;
     },
     seatsHtml: function (seats, mySlot) {
         return `<div class="mpa-seats">${seats.map(s => {
@@ -2050,6 +2208,8 @@ const ASYNC = {
         else if (g.replaced) info = TX('Von der KI übernommen');
         else if (g.waitingFor) info = TX('Wartet auf %s', this.esc(TXS(g.waitingFor)));
         const member = g.mySlot != null;
+        // a game to join shows all its settings (as the live lobbies, MP.traitsHtml)
+        const joinable = !member && g.freeSeats && g.freeSeats.length;
         const btns = [];
         if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">${TX('Öffnen')}</button>`);
         else if (g.status === 'playing' && !g.freeSeats.length) btns.push(`<button class="btn small" onclick="ASYNC.open('${g.id}')">${TX('Zuschauen')}</button>`);
@@ -2057,8 +2217,9 @@ const ASYNC = {
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><span class="mph-kind">${TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
+            <div class="mpa-title"><span class="mph-kind">${TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
               <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
+            ${joinable ? MP.traitsHtml(MP.lobbyTraits(g, false)) : ''}
             ${this.seatsHtml(g.seats, g.mySlot)}
             <div class="mpa-foot"><span>${info}</span><span>${btns.join(' ')}</span></div></div>`;
     },
@@ -2734,6 +2895,26 @@ window.addEventListener('DOMContentLoaded', () => {
         .mpa-row.turn { border-color:#c0392b; box-shadow:0 0 0 1px #c0392b inset; }
         .mpa-title { font-size:14px; }
         .mpa-c { float:right; font-family:monospace; opacity:.6; }
+        .mpa-traits { font-size:12px; color:var(--ink-soft); margin:3px 0 2px; line-height:1.4; }
+        /* filters of the open games: search and a button, the selects fold out below */
+        .mph-filter { margin:12px 0 0; }
+        .mph-f-bar { display:flex; gap:6px; align-items:center; }
+        .mph .mph-f-bar input[type=search] { flex:1 1 auto; min-width:0; padding:8px 10px; border:1px solid var(--rule); border-radius:8px; background:#fffdf6; font:inherit; font-size:14px; }
+        .mph .mph-f-bar input[type=search]:focus { outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(157,59,47,.15); }
+        .mph .mph-f-toggle, .mph .mph-f-foot .btn { flex:0 0 auto; width:auto; }
+        .mph-f-toggle { display:inline-flex; gap:6px; align-items:center; }
+        .mph-f-toggle::after { content:'▾'; font-size:13px; line-height:1; transition:transform .15s; }
+        .mph-filter.open .mph-f-toggle::after { transform:rotate(180deg); }
+        .mph-f-grid { display:none; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px 10px; margin-top:8px; padding:12px; border:1px solid var(--rule); border-radius:10px; background:var(--paper-2); }
+        .mph-filter.open .mph-f-grid { display:grid; }
+        .mph-f-grid label { display:flex; flex-direction:column; gap:3px; min-width:0; font-size:12px; font-weight:600; color:var(--ink-soft); }
+        .mph-f-grid select { width:100%; min-width:0; padding:6px 8px; border:1px solid var(--rule); border-radius:8px; background:#fffdf6; color:var(--ink); font:inherit; font-size:13px; font-weight:400; }
+        .mph-f-grid select.set { border-color:var(--red); box-shadow:0 0 0 1px var(--red) inset; }
+        .mph-f-grid .mph-f-check { flex-direction:row; align-items:center; gap:6px; align-self:end; padding-bottom:6px; cursor:pointer; }
+        .mph-f-check input { width:18px; height:18px; margin:0; flex:0 0 auto; }
+        .mph-f-foot { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+        .mph .mph-f-foot .sub { margin:0; }
+        @media (max-width:640px) { .mph-f-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); padding:10px; } }
         .mpa-seats { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; margin:4px 0; }
         .mpa-seat.me { font-weight:bold; }
         .mp-bot-badge { display:inline-block; font-size:11px; padding:1px 5px; border-radius:4px; background:#3b5f7d; color:#fff; vertical-align:1px; }
