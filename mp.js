@@ -781,19 +781,20 @@ const MP = {
         const authContainer = $('mp-main-auth-container');
         if (!authContainer) return;
 
+        // styles: .mp-auth (DOMContentLoaded below), phones: client/mobile/mobile.css
         if (this.user) {
             authContainer.innerHTML = `
-                <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
+                <div class="mp-auth">
                     <span>${TX('Eingeloggt als %s (%s MMR, %s Spiele)', `<b>${escHtml(this.user.username)}</b>`, escHtml(this.user.mmr), escHtml(this.user.gamesPlayed))}</span>
-                    <button class="btn small" onclick="MP.showAccountModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">${TX('Account & Admin')}</button>
-                    <button class="btn small" onclick="MP.logout()" style="margin:0; padding: 6px 12px; font-size: 13px; background: #c9302c; color: white; border: 1px solid #ac2925; box-shadow: none;">${TX('Abmelden')}</button>
+                    <button class="btn small" onclick="MP.showAccountModal()">${TX('Account & Admin')}</button>
+                    <button class="btn small ghost" onclick="MP.logout()">${TX('Abmelden')}</button>
                 </div>
             `;
         } else {
             authContainer.innerHTML = `
-                <div style="color: rgba(255,255,255,0.9); font-size: 14px; display: flex; align-items: center; gap: 15px;">
-                    <span>${TX('Gast')} <span style="opacity:0.7">(${TX('Ranked gesperrt')})</span></span>
-                    <button class="btn small" onclick="MP.showAuthModal()" style="margin:0; padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); box-shadow: none;">${TX('Anmelden')}</button>
+                <div class="mp-auth">
+                    <span>${TX('Gast')} <span class="mp-auth-soft">(${TX('Ranked gesperrt')})</span></span>
+                    <button class="btn small primary" onclick="MP.showAuthModal()">${TX('Anmelden')}</button>
                 </div>
             `;
         }
@@ -841,36 +842,44 @@ const MP = {
             if (mode === 'menu') {
                 const name = (this.user && this.user.username) || localStorage.getItem('mp-name') || TX('Spieler');
                 const tabBtn = (k, label) => `<button type="button" class="mph-tab" data-tab="${k}" onclick="MP.hubShow('${k}')">${label} <span class="mph-count" id="mph-count-${k}"></span></button>`;
-                h = `
+                // a new game: title as the button's own text (tests click 'text=…'), one line below
+                const newGame = (cls, onclick, title, desc, attrs) =>
+                    `<button class="btn mph-mode ${cls}" onclick="${onclick}" ${attrs || ''}>${title}<small>${desc}</small></button>`;
+                h = `<div class="mph">
+          <label class="mph-name"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${escHtml(name)}" maxlength="24" autocomplete="nickname"></label>
           <div class="mph-new">
-            <button class="btn primary" onclick="MP.host()">${TX('Live-Spiel hosten')}</button>
-            <button class="btn mph-async" onclick="ASYNC.newGame()">${TX('Neues Rundenspiel')}</button>
+            ${newGame('primary', 'MP.host()', TX('Live-Spiel hosten'), TX('Alle spielen gleichzeitig.'))}
+            ${newGame('mph-async', 'ASYNC.newGame()', TX('Neues Rundenspiel'), this.user ? TX('Nacheinander ziehen, wann es dir passt.') : TX('Nur mit Anmeldung.'))}
             ${typeof MATCH !== 'undefined' ? `<div class="mph-ranked">
-              <button class="btn" onclick="MATCH.start()" ${this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`}>🔥 ${TX('Gewertetes Spiel suchen')}</button>
+              ${newGame('', 'MATCH.start()', '🔥 ' + TX('Gewertetes Spiel suchen'), this.user ? TX('Gegner mit ähnlicher MMR, gewertet.') : TX('Nur mit Anmeldung.'),
+                    this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`)}
               ${this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots in der Suche zulassen')}</label>` : ''}
             </div>` : ''}
           </div>
-          <div class="mph-opts">
-            <label class="mph-name"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${escHtml(name)}" maxlength="24"></label>
-          </div>
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
+          <div class="mph-panes">
           <div class="mph-pane" data-pane="running">
-            <div id="mph-running"><p class="sub">${TX('Lade...')}</p></div>
+            <div id="mph-running"><p class="sub mph-empty">${TX('Lade...')}</p></div>
           </div>
           <div class="mph-pane" data-pane="open">
-            <div class="mph-code">
-              <input type="text" id="mp-c" placeholder="${escHtml(TX('Code'))}" maxlength="8">
-              <input type="number" id="mp-p" placeholder="${escHtml(TX('Passwort'))}">
-              <button class="btn small primary" onclick="MP.hubJoinCode()">${TX('Beitreten')}</button>
-              <button class="btn small ghost" onclick="MP.watch($('mp-c').value.trim(), $('mp-p').value.trim(), $('mp-n').value.trim())">${TX('Zuschauen')}</button>
+            <div class="mph-codebox">
+              <div class="mph-code">
+                <input type="text" id="mp-c" placeholder="${escHtml(TX('Code'))}" maxlength="8" autocomplete="off">
+                <input type="number" id="mp-p" placeholder="${escHtml(TX('Passwort'))}" autocomplete="off">
+                <button class="btn small primary" onclick="MP.hubJoinCode()">${TX('Beitreten')}</button>
+                <button class="btn small ghost" onclick="MP.watch($('mp-c').value.trim(), $('mp-p').value.trim(), $('mp-n').value.trim())">${TX('Zuschauen')}</button>
+              </div>
+              <p class="sub mph-codehint">${TX('Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.')}</p>
             </div>
-            <p class="sub mph-codehint">${TX('Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.')}</p>
-            <div id="mph-open"><p class="sub">${TX('Lade...')}</p></div>
+            <div id="mph-open"><p class="sub mph-empty">${TX('Lade...')}</p></div>
           </div>
-        `;
+          </div>
+        </div>`;
                 modal(TX('Multiplayer'), h);
                 $('overlay').classList.add('wide');
                 this.hubShow(this.hubTab || 'open', true);
+                // the lists of the last visit right away, fresh ones follow – no "Lade..." flash
+                if (this._hubLast) this.hubDraw(...this._hubLast);
                 this.hubLoad();
                 this._publicListTimer = setInterval(() => this.hubLoad(), 8000);
                 return;
@@ -1019,12 +1028,13 @@ const MP = {
         ]);
         if (!$('mph-tabs')) return;
         if (rs) ASYNC.data = rs;
+        this._hubLast = [live, rs];
         this.hubDraw(live, rs);
     },
 
     hubDraw: function (live, rs) {
         const section = (title, rows, empty, cls) => `<div class="${cls || ''}"><h4 class="mpa-h">${title}</h4>` +
-            (rows.length ? rows.join('') : `<p class="sub">${empty}</p>`) + '</div>';
+            (rows.length ? rows.join('') : `<p class="sub mph-empty">${empty}</p>`) + '</div>';
         const loginBox = `<div class="mph-async mph-login"><p class="sub">${TX('Rundenspiele gibt es nur mit Anmeldung.')}</p>
             <button class="btn small" onclick="MP.showAuthModal()">${TX('Anmelden')}</button></div>`;
         const liveErr = live ? '' : `<p class="sub error">${TX('Fehler beim Laden.')}</p>`;
@@ -1041,8 +1051,10 @@ const MP = {
             const takenOver = rs.mine.filter(g => !active.includes(g));
             mine = active.length;
             run += `<p class="sub mph-async">${TX('Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer %s Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).', rs.timeoutDays)}</p>`
-                + section(TX('Du bist am Zug'), turn.map(g => ASYNC.row(g)), TX('Gerade nirgends.'), 'mph-async')
-                + section(TX('Warten auf andere'), waiting.map(g => ASYNC.row(g)), TX('Keine.'), 'mph-async')
+                // nothing running: one empty box instead of two
+                + (mine ? section(TX('Du bist am Zug'), turn.map(g => ASYNC.row(g)), TX('Gerade nirgends.'), 'mph-async')
+                    + section(TX('Warten auf andere'), waiting.map(g => ASYNC.row(g)), TX('Keine.'), 'mph-async')
+                    : section(TX('Rundenspiele'), [], TX('Keine laufenden Rundenspiele.'), 'mph-async'))
                 + (takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15).map(g => ASYNC.row(g)), '', 'mph-async') : '');
         } else if (!this.user) run += loginBox;
         const watch = liveRunning.map(l => this.liveRow(l)).concat((rs && rs.watch || []).map(g => ASYNC.row(g)));
@@ -1061,8 +1073,11 @@ const MP = {
             + (rs ? section(TX('Rundenspiele'), openRs.map(g => ASYNC.row(g)), TX('Keine öffentlichen Spiele mit freiem Platz.'), 'mph-async')
                 : this.user ? '' : `<h4 class="mpa-h mph-async">${TX('Rundenspiele')}</h4>` + loginBox);
 
-        $('mph-running').innerHTML = run;
-        $('mph-open').innerHTML = open;
+        // the 8-second refresh only touches the page when something changed (no flicker, focus
+        // and hover stay)
+        const put = (id, html) => { const el = $(id); if (el && el._html !== html) { el.innerHTML = html; el._html = html; } };
+        put('mph-running', run);
+        put('mph-open', open);
         const count = (k, n, hot) => { const el = $('mph-count-' + k); if (el) { el.textContent = n || ''; el.classList.toggle('hot', !!hot); } };
         count('running', turn.length || mine, turn.length);
         count('open', lobbies.length + openRs.length + invites.length, invites.length);
@@ -1410,19 +1425,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         // Auth Container for Main Menu
         const authDiv = document.createElement('div');
-        authDiv.id = 'mp-main-auth-container';
-        authDiv.style.position = 'absolute';
-        authDiv.style.top = '0';
-        authDiv.style.left = '0';
-        authDiv.style.right = '0';
-        authDiv.style.padding = '12px 24px';
-        authDiv.style.background = 'rgba(0, 0, 0, 0.4)';
-        authDiv.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
-        authDiv.style.display = 'flex';
-        authDiv.style.justifyContent = 'flex-end';
-        authDiv.style.alignItems = 'center';
-        authDiv.style.zIndex = '1000';
-        authDiv.style.backdropFilter = 'blur(5px)';
+        authDiv.id = 'mp-main-auth-container';      // styled below (#mp-main-auth-container)
 
         const screenMenu = $('screen-menu');
         if (screenMenu) {
@@ -2469,6 +2472,25 @@ MP.drawLegalFooter = function () {
         ${link('/nutzungsbedingungen.html', TX('Nutzungsbedingungen'))} |
         ${link('/impressum.html', TX('Impressum'))}`;
 };
+/* Main menu: the ways into a game stay big (Erstes Spiel, Spiel fortsetzen, Neues Spiel,
+   Multiplayer); tutorial, statistics, editor, rules, settings and loading go into a compact grid
+   below. The buttons keep their ids and handlers, only their place changes. */
+MP.arrangeMenu = function () {
+    const actions = document.querySelector('#screen-menu .menu-actions');
+    if (!actions || $('mp-menu-more')) return;
+    const cont = $('m-continue'), first = $('m-first');
+    if (cont && first) first.after(cont);
+    const more = document.createElement('div');
+    more.id = 'mp-menu-more';
+    ['m-tutorial', 'mp-overall-btn', 'm-editor', 'm-rules', 'm-options', 'm-load'].forEach(id => {
+        const b = $(id);
+        if (b) more.appendChild(b);
+    });
+    actions.after(more);
+    // one red button on the page: Erstes Spiel (the game's own choice)
+    const live = $('mp-live-btn');
+    if (live) live.classList.remove('primary');
+};
 /* The game's language buttons (switchLang in ui.js) redraw the game's own texts – this redraws
    what mp.js has put on the page. Modals are closed by switchLang anyway. */
 MP.applyLang = function () {
@@ -2517,6 +2539,7 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.onclick = () => GAMESTATS.open();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
     }
+    MP.arrangeMenu();
     MP.applyLang();
     // Tap the code box in the HUD to go back to the list (the game goes on)
     const cred = $('mp-cred-wrapper');
@@ -2583,29 +2606,78 @@ window.addEventListener('DOMContentLoaded', () => {
     const style = document.createElement('style');
     style.textContent = `
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
-        /* Multiplayer menu (MP.showLobby): new games on top, then the tabs "Laufend" / "Offen" */
-        .mph-new { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start; margin-bottom:8px; }
-        .mph-new .btn { width:auto; flex:1 1 160px; margin:0; }
-        .mph-opts { display:flex; gap:6px 16px; align-items:center; flex-wrap:wrap; font-size:13px; margin-bottom:10px; }
-        .mph-name { display:flex; gap:6px; align-items:center; }
-        .mph-name input { width:140px; }
+        /* Main menu (MP.arrangeMenu): login bar on top, the secondary buttons in a grid */
+        #mp-main-auth-container { position:absolute; top:0; left:0; right:0; z-index:1000; display:flex; justify-content:flex-end; align-items:center; padding:12px 20px; }
+        .mp-auth { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--ink-soft); }
+        .mp-auth b { color:var(--ink); }
+        .mp-auth-soft { opacity:.75; }
+        .mp-auth .btn { flex:0 0 auto; margin:0; padding:6px 12px; font-size:13px; box-shadow:none; }
+        #mp-menu-more { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--rule); }
+        #mp-menu-more .btn { padding:10px 12px; font-size:14px; background:transparent; box-shadow:none; }
+        #screen-menu .btn:not(.primary):not([disabled]):hover { background:var(--paper); border-color:var(--ink-soft); }
+        #screen-menu .btn.primary:hover { filter:brightness(1.08); }
+
+        /* Multiplayer menu (MP.showLobby): name, the three new games, then the tabs "Laufend" / "Offen" */
+        .mph { animation:mph-in .18s ease-out; }
+        @keyframes mph-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+        @keyframes mph-fade { from { opacity:0; } to { opacity:1; } }
+        .mph input[type=text], .mph input[type=number] { min-width:0; padding:8px 10px; border:1px solid var(--rule); border-radius:8px; background:#fffdf6; font-size:15px; }
+        .mph input[type=text]:focus, .mph input[type=number]:focus { outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(157,59,47,.15); }
+        .mph input[type=number] { -moz-appearance:textfield; }
+        .mph input[type=number]::-webkit-inner-spin-button, .mph input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+        .mph .btn { margin:0; width:auto; }
+        .mph .sub { font-size:13px; color:var(--ink-soft); margin:0 0 8px; line-height:1.45; }
+        .mph-name { display:flex; gap:10px; align-items:center; margin-bottom:12px; font-size:13px; font-weight:600; color:var(--ink-soft); }
+        .mph-name input { flex:0 1 220px; color:var(--ink); font-weight:500; }
+        .mph-new { display:flex; gap:10px; align-items:flex-start; margin-bottom:18px; }
+        .mph-new > .btn, .mph-ranked { flex:1 1 0; min-width:0; }
+        .mph-mode { display:flex; flex-direction:column; justify-content:center; gap:3px; min-height:72px; text-align:left; padding:12px 14px; font-weight:600; }
+        .mph-mode small { font-size:12px; font-weight:400; line-height:1.35; opacity:.75; }
+        .mph-mode:not([disabled]):hover { filter:brightness(1.04); }
+        .mph-mode.primary:not([disabled]):hover { filter:brightness(1.1); }
         /* the player-bot switch belongs to the ranked search only (lobbies have their own) */
-        .mph-ranked { flex:1 1 160px; display:flex; flex-direction:column; gap:4px; }
-        .mph-ranked .btn { flex:0 0 auto; }
-        .mph-bots { display:flex; gap:4px; align-items:center; justify-content:center; font-size:12px; }
-        .mph-tabs { display:flex; border-bottom:2px solid #a89f91; margin-bottom:8px; }
-        .mph-tab { flex:1; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-2px; padding:8px 6px; font:inherit; font-weight:600; color:#6f6551; cursor:pointer; }
-        .mph-tab.on { color:#9d3b2f; border-bottom-color:#9d3b2f; }
-        .mph-count:not(:empty) { display:inline-block; min-width:18px; border-radius:9px; padding:0 5px; font-size:12px; line-height:18px; background:#e4dbbe; color:#6f6551; }
+        .mph-ranked { display:flex; flex-direction:column; gap:6px; }
+        .mph-ranked .btn { flex:1 1 auto; }
+        .mph-bots { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-soft); cursor:pointer; }
+        .mph-bots input[type=checkbox] { width:18px; height:18px; flex:0 0 auto; margin:0; }
+        .mph-tabs { display:flex; border-bottom:1px solid var(--rule); margin-bottom:12px; }
+        .mph-tab { flex:1; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-1px; padding:10px 6px; font:inherit; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:color .15s, border-color .15s; }
+        .mph-tab:hover { color:var(--ink); }
+        .mph-tab.on { color:var(--red); border-bottom-color:var(--red); }
+        .mph-count:not(:empty) { display:inline-block; min-width:18px; border-radius:9px; padding:0 5px; font-size:12px; line-height:18px; background:var(--parchment); color:var(--ink-soft); }
         .mph-count.hot { background:#c0392b; color:#fff; }
+        /* both tabs keep one height while loading and switching – the dialog does not jump */
+        .mph-panes { min-height:240px; }
         .mph-pane[hidden] { display:none; }
-        .mph-code { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
-        .mph-code input { flex:1 1 70px; width:auto; min-width:0; max-width:120px; }
-        .mph-code #mp-c { text-transform:uppercase; }
-        .mph-code .btn { width:auto; flex:0 0 auto; margin:0; }
-        .mph-codehint { margin:4px 0 0; }
-        .mph-login { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-        .mph-login .btn { width:auto; flex:0 0 auto; margin:0; }
+        .mph-pane:not([hidden]) { animation:mph-fade .15s ease-out; }
+        .mph .mpa-h { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); }
+        .mph-empty { padding:12px; border:1px dashed var(--rule); border-radius:8px; text-align:center; }
+        .mph .sub.mph-empty { margin:0; }
+        .mph-codebox { padding:12px; border-radius:10px; background:var(--paper-2); border:1px solid var(--rule); }
+        .mph-code { display:flex; gap:6px; align-items:center; }
+        .mph-code input { flex:0 1 170px; width:auto; }
+        .mph-code #mp-c { text-transform:uppercase; font-family:var(--mono); letter-spacing:.06em; }
+        .mph-code .btn { flex:0 0 auto; }
+        .mph .mph-codehint { margin:8px 0 0; font-size:12px; }
+        .mph-login { display:flex; gap:10px; align-items:center; justify-content:space-between; padding:12px; border:1px dashed var(--rule); border-radius:8px; }
+        .mph .mph-login .sub { margin:0; }
+        .mph-login .btn { flex:0 0 auto; }
+        .mph .mpa-row { background:#fffdf6; border-color:var(--rule); border-radius:8px; }
+        .mph .mpa-notify { border-top-color:var(--rule); }
+        .mph .row { font-size:14px; }
+        .mph a { color:var(--red); }
+        /* phones: the new games one below the other, title and line side by side */
+        @media (max-width:640px) {
+            .mph-new { flex-direction:column; gap:8px; }
+            .mph-new > .btn, .mph-ranked { flex:0 0 auto; }
+            .mph-mode { min-height:0; padding:10px 14px; }
+            .mph-name input { flex:1 1 auto; }
+            .mph-code { flex-wrap:wrap; }
+            .mph-code input { flex:1 1 40%; }
+            .mph-code .btn { flex:1 1 auto; }
+            .mph-panes { min-height:180px; }
+        }
+        @media (prefers-reduced-motion:reduce) { .mph, .mph-pane { animation:none !important; } }
         .mph-kind { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; background:#e4dbbe; color:#6f6551; vertical-align:1px; }
         .mph-kind.live { background:#3b7d4f; color:#fff; }
         .mpa-h { margin:14px 0 6px; }

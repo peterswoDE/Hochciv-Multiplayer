@@ -54,6 +54,10 @@
         'Gerade läuft kein öffentliches Spiel.': 'No public game is running right now.',
         'Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.': 'Live game: code and password. Turn-based game: just the code.',
         'in der Liste offener Spiele': 'listed under open games',
+        'Alle spielen gleichzeitig.': 'Everyone plays at the same time.',
+        'Nacheinander ziehen, wann es dir passt.': 'Take your turn whenever it suits you.',
+        'Gegner mit ähnlicher MMR, gewertet.': 'Opponents with similar MMR, rated.',
+        'Nur mit Anmeldung.': 'Requires an account.',
 
         // ── Live game: lobby ─────────────────────────────────────────────────────────────
         'Passwort': 'Password',
