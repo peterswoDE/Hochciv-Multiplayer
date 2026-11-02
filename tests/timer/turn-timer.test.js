@@ -83,7 +83,7 @@ async function attempt(newPage) {
         await a.evaluate(() => { MP.showLobby(); });
         await a.waitForFunction(() => typeof MP.setMode === 'function');
         await a.evaluate(() => MP.setMode('host'));
-        await a.fill('#mp-hn', 'TimerA');
+        await a.fill('#mp-n', 'TimerA');
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-set-turntime');
         const opts = await a.$$eval('#mp-set-turntime option', os => os.map(o => o.textContent.trim()));

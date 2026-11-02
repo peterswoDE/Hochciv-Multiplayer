@@ -89,7 +89,7 @@ async function run(browser, users, sources) {
     // ── Live game: A and B with accounts, C a guest ──
     const a = await newPage(ca, 'A'), b = await newPage(cb, 'B'), c = await newPage(cc, 'C');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', ua.name);
+    await a.fill('#mp-n', ua.name);
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');

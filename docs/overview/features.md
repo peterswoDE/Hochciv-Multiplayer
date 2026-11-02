@@ -6,6 +6,7 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 
 ## Playing together
 
+* **One multiplayer menu:** The main menu has one *Multiplayer* button (with a badge when it is your turn in a Rundenspiel). On top: *Live-Spiel hosten* (goes straight into the lobby, public by default – the host can switch *Öffentlich* off there), *Neues Rundenspiel* and *🔥 Gewertetes Spiel suchen*. Below, two tabs: *Laufende Spiele* (your Rundenspiele, public live games and Rundenspiele to watch, notification settings) and *Offene Spiele* (join by code – with password a live game, without one a Rundenspiel –, invitations, public lobbies and Rundenspiele with a free seat). It opens on *Laufende Spiele* when one of your Rundenspiele is running.
 * **Live multiplayer:** Lobbies with a 6-character join code and a 6-digit password, public lobby list, 2 to 8 empires – as many as the map allows (fixed maps and the standard Marathon 4, the tile map 8, custom maps as many as they have start points). The host sets the number of empires and how many of them the KI plays; free human seats are filled with the KI at the start. Further settings: map (including custom maps and their codes), random nations for everyone, KI level, events, wonders and ranked mode.
 * **Server-side rules:** Every move is checked and applied by the real Hochciv engine on the server; clients only display the state. See [How it works](how-it-works.md).
 * **Rundenspiele (asynchronous games):** Play turn by turn over days, with e-mail and push notifications when it is your turn. Same choices as live games: 2–8 empires, how many of them KI (none: the game waits for everybody), random nations for everyone, custom maps. Rules for inactive players: [Rundenspiele](../reference/rundenspiele.md).
@@ -13,7 +14,7 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 * **Reconnects:** Players who lose their connection or reload the page are put back into their seat.
 * **Rematch (live games):** On the end screen the host can start a *Revanche*. Everyone still connected goes back to the same lobby (same code and settings, everyone's own choice of nation) and can start the next game from there.
 * **Turn timer (live games):** The host sets the time per turn: no limit (default), or 1, 2, 3, 5 or 10 minutes. A countdown runs in the HUD. When the time is up, the KI finishes the turn. After three missed turns in a row, the KI keeps playing the seat until the player clicks *Ich bin zurück*.
-* **Spectator mode:** *Zuschauen* with code and password, or from the public list, which also shows running public games. Spectators see the board, the log and the chat, but can't act or write; the player list shows how many are watching (up to 20). In the Discord Activity, whoever joins a running game or a full lobby watches. Public Rundenspiele can be watched from the Rundenspiele list.
+* **Spectator mode:** *Zuschauen* with code and password, or from the multiplayer menu's list of running public games. Spectators see the board, the log and the chat, but can't act or write; the player list shows how many are watching (up to 20). In the Discord Activity, whoever joins a running game or a full lobby watches. Public live games and Rundenspiele can be watched from *Laufende Spiele* in the multiplayer menu.
 
 ## Ranking
 

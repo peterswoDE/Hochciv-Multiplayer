@@ -169,7 +169,7 @@ async function live(browser, errors) {
     };
     const a = await newPage('A'), b = await newPage('B');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', 'ScnA');
+    await a.fill('#mp-n', 'ScnA');
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');
