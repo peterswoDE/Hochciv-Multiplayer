@@ -50,6 +50,7 @@
         // ── Multiplayer menu: live games and turn-based games in two tabs ────────────────
         'Live-Spiel hosten': 'Host a live game',
         'Live-Lobbys': 'Live lobbies',
+        'Spieler-Bots in der Suche zulassen': 'Allow player-bots in the search',
         'Gerade läuft kein öffentliches Spiel.': 'No public game is running right now.',
         'Live-Spiel: Code und Passwort. Rundenspiel: nur der Code.': 'Live game: code and password. Turn-based game: just the code.',
         'in der Liste offener Spiele': 'listed under open games',
@@ -763,7 +764,6 @@
         'Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.':
             'Player-bots are bot accounts: programs that play like players. They take free seats for humans – first come, first served – never the AI seats.',
         'Spieler-Bots erlaubt': 'player-bots allowed',
-        'Spieler-Bots als Mitspieler zulassen': 'Allow player-bots as opponents',
         'Bot von %s': 'Bot of %s',
         // messages from the server
         'Bot-Konten haben keine Kontoeinstellungen.': 'Bot accounts have no account settings.',

@@ -845,11 +845,13 @@ const MP = {
           <div class="mph-new">
             <button class="btn primary" onclick="MP.host()">${TX('Live-Spiel hosten')}</button>
             <button class="btn mph-async" onclick="ASYNC.newGame()">${TX('Neues Rundenspiel')}</button>
-            ${typeof MATCH !== 'undefined' ? `<button class="btn" onclick="MATCH.start()" ${this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`}>🔥 ${TX('Gewertetes Spiel suchen')}</button>` : ''}
+            ${typeof MATCH !== 'undefined' ? `<div class="mph-ranked">
+              <button class="btn" onclick="MATCH.start()" ${this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`}>🔥 ${TX('Gewertetes Spiel suchen')}</button>
+              ${this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots in der Suche zulassen')}</label>` : ''}
+            </div>` : ''}
           </div>
           <div class="mph-opts">
             <label class="mph-name"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${escHtml(name)}" maxlength="24"></label>
-            ${typeof MATCH !== 'undefined' && this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots als Mitspieler zulassen')}</label>` : ''}
           </div>
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
           <div class="mph-pane" data-pane="running">
@@ -2582,12 +2584,15 @@ window.addEventListener('DOMContentLoaded', () => {
     style.textContent = `
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
         /* Multiplayer menu (MP.showLobby): new games on top, then the tabs "Laufend" / "Offen" */
-        .mph-new { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+        .mph-new { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start; margin-bottom:8px; }
         .mph-new .btn { width:auto; flex:1 1 160px; margin:0; }
         .mph-opts { display:flex; gap:6px 16px; align-items:center; flex-wrap:wrap; font-size:13px; margin-bottom:10px; }
         .mph-name { display:flex; gap:6px; align-items:center; }
         .mph-name input { width:140px; }
-        .mph-bots { display:flex; gap:4px; align-items:center; }
+        /* the player-bot switch belongs to the ranked search only (lobbies have their own) */
+        .mph-ranked { flex:1 1 160px; display:flex; flex-direction:column; gap:4px; }
+        .mph-ranked .btn { flex:0 0 auto; }
+        .mph-bots { display:flex; gap:4px; align-items:center; justify-content:center; font-size:12px; }
         .mph-tabs { display:flex; border-bottom:2px solid #a89f91; margin-bottom:8px; }
         .mph-tab { flex:1; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-2px; padding:8px 6px; font:inherit; font-weight:600; color:#6f6551; cursor:pointer; }
         .mph-tab.on { color:#9d3b2f; border-bottom-color:#9d3b2f; }
@@ -2595,7 +2600,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-count.hot { background:#c0392b; color:#fff; }
         .mph-pane[hidden] { display:none; }
         .mph-code { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
-        .mph-code input { width:100px; }
+        .mph-code input { flex:1 1 70px; width:auto; min-width:0; max-width:120px; }
         .mph-code #mp-c { text-transform:uppercase; }
         .mph-code .btn { width:auto; flex:0 0 auto; margin:0; }
         .mph-codehint { margin:4px 0 0; }
