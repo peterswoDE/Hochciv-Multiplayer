@@ -400,6 +400,11 @@
     });
     grid.classList.add('m-tabbed');
     grid.parentNode.insertBefore(bar, grid);
+    // the yield strip above stays at the top (mobile.css): the tab bar sticks right below it
+    const layout = grid.closest('.tech-layout'), aside = layout && layout.querySelector('.tech-aside');
+    if (aside && window.ResizeObserver) {
+      new ResizeObserver(() => layout.style.setProperty('--m-yield-h', aside.offsetHeight + 'px')).observe(aside);
+    }
     let start = lastTab;
     if (start === null || start > 3) start = [0, 1, 2, 3].find(affordable);
     select(start === undefined ? 0 : start);

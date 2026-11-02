@@ -496,14 +496,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const baseUrl = data.callbackBase || window.location.origin;
             const cbGoogle = document.getElementById('oauth-callback-google');
             const cbDiscord = document.getElementById('oauth-callback-discord');
-            if (cbGoogle) cbGoogle.textContent = `Google: ${baseUrl}/api/auth/google/callback`;
-            if (cbDiscord) cbDiscord.textContent = `Discord: ${baseUrl}/api/auth/discord/callback`;
+            if (cbGoogle) cbGoogle.value = `${baseUrl}/api/auth/google/callback`;
+            if (cbDiscord) cbDiscord.value = `${baseUrl}/api/auth/discord/callback`;
             if (cbDiscord && baseUrl !== window.location.origin) {
                 const warn = document.createElement('div');
                 warn.style.cssText = 'color:var(--red); font-weight:bold; margin-top:6px;';
                 warn.textContent = tx('Achtung: Der Server verwendet %s, die Seite läuft aber unter %s.', baseUrl, window.location.origin) + ' ' +
                     tx('BASE_URL in der .env des Servers setzen, sonst schlägt der Login fehl (redirect_uri).');
-                cbDiscord.after(warn);
+                cbDiscord.parentNode.after(warn);
             }
             if (data.google) {
                 document.getElementById('oauth-google-clientid').value = data.google.clientId || '';
@@ -520,6 +520,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Failed to load OAuth config', e);
         }
     }
+
+    // "Kopieren" next to a callback URL
+    document.querySelectorAll('[data-copy]').forEach(btn => btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.copy);
+        input.select();
+        (navigator.clipboard ? navigator.clipboard.writeText(input.value) : Promise.reject()).then(() => {
+            btn.textContent = '✓ ' + tx('Kopiert');
+            setTimeout(() => { btn.textContent = tx('Kopieren'); }, 1500);
+        }, () => { });           // not allowed: the URL is selected, Ctrl+C works
+    }));
 
     window.saveOAuthConfig = async (provider) => {
         const msg = document.getElementById(`oauth-${provider}-msg`);

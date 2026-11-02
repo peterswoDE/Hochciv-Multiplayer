@@ -172,6 +172,11 @@ td.acc-empty { color: var(--ink-soft); text-align: center; padding: 18px; }
 .report-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .report-actions input { flex: 1; min-width: 180px; width: auto; }
 
+/* a read-only value with a copy button (admin: OAuth callback URLs) */
+.acc-copy { display: flex; gap: 8px; }
+.acc-copy input { flex: 1; min-width: 0; font-family: var(--mono) !important; font-size: 13px !important; }
+.acc-copy .btn { flex: 0 0 auto; }
+
 /* user MFA panel (admin) */
 .acc-sub-panel { margin-top: 8px; background: var(--paper-2); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
 .acc-sub-panel > div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
