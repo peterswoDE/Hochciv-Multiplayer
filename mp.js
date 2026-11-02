@@ -839,7 +839,7 @@ const MP = {
             let h = '';
 
             if (mode === 'menu') {
-                const name = localStorage.getItem('mp-name') || (this.user && this.user.username) || TX('Spieler');
+                const name = (this.user && this.user.username) || localStorage.getItem('mp-name') || TX('Spieler');
                 const tabBtn = (k, label) => `<button type="button" class="mph-tab" data-tab="${k}" onclick="MP.hubShow('${k}')">${label} <span class="mph-count" id="mph-count-${k}"></span></button>`;
                 h = `
           <div class="mph-new">
@@ -1330,7 +1330,7 @@ const MP = {
     },
 
     host: async function () {
-        const name = $('mp-n') ? $('mp-n').value.trim() : (localStorage.getItem('mp-name') || 'Host');
+        const name = $('mp-n') ? $('mp-n').value.trim() : ((this.user && this.user.username) || localStorage.getItem('mp-name') || TX('Spieler'));
         if (!name) return toast(TX('Bitte Namen eingeben.'));
         // straight into the lobby: public by default, the host can switch it there
         const isPublic = true;
