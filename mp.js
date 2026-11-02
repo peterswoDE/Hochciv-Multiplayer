@@ -1016,7 +1016,12 @@ const MP = {
         this.hubTab = tab;
         if (!auto) this.hubPicked = true;
         document.querySelectorAll('.mph-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-        document.querySelectorAll('.mph-pane').forEach(p => { p.hidden = p.dataset.pane !== tab; });
+        // the other tab stays laid out, only invisible – the dialog keeps the taller tab's height
+        document.querySelectorAll('.mph-pane').forEach(p => {
+            const off = p.dataset.pane !== tab;
+            p.classList.toggle('off', off);
+            p.inert = off;
+        });
     },
 
     /** Menu: load public live games and (logged in) the Rundenspiele, then draw both tabs. */
@@ -2647,9 +2652,10 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-count:not(:empty) { display:inline-block; min-width:18px; border-radius:9px; padding:0 5px; font-size:12px; line-height:18px; background:var(--parchment); color:var(--ink-soft); }
         .mph-count.hot { background:#c0392b; color:#fff; }
         /* both tabs keep one height while loading and switching – the dialog does not jump */
-        .mph-panes { min-height:240px; }
-        .mph-pane[hidden] { display:none; }
-        .mph-pane:not([hidden]) { animation:mph-fade .15s ease-out; }
+        .mph-panes { display:grid; min-height:240px; }
+        .mph-pane { grid-area:1 / 1; min-width:0; }
+        .mph-pane.off { visibility:hidden; }
+        .mph-pane:not(.off) { animation:mph-fade .15s ease-out; }
         .mph .mpa-h { margin:16px 0 8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); }
         .mph-empty { padding:12px; border:1px dashed var(--rule); border-radius:8px; text-align:center; }
         .mph .sub.mph-empty { margin:0; }
