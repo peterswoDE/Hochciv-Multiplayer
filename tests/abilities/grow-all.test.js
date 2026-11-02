@@ -44,7 +44,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         await a.evaluate(() => { MP.showLobby(); });
         await a.waitForFunction(() => typeof MP.setMode === 'function');
         await a.evaluate(() => MP.setMode('host'));
-        await a.fill('#mp-hn', 'GrowA');
+        await a.fill('#mp-n', 'GrowA');
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-p-civ-0');
         await a.selectOption('#mp-p-civ-0', 'russland');

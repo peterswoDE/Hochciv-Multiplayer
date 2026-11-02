@@ -85,34 +85,31 @@ function makeAdmin() {
         await page.goto(BASE + '/');
         await page.waitForFunction(() => document.getElementById('mp-main-auth-container') && document.getElementById('mp-main-auth-container').textContent.trim());
         const menu = await page.evaluate(() => ({
-            live: document.getElementById('mp-live-btn').textContent, async: document.getElementById('mp-async-btn').textContent,
+            live: document.getElementById('mp-live-btn').textContent, async: !!document.getElementById('mp-async-btn'),
             auth: document.getElementById('mp-main-auth-container').textContent.replace(/\s+/g, ' ').trim(),
             footer: document.getElementById('mp-legal-footer').textContent.replace(/\s+/g, ' ').trim(),
         }));
-        ok(menu.async === 'Turn-based games', 'menu: turn-based games button', menu.async);
+        ok(menu.live === 'Multiplayer' && !menu.async, 'menu: one multiplayer button (turn-based games inside)', menu.live);
         ok(/Guest/.test(menu.auth) && /Log in/.test(menu.auth), 'menu: login bar in English', menu.auth);
         ok(/Privacy policy \(German\)/.test(menu.footer) && /All rights reserved/.test(menu.footer), 'menu: legal footer says the texts are German', menu.footer);
         await clean(page, 'main menu: no German left', '#screen-menu');
 
         // ── flag buttons: German and back, mp.js texts follow ────────────────────────────
         await page.click('#m-lang [data-lang="de"]');
-        const de = await page.evaluate(() => [document.getElementById('mp-async-btn').textContent, document.getElementById('mp-main-auth-container').textContent.replace(/\s+/g, ' ').trim()]);
-        ok(de[0] === 'Rundenspiele' && /Gast/.test(de[1]) && /Anmelden/.test(de[1]), 'switch to German: menu texts German', de.join(' / '));
+        const de = await page.evaluate(() => [document.getElementById('mp-overall-btn').textContent, document.getElementById('mp-main-auth-container').textContent.replace(/\s+/g, ' ').trim()]);
+        ok(de[0] === 'Statistiken' && /Gast/.test(de[1]) && /Anmelden/.test(de[1]), 'switch to German: menu texts German', de.join(' / '));
         await page.click('#m-lang [data-lang="en"]');
-        const en = await page.evaluate(() => document.getElementById('mp-async-btn').textContent);
-        ok(en === 'Turn-based games', 'switch back to English', en);
+        const en = await page.evaluate(() => document.getElementById('mp-overall-btn').textContent);
+        ok(en === 'Statistics', 'switch back to English', en);
 
         // ── live lobby: host a game ──────────────────────────────────────────────────────
         await page.click('#mp-live-btn');
         await page.waitForSelector('#overlay.show, .overlay.show, #ov-body', { state: 'visible' });
-        await clean(page, 'multiplayer menu', '#ov-body');
-        await page.evaluate(() => MP.setMode('host'));
-        await clean(page, 'host form', '#ov-body');
-        await page.evaluate(() => MP.setMode('public-list'));
         await page.waitForTimeout(800);
-        await clean(page, 'public lobby list', '#ov-body');
-        await page.evaluate(() => MP.setMode('host'));
-        await page.fill('#mp-hn', 'Tester');
+        await clean(page, 'multiplayer menu, open games', '#ov-body');
+        await page.click('.mph-tab[data-tab="running"]');
+        await clean(page, 'multiplayer menu, running games', '#ov-body');
+        await page.fill('#mp-n', 'Tester');
         await page.evaluate(() => MP.host());
         await page.waitForFunction(() => /Game settings/.test(document.getElementById('ov-body').textContent), null, { timeout: 15000 });
         await clean(page, 'lobby (host view)', '#ov-body');
@@ -131,9 +128,10 @@ function makeAdmin() {
         await page.goto(BASE + '/');
         await page.waitForFunction(() => /Logged in as/.test(document.getElementById('mp-main-auth-container').textContent), null, { timeout: 15000 });
         await clean(page, 'main menu, logged in', '#screen-menu');
-        await page.click('#mp-async-btn');
-        await page.waitForFunction(() => /New turn-based game/.test(document.getElementById('ov-body').textContent), null, { timeout: 15000 });
-        await clean(page, 'turn-based games list', '#ov-body');
+        await page.click('#mp-live-btn');
+        await page.waitForFunction(() => /New turn-based game/.test(document.getElementById('ov-body').textContent) && /E-mail/i.test(document.getElementById('ov-body').textContent), null, { timeout: 15000 });
+        await page.click('.mph-tab[data-tab="running"]');
+        await clean(page, 'multiplayer menu with turn-based games', '#ov-body');
         await page.evaluate(() => ASYNC.showCreate());
         await clean(page, 'turn-based game form', '#ov-body');
         for (const [sel, val] of [['#mpa-map', 'plaettchen'], ['#mpa-map', 'marathon'], ['#mpa-mode', 'random']]) {
@@ -145,25 +143,51 @@ function makeAdmin() {
         const msg = await page.evaluate(async () => { try { await ASYNC.api('/code/XXXXXX'); return ''; } catch (e) { return e.message; } });
         ok(msg && !/[äöü]|Kein|Spiel/.test(msg), 'server message translated', msg);
 
+        // ── map editor, "My maps", new map, map browser ─────────────────────────────────
+        await page.evaluate(() => { closeModal(); show('screen-menu'); document.getElementById('m-editor').click(); });
+        await page.waitForTimeout(600);
+        await clean(page, 'map editor', '#screen-editor');
+        await page.evaluate(() => document.getElementById('ed-maps').click());
+        await page.waitForTimeout(400);
+        await clean(page, 'my maps', '#ov-body');
+        await page.evaluate(() => document.getElementById('ed-new').click());
+        await page.waitForTimeout(400);
+        await clean(page, 'new map dialog', '#ov-body');
+        await page.evaluate(() => { closeModal(); MAPBROWSER.open(); });
+        await page.waitForFunction(() => !document.querySelector('#mb-grid .mb-ghost'), null, { timeout: 15000 });
+        await clean(page, 'map browser', '#mb');
+        await page.evaluate(() => { MAPBROWSER.close(); show('screen-menu'); });
+
         // ── player profile ───────────────────────────────────────────────────────────────
         await page.evaluate(id => PROFILE.open(id), admin.id);
         await page.waitForFunction(() => /Member since/.test(document.getElementById('hcp-body').textContent), null, { timeout: 15000 });
         await clean(page, 'player profile', '#hcp-box');
         await page.evaluate(() => PROFILE.close());
 
-        // ── account page with every tab (admin included) ─────────────────────────────────
+        // ── account page with every tab, then the admin page with every tab ──────────────
         const acc = await ctx.newPage();
         acc.on('pageerror', e => errors.push(e.message));
         await acc.goto(BASE + '/client/account.html');
-        await acc.locator('[data-target="tab-admin-oauth"]').waitFor({ state: 'visible' });
+        await acc.locator('[data-target="tab-bots"]').waitFor({ state: 'visible' });
         await acc.waitForTimeout(1500);
-        for (const tab of ['tab-profile', 'tab-history', 'tab-bots', 'tab-admin-dashboard', 'tab-admin-lobbies', 'tab-admin-running', 'tab-admin-games', 'tab-admin-users', 'tab-admin-oauth']) {
+        for (const tab of ['tab-profile', 'tab-security', 'tab-history', 'tab-bots']) {
             await acc.click(`[data-target="${tab}"]`);
             await acc.waitForTimeout(1200);
             await clean(acc, `account page: ${tab}`, `#${tab}`);
         }
-        await clean(acc, 'account page: tab row and header', '.nav-tabs');
-        ok(/Account overview/.test(await acc.title()) || /Account/.test(await acc.title()), 'account page title', await acc.title());
+        await clean(acc, 'account page: navigation and top bar', '.acc-nav');
+        await clean(acc, 'account page: top bar', '.acc-top');
+        ok(/Account/.test(await acc.title()), 'account page title', await acc.title());
+        await acc.goto(BASE + '/client/admin.html');
+        await acc.locator('[data-target="tab-admin-oauth"]').waitFor({ state: 'visible' });
+        await acc.waitForTimeout(1500);
+        for (const tab of ['tab-admin-dashboard', 'tab-admin-running', 'tab-admin-games', 'tab-admin-users', 'tab-admin-reports', 'tab-admin-oauth']) {
+            await acc.click(`[data-target="${tab}"]`);
+            await acc.waitForTimeout(1200);
+            await clean(acc, `admin page: ${tab}`, `#${tab}`);
+        }
+        await clean(acc, 'admin page: navigation', '.acc-nav');
+        ok(/Admin/.test(await acc.title()), 'admin page title', await acc.title());
         await acc.click('[data-target="tab-admin-users"]');
         await acc.waitForTimeout(600);
         await acc.evaluate(id => window.toggleAdminUserMfa(id), admin.id);

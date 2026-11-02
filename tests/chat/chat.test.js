@@ -81,7 +81,7 @@ async function liveGame(browser, errors, users) {
     };
     const a = await newPage('A', users[0]), b = await newPage('B', users[1]);
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', 'ChatA');
+    await a.fill('#mp-n', 'ChatA');
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');

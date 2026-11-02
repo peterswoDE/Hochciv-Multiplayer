@@ -18,7 +18,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 |---|---|---|---|
 | `session:connect` | `{ sessionId, password, clientId }` | player or spectator | Bind the socket to the seat whose `clientId` matches (or the spectator). Also used for reconnects. Ack: `playerIndex`, `status`, `players`, `gameConfig`, `hostIndex`, `spectators`. |
 | `session:kick` | `{ playerIndex }` | host | Remove a player from the lobby |
-| `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, …); a custom map is checked with `checkCustomMap` |
+| `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, public listing `isPublic`, …); a custom map is checked with `checkCustomMap` |
 | `lobby:player:update` | `{ civ, ability }` | player | Own nation and ability in the lobby |
 | `game:start` | – | host | Start the game |
 | `draft:pick` | `{ id }` | player | Marathon draft: pick an ability |

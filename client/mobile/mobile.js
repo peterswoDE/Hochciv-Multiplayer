@@ -3,7 +3,8 @@
  * The game files stay untouched; everything here builds on the game's globals.
  *
  *  1. Zoom and pan for every map (game, start tile, draft, editor) on every screen size:
- *     pinch, drag, mouse wheel, and buttons + / − / ⌖ (whole map ↔ own capital).
+ *     pinch, drag, mouse wheel, and buttons + / − / ⌖ (whole map ↔ own capital). In the editor
+ *     one finger paints unless its "Verschieben" tool is on; two fingers always zoom and move.
  *  2. Narrow screens (html.w-narrow, set by ui.js below 600 px):
  *     – action bar "4 + Mehr": Fähigkeiten, Welt and Protokoll move into a small menu
  *     – tech tree with one tab per column (Forschung / Produktion / Militär / Spezial)
@@ -15,6 +16,7 @@
  *   drawMap(svg, map, opts)   wrapped: re-applies the zoom after every redraw
  *   openTile(r, c)            wrapped: keeps the selected field (ui.sel) visible next to its sheet
  *   editorScreen()            wrapped: folds the settings on short screens
+ *   edOwnsDrag()              asked on the editor map: a finger paints (true) or moves the map
  *   used: HEX, hexCenter, capitalOf, tutHighlight, ui.sel, ui.tut, S, MP, LANG, #a-abil/#a-info/#a-log/#a-end,
  *         #a-abil-n, #ov-body, .techgrid > .techcol (4 per era, h4 = field name in era 1)
  */
@@ -184,7 +186,7 @@
         v.cy = g.mapY - (my - r.top - r.height / 2) / v.k;
         v.auto = false; g.moved = true;
         applyView(svg);
-      } else if (list.length === 1) {
+      } else if (list.length === 1 && !g.paint) {
         const dx = e.clientX - g.x, dy = e.clientY - g.y;
         if (!g.moved && Math.hypot(dx, dy) < 8) return;
         g.moved = true; v.auto = false;
@@ -214,7 +216,9 @@
       suppressClick = false;
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size === 1) {
-        g = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false };
+        // the map editor paints with one finger (edOwnsDrag in ui.js) – then only two fingers move the map
+        const paint = svg.id === 'ed-map' && typeof window.edOwnsDrag === 'function' && window.edOwnsDrag();
+        g = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false, paint };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         window.addEventListener('pointercancel', onUp);
@@ -400,6 +404,11 @@
     });
     grid.classList.add('m-tabbed');
     grid.parentNode.insertBefore(bar, grid);
+    // the yield strip above stays at the top (mobile.css): the tab bar sticks right below it
+    const layout = grid.closest('.tech-layout'), aside = layout && layout.querySelector('.tech-aside');
+    if (aside && window.ResizeObserver) {
+      new ResizeObserver(() => layout.style.setProperty('--m-yield-h', aside.offsetHeight + 'px')).observe(aside);
+    }
     let start = lastTab;
     if (start === null || start > 3) start = [0, 1, 2, 3].find(affordable);
     select(start === undefined ? 0 : start);

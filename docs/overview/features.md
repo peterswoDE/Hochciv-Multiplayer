@@ -6,6 +6,7 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 
 ## Playing together
 
+* **One multiplayer menu:** The main menu has one *Multiplayer* button (with a badge when it is your turn in a Rundenspiel). On top: *Live-Spiel hosten* (goes straight into the lobby, public by default – the host can switch *Öffentlich* off there), *Neues Rundenspiel* and *🔥 Gewertetes Spiel suchen*. Below, two tabs: *Laufende Spiele* (your Rundenspiele, public live games and Rundenspiele to watch, notification settings) and *Offene Spiele* (join by code – with password a live game, without one a Rundenspiel –, invitations, public lobbies and Rundenspiele with a free seat). It opens on *Laufende Spiele* when one of your Rundenspiele is running.
 * **Live multiplayer:** Lobbies with a 6-character join code and a 6-digit password, public lobby list, 2 to 8 empires – as many as the map allows (fixed maps and the standard Marathon 4, the tile map 8, custom maps as many as they have start points). The host sets the number of empires and how many of them the KI plays; free human seats are filled with the KI at the start. Further settings: map (including custom maps and their codes), random nations for everyone, KI level, events, wonders and ranked mode.
 * **Server-side rules:** Every move is checked and applied by the real Hochciv engine on the server; clients only display the state. See [How it works](how-it-works.md).
 * **Rundenspiele (asynchronous games):** Play turn by turn over days, with e-mail and push notifications when it is your turn. Same choices as live games: 2–8 empires, how many of them KI (none: the game waits for everybody), random nations for everyone, custom maps. Rules for inactive players: [Rundenspiele](../reference/rundenspiele.md).
@@ -13,7 +14,7 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 * **Reconnects:** Players who lose their connection or reload the page are put back into their seat.
 * **Rematch (live games):** On the end screen the host can start a *Revanche*. Everyone still connected goes back to the same lobby (same code and settings, everyone's own choice of nation) and can start the next game from there.
 * **Turn timer (live games):** The host sets the time per turn: no limit (default), or 1, 2, 3, 5 or 10 minutes. A countdown runs in the HUD. When the time is up, the KI finishes the turn. After three missed turns in a row, the KI keeps playing the seat until the player clicks *Ich bin zurück*.
-* **Spectator mode:** *Zuschauen* with code and password, or from the public list, which also shows running public games. Spectators see the board, the log and the chat, but can't act or write; the player list shows how many are watching (up to 20). In the Discord Activity, whoever joins a running game or a full lobby watches. Public Rundenspiele can be watched from the Rundenspiele list.
+* **Spectator mode:** *Zuschauen* with code and password, or from the multiplayer menu's list of running public games. Spectators see the board, the log and the chat, but can't act or write; the player list shows how many are watching (up to 20). In the Discord Activity, whoever joins a running game or a full lobby watches. Public live games and Rundenspiele can be watched from *Laufende Spiele* in the multiplayer menu.
 
 ## Ranking
 
@@ -34,6 +35,8 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 ## Maps
 
 * **Custom maps:** Maps from the game's map editor ("Meine Karten") are kept in the player's account and synced to every device they log in on. A map can be published with a 6-character code; anybody can load it by that code (also without an account) and use it locally or as the map of a lobby. Every map is checked with the engine's `checkCustomMap` before it is saved or played.
+* **Map editor:** a toolbar with name, undo/redo and save, and a side panel (a strip below the map on phones) with the tools – paint while dragging with three brush sizes, fill an area, move – the terrain and starting points, the map's settings and the file actions. New maps start from a fixed map or empty in any size.
+* **Map browser ("Karten entdecken"):** every published map with a preview, author, favorites and plays; search by map or author, filter by empires, sorted by popularity (favorites, then plays), newest or most played. Logged-in players mark favorites (★), which also appear in the map menu of lobbies and the Rundenspiel form, and report maps. A map can be chosen for a lobby or a Rundenspiel right from the browser, added to "Meine Karten" or opened in the editor as a template. Reachable from the main menu, the multiplayer menu, the lobby, the editor and "Meine Karten". Admins take maps out of the browser.
 
 ## Accounts
 

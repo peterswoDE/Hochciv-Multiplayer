@@ -89,7 +89,7 @@ async function run(browser, users, sources) {
     // ── Live game: A and B with accounts, C a guest ──
     const a = await newPage(ca, 'A'), b = await newPage(cb, 'B'), c = await newPage(cc, 'C');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', ua.name);
+    await a.fill('#mp-n', ua.name);
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');
@@ -211,8 +211,8 @@ async function run(browser, users, sources) {
 
     // ── Admin tab ──
     sql(`UPDATE users SET role = 'admin' WHERE id = '${ua.id}'`);
-    await acc.reload();
-    await acc.waitForFunction(() => document.querySelector('[data-target="tab-admin-reports"]').style.display === 'block');
+    await acc.goto(BASE + '/client/admin.html');
+    await acc.waitForFunction(() => !document.querySelector('[data-target="tab-admin-reports"]').hidden);
     await until(async () => (await acc.textContent('#admin-reports-badge')) === '2');
     ok((await acc.textContent('#admin-reports-badge')) === '2', 'admin: the tab shows 2 open reports', await acc.textContent('#admin-reports-badge'));
     await acc.click('[data-target="tab-admin-reports"]');

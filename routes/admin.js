@@ -261,6 +261,18 @@ router.post('/reports/:id', async (req, res) => {
     }
 });
 
+// --- Map browser: take a published map out (maps/service.js), from the browser or a report ---
+router.post('/maps/:id/unpublish', async (req, res) => {
+    try {
+        const r = await require('../maps/service').adminUnpublish(req.user, req.params.id);
+        if (r.error) return res.status(400).json(r);
+        res.json(r);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
 // --- Chat word filter (utils/profanity.js): the admins' own entries ---
 router.get('/words', async (req, res) => {
     try {

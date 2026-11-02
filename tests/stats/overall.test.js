@@ -226,14 +226,14 @@ async function adminTab(browser, errors) {
         ok(re.status() === 403, 'recompute is for superadmins only', String(re.status()));
         const page = await ctx.newPage();
         page.on('pageerror', e => errors.push('account: ' + e.message));
-        await page.goto(BASE + '/client/account.html');
+        await page.goto(BASE + '/client/admin.html');
         const tab = page.locator('[data-target="tab-admin-stats"]');
         await tab.waitFor({ state: 'visible' });
         await tab.click();
         await page.waitForSelector('#admin-stats-body [data-hcg-recompute]');
         const h3 = await page.$$eval('#admin-stats-body h3', hs => hs.map(h => h.textContent));
         ok(h3.includes('Siegquote je Nation') && h3.includes('Admin') && await page.isVisible('#admin-stats-body a[href="/api/admin/stats/export"]'),
-            'account page: admin tab "Statistiken" with the public tables and the admin part', h3.join(' · '));
+            'admin page: tab "Statistiken" with the public tables and the admin part', h3.join(' · '));
         await ctx.close();
     } finally {
         sql(`DELETE FROM users WHERE id = '${admin.id}'`);

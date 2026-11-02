@@ -96,7 +96,7 @@ async function live(browser, users, sources, errors) {
     };
     const a = await newPage(ca, 'A'), b = await newPage(cb, 'B'), g = await newPage(cg, 'G');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', ua.name);
+    await a.fill('#mp-n', ua.name);
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');
@@ -200,8 +200,8 @@ async function live(browser, users, sources, errors) {
 
     const acc = await ca.newPage();
     acc.on('pageerror', e => errors.push(`account: ${e.message}`));
-    await acc.goto(BASE + '/client/account.html');
-    await acc.waitForFunction(() => document.querySelector('[data-target="tab-admin-reports"]').style.display === 'block');
+    await acc.goto(BASE + '/client/admin.html');
+    await acc.waitForFunction(() => !document.querySelector('[data-target="tab-admin-reports"]').hidden);
     await acc.click('[data-target="tab-admin-reports"]');
     await acc.waitForSelector('.report-card');
     await acc.waitForSelector('#table-admin-words tbody tr td strong');

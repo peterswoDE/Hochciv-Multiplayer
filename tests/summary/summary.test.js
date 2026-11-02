@@ -118,7 +118,7 @@ async function live(browser, errors) {
     };
     const a = await newPage('A'), b = await newPage('B');
     await a.evaluate(() => MP.setMode('host'));
-    await a.fill('#mp-hn', 'SumA');
+    await a.fill('#mp-n', 'SumA');
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     await a.selectOption('#mp-p-civ-0', 'griechenland');
@@ -192,7 +192,7 @@ async function live(browser, errors) {
     const c = await newPage('C');
     await c.evaluate(() => localStorage.setItem('hochciv.summary.auto', '0'));
     await c.evaluate(() => MP.setMode('host'));
-    await c.fill('#mp-hn', 'SumC');
+    await c.fill('#mp-n', 'SumC');
     await c.evaluate(() => MP.host());
     await c.waitForSelector('#mp-p-civ-0');
     await c.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 1, mapKey: 'gross', difficulty: 'leicht' }));

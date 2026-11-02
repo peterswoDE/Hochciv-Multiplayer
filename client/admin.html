@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#e4dbbe">
+    <title>Admin - Hochciv Multiplayer</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="account.css">
+</head>
+
+<body>
+    <header class="acc-top">
+        <a href="/" class="btn btn-ghost">‹ Zurück zum Spiel</a>
+        <span class="acc-brand">Admin-Bereich</span>
+        <span class="acc-who" id="acc-who" data-i18n-ignore></span>
+    </header>
+
+    <div class="acc-layout">
+        <nav class="acc-nav" aria-label="Bereiche">
+            <p class="acc-nav-h">Admin</p>
+            <button class="nav-tab admin-tab" data-target="tab-admin-dashboard" hidden>Übersicht</button>
+            <button class="nav-tab admin-tab" data-target="tab-admin-running" hidden>Laufende Spiele</button>
+            <button class="nav-tab admin-tab" data-target="tab-admin-games" hidden>Beendete Spiele</button>
+            <button class="nav-tab admin-tab" data-target="tab-admin-stats" hidden>Statistiken</button>
+            <button class="nav-tab admin-tab" data-target="tab-admin-users" hidden>Nutzer</button>
+            <button class="nav-tab admin-tab" data-target="tab-admin-reports" hidden>Meldungen<span id="admin-reports-badge" class="nav-count"></span></button>
+            <button class="nav-tab superadmin-tab" data-target="tab-admin-oauth" hidden>OAuth</button>
+            <div class="acc-nav-sep"></div>
+            <a class="acc-switch" href="account.html">‹ Mein Konto</a>
+        </nav>
+
+        <main class="acc-main">
+            <!-- Overview: server status, global switches, open lobbies -->
+            <section id="tab-admin-dashboard" class="tab-content">
+                <h1 class="acc-h">Übersicht</h1>
+                <p class="acc-lede">Was gerade auf dem Server los ist. Aktualisiert sich alle 10 Sekunden.</p>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div>Aktive Lobbys</div>
+                        <div class="metric-value" id="admin-lobbies-count">-</div>
+                    </div>
+                    <div class="metric-card">
+                        <div>Spieler Online</div>
+                        <div class="metric-value" id="admin-players-count">-</div>
+                    </div>
+                    <div class="metric-card">
+                        <div>Server Uptime</div>
+                        <div class="metric-value" id="admin-uptime">-</div>
+                    </div>
+                </div>
+
+                <div class="acc-card">
+                    <h2>Globale Einstellungen</h2>
+                    <div class="acc-setting">
+                        <div>
+                            <strong>Wartungsmodus</strong>
+                            <small>Verhindert das Erstellen neuer Lobbys.</small>
+                        </div>
+                        <button id="btn-toggle-maintenance" class="btn" onclick="toggleMaintenance()">Laden...</button>
+                    </div>
+                    <div class="acc-setting">
+                        <label class="acc-check">
+                            <input type="checkbox" id="admin-registration" onchange="toggleConfig('registrationEnabled', this.checked)">
+                            Registrierung erlauben
+                        </label>
+                    </div>
+                </div>
+
+                <div class="acc-card">
+                    <h2>Lobby Management</h2>
+                    <div class="acc-scroll">
+                        <table id="table-admin-lobbies">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Status</th>
+                                    <th>Spieler</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Running games (live and Rundenspiele) with their game version -->
+            <section id="tab-admin-running" class="tab-content">
+                <div class="acc-row" style="margin:0 0 4px; justify-content:space-between;">
+                    <h1 class="acc-h">Laufende Spiele</h1>
+                    <button id="btn-admin-running-reload" class="btn small">Aktualisieren</button>
+                </div>
+                <p class="acc-lede">Live-Spiele und Rundenspiele mit ihrer Spielversion.</p>
+
+                <div class="acc-card">
+                    <h2>Nach Spielversion</h2>
+                    <div class="acc-scroll">
+                        <table id="table-admin-versions">
+                            <thead>
+                                <tr>
+                                    <th>Version</th>
+                                    <th>Live-Spiele</th>
+                                    <th>Rundenspiele</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <p class="acc-desc" style="margin:10px 0 0;">Rundenspiele laufen bis zum Ende mit der Version, mit der sie gestartet wurden. Hat eine ältere Version keine Spiele mehr, kann ihr Ordner (HochCiv-vNN) entfernt werden.</p>
+                </div>
+
+                <div class="acc-card">
+                    <h2>Live-Spiele <small id="admin-live-total"></small></h2>
+                    <div class="acc-scroll">
+                        <table id="table-admin-live">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Version</th>
+                                    <th>Status</th>
+                                    <th>Runde</th>
+                                    <th>Am Zug</th>
+                                    <th>Spieler</th>
+                                    <th>Letzte Aktivität</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="acc-card">
+                    <h2>Rundenspiele <small id="admin-async-total"></small></h2>
+                    <div class="acc-scroll">
+                        <table id="table-admin-running">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Version</th>
+                                    <th>Status</th>
+                                    <th>Runde</th>
+                                    <th>Wartet auf</th>
+                                    <th>Spieler</th>
+                                    <th>Wartet seit</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Finished games -->
+            <section id="tab-admin-games" class="tab-content">
+                <h1 class="acc-h">Beendete Spiele <small id="admin-games-total" style="font-family:inherit; font-size:15px; font-weight:400; color:var(--ink-soft);"></small></h1>
+                <p class="acc-lede">Tippe auf ein Spiel für die Auswertung.</p>
+                <div class="acc-card">
+                    <form id="form-admin-games-search" class="acc-row" style="margin-top:0;">
+                        <input type="search" id="admin-games-q" placeholder="Nach Spieler suchen …" maxlength="50">
+                        <button type="submit" class="btn">Suchen</button>
+                    </form>
+                    <div class="acc-scroll">
+                        <table id="table-admin-games">
+                            <thead>
+                                <tr>
+                                    <th>Datum</th>
+                                    <th>Art</th>
+                                    <th>Runden</th>
+                                    <th>Gewinner</th>
+                                    <th>Spieler</th>
+                                    <th>Version</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <button id="btn-admin-games-more" class="btn" style="display:none; margin-top:12px;">Weitere laden</button>
+                </div>
+            </section>
+
+            <!-- The public overall statistics plus admin detail (client/gamestats.js) -->
+            <section id="tab-admin-stats" class="tab-content">
+                <h1 class="acc-h">Statistiken</h1>
+                <p class="acc-lede">Gewinnraten über alle Spiele, mit den Details für Admins.</p>
+                <div class="acc-card">
+                    <div id="admin-stats-body"></div>
+                </div>
+            </section>
+
+            <!-- Users -->
+            <section id="tab-admin-users" class="tab-content">
+                <h1 class="acc-h">Nutzer <small id="admin-users-total" style="font-family:inherit; font-size:15px; font-weight:400; color:var(--ink-soft);"></small></h1>
+                <p class="acc-lede">Rollen, Sperren, Passwörter und zweite Faktoren der Konten.</p>
+                <div class="acc-card">
+                    <div class="acc-row" style="margin-top:0;">
+                        <input type="search" id="admin-users-q" placeholder="Nach Name oder E-Mail filtern …" maxlength="60" autocomplete="off">
+                    </div>
+                    <div class="acc-scroll">
+                        <table id="table-admin-users">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Rolle</th>
+                                    <th>Spiele</th>
+                                    <th>MMR</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chat reports and the word filter -->
+            <section id="tab-admin-reports" class="tab-content">
+                <h1 class="acc-h">Meldungen</h1>
+                <p class="acc-lede">Gemeldete Chat-Nachrichten und der Wortfilter.</p>
+
+                <div class="acc-card">
+                    <h2>Gemeldete Chat-Nachrichten</h2>
+                    <div class="acc-row">
+                        <select id="admin-reports-status">
+                            <option value="open">Offen</option>
+                            <option value="closed">Erledigt</option>
+                        </select>
+                        <small id="admin-reports-total" style="color:var(--ink-soft);"></small>
+                        <button id="btn-admin-reports-reload" class="btn small">Neu laden</button>
+                    </div>
+                    <div id="admin-reports-list"></div>
+                    <button id="btn-admin-reports-more" class="btn" style="display:none; margin-top:12px;">Weitere laden</button>
+                </div>
+
+                <div class="acc-card">
+                    <h2>Wortfilter</h2>
+                    <p class="acc-desc">Chat-Texte mit unangemessener Sprache werden nicht gesendet, sondern automatisch gemeldet; der Absender kann 5 Minuten lang keine Texte schreiben, nach einem zweiten Mal bis zum Ende des Spiels. Grundlage sind eingebaute Listen (Englisch, Deutsch). Hier kommen eigene Wörter dazu, oder Wörter, die nie als unangemessen gelten.</p>
+                    <form id="form-admin-word" class="acc-row">
+                        <input type="text" id="admin-word" maxlength="60" required placeholder="Wort">
+                        <select id="admin-word-kind">
+                            <option value="ban">Sperren</option>
+                            <option value="allow">Erlauben</option>
+                        </select>
+                        <select id="admin-word-match">
+                            <option value="word">nur als ganzes Wort</option>
+                            <option value="part">auch als Wortteil</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary">Hinzufügen</button>
+                    </form>
+                    <p id="msg-admin-word" class="acc-msg"></p>
+                    <div class="acc-scroll">
+                        <table id="table-admin-words">
+                            <thead>
+                                <tr><th>Wort</th><th>Art</th><th>Treffer</th><th>Von</th><th></th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <h3>Text prüfen</h3>
+                    <form id="form-admin-wordcheck" class="acc-row" style="margin-top:0;">
+                        <input type="text" id="admin-wordcheck" maxlength="300" placeholder="Text zum Prüfen">
+                        <button type="submit" class="btn">Prüfen</button>
+                    </form>
+                    <p id="msg-admin-wordcheck" class="acc-msg"></p>
+                </div>
+            </section>
+
+            <!-- Super admin: OAuth providers -->
+            <section id="tab-admin-oauth" class="tab-content">
+                <h1 class="acc-h">OAuth Einstellungen</h1>
+                <p class="acc-lede">Konfiguriere die Social Login Provider. Benutzer können sich dann über diese Dienste anmelden.</p>
+
+                <div class="acc-grid2">
+                    <div class="acc-card">
+                        <h2>Google OAuth</h2>
+                        <div class="form-group" style="margin-top:12px;">
+                            <label>Client ID</label>
+                            <input type="text" id="oauth-google-clientid" placeholder="xxxxxx.apps.googleusercontent.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Client Secret</label>
+                            <input type="password" id="oauth-google-secret" placeholder="GOCSPX-xxxxxxxx">
+                        </div>
+                        <label class="acc-check" style="margin-bottom:14px;">
+                            <input type="checkbox" id="oauth-google-enabled"> Aktiviert
+                        </label>
+                        <button class="btn btn-primary" onclick="saveOAuthConfig('google')">Google speichern</button>
+                        <p id="oauth-google-msg" class="acc-msg"></p>
+                    </div>
+
+                    <div class="acc-card">
+                        <h2>Discord OAuth</h2>
+                        <div class="form-group" style="margin-top:12px;">
+                            <label>Client ID</label>
+                            <input type="text" id="oauth-discord-clientid" placeholder="123456789012345678">
+                        </div>
+                        <div class="form-group">
+                            <label>Client Secret</label>
+                            <input type="password" id="oauth-discord-secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                        </div>
+                        <div class="form-group">
+                            <label>Bot-Token (Discord Activity, optional)</label>
+                            <input type="password" id="oauth-discord-bottoken" placeholder="Developer Portal → Bot → Token">
+                            <small style="color:var(--ink-soft);">Damit prüft der Server, dass nur Spieler aus dem Anruf der Lobby ihrer Activity beitreten.</small>
+                        </div>
+                        <label class="acc-check" style="margin-bottom:14px;">
+                            <input type="checkbox" id="oauth-discord-enabled"> Aktiviert (Website-Login)
+                        </label>
+                        <button class="btn btn-primary" onclick="saveOAuthConfig('discord')">Discord speichern</button>
+                        <p id="oauth-discord-msg" class="acc-msg"></p>
+                    </div>
+                </div>
+
+                <div class="acc-card" style="margin-top:16px;">
+                    <h2>Callback URLs</h2>
+                    <p class="acc-desc" style="margin:4px 0 12px;">Trage diese URLs in den jeweiligen Developer-Portalen als Redirect URIs ein:</p>
+                    <!-- one field per URL: a click selects just the URL, the button copies it -->
+                    <div class="form-group">
+                        <label for="oauth-callback-google">Google</label>
+                        <div class="acc-copy">
+                            <input type="text" id="oauth-callback-google" readonly value="Loading..." onfocus="this.select()">
+                            <button type="button" class="btn" data-copy="oauth-callback-google">Kopieren</button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="oauth-callback-discord">Discord</label>
+                        <div class="acc-copy">
+                            <input type="text" id="oauth-callback-discord" readonly value="Loading..." onfocus="this.select()">
+                            <button type="button" class="btn" data-copy="oauth-callback-discord">Kopieren</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer class="portal-footer">
+        <p>&copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten. | <a href="/datenschutzerklaerung.html">Datenschutzerklärung</a> | <a href="/nutzungsbedingungen.html">Nutzungsbedingungen</a> | <a href="/impressum.html">Impressum</a></p>
+    </footer>
+
+    <!-- A finished game (ACC.gameDetails) -->
+    <div id="history-modal" class="acc-modal" style="display:none;">
+        <div class="acc-modal-card wide">
+            <button class="acc-modal-x" data-close aria-label="Schließen">&times;</button>
+            <h2 id="hm-title">Spielauswertung</h2>
+            <div id="hm-body"></div>
+        </div>
+    </div>
+
+    <script src="i18n.js"></script>
+    <script src="profile.js"></script>
+    <script src="gamestats.js"></script>
+    <script>
+        // client/stats.js (the chart of a match) uses these helpers of the game page (mp.js)
+        const TX = (de, ...args) => HC_I18N.t(de, ...args);
+        const TXS = msg => HC_I18N.tr(msg);
+        const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    </script>
+    <script src="stats.js"></script>
+    <script src="account-common.js"></script>
+    <script src="admin.js"></script>
+</body>
+
+</html>

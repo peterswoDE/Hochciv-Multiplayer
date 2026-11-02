@@ -326,7 +326,7 @@ function injectUi() {
     const style = document.createElement('style');
     style.textContent = `
         /* Account login and Rundenspiele need the website's login – not available inside Discord */
-        #mp-main-auth-container, #mp-async-btn { display: none !important; }
+        #mp-main-auth-container, .mph-async { display: none !important; }
         #dc-bar {
             position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
             display: flex; justify-content: flex-end; align-items: center; gap: 12px;

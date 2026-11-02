@@ -362,28 +362,113 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
 /* Legephase: Hinweis links, Knöpfe rechts */
 .place-tools{align-items:center}
 .place-tools .hint{flex:1;margin:0;font-size:12px}
-.palette{display:flex;gap:6px;padding:8px;background:var(--paper);border-top:1px solid var(--rule);
-  overflow-x:auto}
-.swatch{flex:0 0 auto;padding:8px 10px;border-radius:8px;border:2px solid transparent;font-size:12px;
-  cursor:pointer;display:flex;align-items:center;gap:6px}
-.swatch.on{border-color:var(--ink)}
-.swatch i{width:14px;height:14px;border-radius:3px;display:block}
 .ed-tools{display:flex;flex-wrap:wrap;gap:6px;padding:8px 8px calc(8px + var(--safe-b));background:var(--paper);
   border-top:1px solid var(--rule)}
-/* Karteneditor (Mehrspieler-Erweiterung): Einstellungen der Karte, Prüfzeile, Startpunkte */
-.ed-settings{background:var(--paper);border-bottom:1px solid var(--rule);padding:4px 10px}
-.ed-settings summary{cursor:pointer;font-weight:600;padding:4px 0}
-.ed-settings input[type=text],.ed-settings input:not([type]),.ed-settings select{min-width:0;font:inherit;
-  padding:4px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper-2)}
-.ed-settings #ed-name{flex:1;max-width:60%}
-.ed-size input{width:4.2em;font:inherit;padding:4px;border:1px solid var(--rule);border-radius:6px;background:var(--paper-2)}
-.ed-status{margin:0;padding:4px 10px;font-size:13px;background:var(--paper)}
+/* Karteneditor (Mehrspieler-Erweiterung): Kopfzeile mit Name, Rückgängig und Speichern, darunter die
+   Prüfzeile; links die Seitenleiste (Werkzeug, Palette, Karte, Datei), rechts die Karte. Schmal
+   (< 720 px) liegt die Karte oben und die Leiste darunter; „⋯" klappt Karte und Datei auf. */
+.ed-bar{gap:4px}
+.ed-name{flex:1;min-width:0;font:600 18px/1.2 var(--serif);color:var(--ink);padding:6px 8px;
+  border:1px solid transparent;border-radius:8px;background:transparent}
+.ed-name:hover{border-color:var(--rule)}
+.ed-name:focus{border-color:var(--ink-soft);background:var(--paper-2);outline:none}
+.ed-name:placeholder-shown{border-color:var(--red-soft);border-style:dashed}
+.ed-bar .icon-btn{padding:6px 9px;border-radius:8px;color:var(--ink)}
+.ed-bar .icon-btn:disabled{opacity:.3;cursor:default}
+.ed-bar .icon-btn:not(:disabled):hover{background:var(--paper-2)}
+#ed-save{position:relative;flex:0 0 auto;padding:8px 16px;margin-left:4px}
+#ed-save.dirty::after{content:"";position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 0 2px var(--paper)}
+.ed-more-btn{display:none}
+.ed-status{margin:0;padding:5px 12px;font-size:13px;background:var(--paper);border-bottom:1px solid var(--rule);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ed-status::before{display:inline-block;width:1.2em;font-weight:700}
 .ed-status.ok{color:#2f6f3f}
-.ed-status.bad{color:#8f2f3f}
-.swatch.spawn i{border-radius:50%;color:#fff;font-style:normal;font-size:10px;line-height:14px;text-align:center}
-.mymap{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:8px 0;border-bottom:1px solid var(--rule)}
-.mymap b{flex:1}
-.mymap span{display:flex;gap:4px}
+.ed-status.ok::before{content:"✓"}
+.ed-status.bad{color:#8f2f3f;background:#f8ece4}
+.ed-status.bad::before{content:"!"}
+.ed-body{flex:1;display:flex;min-height:0}
+.ed-side{flex:0 0 268px;overflow-y:auto;background:var(--paper);border-right:1px solid var(--rule);
+  padding:0 12px calc(12px + var(--safe-b));-webkit-overflow-scrolling:touch}
+.ed-group{padding:10px 0;border-bottom:1px solid var(--rule)}
+.ed-group:last-child{border-bottom:0}
+.ed-group h4,.ed-settings summary,.ed-pal-h{margin:0 0 7px;font:600 11px/1.3 var(--sans);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.ed-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.ed-mode{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border:1px solid var(--rule);
+  border-radius:9px;background:var(--paper-2);color:var(--ink);font:600 11px/1.2 var(--sans);cursor:pointer}
+.ed-mode i{font-style:normal;font-size:17px;line-height:1.1}
+.ed-mode.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.ed-brush{display:flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;color:var(--ink-soft)}
+.ed-brush span{flex:1}
+.ed-brush.off{opacity:.45}
+.ed-bsize{width:34px;height:30px;display:grid;place-items:center;border:1px solid var(--rule);border-radius:8px;
+  background:var(--paper-2);cursor:pointer;padding:0}
+.ed-bsize i{width:var(--d);height:var(--d);border-radius:50%;background:var(--ink)}
+.ed-bsize.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.ed-side .palette{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.ed-pal-h{grid-column:1/-1;margin:4px 0 2px}
+.ed-pal-h:first-child{margin-top:0}
+.swatch{flex:0 0 auto;padding:6px 8px;border-radius:8px;border:1px solid var(--rule);background:var(--paper-2);
+  font:12px/1.2 var(--sans);color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px;min-width:0;text-align:left}
+.swatch span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.swatch.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink);background:var(--paper)}
+.swatch i{flex:0 0 auto;width:16px;height:16px;border-radius:4px;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.swatch.spawn i{border-radius:50%;color:#fff;font-style:normal;font-size:10px;font-weight:700;line-height:16px;text-align:center}
+.swatch.missing i{opacity:.45;outline:1.5px dashed var(--ink-soft);outline-offset:1px}
+.ed-settings summary{cursor:pointer;margin:0}
+.ed-settings[open] summary{margin-bottom:6px}
+.ed-settings .row{font-size:13px;padding:6px 0}
+.ed-settings select{min-width:0;font:inherit;padding:4px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper-2)}
+.ed-size{flex-wrap:wrap;gap:4px}
+.ed-size input{width:4.2em;font:inherit;padding:4px;border:1px solid var(--rule);border-radius:6px;background:var(--paper-2)}
+.ed-filebtns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ed-filebtns .btn{width:100%;min-width:0}
+.ed-filebtns .btn[hidden]{display:none}
+#ed-map{touch-action:none}
+@media (max-width:719px){
+  .ed-body{flex-direction:column}
+  #ed-host{order:-1}
+  .ed-side{flex:0 0 auto;max-height:52%;border-right:0;border-top:1px solid var(--rule);padding:0 8px calc(4px + var(--safe-b))}
+  .ed-more-btn{display:inline-block}
+  .ed-name{font-size:16px;padding:6px}
+  .ed-bar .icon-btn{padding:6px 7px}
+  .ed-group{padding:6px 0}
+  .ed-group h4{display:none}
+  .ed-g-tools{display:flex;align-items:center;gap:8px;border-bottom:0;padding-bottom:2px}
+  .ed-modes{display:flex;gap:4px}
+  .ed-mode{flex-direction:row;padding:6px 9px;font-size:12px}
+  .ed-mode span{display:none}
+  .ed-brush{margin:0 0 0 auto}
+  .ed-brush span{display:none}
+  .ed-side .palette{display:flex;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+  .ed-pal-h{display:none}
+  .swatch{padding:8px 9px}
+  #screen-editor:not(.ed-open) .ed-settings,#screen-editor:not(.ed-open) .ed-files{display:none}
+  #screen-editor.ed-open .ed-more-btn{background:var(--ink);color:var(--paper)}
+}
+/* Meine Karten: Karten als Kacheln mit Vorschau */
+.map-thumb{display:block;width:100%;height:100%}
+.mm-acts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.mymaps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:10px}
+.mymap{display:flex;flex-direction:column;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2);overflow:hidden}
+.mymap-thumb{height:120px;padding:8px;border:0;border-bottom:1px solid var(--rule);background:#e4dbbe;cursor:pointer}
+.mymap-thumb:hover{background:#ddd2b0}
+.mymap-info{padding:8px 10px 4px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.mymap-info b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mymap-info small{font-size:12px;color:var(--ink-soft)}
+.mymap-info .mapcode{align-self:flex-start;color:var(--ink)}
+.mymap-acts{display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px 10px;margin-top:auto}
+.mymap-acts .btn{flex:0 0 auto;padding:5px 9px;font-size:12px;white-space:nowrap}
+.mymap-acts .btn:first-child{flex:1 0 auto}
+/* Neue Karte: Vorlagen */
+.ed-tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:8px 0 14px}
+.ed-tpl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:8px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--paper-2);font:inherit;color:inherit;text-align:left;cursor:pointer}
+.ed-tpl:hover{border-color:var(--ink-soft)}
+.ed-tpl .map-thumb{height:80px;background:#e4dbbe;border-radius:6px;margin-bottom:4px}
+.ed-tpl small{font-size:11px;color:var(--ink-soft)}
+.ed-new-h{margin:6px 0 4px;font-size:14px}
 /* Code einer veröffentlichten Karte (Mehrspieler-Erweiterung) */
 .mapcode{font-family:ui-monospace,monospace;background:var(--paper-2);border:1px solid var(--rule);
   border-radius:4px;padding:1px 6px}

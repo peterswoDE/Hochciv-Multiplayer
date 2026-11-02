@@ -27,7 +27,8 @@ Tests create their own test accounts and delete them afterwards.
 
 | Test | Covers | Server started with |
 |---|---|---|
-| `admin/running-games.test.js` | admin tab *Laufende Spiele* | default |
+| `account/pages.test.js` | account and admin pages: own pages, sections in the address, admin page only for admins, iframe break-out, phone width | default |
+| `admin/running-games.test.js` | admin page *Laufende Spiele* | default |
 | `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
 | `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups | default |
@@ -35,18 +36,19 @@ Tests create their own test accounts and delete them afterwards.
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
 | `i18n/english.test.js` | every screen in English, no German left | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
+| `maps/maps.test.js` | map browser: browsing, search, sorting, favorites, the detail view, picking a map for a lobby and a Rundenspiel, map reports and the admin's unpublish, the editor's drag painting and undo, phone layout, account merge and deletion | default |
 | `loading/loading.test.js` | fast page load: content hashes, year-long caching, gzip, page files without session queries | default |
 | `match/match.test.js` | ranked matchmaking | `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000` |
 | `mobile/mobile.test.js` | mobile layer (touch, zoom, narrow layout) | default |
 | `push/push.test.js` | push notifications | override file with an FCM stub (see header) |
 | `rematch/rematch.test.js` | rematch of a live game | default |
 | `replay/replay.test.js` | replays | default |
-| `reports/reports.test.js` | chat reports and their admin tab | default |
+| `reports/reports.test.js` | chat reports and their admin section | default |
 | `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
 | `score/win-bonus.test.js` | winner's bonus points | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
 | `spectators/spectators.test.js` | spectator mode | default |
-| `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin tab | default |
+| `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin page | default |
 | `stats/stats.test.js` | post-game statistics | default |
 | `summary/summary.test.js` | "since your last turn" | default |
 | `timer/turn-timer.test.js` | turn timer of live games | `TURN_TIMER_SCALE=0.05 TURN_TIMER_AFK_AFTER=2` |
@@ -66,7 +68,8 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 | Change | Run |
 |---|---|
 | new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
-| `client/mobile/` | `mobile` |
+| `client/mobile/` | `mobile`, `maps` (editor painting) |
+| custom maps, map browser, editor | `maps`, `i18n` |
 | new or changed texts | `i18n` |
 | a feature from [TASKS.md](../../TASKS.md) | that feature's test (named in its section) |
 | auth, origin check, sessions | `security`, `auth`, `loading` |

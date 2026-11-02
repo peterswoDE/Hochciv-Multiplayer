@@ -167,7 +167,7 @@ async function ban(browser) {
         };
         const a = await newPage(ca), v = await newPage(cv);
         await a.evaluate(() => MP.setMode('host'));
-        await a.fill('#mp-hn', admin.name);
+        await a.fill('#mp-n', admin.name);
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-p-civ-0');
         await a.selectOption('#mp-p-civ-0', 'griechenland');
