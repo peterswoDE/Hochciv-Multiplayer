@@ -36,6 +36,7 @@ Tests create their own test accounts and delete them afterwards.
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
 | `i18n/english.test.js` | every screen in English, no German left | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
+| `maps/maps.test.js` | map browser: browsing, search, sorting, favorites, the detail view, picking a map for a lobby and a Rundenspiel, map reports and the admin's unpublish, the editor's drag painting and undo, phone layout, account merge and deletion | default |
 | `loading/loading.test.js` | fast page load: content hashes, year-long caching, gzip, page files without session queries | default |
 | `match/match.test.js` | ranked matchmaking | `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000` |
 | `mobile/mobile.test.js` | mobile layer (touch, zoom, narrow layout) | default |
@@ -67,7 +68,8 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 | Change | Run |
 |---|---|
 | new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
-| `client/mobile/` | `mobile` |
+| `client/mobile/` | `mobile`, `maps` (editor painting) |
+| custom maps, map browser, editor | `maps`, `i18n` |
 | new or changed texts | `i18n` |
 | a feature from [TASKS.md](../../TASKS.md) | that feature's test (named in its section) |
 | auth, origin check, sessions | `security`, `auth`, `loading` |

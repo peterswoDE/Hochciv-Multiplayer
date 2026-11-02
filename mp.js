@@ -201,37 +201,55 @@ const MP = {
     },
 
     /**
-     * Lobby row for the custom map: the host picks one of "Meine Karten" (map editor) or a
-     * file; everyone sees its name and size. The server checks the map again (checkCustomMap).
+     * Lobby row for the custom map: the host picks one of "Meine Karten" (map editor), a favorite
+     * of the map browser (client/maps), a map from the browser or a file; everyone sees its name
+     * and size. The server checks the map again (checkCustomMap).
      */
     customMapRow: function (isHost) {
         const cur = this.gameConfig.customMap;
         const info = cur ? `<b>${esc(cur.name)}</b> (${cur.rows.length} × ${cur.rows[0].length})` : `<i>${TX('noch keine gewählt')}</i>`;
         if (!isHost) return `<p class="hint" style="margin:4px 0 8px">${TX('Eigene Karte: %s', info)}</p>`;
         const list = typeof myMaps !== 'undefined' ? myMaps : [];
+        const favs = typeof MAPBROWSER !== 'undefined' ? MAPBROWSER.favs : [];
         const opts = list.map(m => `<option value="${esc(m.name)}" ${cur && cur.name === m.name ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
-        return `<label class="row"><span>${TX('Meine Karten')}</span>
+        const favOpts = favs.map(m => `<option value="fav:${esc(m.id)}">★ ${esc(m.name)}${m.author ? ' – ' + esc(m.author) : ''}</option>`).join('');
+        return `<label class="row"><span>${TX('Karte wählen')}</span>
               <select id="mp-set-custom" onchange="MP.pickCustomMap(this.value)">
                 ${cur && !list.some(m => m.name === cur.name) ? `<option selected>${esc(cur.name)}</option>` : ''}
-                ${opts || (cur ? '' : `<option value="">${TX('– keine gespeichert –')}</option>`)}
+                ${opts ? `<optgroup label="${esc(TX('Meine Karten'))}">${opts}</optgroup>` : (cur ? '' : `<option value="">${TX('– keine gespeichert –')}</option>`)}
+                ${favOpts ? `<optgroup label="${esc(TX('Favoriten'))}">${favOpts}</optgroup>` : ''}
               </select></label>
             <p class="hint" style="margin:4px 0 8px">${TX('Eigene Karte: %s', info)} ·
+              ${this.browseLink('MP.browseMaps()')}
               <a href="#" onclick="MP.customMapByCode(); return false">${TX('Code eingeben')}</a> ·
               <a href="#" onclick="MP.importCustomMap(); return false">${TX('aus Datei laden')}</a>
               – ${TX('Karten baust du im Karteneditor (Hauptmenü).')}</p>`;
+    },
+    /** "Karten entdecken" link (map browser, client/maps) – nothing without it. */
+    browseLink: function (onclick) {
+        return typeof MAPBROWSER !== 'undefined' ? `<a href="#" onclick="${onclick}; return false"><b>${TX('Karten entdecken')}</b></a> · ` : '';
+    },
+    /** A map from the map browser becomes the lobby's map. */
+    browseMaps: function () {
+        MAPBROWSER.open({ pick: (map, m) => this.setLobbyMap(map, m.author) });
+    },
+    setLobbyMap: function (map, author) {
+        this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: map }, res => {
+            if (res && res.error) return toast(TXS(res.error));
+            toast(author ? TX('Karte „%s" von %s gewählt.', map.name, author) : TX('Karte „%s" gewählt.', map.name));
+        });
     },
     /** A published map (6-character code) becomes the lobby's map. */
     customMapByCode: function () {
         const code = prompt(TX('Kartencode (6 Zeichen):'));
         if (!code) return;
-        MAPACCOUNT.account.load(code).then(r => {
-            this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: r.map }, res => {
-                if (res && res.error) return toast(TXS(res.error));
-                toast(r.author ? TX('Karte „%s" von %s gewählt.', r.map.name, r.author) : TX('Karte „%s" gewählt.', r.map.name));
-            });
-        }).catch(e => toast(TXS(e.message)));
+        MAPACCOUNT.account.load(code).then(r => this.setLobbyMap(r.map, r.author)).catch(e => toast(TXS(e.message)));
     },
     pickCustomMap: function (name) {
+        if (name.startsWith('fav:')) {
+            MAPBROWSER.favMap(name.slice(4)).then(r => this.setLobbyMap(r.map, r.author)).catch(e => { toast(e.message); this.renderLobby(); });
+            return;
+        }
         const m = typeof myMap === 'function' ? myMap(name) : null;
         if (m) this.socket.emit('lobby:config', { mapKey: 'eigene', customMap: m }, res => { if (res && res.error) toast(TXS(res.error)); });
     },
@@ -854,6 +872,7 @@ const MP = {
               ${this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots in der Suche zulassen')}</label>` : ''}
             </div>` : ''}
           </div>
+          ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
           <div class="mph-panes">
           <div class="mph-pane" data-pane="running">
@@ -942,7 +961,8 @@ const MP = {
                   ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>${TX('Eigene Karte')}</option>` : ''}
                 </select>
               </label>
-              ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost) : ''}
+              ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost)
+                    : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP.browseMaps()').replace(/ · $/, '')}</p>` : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
@@ -1890,6 +1910,7 @@ const MAPACCOUNT = {
         this.userId = id;
         this.rows = {};
         if (id) this.sync().catch(e => console.warn('[Maps] Abgleich fehlgeschlagen:', e.message));
+        if (typeof MAPBROWSER !== 'undefined') MAPBROWSER.loadFavs();
     },
 
     sync: async function () {
@@ -2092,9 +2113,11 @@ const ASYNC = {
               ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
               ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36, 4 Reiche)')) : ''}
               ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
-            ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Meine Karten')}</span><select id="mpa-custom">
-              ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (${m.marathon ? TX('bis %s Reiche, Marathon', m.maxPlayers || 4) : TX('bis %s Reiche', m.maxPlayers || 4)})</option>`).join('') || `<option value="">${TX('– keine gespeichert –')}</option>`}</select></label>
-              <p class="sub"><a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
+            ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Karte wählen')}</span><select id="mpa-custom">
+              ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (${m.marathon ? TX('bis %s Reiche, Marathon', m.maxPlayers || 4) : TX('bis %s Reiche', m.maxPlayers || 4)})</option>`).join('') || `<option value="">${TX('– keine gespeichert –')}</option>`}
+              ${typeof MAPBROWSER !== 'undefined' && MAPBROWSER.favs.length ? `<optgroup label="${this.esc(TX('Favoriten'))}">${MAPBROWSER.favs.map(m =>
+                    `<option value="fav:${this.esc(m.id)}">★ ${this.esc(m.name)}${m.author ? ' – ' + this.esc(m.author) : ''}</option>`).join('')}</optgroup>` : ''}</select></label>
+              <p class="sub">${MP.browseLink('ASYNC.browseMaps()')}<a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
                 <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}</p>` : ''}
             <label class="row"><span>${TX('Nationen')}</span><select id="mpa-mode">
               ${opt('fixed', f.civMode, TX('Fest – jeder wählt seine Nation'))}${opt('random', f.civMode, TX('Zufällige Nationen für alle – Zugfolge nach Beitritt'))}</select></label>
@@ -2134,11 +2157,18 @@ const ASYNC = {
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
             events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
-            customName: v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
+            customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
+                : v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
             invite: v('mpa-invite') || '',
             playerBots: c('mpa-bots'), playerBotLimit: v('mpa-botlimit') || '',
         });
         if (f.civ !== civBefore) f.ability = 'basis';
+        // a favorite of the map browser: into "Meine Karten" first, like a map loaded by code
+        const fav = (v('mpa-custom') || '').startsWith('fav:') ? v('mpa-custom').slice(4) : null;
+        if (fav) {
+            MAPBROWSER.favMap(fav).then(r => this.useBrowsedMap(r.map, r.code)).catch(e => { toast(e.message); this.showCreate(); });
+            return;
+        }
         if (rerender) this.showCreate();
     },
 
@@ -2146,6 +2176,18 @@ const ASYNC = {
     countText: function (c) {
         const total = c.playerCount || (c.noKi ? c.humanCount : 4), ki = total - c.humanCount;
         return `${TX('%s Reiche', total)} · ${TX('%s Menschen', c.humanCount)} · ${ki ? TX('%s KI', ki) : TX('ohne KI')}`;
+    },
+
+    /** A map from the map browser goes into "Meine Karten" first, then it is the form's custom map. */
+    browseMaps: function () {
+        this.readForm(false);
+        MAPBROWSER.open({ pick: (map, m) => this.useBrowsedMap(map, m.code) });
+    },
+    useBrowsedMap: function (map, code) {
+        const a = addMapFromCode(map, code);
+        if (a.error) { toast(a.error); return this.showCreate(); }
+        Object.assign(this.form, { mapKey: 'eigene', customName: a.name });
+        this.showCreate();
     },
 
     /** A published map (code) goes into "Meine Karten" first, then it is the form's custom map. */
@@ -2485,7 +2527,7 @@ MP.arrangeMenu = function () {
     if (cont && first) first.after(cont);
     const more = document.createElement('div');
     more.id = 'mp-menu-more';
-    ['m-tutorial', 'mp-overall-btn', 'm-editor', 'm-rules', 'm-options', 'm-load'].forEach(id => {
+    ['m-tutorial', 'mp-overall-btn', 'm-editor', 'mp-maps-btn', 'm-rules', 'm-options', 'm-load'].forEach(id => {
         const b = $(id);
         if (b) more.appendChild(b);
     });
@@ -2500,6 +2542,7 @@ MP.applyLang = function () {
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
     set('mp-live-btn', TX('Multiplayer'));
     set('mp-overall-btn', TX('Statistiken'));
+    set('mp-maps-btn', TX('Karten entdecken'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
     const wait = document.querySelector('.mp-waiting-toast');
@@ -2640,6 +2683,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-mode.primary:not([disabled]):hover { filter:brightness(1.1); }
         /* the player-bot switch belongs to the ranked search only (lobbies have their own) */
         .mph-ranked { display:flex; flex-direction:column; gap:6px; }
+        .mph-maps { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; width:100%; margin:-8px 0 16px; padding:9px 14px; text-align:left; font-weight:600; }
+        .mph-maps small { font-size:12px; font-weight:400; opacity:.75; }
         .mph-ranked .btn { flex:1 1 auto; }
         .mph-bots { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-soft); cursor:pointer; }
         .mph-bots input[type=checkbox] { width:18px; height:18px; flex:0 0 auto; margin:0; }

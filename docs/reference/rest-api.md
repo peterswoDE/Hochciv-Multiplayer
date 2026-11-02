@@ -108,11 +108,17 @@ Playing the opened game: [Socket.IO events → Rundenspiele](socket-events.md#ru
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | GET | `/code/:code` | public | Load a published map by its code |
+| GET | `/browse` | public | Map browser: published maps, 24 per page – `?sort=popular\|new\|played` (popular = favorites, then plays), `&q=` (part of the map's or the author's name), `&players=` (at least this many empires), `&page=`, `&limit=` (≤ 100); `&only=favorites\|mine` needs a login. Each map with author, favorites, plays, `fav` (the viewer's favorite), `own`; `moderator` for admins |
+| POST | `/browse/:id/pick` | public | A published map to play or keep – the current version, counted as played (not for the owner) |
+| POST | `/:id/favorite` | login | `{ on }` mark or unmark a published map as a favorite → `{ fav, favorites }` |
+| POST | `/:id/report` | login | `{ reason }` report a published map (once per player, not the own) |
 | GET | `/` | login | The account's maps |
 | POST | `/` | login | Save `{ map }` (checked with `checkCustomMap`; same name = same map) |
 | DELETE | `/:id` | login | Delete a map |
 | POST | `/:id/publish` | login | Give it a 6-character code |
 | POST | `/:id/unpublish` | login | Remove the code |
+
+Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (the map stays in its owner's account, the code stops working).
 
 ## Matches and profiles – public
 

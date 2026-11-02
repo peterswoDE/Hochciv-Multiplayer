@@ -31,8 +31,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     ACC.drawWho(currentUser);
     document.querySelectorAll('.admin-tab').forEach(el => el.hidden = false);
     if (currentUser.role === 'superadmin') document.querySelectorAll('.superadmin-tab').forEach(el => el.hidden = false);
-    openFromHash();
-    setInterval(() => { if (current === 'tab-admin-dashboard' && !document.hidden) loadDashboard(); }, 10000);
     loadReportCount();
     setInterval(loadReportCount, 60000);
 
@@ -378,19 +376,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    /* A reported map (map browser): a small picture of it – the game's terrain colours, one path
+       per terrain, starting points as dots (the same drawing as mapThumb in the game's ui.js). */
+    const TERRAIN_COLORS = { G: '#adba7c', W: '#708a58', B: '#aa967e', F: '#70a0ba', M: '#96bac6', I: '#d0c48a', V: '#6b5a4c' };
+    const SPAWN_COLORS = ['#2f6f8f', '#8f2f3f', '#3f6f3f', '#6f4f8f', '#c8691c', '#b39a22', '#b2477d', '#42505e'];
+    function mapPreview(map) {
+        if (!map || !Array.isArray(map.rows) || !map.rows.length) return '';
+        const rows = map.rows, s = 10, w = Math.sqrt(3) * s;
+        const W = w * (Math.max(...rows.map(r => r.length)) + 0.5), H = s * 1.5 * rows.length + s * 0.5;
+        const corners = [0, 1, 2, 3, 4, 5].map(i => [s * Math.cos(Math.PI / 180 * (60 * i - 30)), s * Math.sin(Math.PI / 180 * (60 * i - 30))]);
+        const centre = (r, c) => [w * (c + 0.5 * (r & 1)) + w / 2, s * 1.5 * r + s];
+        const d = {};
+        rows.forEach((row, r) => [...String(row)].forEach((t, c) => {
+            if (!TERRAIN_COLORS[t]) return;
+            const [x, y] = centre(r, c);
+            d[t] = (d[t] || '') + 'M' + corners.map(([a, b]) => (x + a).toFixed(1) + ' ' + (y + b).toFixed(1)).join('L') + 'Z';
+        }));
+        const dots = (map.spawns || []).map((p, i) => {
+            if (!Array.isArray(p)) return '';
+            const [x, y] = centre(p[0], p[1]);
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${SPAWN_COLORS[i % 8]}" stroke="#2a2721" stroke-width="2.4"/>`;
+        }).join('');
+        return `<svg class="report-map" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" aria-hidden="true">` +
+            Object.keys(d).map(t => `<path d="${d[t]}" fill="${TERRAIN_COLORS[t]}" stroke="${TERRAIN_COLORS[t]}" stroke-width=".6"/>`).join('') + dots + '</svg>';
+    }
+
+    function renderMapReport(r, i, acc, closed, ban) {
+        const m = r.message || {};
+        const actions = r.status === 'open'
+            ? `<input type="text" id="report-note-${i}" maxlength="1000" placeholder="${tx('Notiz (freiwillig)')}">
+               <button class="btn small error" onclick="reportAction(${i}, 'unlist')">${tx('Karte zurückziehen')}</button>
+               <button class="btn small btn-primary" onclick="reportAction(${i}, 'resolved')">${tx('Erledigt')}</button>
+               <button class="btn small" onclick="reportAction(${i}, 'dismissed')">${tx('Verwerfen')}</button>${ban}`
+            : `<button class="btn small" onclick="reportAction(${i}, 'open')">${tx('Wieder öffnen')}</button>${ban}`;
+        return `<div class="report-card">
+            <div class="report-head">
+                <strong>${esc(r.reportedName)}</strong>
+                <span class="report-meta">${tx('gemeldet von %s', esc(r.reporterName))} · ${fmtTime(r.createdAt)} · ${tx('Karte')}</span>
+            </div>
+            <div><strong>${tx('Karte:')}</strong> ${esc(m.name)} <span class="report-meta">(${tx('Code')} ${esc(m.code)})</span></div>
+            ${r.reason ? `<div><strong>${tx('Grund:')}</strong> ${esc(r.reason)}</div>` : ''}
+            <div class="report-map-box">${mapPreview(r.context)}</div>
+            ${closed}
+            <div class="report-actions">${actions}</div>
+        </div>`;
+    }
+
     function renderReport(r, i) {
         const acc = r.reportedAccount;
         const where = r.source === 'async' ? tx('Rundenspiel') : tx('Live-Spiel');
-        const chat = (r.context || []).map(m => {
-            const cls = m.id === r.message.id ? 'reported' : (m.name === r.reportedName ? 'by-reported' : '');
-            return `<div class="${cls}"><time>${fmtTime(m.t)}</time><strong>${esc(m.name)}</strong> ${esc(chatText(m))}</div>`;
-        }).join('');
         const statusTxt = { resolved: tx('Erledigt'), dismissed: tx('Verworfen') }[r.status];
         const closed = r.status !== 'open'
             ? `<p class="report-meta">${esc(statusTxt)} ${tx('von %s', esc(r.handledBy || '?'))}, ${r.handledAt ? fmtTime(r.handledAt) : ''}${r.note ? ' – ' + esc(r.note) : ''}</p>` : '';
         const ban = acc && !acc.isBanned
             ? `<button class="btn small error" onclick="reportAction(${i}, 'ban')">${tx('Konto sperren')}</button>`
             : (acc && acc.isBanned ? `<span class="badge banned">${tx('Gesperrt')}</span>` : '');
+        if (r.kind === 'map') return renderMapReport(r, i, acc, closed, ban);
+        const chat = (r.context || []).map(m => {
+            const cls = m.id === r.message.id ? 'reported' : (m.name === r.reportedName ? 'by-reported' : '');
+            return `<div class="${cls}"><time>${fmtTime(m.t)}</time><strong>${esc(m.name)}</strong> ${esc(chatText(m))}</div>`;
+        }).join('');
         const actions = r.status === 'open'
             ? `<input type="text" id="report-note-${i}" maxlength="1000" placeholder="${tx('Notiz (freiwillig)')}">
                <button class="btn small btn-primary" onclick="reportAction(${i}, 'resolved')">${tx('Erledigt')}</button>
@@ -420,6 +465,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             return loadAdminReports(false);
         }
         const note = document.getElementById(`report-note-${i}`);
+        // a reported map: out of the map browser, then the report is done
+        if (action === 'unlist') {
+            if (!confirm(tx('„%s" aus dem Kartenbrowser nehmen? Die Karte bleibt im Konto von %s, ihr Code funktioniert nicht mehr.', r.message.name, r.reportedName))) return;
+            const un = await post(`/api/admin/maps/${encodeURIComponent(r.sourceId)}/unpublish`, {}).catch(() => null);
+            if (!un || !un.ok) return fail(un);
+            action = 'resolved';
+            if (note && !note.value.trim()) note.value = tx('Karte zurückgezogen');
+        }
         const res = await post(`/api/admin/reports/${encodeURIComponent(r.id)}`,
             { status: action, note: note ? note.value : undefined }).catch(() => null);
         if (!res || !res.ok) return fail(res);
@@ -557,4 +610,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             msg.style.color = 'var(--red)';
         }
     };
+
+    // only now: the sections' state (adminReports, adminGames, …) is declared above – opening
+    // admin.html#reports directly ran into it before ("Cannot access 'adminReports' before initialization")
+    openFromHash();
+    setInterval(() => { if (current === 'tab-admin-dashboard' && !document.hidden) loadDashboard(); }, 10000);
 });

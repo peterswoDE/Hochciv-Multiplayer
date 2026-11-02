@@ -209,32 +209,48 @@
 
 <!-- ------------------------------------------------------------------ Karteneditor -->
 <section id="screen-editor" class="screen">
-  <header class="bar">
-    <button class="icon-btn" data-back>‹</button>
-    <h2>Karteneditor</h2>
-    <button class="btn small" id="ed-maps">Meine Karten</button>
-  </header>
-  <details class="ed-settings" id="ed-settings" open>
-    <summary>Einstellungen der Karte</summary>
-    <label class="row"><span>Name</span>
-      <input id="ed-name" maxlength="40" placeholder="Name der Karte"></label>
-    <label class="row"><span>Max. Reiche (Startpunkte)</span>
-      <select id="ed-max"></select></label>
-    <label class="row"><span>Marathonregeln</span>
-      <input type="checkbox" id="ed-marathon"></label>
-    <div class="row ed-size"><span>Größe (Zeilen × Spalten)</span>
-      <span><input id="ed-rows" type="number" min="4" max="48"> × <input id="ed-cols" type="number" min="4" max="48">
-      <button class="btn small" id="ed-size">Übernehmen</button></span></div>
-  </details>
-  <div id="ed-host"><svg id="ed-map" xmlns="http://www.w3.org/2000/svg"></svg></div>
-  <p class="ed-status" id="ed-status"></p>
-  <div class="palette" id="ed-palette"></div>
-  <div class="ed-tools">
+  <header class="bar ed-bar">
+    <button class="icon-btn" id="ed-back">‹</button>
+    <input id="ed-name" class="ed-name" maxlength="40" placeholder="Name der Karte" autocomplete="off">
+    <button class="icon-btn" id="ed-undo" disabled>↶</button>
+    <button class="icon-btn" id="ed-redo" disabled>↷</button>
     <button class="btn small primary" id="ed-save">Speichern</button>
-    <button class="btn small" id="ed-publish">Veröffentlichen</button>
-    <button class="btn small" id="ed-new">Neu</button>
-    <button class="btn small" id="ed-import">Importieren</button>
-    <button class="btn small" id="ed-export">Exportieren</button>
+    <button class="icon-btn ed-more-btn" id="ed-more">⋯</button>
+  </header>
+  <p class="ed-status" id="ed-status"></p>
+  <div class="ed-body">
+    <aside class="ed-side">
+      <div class="ed-group ed-g-tools">
+        <h4>Werkzeug</h4>
+        <div class="ed-modes" id="ed-modes"></div>
+        <div class="ed-brush" id="ed-brush"></div>
+      </div>
+      <div class="ed-group ed-g-palette">
+        <div class="palette" id="ed-palette"></div>
+      </div>
+      <details class="ed-group ed-settings" id="ed-settings" open>
+        <summary>Karte</summary>
+        <label class="row"><span>Max. Reiche (Startpunkte)</span>
+          <select id="ed-max"></select></label>
+        <label class="row"><span>Marathonregeln</span>
+          <input type="checkbox" id="ed-marathon"></label>
+        <div class="row ed-size"><span>Größe (Zeilen × Spalten)</span>
+          <span><input id="ed-rows" type="number" min="4" max="48"> × <input id="ed-cols" type="number" min="4" max="48">
+          <button class="btn small" id="ed-size">Übernehmen</button></span></div>
+      </details>
+      <div class="ed-group ed-files">
+        <h4>Datei</h4>
+        <div class="ed-filebtns">
+          <button class="btn small" id="ed-maps">Meine Karten</button>
+          <button class="btn small" id="ed-new">Neue Karte</button>
+          <button class="btn small" id="ed-publish">Veröffentlichen</button>
+          <button class="btn small" id="ed-browse" hidden>Karten entdecken</button>
+          <button class="btn small ghost" id="ed-import">Importieren</button>
+          <button class="btn small ghost" id="ed-export">Exportieren</button>
+        </div>
+      </div>
+    </aside>
+    <div id="ed-host"><svg id="ed-map" xmlns="http://www.w3.org/2000/svg"></svg></div>
   </div>
 </section>
 

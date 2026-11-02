@@ -14,6 +14,7 @@ const TotpToken = require('./TotpToken')(sequelize);
 const OAuthProvider = require('./OAuthProvider')(sequelize);
 const AsyncGame = require('./AsyncGame')(sequelize);
 const CustomMap = require('./CustomMap')(sequelize);
+const MapFavorite = require('./MapFavorite')(sequelize);
 const DeviceToken = require('./DeviceToken')(sequelize);
 const Replay = require('./Replay')(sequelize);
 const ReplayFrame = require('./ReplayFrame')(sequelize);
@@ -43,6 +44,7 @@ module.exports = {
     OAuthProvider,
     AsyncGame,
     CustomMap,
+    MapFavorite,
     DeviceToken,
     Replay,
     ReplayFrame,

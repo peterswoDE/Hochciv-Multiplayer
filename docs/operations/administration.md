@@ -30,7 +30,7 @@ Admins open the admin page from their account page (*Mein Konto* in the game men
 | **Beendete Spiele** | Finished matches, newest first, with a player search. |
 | **Statistiken** | The overall statistics with the admin details. |
 | **Nutzer** | All accounts, newest first, with a filter by name or e-mail. Per user: ban / unban, set a new password, change the role, show and remove second factors (authenticator apps, passkeys, e-mail code), delete the account. Bot accounts show a *Bot* badge and their owner (only ban and delete apply); bot creators show their bots and *Bot-Limit* to change how many they may own. |
-| **Meldungen** | Chat reports from players and from the word filter, with the message and the game's chat history; mark them handled with a note. Also the admins' own entries for the **word filter** ('ban' words – whole word or part of a word – and 'allow' words) and a field to try a text against the filter. |
+| **Meldungen** | Chat reports from players and from the word filter, with the message and the game's chat history; mark them handled with a note. Reported maps of the map browser show the map's picture, name, code and the reason; *Karte zurückziehen* takes the map out of the browser (it stays in its owner's account, its code stops working) and closes the report. Admins can also do that from the map browser itself (*Aus dem Browser entfernen* in a map's details). Also the admins' own entries for the **word filter** ('ban' words – whole word or part of a word – and 'allow' words) and a field to try a text against the filter. |
 | **OAuth** (superadmin) | Client ID, secret and *Aktiviert* for Google and Discord, the Discord bot token for the Activity, and the callback URLs the server uses. See [Google and Discord login](login-providers.md). |
 
 ### Maintenance mode and registration
@@ -43,7 +43,7 @@ Admins open the admin page from their account page (*Mein Konto* in the game men
 
 * A ban logs the account out everywhere, closes its open game connections and takes it off its live seats (the seat plays on as a guest's) – `utils/detachUser.js`. The bots of a banned owner stop the same way until the ban is lifted; so do they when the owner loses the role `botcreator`.
 * Deleting a bot owner deletes their bots as well.
-* Deleting an account (by the user or an admin, `utils/deleteAccount.js`) keeps the game history for the other players, but anonymizes its seats; running Rundenspiele go on without it, and its name is removed from their game states and replay frames. Its custom maps and push devices are deleted.
+* Deleting an account (by the user or an admin, `utils/deleteAccount.js`) keeps the game history for the other players, but anonymizes its seats; running Rundenspiele go on without it, and its name is removed from their game states and replay frames. Its custom maps (with the favorites others gave them), its own favorites and push devices are deleted.
 
 ## Command-line tools
 

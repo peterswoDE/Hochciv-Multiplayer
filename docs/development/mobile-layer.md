@@ -6,7 +6,7 @@
 
 ## What it does
 
-* **Zoomable maps on every screen size** (game, start tile, draft, editor): pinch, drag, mouse wheel, and buttons + / − / ⌖ (whole map ↔ own capital). Maps start zoomed in far enough that a hex is a touch target (44 px), unless the whole map already gives ≥ 36 px hexes (tablets).
+* **Zoomable maps on every screen size** (game, start tile, draft, editor): pinch, drag, mouse wheel, and buttons + / − / ⌖ (whole map ↔ own capital). In the map editor one finger paints – the layer asks the game's `edOwnsDrag()` – unless the editor's *Verschieben* tool is on (or the space bar is held); two fingers always zoom and move. Maps start zoomed in far enough that a hex is a touch target (44 px), unless the whole map already gives ≥ 36 px hexes (tablets).
 * **Narrow screens** (`html.w-narrow` from the game, < 600 px):
   * **Aktionsleiste:** "4 + Mehr" – *Fähigkeiten*, *Welt* and *Protokoll* move into a small menu, which still works while `mp.js` waits for other players.
   * **Technologiebogen:** one tab per column.

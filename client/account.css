@@ -169,6 +169,8 @@ td.acc-empty { color: var(--ink-soft); text-align: center; padding: 18px; }
 .report-chat .by-reported { background: rgba(157, 59, 47, .08); }
 .report-chat .reported { background: rgba(157, 59, 47, .25); font-weight: 600; }
 .report-chat time { color: var(--ink-soft); font-size: 12px; margin-right: 6px; }
+.report-map-box { margin: 8px 0; padding: 8px; border-radius: 8px; background: #e4dbbe; max-width: 420px; }
+.report-map { display: block; width: 100%; height: auto; max-height: 300px; }
 .report-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .report-actions input { flex: 1; min-width: 180px; width: auto; }
 

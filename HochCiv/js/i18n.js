@@ -908,8 +908,26 @@ const UI_EN = {
     'Published – code %s',
   '„%s" zurückziehen? Der Code funktioniert dann nicht mehr.':
     'Unpublish "%s"? The code will stop working.',
-  'Neue Karte (Originalkarte als Vorlage)':
-    'New map (original map as template)',
+  'Neue Karte': 'New map',
+  'Karten entdecken': 'Discover maps',
+  'Fang mit einer Vorlage an oder mit einer leeren Karte.': 'Start from a template or from an empty map.',
+  'Leere Karte': 'Empty map',
+  'Leere Karte anlegen': 'Create empty map',
+  'Die Änderungen an der offenen Karte sind nicht gespeichert. Verwerfen?':
+    'The changes to the open map are not saved. Discard them?',
+  'Zurück': 'Back',
+  'Rückgängig (Strg+Z)': 'Undo (Ctrl+Z)',
+  'Wiederholen (Strg+Y)': 'Redo (Ctrl+Y)',
+  'Karte und Datei': 'Map and file',
+  'Malen': 'Paint',
+  'Füllen': 'Fill',
+  'Verschieben': 'Move',
+  'Pinsel': 'Brush',
+  '%s Felder': '%s tiles',
+  'Gelände': 'Terrain',
+  'Startpunkte': 'Starting points',
+  'Werkzeug': 'Tool',
+  'Datei': 'File',
   'Datei importieren':
     'Import file',
   'Karte „%s" löschen?':

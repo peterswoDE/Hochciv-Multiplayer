@@ -35,6 +35,8 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 ## Maps
 
 * **Custom maps:** Maps from the game's map editor ("Meine Karten") are kept in the player's account and synced to every device they log in on. A map can be published with a 6-character code; anybody can load it by that code (also without an account) and use it locally or as the map of a lobby. Every map is checked with the engine's `checkCustomMap` before it is saved or played.
+* **Map editor:** a toolbar with name, undo/redo and save, and a side panel (a strip below the map on phones) with the tools – paint while dragging with three brush sizes, fill an area, move – the terrain and starting points, the map's settings and the file actions. New maps start from a fixed map or empty in any size.
+* **Map browser ("Karten entdecken"):** every published map with a preview, author, favorites and plays; search by map or author, filter by empires, sorted by popularity (favorites, then plays), newest or most played. Logged-in players mark favorites (★), which also appear in the map menu of lobbies and the Rundenspiel form, and report maps. A map can be chosen for a lobby or a Rundenspiel right from the browser, added to "Meine Karten" or opened in the editor as a template. Reachable from the main menu, the multiplayer menu, the lobby, the editor and "Meine Karten". Admins take maps out of the browser.
 
 ## Accounts
 

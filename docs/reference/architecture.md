@@ -17,7 +17,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `sockets/match.js` | Ranked matchmaking queue (in memory) |
 | `async/logic.js` | Rules of the Rundenspiel meta game on a plain object: seats, invitations, pre-phases, KI fill-in, timeouts – no database, no sockets |
 | `async/service.js` | Rundenspiele persistence: one change at a time per game, save after every action, live updates, notifications, MMR, reminder/timeout sweep |
-| `maps/service.js` | Custom maps in the account: save (checked with the engine's `checkCustomMap`), publish with a code, load by code |
+| `maps/service.js` | Custom maps in the account: save (checked with the engine's `checkCustomMap`), publish with a code, load by code; the map browser (browse, pick, favorites, admin unpublish) |
 | `routes/` | REST API – see [REST API](rest-api.md) |
 | `models/` | Database models – see [Database](database.md) |
 | `elevate.js` | Command-line tool to assign admin roles |
@@ -56,6 +56,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/scenes.js` | Plays what the others did on the map (also the diff code `utils/scenes.js` uses) |
 | `client/profile.js` | Player profiles |
 | `client/matchmaking.js` | Ranked matchmaking UI |
+| `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |
 | `client/account.html`, `account.js` | Account page and admin panel |
 | `client/passkey.js` | Passkey helpers and the wrong-address message |

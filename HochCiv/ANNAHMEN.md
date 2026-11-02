@@ -4898,6 +4898,22 @@ Startpunkt mit Meer oder Vulkan übermalt, fällt er weg) und eigene Knöpfe **S
 Code (mit Kopieren und Zurückziehen), ohne Mehrspielerserver oder Anmeldung sagt es, warum
 es nicht geht.
 
+**Karteneditor, neu aufgebaut (Mehrspieler-Erweiterung, v98).** Kopfzeile mit dem Namen als
+Eingabefeld, Rückgängig/Wiederholen und Speichern (ein Punkt am Knopf: ungespeichert), darunter
+die Prüfzeile. Links eine Seitenleiste: **Werkzeug** (Malen, Füllen, Verschieben; Pinsel 1, 7
+oder 19 Felder), **Palette** (Gelände, Startpunkte – ein fehlender ist gestrichelt), **Karte**
+(Max. Reiche, Marathon, Größe) und **Datei** (Meine Karten, Neue Karte, Veröffentlichen, Karten
+entdecken, Importieren, Exportieren). Schmal (< 720 px) liegt die Karte oben, Werkzeug und
+Palette darunter als Leisten, „⋯" klappt Karte und Datei auf. Malen wirkt im Ziehen (ein Strich
+= ein Schritt Rückgängig); Startpunkt und Füllen wirken bei einem Tipp. Zwei Finger zoomen immer,
+ein begonnener Strich wird dabei zurückgenommen; mit einem Finger verschiebt nur das Werkzeug
+„Verschieben" (die Mobilschicht des Servers fragt `edOwnsDrag()`). Tasten: Strg+Z/Y/S, B/F/H,
+1–3, Leertaste gehalten = verschieben. **Neue Karte** bietet die festen Karten als Vorlage oder
+eine leere Karte in Wunschgröße (Meer, Grasland oder Kein Feld). Wer den Editor, eine andere
+Karte oder die Seite mit ungespeicherten Änderungen verlässt, wird gefragt. „Meine Karten" zeigt
+Kacheln mit Vorschau (`mapThumb`: je Gelände ein SVG-Pfad, auch der Kartenbrowser des Servers
+nutzt es).
+
 **Mehrspieler.** Live-Lobby und Rundenspiel fragen nach „Reiche insgesamt" und „davon KI".
 In der Live-Lobby nimmt die Lobby so viele Menschen auf, wie Plätze nicht der KI gehören;
 freie Plätze besetzt beim Start die KI. Im Rundenspiel sind die KI-Plätze von Anfang an
