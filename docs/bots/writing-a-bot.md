@@ -111,7 +111,9 @@ Every event you send gets an answer through the acknowledgement callback (`sio.c
    ```json
    [{ "id": "…", "joinCode": "K7Q2", "password": "…", "status": "lobby", "hostName": "Anna",
       "playersCount": 1, "maxPlayers": 3, "mapKey": "random", "round": null, "spectators": 0,
-      "playerBots": true, "playerBotsFree": null }]
+      "playerBots": true, "playerBotsFree": null, "customMapName": null, "empires": 4, "kiCount": 1,
+      "difficulty": "mittel", "randomCivs": false, "events": false, "eventMode": "hard", "wonders": false,
+      "ranked": false, "turnTime": 0 }]
    ```
 
    Your bot may join when `status` is `"lobby"`, `playerBots` is `true`, `playerBotsFree` isn't `0` (`null` means no limit), and `playersCount < maxPlayers`.
