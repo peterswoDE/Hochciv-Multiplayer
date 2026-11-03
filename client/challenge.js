@@ -4,7 +4,8 @@
  * A button in the multiplayer menu opens the week's challenge: its setup (map, nation and
  * ability, three KI, events, wonders), the time left, one's own attempts (start, play again,
  * continue or start over, the results) and the leaderboard. Past weeks can be picked and played
- * too; their leaderboard is closed, so those attempts are practice. An attempt is a Rundenspiel
+ * too; their leaderboard is closed, so those attempts are practice. One attempt runs at a time:
+ * starting another resigns it (after asking). An attempt is a Rundenspiel
  * (ASYNC.open). Server: utils/challenge.js, GET /api/challenge, POST /api/challenge/start.
  */
 (function () {
@@ -60,10 +61,15 @@
             if (me.ranked) lines.push(`<p class="ch-mine" id="ch-result">${T('Dein Ergebnis: Platz %s', me.ranked.rank)} · ${this.resultText(me.ranked)}</p>`);
             if (me.best) lines.push(`<p class="ch-mine ch-practice" id="ch-best">${T('Bester Versuch außer Wertung')} · ${this.resultText(me.best)}</p>`);
             if (me.attempts) lines.push(`<p class="sub" id="ch-attempts">${T('%s Versuch(e) beendet', me.attempts)}</p>`);
-            if (me.running) lines.push(`<p>${T('Dein Versuch läuft.')}</p>
-                <div class="ch-actions"><button class="btn primary" id="ch-continue" onclick="CHALLENGE.continue_('${esc(me.running)}')">${T('Weiterspielen')}</button>
-                <button class="btn ghost" id="ch-restart" onclick="CHALLENGE.start(true)">${T('Neu starten')}</button></div>`);
-            else lines.push(`<button class="btn wide primary" id="ch-start" onclick="CHALLENGE.start()">${me.attempts ? T('Nochmal spielen') : T('Challenge starten')}</button>`);
+            const run = me.running;
+            if (run && run.week === d.week.id) lines.push(`<p>${T('Dein Versuch läuft.')}</p>
+                <div class="ch-actions"><button class="btn primary" id="ch-continue" onclick="CHALLENGE.continue_('${esc(run.asyncId)}')">${T('Weiterspielen')}</button>
+                <button class="btn ghost" id="ch-restart" onclick="CHALLENGE.start()">${T('Neu starten')}</button></div>`);
+            else {
+                if (run) lines.push(`<p class="sub" id="ch-other">${T('Dein Versuch in %s läuft noch.', esc(weekLabel(run.week)))}
+                    <a href="#" onclick="CHALLENGE.continue_('${esc(run.asyncId)}'); return false">${T('Weiterspielen')}</a></p>`);
+                lines.push(`<button class="btn wide primary" id="ch-start" onclick="CHALLENGE.start()">${me.attempts ? T('Nochmal spielen') : T('Challenge starten')}</button>`);
+            }
             return lines.join('');
         },
 
@@ -96,13 +102,14 @@
                 ${d.week.next ? `<a href="#" id="ch-next" onclick="CHALLENGE.open('${esc(d.week.next)}'); return false">${T('Nächste Woche')} →</a>` : ''}</p>`;
         },
 
-        start: async function (restart) {
-            if (restart && !confirm(T('Den laufenden Versuch aufgeben und neu beginnen? Er zählt als Niederlage.'))) return;
-            const btn = $(restart ? 'ch-restart' : 'ch-start');
+        start: async function () {
+            const run = this.data && this.data.me && this.data.me.running;
+            if (run && !confirm(T('Dein laufender Versuch (%s) wird aufgegeben und zählt als Niederlage. Neu beginnen?', weekLabel(run.week)))) return;
+            const btn = $(run && run.week === this.data.week.id ? 'ch-restart' : 'ch-start');
             if (btn) btn.disabled = true;
             try {
                 const r = await fetch('/api/challenge/start', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ week: this.data && this.data.week.id, restart: !!restart }) });
+                    body: JSON.stringify({ week: this.data && this.data.week.id }) });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error ? TS(d.error) : T('Fehler'));
                 this.continue_(d.asyncId);

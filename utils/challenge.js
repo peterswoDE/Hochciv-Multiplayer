@@ -4,8 +4,9 @@
  * storage and no admin. An attempt is a Rundenspiel alone against three KI (async/service.js,
  * `config.challenge` = the week), played on the server like every other.
  *
- * Attempts: as many as a player likes, one running per week at a time (starting over resigns
- * it), also of past weeks (from FIRST_WEEK on). The leaderboard of a week holds each player's
+ * Attempts: as many as a player likes, but one running at a time – starting one (of any week)
+ * resigns the running one. Past weeks can be played too, back to the first week anyone played
+ * (weeks before the challenge existed can't be viewed). The leaderboard of a week holds each player's
  * best attempt that finished before the week ended – after that the week is closed and later
  * attempts are practice. Best: a victory first, then fewer rounds, then more points, then who
  * finished first. Resigning or a KI takeover is a loss.
@@ -20,8 +21,6 @@ const engine = require('../engine-adapter');
 const DAY = 86400000;
 const BOARD_SIZE = 20;
 const MAPS = ['0', 'gross'];
-const FIRST_WEEK = process.env.CHALLENGE_FIRST_WEEK || '2026-W45';     // the first challenge week; older ones can't be played
-const MAX_RUNNING = 3;                  // running attempts per player, all weeks together
 
 /** The ISO week of a date: { id: '2026-W45', startsAt (Monday 00:00 UTC), endsAt }. */
 function weekOf(date) {
@@ -48,12 +47,18 @@ function boundsOf(weekId) {
     return w.id === weekId ? w : null;
 }
 
-/** The weeks that can be played, newest first. */
-function weeksUntil(now) {
+/** The first challenge week: the oldest one anyone played, else this one. */
+async function firstWeek(now) {
+    const [row] = await ChallengeResult.sequelize.query('SELECT min("weekId") AS w FROM challenge_results', { type: 'SELECT' });
+    return row && row.w && row.w < now.id ? row.w : now.id;
+}
+
+/** The weeks that can be played (from `first` to `now`), newest first. */
+function weeksUntil(now, first) {
     const out = [];
     for (let t = now.startsAt.getTime(); ; t -= 7 * DAY) {
         const id = weekOf(new Date(t)).id;
-        if (id < FIRST_WEEK) break;
+        if (id < first) break;
         out.push(id);
     }
     return out;
@@ -105,24 +110,24 @@ async function info(user, weekId) {
     const week = weekId && WEEK_RE.test(weekId) ? weekId : now.id;
     if (week > now.id) return { error: 'Diese Woche hat noch nicht begonnen.' };
     const bounds = boundsOf(week);
-    if (!bounds || week < FIRST_WEEK) return { error: 'Diese Woche gibt es nicht.' };
+    const first = await firstWeek(now);
+    if (!bounds || week < first) return { error: 'Diese Woche gibt es nicht.' };
     const rows = await ranked(week, bounds);
     const playing = await ChallengeResult.count({ where: { weekId: week, finished: false } });
     let me = null;
     if (user) {
-        const mine = await ChallengeResult.findAll({ where: { weekId: week, userId: user.id } });
-        const done = mine.filter(r => r.finished).sort(better);
-        const running = mine.find(r => !r.finished);
+        const done = (await ChallengeResult.findAll({ where: { weekId: week, userId: user.id, finished: true } })).sort(better);
+        const running = await ChallengeResult.findOne({ where: { userId: user.id, finished: false } });      // of any week
         const rank = rows.findIndex(x => x.userId === user.id);
         me = {
             attempts: done.length,
-            running: running ? running.asyncId : null,
+            running: running ? { asyncId: running.asyncId, week: running.weekId } : null,
             ranked: rank >= 0 ? publicRow(rows[rank], rank + 1) : null,
             // the best attempt of all when it is a later one, not on the leaderboard (practice)
             best: done.length && !inTime(done[0], bounds) && (rank < 0 || better(done[0], rows[rank]) < 0) ? publicRow(done[0], null) : null,
         };
     }
-    const weeks = weeksUntil(now);
+    const weeks = weeksUntil(now, first);
     const i = weeks.indexOf(week);
     return {
         week: { id: week, current: week === now.id, startsAt: bounds.startsAt, endsAt: bounds.endsAt, previous: weeks[i + 1] || null, next: weeks[i - 1] || null },
@@ -136,29 +141,21 @@ async function info(user, weekId) {
 
 const starting = new Set();             // userId: one start at a time (a double click)
 
-/**
- * Start an attempt at this week (or `weekId`). A running attempt of that week is returned,
- * unless `restart`: then it is resigned (a loss) and a new one begins.
- */
-async function start(user, weekId, restart) {
+/** Start an attempt at this week (or `weekId`); a running attempt (of any week) is resigned, a loss. */
+async function start(user, weekId) {
     if (user.accountType === 'bot') return { error: 'Die Wochen-Challenge ist für Spieler, nicht für Bots.' };
     const now = weekOf(new Date());
     const week = weekId || now.id;
     if (week > now.id) return { error: 'Diese Woche hat noch nicht begonnen.' };
-    if (!boundsOf(week) || week < FIRST_WEEK) return { error: 'Diese Woche gibt es nicht.' };
+    if (!boundsOf(week) || week < await firstWeek(now)) return { error: 'Diese Woche gibt es nicht.' };
     if (starting.has(user.id)) return { error: 'Die Challenge startet gerade schon.' };
     starting.add(user.id);
     try {
         const service = require('../async/service');
-        const running = await ChallengeResult.findAll({ where: { userId: user.id, finished: false } });
-        const had = running.find(r => r.weekId === week);
-        if (had && !restart) return { asyncId: had.asyncId, running: true };
-        if (had) {
+        for (const had of await ChallengeResult.findAll({ where: { userId: user.id, finished: false } })) {
             // the result comes with the game's end (recordResult); a game that is gone is closed here
             const r = had.asyncId ? await service.resign(user, had.asyncId) : { error: true };
             if (r && r.error) await had.update({ finished: true, finishedAt: new Date() });
-        } else if (running.length >= MAX_RUNNING) {
-            return { error: 'Du hast schon drei laufende Challenge-Versuche. Beende oder gib erst einen davon auf.' };
         }
         const s = setupOf(week);
         const row = await ChallengeResult.create({ weekId: week, userId: user.id, username: user.username });
@@ -205,4 +202,4 @@ async function migrate() {
     await ChallengeResult.sequelize.query('DROP INDEX IF EXISTS "challenge_results_week_user_key"');
 }
 
-module.exports = { weekOf, boundsOf, setupOf, info, start, recordResult, removeUser, mergeUser, migrate, WEEK_RE, FIRST_WEEK };
+module.exports = { weekOf, boundsOf, setupOf, info, start, recordResult, removeUser, mergeUser, migrate, WEEK_RE };

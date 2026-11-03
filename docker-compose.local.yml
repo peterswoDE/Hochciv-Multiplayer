@@ -43,8 +43,6 @@ services:
       - ASYNC_TIMEOUT_MS=${ASYNC_TIMEOUT_MS:-}
       - ASYNC_REMINDER_MS=${ASYNC_REMINDER_MS:-}
       - ASYNC_SWEEP_MS=${ASYNC_SWEEP_MS:-}
-      # weekly challenge: the first playable week (tests/challenge needs a past week)
-      - CHALLENGE_FIRST_WEEK=${CHALLENGE_FIRST_WEEK:-2026-W40}
       # Chat word filter tests (tests/filter/filter.test.js): the first writing timeout (default 5 minutes)
       - CHAT_MUTE_MS=${CHAT_MUTE_MS:-300000}
     env_file:
