@@ -44,6 +44,7 @@ Tests create their own test accounts and delete them afterwards.
 | `loading/loading.test.js` | fast page load: content hashes, year-long caching, gzip, page files without session queries | default |
 | `match/match.test.js` | ranked matchmaking | `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000` |
 | `mobile/mobile.test.js` | mobile layer (touch, zoom, narrow layout) | default |
+| `nextgame/nextgame.test.js` | "next game" in Rundenspiele: hidden on one's turn, the count, opening the next game, none left, English, leaving | default |
 | `push/push.test.js` | push notifications | override file with an FCM stub (see header) |
 | `resign/resign.test.js` | resigning: when it ends the game, a ranked live duel (MMR, match record), a live game with KI, Rundenspiele | default |
 | `ready/ready.test.js` | lobby ready check: status column, the count on the start button, settings clear the ticks, the host's question, English | default |

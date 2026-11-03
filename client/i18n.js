@@ -99,6 +99,10 @@
         'Verbunden': 'Connected',
         'Wartet': 'Waiting',
         'Kick': 'Kick',
+        // "next game" (mp.js refreshNext)
+        'Nächstes Spiel (%s)': 'Next game (%s)',
+        'Ein anderes Rundenspiel wartet auf deinen Zug.': 'Another turn-based game waits for your move.',
+        '%s andere Rundenspiele warten auf deinen Zug.': '%s other turn-based games wait for your move.',
         // sound and tab alerts (client/alerts.js)
         'Du bist dran': 'Your turn',
         '%s ist beigetreten': '%s joined',

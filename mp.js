@@ -666,6 +666,12 @@ const MP = {
     syncTurnBlocker: function () {
         MP.drawAfkBanner();
         MP.drawSummaryButton();
+        // Rundenspiele: our turn just ended → which other games wait for us (F20)
+        if (MP.asyncId) {
+            const mine = MP.isMyTurn();
+            MP.refreshNext(MP._wasMyTurn && !mine);
+            MP._wasMyTurn = mine;
+        } else MP.drawNextGame();
         const wait = document.querySelector('.mp-waiting-toast');
         if (wait && MP.spectator) wait.textContent = TX('Du schaust zu');
         if (S && !MP.isMyTurn() && !S.over) {
@@ -673,6 +679,59 @@ const MP = {
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    // ── "Next game" (F20): the other Rundenspiele that wait for us ───────────
+    nextIds: [],
+    _nextAt: 0,
+    /** Asks the server at most every 20 s (force: right after our turn ended). */
+    refreshNext: async function (force) {
+        if (!this.asyncId || !this.user) return this.drawNextGame();
+        if (!force && Date.now() - this._nextAt < 20000) return this.drawNextGame();
+        this._nextAt = Date.now();
+        const here = this.asyncId;
+        try {
+            const mine = (await ASYNC.api('')).mine || [];
+            // the nearest deadline first
+            this.nextIds = mine.filter(g => g.yourTurn && g.id !== here)
+                .sort((a, b) => (a.deadline || Infinity) - (b.deadline || Infinity)).map(g => g.id);
+        } catch (_) { /* offline – keep the last list */ }
+        this.drawNextGame();
+    },
+    drawNextGame: function () {
+        let el = $('mp-next-game');
+        if (!el) {
+            if (!document.body) return;
+            el = document.createElement('button');
+            el.id = 'mp-next-game';
+            el.type = 'button';
+            el.className = 'btn small primary';
+            el.hidden = true;
+            el.onclick = () => MP.openNextGame();
+            document.body.appendChild(el);
+        }
+        const n = this.nextIds.length;
+        const show = !!this.asyncId && n > 0 && typeof S !== 'undefined' && !!S && (S.over || !this.isMyTurn());
+        el.hidden = !show;
+        if (!show) return;
+        el.textContent = '▶ ' + TX('Nächstes Spiel (%s)', n);
+        el.title = n === 1 ? TX('Ein anderes Rundenspiel wartet auf deinen Zug.') : TX('%s andere Rundenspiele warten auf deinen Zug.', n);
+        // below the banners at the top, if one is shown
+        const banner = $('mp-afk-banner');
+        const top = banner && !banner.hidden ? banner.getBoundingClientRect().bottom + 6 : null;
+        el.style.top = top ? top + 'px' : '';
+    },
+    openNextGame: function () {
+        const id = this.nextIds.shift();
+        if (!id) return;
+        this.drawNextGame();
+        // an older game version only opens its own games: the current page sorts it out
+        if (OLD_VERSIONS.includes(APP_VERSION_HERE)) { location.href = '/?async=' + encodeURIComponent(id); return; }
+        if (typeof closeModal === 'function') closeModal();
+        ASYNC.close();
+        this._wasMyTurn = false;
+        this._nextAt = 0;
+        ASYNC.open(id);
     },
 
     // ── What the others did, played on the map (client/scenes.js) ───────────
@@ -1762,6 +1821,10 @@ window.addEventListener('DOMContentLoaded', () => {
             background: #904030; color: white; padding: 6px 14px; border-radius: 4px; z-index: 1000; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .mp-waiting .mp-waiting-toast { display: block; }
+        #mp-next-game { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1001; width: auto; margin: 0;
+            white-space: nowrap; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        #mp-next-game[hidden] { display: none; }
+        html.w-narrow #mp-next-game { top: calc(var(--hud-h,54px) + 40px); }
         @keyframes mpAnimPop {
             0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
             20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
@@ -2673,6 +2736,8 @@ const ASYNC = {
         if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
         MP.clearScenes();
         MP.asyncId = null;
+        MP.nextIds = [];
+        MP.drawNextGame();
         MP.active = false;
         MP.spectator = false;
         this.view = null;
