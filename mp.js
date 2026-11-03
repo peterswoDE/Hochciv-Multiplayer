@@ -93,6 +93,11 @@ const MP = {
         }
     },
 
+    /** Sound and tab alerts (client/alerts.js), if loaded. */
+    alert: function (kind, title) {
+        if (typeof ALERTS !== 'undefined') ALERTS.notify(kind, title);
+    },
+
     /** A new authoritative state arrived: redraw, start our turn if it just began. */
     applyState: function (state) {
         S = state;
@@ -106,6 +111,7 @@ const MP = {
             MP.lastTurn = S.cur;
             humanTurnStart();
             MP.animDeinZug();
+            MP.alert('turn', '▶ ' + TX('Du bist dran'));
         } else {
             MP.lastTurnKey = key;
             MP.lastTurn = S.cur;
@@ -478,6 +484,7 @@ const MP = {
                 MP.players = data.players;
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
                 toast(TX('%s ist beigetreten.', data.name));
+                if (MP.renderLobby) MP.alert('join', TX('%s ist beigetreten', data.name));
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
             });
@@ -489,7 +496,10 @@ const MP = {
                 MP.updatePlayerList();
             });
             this.socket.on('lobby:player:updated', players => {
+                const wasReady = MP.allReady();
                 MP.players = players;
+                // the host: everyone ticked "ready" (F17)
+                if (!wasReady && MP.allReady() && MP.lobbyIndex === MP.hostIndex && MP.renderLobby) MP.alert('ready', '✓ ' + TX('Alle sind bereit'));
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
                 // turn timer: a seat went to the KI or came back
@@ -578,6 +588,7 @@ const MP = {
 
             this.socket.on('game:start', data => {
                 if (MP.asyncId) return;
+                MP.alert('start', '▶ ' + TX('Das Spiel beginnt'));
                 MP.clearScenes();
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
@@ -922,6 +933,7 @@ const MP = {
             </div>` : ''}
           </div>
           ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
+          ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
           <div class="mph-panes">
           <div class="mph-pane" data-pane="running">
@@ -1665,6 +1677,10 @@ const MP = {
     readyCount: function () {
         const others = (this.players || []).filter(p => p.index !== this.hostIndex);
         return { ready: others.filter(p => p.ready).length, of: others.length };
+    },
+    allReady: function () {
+        const c = this.readyCount();
+        return c.of > 0 && c.ready === c.of;
     },
     readyCell: function (p, isMe, isHost) {
         if (!p.connected) return TX('Wartet');
@@ -2884,6 +2900,15 @@ window.addEventListener('DOMContentLoaded', () => {
             r.onclick = () => MP.resign();
             quit.parentNode.insertBefore(r, btn.nextSibling);
         }
+        if (typeof ALERTS !== 'undefined') {
+            const snd = document.createElement('button');
+            snd.className = 'btn wide ghost';
+            snd.id = 'mm-sound';
+            const label = () => { snd.textContent = ALERTS.soundOn() ? '🔔 ' + TX('Töne: an') : '🔕 ' + TX('Töne: aus'); };
+            label();
+            snd.onclick = () => { ALERTS.setSound(!ALERTS.soundOn()); label(); };
+            quit.parentNode.insertBefore(snd, quit);
+        }
         quit.remove();
     }, 0));
     MP.fetchUser().then(() => {
@@ -2932,6 +2957,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const style = document.createElement('style');
     style.textContent = `
+        .mph-sound { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); margin:10px 0 0; cursor:pointer; }
+        .mph-sound input { width:auto; margin:0; }
         .mp-ready-yes { color:#2e6b34; font-weight:600; white-space:nowrap; }
         .mp-ready-no { opacity:.65; }
         .btn.mp-ready-on { background:#2e6b34; color:#fff; border-color:#2e6b34; }

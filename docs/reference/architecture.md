@@ -56,6 +56,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/scenes.js` | Plays what the others did on the map (also the diff code `utils/scenes.js` uses) |
 | `client/profile.js` | Player profiles |
 | `client/matchmaking.js` | Ranked matchmaking UI |
+| `client/alerts.js` | Sound and tab alerts (own turn, lobby, start, match found, chat) |
 | `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |
 | `client/account.html`, `account.js` | Account page and admin panel |

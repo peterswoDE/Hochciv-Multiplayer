@@ -54,6 +54,8 @@ const CHAT = {
         else this.list = this.list.concat(msg).slice(-200);
         if (!this.mine(msg) && msg.kind !== 'ping') {
             if (this.isOpen()) this.markSeen(); else this.unread++;
+            // a tone when it would go unnoticed (closed panel or a hidden tab)
+            if (!this.isOpen() || document.hidden) MP.alert('chat', '💬 ' + TX('Neue Nachricht von %s', msg.name || ''));
         }
         this.render();
     },
