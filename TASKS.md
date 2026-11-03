@@ -21,7 +21,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 11 | F13 | [Overall statistics](#f13-overall-statistics) | ✔ | ✔ | ✅ |
 | 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | ✅ |
 | 13 | F15 | [Invite link](#f15-invite-link) | ✔ | ✔ | ✅ |
-| 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ⬜ |
+| 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ✅ |
 | 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ⬜ |
 | 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ⬜ |
 | 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ⬜ |
@@ -365,9 +365,22 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** Give up a game you can't win instead of leaving the others waiting.
 
-**Planned:** *Aufgeben* in the game menu, with a confirmation. The KI plays the seat to the end; the player counts as last of the empires still in the game. Live games and Rundenspiele. In ranked games it costs the same as being replaced at the 7-day timeout (the result plus 15 MMR).
+**Decisions**
+- *🏳 Aufgeben* in the game menu of live games and Rundenspiele, with a confirmation (it names the MMR in ranked games). Only while the game runs.
+- The KI plays the seat to the end (*mittel*, ranked *schwer*); the player stays on the page and watches (banner, can be closed). The player list shows *Aufgegeben*, the others get a toast, the game log a line.
+- Rating: like a Rundenspiel seat the KI took over after 7 days – out of the MMR calculation, a played game, in ranked games −15 MMR.
+- Two cases end the game at once: a game that began without KI seats has one human left (that human wins), or nobody human is left (the most points win, so no KI-only game runs on).
 
-**Status:** ⬜
+**Implementation**
+- `utils/resign.js`: `endAfterResign()` (the two end cases, `S.over.resign`), `logResign()`, `MMR_PENALTY`.
+- Live (`sockets/game.js`): `game:resign` sets `resigned` on the lobby player, makes the seat KI, plays the turn if it was theirs (`finishTurnForAbsent`), sends `game:resigned`. Actions of a resigned player are refused, `turn:reclaim` doesn't give the seat back, the turn timer's AFK rule ignores them. `processGameOverMmr` keeps them out of the rating (`replaced`, `replacedUserId`, `resigned`, `penalty`) and applies the penalty. A rematch clears it (`sessions.js`).
+- Rundenspiele: `async/logic.js resign()` (uses `replaceSeat`, `resigned` on the seat and in the views), `service.resign()` (penalty or a played game), `async:resign`, `POST /api/async/:id/resign`.
+- `utils/facts.js`: victory type `resign` (overall statistics: *Aufgabe*).
+- `mp.js`: `hasResigned()`, `canResign()`, `resign()`, the menu button, the banner, the player-list tag, the Rundenspiel seat label *KI (… hat aufgegeben)*, the two end texts translated (`translateOver`). Texts in `client/i18n.js`.
+
+**Tests:** `tests/resign/resign.test.js`: the end rule, a ranked live duel of two accounts (menu button, the win, match record, 985 MMR and one game for the one who resigned), a live game with KI (the KI plays the turn, actions refused, banner, player list, log; the last human resigns → points), Rundenspiele (a duel ends, a game with KI goes on and the player watches). `rematch`, `score/win-bonus`, `stats/overall`, `timer`, `i18n` pass.
+
+**Status:** ✅ on `development`
 
 ## F17 Lobby ready check
 

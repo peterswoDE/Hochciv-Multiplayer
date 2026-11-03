@@ -523,6 +523,21 @@ function draftPick(user, id, abilityId) {
     });
 }
 
+/** Resign (F16): the KI plays the seat to the end; ranked games cost the takeover penalty. */
+async function resign(user, id) {
+    let penalized = null;
+    const r = await withGame(id, g => {
+        const res = L.resign(g, user.id);
+        if (res.error) return res;
+        penalized = res.penalized;
+        return { ok: true };
+    });
+    if (r && r.error) return r;
+    if (penalized) await applyPenalties([penalized]);
+    else await User.update({ gamesPlayed: sequelize.literal('"gamesPlayed" + 1') }, { where: { id: user.id } });
+    return { ok: true };
+}
+
 // ── Scheduler: reminders after 5 days, takeover after 7 ───────────────────────
 
 async function sweep() {
@@ -636,7 +651,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report,
+    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report, resign,
     setNotifyEmail, sweep, room, removeUser,
     processResult,      // for tests/score
 };

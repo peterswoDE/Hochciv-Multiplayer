@@ -46,7 +46,39 @@ const MP = {
     },
     /** It is our turn and we play it ourselves. */
     isMyTurn: function () {
-        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk();
+        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk() && !this.hasResigned();
+    },
+    /** We gave up (F16): the KI plays our seat to the end, we only watch. */
+    hasResigned: function () {
+        if (this.asyncId) return !!(typeof ASYNC !== 'undefined' && ASYNC.view && ASYNC.view.resigned);
+        const me = (this.players || []).find(p => p.index === this.lobbyIndex);
+        return !!(me && me.resigned);
+    },
+    canResign: function () {
+        if (!this.active || this.spectator || typeof S === 'undefined' || !S || S.over || this.hasResigned()) return false;
+        if (this.asyncId) return !!(ASYNC.view && ASYNC.view.status === 'playing' && ASYNC.view.myIndex >= 0);
+        return this.playerIndex != null && this.playerIndex >= 0;
+    },
+    resign: function () {
+        const ranked = this.asyncId ? !!(ASYNC.view && ASYNC.view.config && ASYNC.view.config.ranked) : !!(this.gameConfig && this.gameConfig.ranked);
+        const msg = TX('Wirklich aufgeben? Die KI spielt dein Reich zu Ende, und das Spiel zählt als Niederlage.')
+            + (ranked ? ' ' + TX('Gewertetes Spiel: −%s MMR.', this.RESIGN_MMR) : '');
+        if (!confirm(msg)) return;
+        if (typeof closeModal === 'function') closeModal();
+        const done = res => {
+            if (res && res.error) return toast(TXS(res.error));
+            this._resignBannerClosed = false;
+            toast(TX('Du hast aufgegeben.'));
+            this.drawAfkBanner();
+        };
+        if (this.asyncId) this.socket.emit('async:resign', { id: this.asyncId }, done);
+        else this.socket.emit('game:resign', {}, done);
+    },
+    RESIGN_MMR: 15,                 // utils/resign.js MMR_PENALTY
+    /** The two end texts of utils/resign.js come from the server in German. */
+    translateOver: function (over) {
+        if (over && over.resign && over.how) over.how = TXS(over.how);
+        return over;
     },
 
     /** Send a game action to the server – live lobby or asynchronous game. */
@@ -281,7 +313,8 @@ const MP = {
             const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
             const name = lp.name || civ.n;
             // an absent player's seat (turn timer) is played by the KI, but stays theirs
-            const status = lp.afk ? `<span class="mp-pl-tag off" title="${TX('Hat dreimal nicht gezogen – die KI spielt den Platz')}">${TX('KI (abwesend)')}</span>`
+            const status = lp.resigned ? `<span class="mp-pl-tag off" title="${TX('Hat aufgegeben – die KI spielt das Reich zu Ende')}">${TX('Aufgegeben')}</span>`
+                : lp.afk ? `<span class="mp-pl-tag off" title="${TX('Hat dreimal nicht gezogen – die KI spielt den Platz')}">${TX('KI (abwesend)')}</span>`
                 : bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
                 : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
@@ -604,8 +637,13 @@ const MP = {
                 if (typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(data);
             });
 
+            this.socket.on('game:resigned', d => {
+                if (!d || (d.index === MP.lobbyIndex && !MP.spectator)) return;
+                toast(TX('%s hat aufgegeben. Die KI spielt das Reich weiter.', d.name));
+            });
+
             this.socket.on('game:over', winData => {
-                S.over = winData;
+                S.over = MP.translateOver(winData);
                 gameOver();
             });
         });
@@ -777,7 +815,15 @@ const MP = {
     /** Banner while the KI plays our seat, with the button to take it back. */
     drawAfkBanner: function () {
         const el = $('mp-afk-banner');
-        if (el) el.hidden = !(this.active && this.isAfk() && typeof S !== 'undefined' && S && !S.over);
+        if (!el) return;
+        const running = this.active && typeof S !== 'undefined' && !!S && !S.over;
+        const resigned = running && this.hasResigned();
+        el.hidden = !(running && (resigned ? !this._resignBannerClosed : this.isAfk()));
+        const text = $('mp-afk-text'), btn = $('mp-afk-btn'), x = $('mp-afk-x');
+        if (text) text.textContent = resigned ? TX('Du hast aufgegeben – die KI spielt dein Reich zu Ende. Du kannst weiter zuschauen.')
+            : TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.');
+        if (btn) btn.hidden = resigned;
+        if (x) x.hidden = !resigned;
     },
     reclaimSeat: function () {
         this.socket.emit('turn:reclaim', {}, res => {
@@ -1793,7 +1839,8 @@ window.addEventListener('DOMContentLoaded', () => {
     afk.id = 'mp-afk-banner';
     afk.hidden = true;
     afk.innerHTML = `<span id="mp-afk-text">${TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.')}</span>
-        <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>`;
+        <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>
+        <button class="btn small ghost" id="mp-afk-x" hidden title="${TX('Schließen')}" onclick="MP._resignBannerClosed = true; MP.drawAfkBanner()">✕</button>`;
     document.body.appendChild(afk);
 });
 
@@ -2170,7 +2217,7 @@ const ASYNC = {
     },
     seatsHtml: function (seats, mySlot) {
         return `<div class="mpa-seats">${seats.map(s => {
-            const who = s.kind === 'bot' ? TX('Bot') : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
+            const who = s.kind === 'bot' ? TX('Bot') : s.resigned ? TX('KI (%s hat aufgegeben)', this.esc(s.name)) : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
                 : s.name ? this.esc(s.name) + (s.botAccount ? ' 🤖' : '') : `<i>${TX('frei')}</i>`;
             return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
         }).join('')}</div>`;
@@ -2230,6 +2277,7 @@ const ASYNC = {
         let info = '';
         if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (days != null ? ' ' + TX('noch %s Tag(e)', days) : '');
         else if (g.status === 'finished') info = TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
+        else if (g.resigned) info = TX('Aufgegeben');
         else if (g.replaced) info = TX('Von der KI übernommen');
         else if (g.waitingFor) info = TX('Wartet auf %s', this.esc(TXS(g.waitingFor)));
         const member = g.mySlot != null;
@@ -2587,7 +2635,8 @@ const ASYNC = {
         this.view = view;
         MP.lastStats = view.stats || null;            // a finished game: its statistics (client/stats.js)
         MP.lastRecord = view.record || null;          // … and its stored match with the replay (client/replay.js)
-        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
+        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced), resigned: !!s.resigned }));
+        if (view.state && view.state.over) MP.translateOver(view.state.over);
         const toastEl = document.querySelector('.mp-waiting-toast');
         if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
 
@@ -2796,6 +2845,14 @@ window.addEventListener('DOMContentLoaded', () => {
             ? () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); }
             : () => { location.href = location.pathname; };
         quit.parentNode.insertBefore(btn, quit);
+        if (MP.canResign()) {
+            const r = document.createElement('button');
+            r.className = 'btn wide ghost';
+            r.id = 'mm-resign';
+            r.textContent = '🏳 ' + TX('Aufgeben');
+            r.onclick = () => MP.resign();
+            quit.parentNode.insertBefore(r, btn.nextSibling);
+        }
         quit.remove();
     }, 0));
     MP.fetchUser().then(() => {
