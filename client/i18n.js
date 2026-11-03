@@ -99,6 +99,17 @@
         'Verbunden': 'Connected',
         'Wartet': 'Waiting',
         'Kick': 'Kick',
+        // lobby ready check (mp.js readyCell, startClick)
+        'Bereit': 'Ready',
+        'Ich bin bereit': "I'm ready",
+        'Wählt noch …': 'Still choosing …',
+        '%s/%s bereit': '%s/%s ready',
+        'Nochmal tippen, um es zurückzunehmen.': 'Tap again to take it back.',
+        'Zeigt dem Host, dass du startklar bist.': 'Tells the host that you are set to go.',
+        'Du bist bereit. Der Host startet das Spiel.': 'You are ready. The host starts the game.',
+        'Wähle deine Nation und tippe auf „Ich bin bereit".': 'Pick your nation and tap “I’m ready”.',
+        '%s von %s Mitspielern sind noch nicht bereit. Trotzdem starten?': '%s of %s players are not ready yet. Start anyway?',
+        'Der Host hat die Einstellungen geändert – bitte bestätige erneut.': 'The host changed the settings – please confirm again.',
         // resign (mp.js resign, utils/resign.js)
         'Aufgeben': 'Resign',
         'Aufgegeben': 'Resigned',

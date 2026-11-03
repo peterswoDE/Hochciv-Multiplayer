@@ -222,6 +222,11 @@ module.exports = function registerHandlers(io) {
             if (updated) {
                 ack({ ok: true });
                 io.to(sessionId).emit('lobby:config:update', updated);
+                // ready check (F17): new settings have to be confirmed again
+                if (session.players.some(p => p.ready)) {
+                    session.players.forEach(p => { p.ready = false; });
+                    io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+                }
             } else {
                 ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
@@ -240,6 +245,16 @@ module.exports = function registerHandlers(io) {
             } else {
                 ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
+        });
+
+        // ── Ready check (F17): a player confirms the lobby; the host may start anyway ──
+        on(socket, 'lobby:ready', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'lobby') return ack({ error: 'Spiel läuft bereits.' });
+            sessions.recordActivity(sessionId);
+            me.ready = data.ready !== false;
+            ack({ ok: true, ready: me.ready });
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
         });
 
         // ── Start the game (host only) ───────────────────────────────────────
@@ -773,6 +788,7 @@ function publicPlayers(session) {
         isBot: p.kind === 'bot' || p.kind === 'ki',     // computer seat (KI fill-in)
         afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
         resigned: !!p.resigned,         // gave up: the KI plays the seat to the end
+        ready: !!p.ready || !!p.playerBot,      // lobby ready check; player-bots are always ready
     }));
 }
 

@@ -317,7 +317,7 @@ function resetForRematch(sessionId) {
         const choice = p.choice || {};
         Object.assign(p, {
             index: i, civ: choice.civ || p.civ, ability: choice.ability || p.ability,
-            afk: false, missedTurns: 0, resigned: false, drafted: null, roman: null, color: null,
+            afk: false, missedTurns: 0, resigned: false, ready: false, drafted: null, roman: null, color: null,
             chatMute: null,             // the word filter's timeout lasts for one game
         });
         delete p.mappedName;

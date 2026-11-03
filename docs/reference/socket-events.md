@@ -20,6 +20,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `session:kick` | `{ playerIndex }` | host | Remove a player from the lobby |
 | `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, public listing `isPublic`, …); a custom map is checked with `checkCustomMap` |
 | `lobby:player:update` | `{ civ, ability }` | player | Own nation and ability in the lobby |
+| `lobby:ready` | `{ ready }` | player | Ready check: tick or take back; new lobby settings clear every tick. The players in `lobby:player:updated` carry `ready` (player-bots always `true`) |
 | `game:start` | – | host | Start the game |
 | `draft:pick` | `{ id }` | player | Marathon draft: pick an ability |
 | `placement:action` | placement action | player | Tile map: place the start tile (all players at once) |
