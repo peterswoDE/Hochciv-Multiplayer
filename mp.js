@@ -1295,8 +1295,9 @@ const MP = {
             customMapName: c.customMapName, empires, ki: Math.max(0, empires - (c.humanCount || empires)),
             level: this.kiLevel(c.difficulty), civs: c.civMode === 'random' ? 'random' : 'fixed',
             events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off',
-            // Rundenspiele have days per turn, no turn timer
-            ranked: c.ranked ? 'yes' : 'no', turn: 'free', turnTime: 0,
+            // Rundenspiele have days per turn (F19): fewer than 7 count as "with time limit"
+            ranked: c.ranked ? 'yes' : 'no', turn: c.turnDays && c.turnDays < 7 ? 'timed' : 'free', turnTime: 0,
+            turnDays: c.turnDays && c.turnDays < 7 ? c.turnDays : 0,
             bots: c.playerBots ? 'yes' : 'no', free: !!(x.freeSeats && x.freeSeats.length),
             names: (x.seats || []).map(s => s.name).filter(Boolean),
         };
@@ -1327,6 +1328,7 @@ const MP = {
         if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
         if (t.wonders === 'on') parts.push(TX('Weltwunder'));
         if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
+        if (t.turnDays) parts.push(t.turnDays === 1 ? TX('1 Tag pro Zug') : TX('%s Tage pro Zug', t.turnDays));
         if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
         return `<div class="mpa-traits">${parts.join(' · ')}</div>`;
     },
@@ -2320,9 +2322,10 @@ const ASYNC = {
             placement: TX('Startplättchen legen'), draft: TX('Fähigkeiten draften'),
             playing: TX('Runde %s', g.round), finished: TX('Beendet'), cancelled: TX('Abgebrochen'),
         }[g.status] || g.status;
-        const days = g.deadline ? Math.max(0, Math.ceil((g.deadline - Date.now()) / 864e5)) : null;
+        const leftMs = g.deadline ? Math.max(0, g.deadline - Date.now()) : null;
+        const left = leftMs == null ? '' : leftMs >= 864e5 ? TX('noch %s Tag(e)', Math.ceil(leftMs / 864e5)) : TX('noch %s Std.', Math.max(1, Math.ceil(leftMs / 36e5)));
         let info = '';
-        if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (days != null ? ' ' + TX('noch %s Tag(e)', days) : '');
+        if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (left ? ' ' + left : '');
         else if (g.status === 'finished') info = TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
         else if (g.resigned) info = TX('Aufgegeben');
         else if (g.replaced) info = TX('Von der KI übernommen');
@@ -2361,7 +2364,7 @@ const ASYNC = {
     showCreate: function () {
         const f = this.form = this.form || {
             mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
-            events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '',
+            events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
             playerBots: false, playerBotLimit: '',
         };
         const civ = this.civ(f.civ) || CIVS[0];
@@ -2416,6 +2419,9 @@ const ASYNC = {
             <label class="row"><span>${TX('Mit Weltwundern')}</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
             <label class="row"${noKi ? ' hidden' : ''}><span>${TX('KI-Stufe')}</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
               ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
+            <label class="row"><span>${TX('Zeit pro Zug')}</span><select id="mpa-days">
+              ${[1, 3, 7].map(d => `<option value="${d}" ${(f.turnDays || 7) === d ? 'selected' : ''}>${d === 1 ? TX('1 Tag') : TX('%s Tage', d)}</option>`).join('')}</select></label>
+            <p class="hint" style="margin:-4px 0 8px">${TX('Wer so lange nicht zieht, wird erinnert und danach von der KI ersetzt.')}</p>
             <label class="row"><span>🔥 ${TX('Gewertet')} <small>(${TX('KI auf schwerster Stufe')})</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
             <label class="row"><span>${TX('Öffentlich auffindbar')}</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
             <label class="row"><span>🤖 ${TX('Spieler-Bots erlauben')}</span><input type="checkbox" id="mpa-bots" ${f.playerBots ? 'checked' : ''}></label>
@@ -2438,6 +2444,7 @@ const ASYNC = {
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
             events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
+            turnDays: +v('mpa-days') || f.turnDays || 7,
             customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
                 : v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
             invite: v('mpa-invite') || '',
@@ -2501,7 +2508,7 @@ const ASYNC = {
             const r = await this.api('', {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
-                    wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic,
+                    wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },
