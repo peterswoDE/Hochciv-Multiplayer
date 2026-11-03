@@ -19,7 +19,7 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `map_favorites` | `MapFavorite` | Players' favorites among the published maps |
 | `seasons` | `Season` | Ranked seasons, one per quarter (`2026-Q4`); `closedAt` once the next one began |
 | `season_results` | `SeasonResult` | Final standing per account and closed season: MMR, rank (humans and bots apart), tier, games, wins |
-| `challenge_results` | `ChallengeResult` | Weekly challenge: one attempt per account and week (`weekId` like `2026-W45`), its Rundenspiel and, once finished, victory, rounds, points |
+| `challenge_results` | `ChallengeResult` | Weekly challenge: one row per attempt (any number per account and week; `weekId` like `2026-W45`), its Rundenspiel (`asyncId`) and, once finished, victory, rounds, points, `finishedAt` (before the week's end: on the leaderboard) |
 | `friendships` | `Friendship` | Friends list: `userId` asked `friendId`, `status` `pending` or `accepted` (one row per pair; declining or removing deletes it) |
 | `passkeys` | `Passkey` | Passkeys (WebAuthn) |
 | `TotpTokens` | `TotpToken` | Authenticator apps (several per account; table name from Sequelize's default) |

@@ -36,7 +36,7 @@ Tests create their own test accounts and delete them afterwards.
 | `lobbies/lobby-filter.test.js` | filters of the open games: every lobby setting in `/api/public-sessions`, each filter and combinations on live lobbies and Rundenspiele, search, reset, kept filters, phone | default |
 | `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups | default |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
-| `challenge/challenge.test.js` | weekly challenge: weeks and setup, starting from the menu, one attempt, refused shortcuts, the result after resigning, the leaderboard order, the previous week, English | default |
+| `challenge/challenge.test.js` | weekly challenge: weeks and setup, starting from the menu, the running attempt, refused shortcuts, the result after resigning, the leaderboard order (best attempt per player), play again, start over, past weeks (playable, closed leaderboard), English | default |
 | `deadline/deadline.test.js` | time per turn of Rundenspiele: the form, the open games and the filter, the deadline in the list, the takeover after 1 "day" while a 7-day game still waits | `ASYNC_TIMEOUT_MS=70000 ASYNC_REMINDER_MS=50000 ASYNC_SWEEP_MS=1000` |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
 | `friends/friends.test.js` | friends list: requests, accepting, crossing requests, refusals and blocks, suggestions, profile button, live invitation into a lobby, Rundenspiel names, removing, offline, account deletion, English | default |

@@ -1,10 +1,14 @@
 /**
  * Weekly challenge (F21). Every ISO week (Monday 00:00 UTC) has one setup for everybody – map,
  * nation, ability, KI level, events, wonders – derived from the week's id, so it needs no
- * storage and no admin. A player has one attempt per week: a Rundenspiel alone against three KI
- * (async/service.js, `config.challenge` = the week), played on the server like every other.
- * When it ends, its result is recorded; the leaderboard ranks a victory first, then fewer
- * rounds, then more points, then who finished first. Resigning or a KI takeover is a loss.
+ * storage and no admin. An attempt is a Rundenspiel alone against three KI (async/service.js,
+ * `config.challenge` = the week), played on the server like every other.
+ *
+ * Attempts: as many as a player likes, one running per week at a time (starting over resigns
+ * it), also of past weeks (from FIRST_WEEK on). The leaderboard of a week holds each player's
+ * best attempt that finished before the week ended – after that the week is closed and later
+ * attempts are practice. Best: a victory first, then fewer rounds, then more points, then who
+ * finished first. Resigning or a KI takeover is a loss.
  *
  * Results: models/ChallengeResult.js. The game counts like any unranked Rundenspiel (history,
  * statistics, badges); it changes no MMR.
@@ -16,6 +20,8 @@ const engine = require('../engine-adapter');
 const DAY = 86400000;
 const BOARD_SIZE = 20;
 const MAPS = ['0', 'gross'];
+const FIRST_WEEK = process.env.CHALLENGE_FIRST_WEEK || '2026-W45';     // the first challenge week; older ones can't be played
+const MAX_RUNNING = 3;                  // running attempts per player, all weeks together
 
 /** The ISO week of a date: { id: '2026-W45', startsAt (Monday 00:00 UTC), endsAt }. */
 function weekOf(date) {
@@ -31,6 +37,27 @@ function weekOf(date) {
 }
 
 const WEEK_RE = /^\d{4}-W\d{2}$/;
+
+/** The bounds of a week id like weekOf, or null when there is no such week ('2027-W53'). */
+function boundsOf(weekId) {
+    const m = /^(\d{4})-W(\d{2})$/.exec(weekId || '');
+    if (!m) return null;
+    const jan4 = new Date(Date.UTC(+m[1], 0, 4));
+    const start = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * DAY + (+m[2] - 1) * 7 * DAY);
+    const w = weekOf(start);
+    return w.id === weekId ? w : null;
+}
+
+/** The weeks that can be played, newest first. */
+function weeksUntil(now) {
+    const out = [];
+    for (let t = now.startsAt.getTime(); ; t -= 7 * DAY) {
+        const id = weekOf(new Date(t)).id;
+        if (id < FIRST_WEEK) break;
+        out.push(id);
+    }
+    return out;
+}
 
 /** The setup of a week (the same for everybody, from a hash of its id). */
 function setupOf(weekId) {
@@ -56,35 +83,50 @@ function setupOf(weekId) {
 
 const publicRow = (r, rank) => ({ rank, userId: r.userId, username: r.username, won: r.won, rounds: r.rounds, points: r.points, finishedAt: r.finishedAt, gameId: r.gameId });
 
-/** Finished attempts of a week, best first. */
-async function ranked(weekId) {
-    const rows = await ChallengeResult.findAll({ where: { weekId, finished: true } });
-    rows.sort((a, b) => (b.won - a.won)
-        || (a.won ? (a.rounds || 0) - (b.rounds || 0) : 0)
-        || (b.points || 0) - (a.points || 0)
-        || new Date(a.finishedAt) - new Date(b.finishedAt));
-    return rows;
+/** Sort order of attempts: the better one first. */
+const better = (a, b) => (b.won - a.won)
+    || (a.won ? (a.rounds || 0) - (b.rounds || 0) : 0)
+    || (b.points || 0) - (a.points || 0)
+    || new Date(a.finishedAt) - new Date(b.finishedAt);
+
+/** Counts for the leaderboard: finished before the week ended. */
+const inTime = (r, bounds) => !!r.finishedAt && new Date(r.finishedAt) < bounds.endsAt;
+
+/** The leaderboard of a week: each player's best attempt in time, best first. */
+async function ranked(weekId, bounds) {
+    const rows = (await ChallengeResult.findAll({ where: { weekId, finished: true } })).filter(r => inTime(r, bounds)).sort(better);
+    const seen = new Set();
+    return rows.filter(r => !seen.has(r.userId) && seen.add(r.userId));
 }
 
-/** This week (or `weekId`): setup, leaderboard, and – logged in – one's own attempt. */
+/** This week (or `weekId`): setup, leaderboard, and – logged in – one's own attempts. */
 async function info(user, weekId) {
     const now = weekOf(new Date());
     const week = weekId && WEEK_RE.test(weekId) ? weekId : now.id;
     if (week > now.id) return { error: 'Diese Woche hat noch nicht begonnen.' };
-    const bounds = week === now.id ? now : null;
-    const rows = await ranked(week);
+    const bounds = boundsOf(week);
+    if (!bounds || week < FIRST_WEEK) return { error: 'Diese Woche gibt es nicht.' };
+    const rows = await ranked(week, bounds);
     const playing = await ChallengeResult.count({ where: { weekId: week, finished: false } });
     let me = null;
     if (user) {
-        const r = await ChallengeResult.findOne({ where: { weekId: week, userId: user.id } });
-        if (r) {
-            const rank = rows.findIndex(x => x.userId === user.id);
-            me = { status: r.finished ? 'finished' : 'playing', asyncId: r.asyncId, ...(r.finished ? publicRow(r, rank + 1) : {}) };
-        }
+        const mine = await ChallengeResult.findAll({ where: { weekId: week, userId: user.id } });
+        const done = mine.filter(r => r.finished).sort(better);
+        const running = mine.find(r => !r.finished);
+        const rank = rows.findIndex(x => x.userId === user.id);
+        me = {
+            attempts: done.length,
+            running: running ? running.asyncId : null,
+            ranked: rank >= 0 ? publicRow(rows[rank], rank + 1) : null,
+            // the best attempt of all when it is a later one, not on the leaderboard (practice)
+            best: done.length && !inTime(done[0], bounds) && (rank < 0 || better(done[0], rows[rank]) < 0) ? publicRow(done[0], null) : null,
+        };
     }
-    const prev = weekOf(new Date((bounds ? bounds.startsAt : now.startsAt).getTime() - 3 * DAY)).id;
+    const weeks = weeksUntil(now);
+    const i = weeks.indexOf(week);
     return {
-        week: { id: week, current: week === now.id, startsAt: bounds && bounds.startsAt, endsAt: bounds && bounds.endsAt, previous: week === now.id ? prev : null },
+        week: { id: week, current: week === now.id, startsAt: bounds.startsAt, endsAt: bounds.endsAt, previous: weeks[i + 1] || null, next: weeks[i - 1] || null },
+        weeks,
         setup: setupOf(week),
         list: rows.slice(0, BOARD_SIZE).map((r, i) => publicRow(r, i + 1)),
         finished: rows.length, playing,
@@ -92,25 +134,45 @@ async function info(user, weekId) {
     };
 }
 
-/** Start this week's attempt (or return the running one). */
-async function start(user) {
+const starting = new Set();             // userId: one start at a time (a double click)
+
+/**
+ * Start an attempt at this week (or `weekId`). A running attempt of that week is returned,
+ * unless `restart`: then it is resigned (a loss) and a new one begins.
+ */
+async function start(user, weekId, restart) {
     if (user.accountType === 'bot') return { error: 'Die Wochen-Challenge ist für Spieler, nicht für Bots.' };
-    const week = weekOf(new Date()).id;
-    const had = await ChallengeResult.findOne({ where: { weekId: week, userId: user.id } });
-    if (had) return had.finished ? { error: 'Du hast die Challenge dieser Woche schon gespielt.' } : { asyncId: had.asyncId, running: true };
-    let row;
-    try { row = await ChallengeResult.create({ weekId: week, userId: user.id, username: user.username }); }
-    catch (_) { return { error: 'Die Challenge startet gerade schon.' }; }     // a second click at the same time
-    const s = setupOf(week);
-    const service = require('../async/service');
-    const r = await service.create(user, {
-        config: { mapKey: s.mapKey, civMode: 'fixed', events: s.events, eventMode: s.eventMode, wonders: s.wonders,
-            difficulty: s.difficulty, playerCount: s.playerCount, kiCount: s.kiCount, isPublic: false, turnDays: 7 },
-        civ: s.civ, ability: s.ability,
-    }, { challenge: week, seed: s.seed });
-    if (r.error) { await row.destroy(); return r; }
-    await row.update({ asyncId: r.id });
-    return { asyncId: r.id };
+    const now = weekOf(new Date());
+    const week = weekId || now.id;
+    if (week > now.id) return { error: 'Diese Woche hat noch nicht begonnen.' };
+    if (!boundsOf(week) || week < FIRST_WEEK) return { error: 'Diese Woche gibt es nicht.' };
+    if (starting.has(user.id)) return { error: 'Die Challenge startet gerade schon.' };
+    starting.add(user.id);
+    try {
+        const service = require('../async/service');
+        const running = await ChallengeResult.findAll({ where: { userId: user.id, finished: false } });
+        const had = running.find(r => r.weekId === week);
+        if (had && !restart) return { asyncId: had.asyncId, running: true };
+        if (had) {
+            // the result comes with the game's end (recordResult); a game that is gone is closed here
+            const r = had.asyncId ? await service.resign(user, had.asyncId) : { error: true };
+            if (r && r.error) await had.update({ finished: true, finishedAt: new Date() });
+        } else if (running.length >= MAX_RUNNING) {
+            return { error: 'Du hast schon drei laufende Challenge-Versuche. Beende oder gib erst einen davon auf.' };
+        }
+        const s = setupOf(week);
+        const row = await ChallengeResult.create({ weekId: week, userId: user.id, username: user.username });
+        const r = await service.create(user, {
+            config: { mapKey: s.mapKey, civMode: 'fixed', events: s.events, eventMode: s.eventMode, wonders: s.wonders,
+                difficulty: s.difficulty, playerCount: s.playerCount, kiCount: s.kiCount, isPublic: false, turnDays: 7 },
+            civ: s.civ, ability: s.ability,
+        }, { challenge: week, seed: s.seed });
+        if (r.error) { await row.destroy(); return r; }
+        await row.update({ asyncId: r.id });
+        return { asyncId: r.id };
+    } finally {
+        starting.delete(user.id);
+    }
 }
 
 /** The attempt's Rundenspiel ended (async/service.js processResult). */
@@ -125,7 +187,7 @@ async function recordResult(g, players, gameId) {
         points: p ? p.points : 0,
         gameId,
         finishedAt: new Date(),
-    }, { where: { weekId: week, userId: g.hostUserId } });
+    }, { where: { weekId: week, userId: g.hostUserId, asyncId: g.id } });
 }
 
 /** Account deleted: its attempts go. */
@@ -133,12 +195,14 @@ async function removeUser(userId, transaction) {
     await ChallengeResult.destroy({ where: { userId }, transaction });
 }
 
-/** Discord Activity account merged: its attempts move unless the real account has that week. */
+/** Discord Activity account merged: its attempts move over. */
 async function mergeUser(fromId, into, transaction) {
-    for (const r of await ChallengeResult.findAll({ where: { userId: fromId }, transaction })) {
-        if (await ChallengeResult.count({ where: { userId: into.id, weekId: r.weekId }, transaction })) await r.destroy({ transaction });
-        else await r.update({ userId: into.id, username: into.username }, { transaction });
-    }
+    await ChallengeResult.update({ userId: into.id, username: into.username }, { where: { userId: fromId }, transaction });
 }
 
-module.exports = { weekOf, setupOf, info, start, recordResult, removeUser, mergeUser, WEEK_RE };
+/** Until 2026-11 the table had one attempt per week and player; that unique index goes. */
+async function migrate() {
+    await ChallengeResult.sequelize.query('DROP INDEX IF EXISTS "challenge_results_week_user_key"');
+}
+
+module.exports = { weekOf, boundsOf, setupOf, info, start, recordResult, removeUser, mergeUser, migrate, WEEK_RE, FIRST_WEEK };

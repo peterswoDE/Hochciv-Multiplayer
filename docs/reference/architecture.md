@@ -33,7 +33,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `bots.js` | Bot accounts: who may own bots and how many, tokens, whether a bot may play ([Bot accounts](bot-accounts.md)) |
 | `friends.js`, `presence.js` | Friends list: requests, the list with online status, live invitations; who is online (open sockets) |
 | `resign.js` | Resigning: when it ends the game, the log line, the MMR penalty |
-| `challenge.js` | Weekly challenge: ISO weeks, the week's setup, starting the attempt, recording the result, its leaderboard |
+| `challenge.js` | Weekly challenge: ISO weeks, the week's setup, starting attempts (also of past weeks, start over), recording the results, the leaderboard (closed when the week ends) |
 | `teams.js` | Team mode: the runtime patch of the engine's combat phase (no friendly fire), teams on the state, shared victory |
 | `seasons.js`, `badges.js` | Ranked seasons (closing, soft reset, tiers, leaderboard); badges from the match history |
 | `oauth.js`, `discordStrategy.js` | Google/Discord login strategies from the database configuration |
@@ -63,7 +63,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/matchmaking.js` | Ranked matchmaking UI |
 | `client/alerts.js` | Sound and tab alerts (own turn, lobby, start, match found, chat) |
 | `client/ranking.js` | Leaderboard with seasons and tiers (tier and badge display: `client/profile.js`) |
-| `client/challenge.js` | Weekly challenge: the week's setup, start / continue, leaderboard |
+| `client/challenge.js` | Weekly challenge: week picker, the week's setup, start / play again / continue / start over, own results, leaderboard |
 | `client/friends.js` | Friends list: the menu tab, lobby invitations, friend names for Rundenspiel invitations, the profile button |
 | `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |

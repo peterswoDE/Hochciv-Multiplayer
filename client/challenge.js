@@ -2,10 +2,10 @@
  * Weekly challenge (F21) on the game page – loaded after mp.js (inject.js).
  *
  * A button in the multiplayer menu opens the week's challenge: its setup (map, nation and
- * ability, three KI, events, wonders), the time left, one's own attempt (start, continue, or the
- * result) and the leaderboard; the previous week can be looked at too. The attempt itself is a
- * Rundenspiel (ASYNC.open). Server: utils/challenge.js, GET /api/challenge, POST
- * /api/challenge/start.
+ * ability, three KI, events, wonders), the time left, one's own attempts (start, play again,
+ * continue or start over, the results) and the leaderboard. Past weeks can be picked and played
+ * too; their leaderboard is closed, so those attempts are practice. An attempt is a Rundenspiel
+ * (ASYNC.open). Server: utils/challenge.js, GET /api/challenge, POST /api/challenge/start.
  */
 (function () {
     'use strict';
@@ -20,7 +20,7 @@
         data: null,
 
         hubButton: function () {
-            return `<button class="btn ghost mph-maps mph-challenge" onclick="CHALLENGE.open()">📅 ${T('Wochen-Challenge')}<small>${T('Jede Woche dieselbe Aufgabe für alle: allein gegen drei KI, ein Versuch.')}</small></button>`;
+            return `<button class="btn ghost mph-maps mph-challenge" onclick="CHALLENGE.open()">📅 ${T('Wochen-Challenge')}<small>${T('Jede Woche dieselbe Aufgabe für alle: allein gegen drei KI, so oft du willst.')}</small></button>`;
         },
 
         load: async function (week) {
@@ -53,14 +53,18 @@
         },
 
         meHtml: function (d) {
-            if (!d.week.current) return '';
             if (!MP.user) return `<p>${T('Die Wochen-Challenge gibt es nur mit Anmeldung.')}</p>
                 <button class="btn wide" onclick="MP.showAuthModal()">${T('Anmelden')}</button>`;
-            const me = d.me;
-            if (!me) return `<button class="btn wide primary" id="ch-start" onclick="CHALLENGE.start()">${T('Challenge starten')}</button>`;
-            if (me.status === 'playing') return `<p>${T('Dein Versuch läuft.')}</p>
-                <button class="btn wide primary" id="ch-continue" onclick="CHALLENGE.continue_('${esc(me.asyncId)}')">${T('Weiterspielen')}</button>`;
-            return `<p class="ch-mine" id="ch-result">${T('Dein Ergebnis: Platz %s', me.rank)} · ${this.resultText(me)}</p>`;
+            const me = d.me || {};
+            const lines = [];
+            if (me.ranked) lines.push(`<p class="ch-mine" id="ch-result">${T('Dein Ergebnis: Platz %s', me.ranked.rank)} · ${this.resultText(me.ranked)}</p>`);
+            if (me.best) lines.push(`<p class="ch-mine ch-practice" id="ch-best">${T('Bester Versuch außer Wertung')} · ${this.resultText(me.best)}</p>`);
+            if (me.attempts) lines.push(`<p class="sub" id="ch-attempts">${T('%s Versuch(e) beendet', me.attempts)}</p>`);
+            if (me.running) lines.push(`<p>${T('Dein Versuch läuft.')}</p>
+                <div class="ch-actions"><button class="btn primary" id="ch-continue" onclick="CHALLENGE.continue_('${esc(me.running)}')">${T('Weiterspielen')}</button>
+                <button class="btn ghost" id="ch-restart" onclick="CHALLENGE.start(true)">${T('Neu starten')}</button></div>`);
+            else lines.push(`<button class="btn wide primary" id="ch-start" onclick="CHALLENGE.start()">${me.attempts ? T('Nochmal spielen') : T('Challenge starten')}</button>`);
+            return lines.join('');
         },
 
         resultText: function (r) {
@@ -71,28 +75,34 @@
             const box = $('ch-box'), d = this.data;
             if (!box || !d) return;
             const me = MP.user ? MP.user.id : null;
-            const left = d.week.endsAt ? Math.max(0, new Date(d.week.endsAt) - Date.now()) : 0;
+            const left = Math.max(0, new Date(d.week.endsAt) - Date.now());
             const leftText = left >= 864e5 ? T('noch %s Tag(e)', Math.ceil(left / 864e5)) : T('noch %s Std.', Math.max(1, Math.ceil(left / 36e5)));
+            const weeks = d.weeks && d.weeks.length ? d.weeks : [d.week.id];
             box.innerHTML = `
-              <p class="ch-head"><b>${esc(weekLabel(d.week.id))}</b>${d.week.current ? ' · ' + esc(leftText) : ' · ' + esc(T('abgeschlossen'))}</p>
+              <p class="ch-head"><select id="ch-week" onchange="CHALLENGE.open(this.value)" aria-label="${esc(T('Woche'))}">
+                ${weeks.map((w, i) => `<option value="${esc(w)}"${w === d.week.id ? ' selected' : ''}>${esc(weekLabel(w))}${i === 0 ? ' · ' + esc(T('aktuell')) : ''}</option>`).join('')}
+              </select> ${d.week.current ? esc(T('Bestenliste offen, %s', leftText)) : esc(T('abgeschlossen'))}</p>
               ${this.setupHtml(d.setup)}
-              <p class="sub">${T('Ein Versuch pro Woche, allein gegen drei KI als Rundenspiel – spiel in deinem Tempo. Gewertet wird ein Sieg, dann weniger Runden, dann mehr Punkte. Aufgeben zählt als Niederlage.')}</p>
+              <p class="sub">${T('So oft du willst, allein gegen drei KI als Rundenspiel – spiel in deinem Tempo. In die Bestenliste kommt dein bester Versuch, der vor dem Ende der Woche fertig ist; danach ist sie geschlossen. Gewertet wird ein Sieg, dann weniger Runden, dann mehr Punkte. Aufgeben zählt als Niederlage.')}</p>
+              ${d.week.current ? '' : `<p class="ch-closed" id="ch-closed">${T('Diese Woche ist vorbei: Die Bestenliste ist geschlossen, neue Versuche sind Übung.')}</p>`}
               ${this.meHtml(d)}
-              <h4 class="mpa-h">${T('Bestenliste')} <span class="sub">${esc(T('%s fertig, %s spielen noch', d.finished, d.playing))}</span></h4>
+              <h4 class="mpa-h">${T('Bestenliste')} <span class="sub">${esc(d.week.current ? T('%s Spieler, %s Versuche laufen', d.finished, d.playing) : T('%s Spieler', d.finished))}</span></h4>
               ${d.list.length ? `<table class="rk-table ch-table"><thead><tr><th>#</th><th>${T('Name')}</th><th>${T('Ergebnis')}</th><th>${T('Runden')}</th><th>${T('Punkte')}</th></tr></thead><tbody>
                 ${d.list.map(r => `<tr class="${r.userId === me ? 'rk-me' : ''}" data-user="${esc(r.userId)}"><td class="rk-num">${esc(r.rank)}</td>
                   <td><a href="#" class="hcp-link" data-profile="${esc(r.userId)}">${esc(r.username)}</a></td>
                   <td>${r.won ? '✓ ' + esc(T('Sieg')) : '–'}</td><td class="rk-num">${esc(r.rounds)}</td><td class="rk-num">${esc(r.points)}</td></tr>`).join('')}
-              </tbody></table>` : `<p class="sub mph-empty">${T('Noch hat niemand die Challenge dieser Woche beendet.')}</p>`}
-              <p class="ch-nav">${d.week.previous ? `<a href="#" onclick="CHALLENGE.open('${esc(d.week.previous)}'); return false">← ${T('Letzte Woche')}</a>`
-                : `<a href="#" onclick="CHALLENGE.open(); return false">${T('Zur aktuellen Woche')} →</a>`}</p>`;
+              </tbody></table>` : `<p class="sub mph-empty">${d.week.current ? T('Noch hat niemand die Challenge dieser Woche beendet.') : T('In dieser Woche hat niemand die Challenge beendet.')}</p>`}
+              <p class="ch-nav">${d.week.previous ? `<a href="#" id="ch-prev" onclick="CHALLENGE.open('${esc(d.week.previous)}'); return false">← ${T('Vorherige Woche')}</a>` : ''}
+                ${d.week.next ? `<a href="#" id="ch-next" onclick="CHALLENGE.open('${esc(d.week.next)}'); return false">${T('Nächste Woche')} →</a>` : ''}</p>`;
         },
 
-        start: async function () {
-            const btn = $('ch-start');
+        start: async function (restart) {
+            if (restart && !confirm(T('Den laufenden Versuch aufgeben und neu beginnen? Er zählt als Niederlage.'))) return;
+            const btn = $(restart ? 'ch-restart' : 'ch-start');
             if (btn) btn.disabled = true;
             try {
-                const r = await fetch('/api/challenge/start', { method: 'POST', credentials: 'same-origin' });
+                const r = await fetch('/api/challenge/start', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ week: this.data && this.data.week.id, restart: !!restart }) });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error ? TS(d.error) : T('Fehler'));
                 this.continue_(d.asyncId);
@@ -113,8 +123,13 @@
         .ch-setup { border-collapse:collapse; margin:0 0 10px; font-size:14px; }
         .ch-setup th { text-align:left; font-weight:400; opacity:.7; padding:3px 14px 3px 0; white-space:nowrap; }
         .ch-setup td { padding:3px 0; }
-        .ch-mine { font-weight:600; }
-        .ch-nav { margin:10px 0 0; font-size:13px; }
+        .ch-head select { font:inherit; font-weight:600; margin-right:6px; max-width:100%; }
+        .ch-mine { font-weight:600; margin:4px 0; }
+        .ch-practice { font-weight:400; opacity:.85; }
+        .ch-closed { margin:0 0 8px; padding:6px 10px; border-radius:6px; background:rgba(127,127,127,.15); font-size:13px; }
+        .ch-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .ch-actions .btn { flex:1 1 140px; }
+        .ch-nav { margin:10px 0 0; font-size:13px; display:flex; justify-content:space-between; gap:12px; }
         .mph-challenge { margin-top:-8px; }
     `;
     document.head.appendChild(style);

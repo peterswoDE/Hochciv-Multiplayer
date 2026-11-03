@@ -2,8 +2,11 @@
  * Weekly challenge (F21, utils/challenge.js).
  *
  *   GET  /api/challenge?week=<YYYY-Www>  – the week's setup, leaderboard (top 20), how many play,
- *                                          and – logged in – one's own attempt (public)
- *   POST /api/challenge/start            – start this week's attempt, or get the running one (login)
+ *                                          the weeks that can be played, and – logged in – one's
+ *                                          own attempts (public)
+ *   POST /api/challenge/start            – { week?, restart? }: start an attempt at this week (or
+ *                                          a past one), or get the running one; `restart` resigns
+ *                                          it and starts anew (login)
  */
 const express = require('express');
 const rateLimitLib = require('express-rate-limit');
@@ -29,7 +32,8 @@ const send = (res, p) => p.then(r => {
 router.get('/', (req, res) => send(res, challenge.info(req.user || null, typeof req.query.week === 'string' ? req.query.week : null)));
 router.post('/start', (req, res) => {
     if (!(req.isAuthenticated && req.isAuthenticated())) return res.status(401).json({ error: 'Die Wochen-Challenge gibt es nur mit Anmeldung.' });
-    send(res, challenge.start(req.user));
+    const b = req.body || {};
+    send(res, challenge.start(req.user, typeof b.week === 'string' ? b.week : null, b.restart === true));
 });
 
 module.exports = router;

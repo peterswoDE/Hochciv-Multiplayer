@@ -187,6 +187,8 @@ sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
     // facts of older matches for the overall statistics (needs the column `facts`)
     require('./utils/facts').startBackfill();
+    // weekly challenge: many attempts per week now (utils/challenge.js)
+    require('./utils/challenge').migrate().catch(err => console.error('[Challenge] Migration failed:', err));
     // ranked seasons: the current quarter, closing the last one (utils/seasons.js)
     require('./utils/seasons').start();
     // the admins' words for the chat filter (utils/profanity.js)
