@@ -27,7 +27,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ✅ |
 | 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ✅ |
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
-| 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ⬜ |
+| 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | – (solo vs. KI) | ⬜ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ⬜ |
 
@@ -472,9 +472,21 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 ## F10 Seasons, leaderboard and badges
 
-Seasons with tiers and a soft MMR reset, a public leaderboard, and badges on the profile (wins with each nation, wonders built, …).
+**Goal:** Something to play for over weeks: a season standing, a tier, badges to collect.
 
-**Status:** ⬜
+**Decisions**
+- A season is a calendar quarter (UTC). The first one began without a reset. At its end the final standings are kept and every MMR moves halfway back to 1000. The MMR stays one number, shared by humans and bots.
+- Tiers by MMR: Bronze, Silber (950), Gold (1100), Platin (1250), Diamant (1400), once an account has 5 ranked games in the season.
+- *🏆 Rangliste* in the main menu and the multiplayer menu: the top 100 of the running or a closed season, players or bots, own row marked (and shown below when not in the top 100).
+- Badges on the profile, computed from the history (also older matches): first win, 10 / 50 wins, 10 / 50 / 100 games, each kind of victory and all four, every nation, 10 wonders, 5 duels, season tiers Gold+, podium, champion. Plus the season's tier, the closed seasons and "wins with n of m nations".
+
+**Implementation**
+- `models/Season.js`, `models/SeasonResult.js`; `utils/seasons.js` (`ensure()` at startup and hourly, `close()`, `leaderboard()`, `profileOf()`); `utils/badges.js`; `routes/seasons.js` (`GET /api/seasons/leaderboard`); `routes/profile.js` adds season and badges. Account deletion and Activity merges handle the results. `GET /api/leaderboard` is unchanged.
+- `client/ranking.js` (new, via `inject.js`), the menu button and the link in the multiplayer menu (`mp.js`); `client/profile.js` shows tier, past seasons and badges (`window.HC_SEASONS`). Texts in `client/i18n.js`.
+
+**Tests:** `tests/seasons/seasons.test.js`. `stats`, `i18n`, `loading`, `score/win-bonus`, `account/pages` pass.
+
+**Status:** ✅ on `development`
 
 ## F21 Weekly challenge
 

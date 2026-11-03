@@ -21,6 +21,56 @@
     const fmtDateTime = d => new Date(d).toLocaleString(HC_I18N.locale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const fmtShift = n => n == null ? '–' : n > 0 ? `+${n}` : `${n}`;
 
+    // Ranked seasons (F10, utils/seasons.js): tiers, labels – also used by client/ranking.js
+    const TIERS = {
+        diamant: { i: '💎', n: 'Diamant' }, platin: { i: '🔷', n: 'Platin' }, gold: { i: '🥇', n: 'Gold' },
+        silber: { i: '🥈', n: 'Silber' }, bronze: { i: '🥉', n: 'Bronze' },
+    };
+    const seasonLabel = id => { const m = /^(\d{4})-Q(\d)$/.exec(id || ''); return m ? `Q${m[2]} ${m[1]}` : String(id || ''); };
+    const tierHtml = (tier, games, need) => tier
+        ? `<span class="hcp-tier hcp-tier-${esc(tier)}">${TIERS[tier].i} ${esc(tx(TIERS[tier].n))}</span>`
+        : `<span class="hcp-tier hcp-tier-none" title="${esc(tx('Ab %s gewerteten Spielen in der Saison', need))}">⏳ ${esc(tx('Unplatziert (%s/%s)', Math.min(games, need), need))}</span>`;
+    window.HC_SEASONS = { TIERS, seasonLabel, tierHtml };
+    // Badges (F10, utils/badges.js): the server sends the keys
+    const BADGES = {
+        first_win: ['⭐', 'Erster Sieg', 'Ein Spiel gewonnen.'],
+        wins_10: ['🏆', 'Seriensieger', '10 Spiele gewonnen.'],
+        wins_50: ['🏅', 'Triumphator', '50 Spiele gewonnen.'],
+        games_10: ['🎲', 'Stammgast', '10 Spiele gespielt.'],
+        games_50: ['🎖', 'Veteran', '50 Spiele gespielt.'],
+        games_100: ['🏛', 'Legende', '100 Spiele gespielt.'],
+        victory_military: ['⚔', 'Eroberer', 'Mit einem Militärsieg gewonnen.'],
+        victory_science: ['🔬', 'Gelehrter', 'Mit einem Forschungssieg gewonnen.'],
+        victory_economy: ['💰', 'Händler', 'Mit einem Wirtschaftssieg gewonnen.'],
+        victory_culture: ['🎭', 'Kulturträger', 'Mit einem Kultursieg gewonnen.'],
+        all_victories: ['🌟', 'Allrounder', 'Mit allen vier Siegarten gewonnen.'],
+        nations_all: ['🌍', 'Weltreisender', 'Mit jeder Nation gewonnen.'],
+        wonders_10: ['🏗', 'Baumeister', '10 Weltwunder gebaut.'],
+        duels_5: ['🤺', 'Duellant', '5 Duelle (1 gegen 1) gewonnen.'],
+        season_gold: ['🥇', 'Gold-Saison', 'Eine Saison in Gold beendet.'],
+        season_platin: ['🔷', 'Platin-Saison', 'Eine Saison in Platin beendet.'],
+        season_diamant: ['💎', 'Diamant-Saison', 'Eine Saison in Diamant beendet.'],
+        season_podium: ['🎗', 'Saison-Podest', 'Eine Saison unter den ersten drei beendet.'],
+        season_champion: ['👑', 'Saisonsieger', 'Eine Saison auf Platz 1 beendet.'],
+    };
+    function seasonHtml(data) {
+        if (!data.season) return '';
+        const s = data.season;
+        const past = (data.seasons || []).filter(r => r.games > 0);
+        return `<div class="hcp-season"><span>${esc(tx('Saison %s', seasonLabel(s.id)))}:</span> ${tierHtml(s.tier, s.games, s.placementGames)}
+              <span class="hcp-sub">${esc(tx('%s gewertete Spiele, %s Siege', s.games, s.wins))}</span></div>`
+            + (past.length ? `<div class="hcp-past">${past.slice(0, 6).map(r => `<span title="${esc(tx('Platz %s · %s MMR', r.rank, r.mmr))}">${esc(seasonLabel(r.id))}: ${r.tier ? TIERS[r.tier].i + ' ' + esc(tx(TIERS[r.tier].n)) : esc(tx('Unplatziert'))} · #${esc(r.rank)}</span>`).join('')}</div>` : '');
+    }
+    function badgesHtml(data) {
+        if (!data.badges) return '';
+        const list = data.badges.filter(b => BADGES[b.k]);
+        const p = data.progress || {};
+        const nations = p.nations && p.nations.of ? `<span class="hcp-sub">${esc(tx('Siege mit %s von %s Nationen', p.nations.n, p.nations.of))}</span>` : '';
+        return `<h3 class="hcp-h">${tx('Abzeichen')}</h3>` + (list.length
+            ? `<div class="hcp-badges">${list.map(b => { const [i, n, d] = BADGES[b.k]; return `<span class="hcp-badge" data-badge="${esc(b.k)}" title="${esc(tx(d))}">${i} ${esc(tx(n))}</span>`; }).join('')}</div>`
+            : `<p class="hcp-empty">${tx('Noch keine Abzeichen – das erste gibt es für den ersten Sieg.')}</p>`) + nations;
+    }
+
     const CSS = `
         .hcp-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
         .hcp-link:hover { color: var(--red, #9d3b2f); text-decoration-style: solid; }
@@ -72,6 +122,12 @@
             border: 1px solid var(--rule, #c9bb98); background: var(--paper-2, #efe6ce); color: inherit; font: inherit; }
         .hcp-empty { color: var(--ink-soft, #6f6551); padding: 8px 0; }
         @media (max-width: 480px) { .hcp-stats { grid-template-columns: repeat(2, 1fr); } }
+        .hcp-season { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: -6px 0 10px; }
+        .hcp-tier { font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--paper-2, #efe6ce); white-space: nowrap; }
+        .hcp-tier-none { font-weight: 400; opacity: .8; }
+        .hcp-past { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-soft, #6f6551); margin: -4px 0 10px; }
+        .hcp-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+        .hcp-badge { border: 1px solid var(--rule, #d8ccb0); border-radius: 12px; padding: 3px 9px; font-size: 13px; background: var(--paper, #fbf6e9); cursor: help; }
     `;
 
     let overlay = null;
@@ -204,6 +260,8 @@
               <div class="hcp-stat"><b>${esc(data.wins)}</b><span>${tx('Siege')}</span></div>
               <div class="hcp-stat"><b>${esc(rate)}</b><span>${tx('Siegquote')}</span></div>
             </div>
+            ${seasonHtml(data)}
+            ${badgesHtml(data)}
             <h3 class="hcp-h">${tx('Spiele')}</h3>
             ${games.length ? games.map(g => gameHtml(g, data.id)).join('') : `<p class="hcp-empty">${tx('Noch keine Spiele.')}</p>`}
             ${games.length < total ? `<button class="hcp-more" id="hcp-more">${tx('Weitere Spiele laden')}</button>` : ''}`;
