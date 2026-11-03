@@ -54,6 +54,7 @@ async function mergeInto(into, from) {
         }
         await AsyncGame.update({ hostUserId: into.id }, { where: { hostUserId: from.id }, transaction });
         await friends.mergeUser(from.id, into.id, transaction);
+        await require('./challenge').mergeUser(from.id, into, transaction);
         // season standings: the real account keeps its own where both have one
         const { SeasonResult } = require('../models');
         for (const r of await SeasonResult.findAll({ where: { userId: from.id }, transaction })) {

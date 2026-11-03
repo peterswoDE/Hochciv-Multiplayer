@@ -281,6 +281,10 @@ async function processResult(g) {
             console.error(`[Async] Replay failed for ${g.id}:`, err);
         }
         Facts.storeLater(game.id);                     // overall statistics (utils/facts.js), from the replay
+        if (g.config.challenge) {
+            try { await require('../utils/challenge').recordResult(g, players, game.id); }
+            catch (err) { console.error(`[Challenge] Result of ${g.id} failed:`, err); }
+        }
         g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })),
             gameId: game.id, replay };
     } catch (err) {
@@ -310,10 +314,12 @@ function generateJoinCode() {
     return code;
 }
 
-async function create(user, body) {
+/** `internal`: set by the server only (the weekly challenge, utils/challenge.js), never by a request. */
+async function create(user, body, internal) {
     const active = await AsyncGame.count({ where: { status: ACTIVE, participantIds: { [Op.contains]: [user.id] } } });
     if (active >= MAX_ACTIVE_PER_USER) return { error: `Höchstens ${MAX_ACTIVE_PER_USER} laufende Rundenspiele.` };
-    const { g, error } = L.create(userOf(user), body || {});
+    const opts = Object.assign({}, body || {}, { challenge: internal && internal.challenge || undefined, seed: internal && internal.seed || undefined });
+    const { g, error } = L.create(userOf(user), opts);
     if (error) return { error };
     g.joinCode = generateJoinCode();
     g.waitSince = Date.now();

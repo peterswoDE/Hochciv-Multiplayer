@@ -28,7 +28,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ✅ |
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
-| 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | – (solo vs. KI) | ⬜ |
+| 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ⬜ |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
@@ -492,9 +492,19 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** A shared goal for everyone each week, also for players who have no opponent at hand.
 
-**Planned:** every week the same map, seed, nation and settings for everybody, played alone against the KI as a Rundenspiel-like game on the server. A leaderboard ranks the results (victory, then fewer rounds, then points). One scored attempt per week.
+**Decisions**
+- A week is an ISO week (Monday 00:00 UTC). Its setup comes from a hash of the week's id, the same for everybody and without storage: original or large map, nation and ability, four empires (three KI with the base ability at one of the two hardest levels), events (on/off, easy/hard), wonders, and a fixed seed.
+- One attempt per account and week, played as a Rundenspiel alone against the KI (own pace, the normal 7 days per turn). It can't be left or cancelled; resigning or a KI takeover counts as a loss. Not ranked; it counts as a game in the history.
+- Leaderboard of the week: a victory first, then fewer rounds, then more points, then who finished first. Top 20, one's own result, how many still play; the previous week can be viewed.
+- *📅 Wochen-Challenge* in the multiplayer menu; the attempt is labelled in the Rundenspiele list.
 
-**Status:** ⬜
+**Implementation**
+- `utils/challenge.js` (`weekOf`, `setupOf`, `info`, `start`, `recordResult`), `models/ChallengeResult.js` (`challenge_results`), `routes/challenge.js` (`/api/challenge`). `async/logic.js`: `opts.challenge` lets one human play and fills the KI seats at once; leaving and cancelling are refused. `async/service.js`: `create(user, body, internal)` – only the server sets the challenge; `processResult` records it. Account deletion and Activity merges handle the rows.
+- `client/challenge.js` (via `inject.js`), the button in the multiplayer menu and the label in `ASYNC.row` (`mp.js`). Texts in `client/i18n.js`.
+
+**Tests:** `tests/challenge/challenge.test.js`. `resign`, `nextgame`, `bots`, `summary`, `i18n` pass.
+
+**Status:** ✅ on `development`
 
 ## F22 Team mode
 

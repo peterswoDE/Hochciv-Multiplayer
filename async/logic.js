@@ -144,7 +144,10 @@ function create(host, opts) {
     const lim = limitsOf(null, config.mapKey, config.customMap);
     const cErr = countError(lim, total);
     if (cErr) return { error: cErr };
-    if (total - ki < 2) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };
+    // the weekly challenge (utils/challenge.js) is played alone; only the server creates it
+    const challenge = opts && typeof opts.challenge === 'string' ? opts.challenge : null;
+    if (total - ki < 2 && !challenge) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };
+    if (challenge) Object.assign(config, { challenge, isPublic: false, ranked: false, seed: Number.isInteger(opts.seed) ? opts.seed : config.seed });
     Object.assign(config, { playerCount: total, humanCount: total - ki, noKi: ki === 0 });
     // Player-bots (bot accounts, utils/bots.js) take human seats like players, never the KI's;
     // the host allows them and may limit them (null = no limit). A bot as host always allows them.
@@ -208,6 +211,12 @@ function create(host, opts) {
     /* Start right away (the host plays turn 1 while the others join) when the seats are
        final already: nations dealt at random, or all four nations of a fixed map. Otherwise –
        and always without KI – the game starts once everybody is there. */
+    // the weekly challenge: the KI takes the other seats right away, all with the base ability –
+    // the same opponents for everybody
+    if (challenge) {
+        fillBots(g);
+        g.seats.filter(s => s.kind === 'ki').forEach(s => { s.ability = 'basis'; });
+    }
     const seatsFinal = config.civMode === 'random' || (!freeCivs(g) && total === 4);
     if (!hasPrephase(g) && !config.noKi && seatsFinal) startGame(g);
     return { g };
@@ -321,6 +330,7 @@ function dropFreeSeats(g) {
 function leave(g, userId) {
     const seat = seatOf(g, userId);
     if (!seat) return 'Du bist nicht in diesem Spiel.';
+    if (g.config.challenge) return 'Die Wochen-Challenge kann man nur aufgeben.';
     if (userId === g.hostUserId) return 'Der Host kann das Spiel nur abbrechen, nicht verlassen.';
     const free = g.status === 'setup' || (g.status === 'playing' && !seat.started);
     if (!free) return 'Nach deinem ersten Zug kannst du das Spiel nicht mehr verlassen.';
@@ -342,6 +352,7 @@ function leave(g, userId) {
 /** Host cancels: allowed until another human has played a turn / before the pre-phase. */
 function cancel(g, userId) {
     if (userId !== g.hostUserId) return 'Nur der Host kann das Spiel abbrechen.';
+    if (g.config.challenge) return 'Die Wochen-Challenge kann man nur aufgeben.';
     const others = g.seats.filter(s => s.userId && s.userId !== userId);
     const ok = g.status === 'setup' || (g.status === 'playing' && others.every(s => !s.started));
     if (!ok) return 'Das Spiel läuft schon – abbrechen geht nicht mehr.';

@@ -994,6 +994,7 @@ const MP = {
             </div>` : ''}
           </div>
           ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
+          ${typeof CHALLENGE !== 'undefined' ? CHALLENGE.hubButton() : ''}
           ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}${typeof FRIENDS !== 'undefined' ? tabBtn('friends', '👥 ' + TX('Freunde')) : ''}</div>
           <div class="mph-panes">
@@ -2413,7 +2414,7 @@ const ASYNC = {
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><span class="mph-kind">${TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
+            <div class="mpa-title"><span class="mph-kind">${c.challenge ? '📅 ' + TX('Wochen-Challenge') : TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
               <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
             ${joinable ? MP.traitsHtml(MP.lobbyTraits(g, false)) : ''}
             ${this.seatsHtml(g.seats, g.mySlot)}

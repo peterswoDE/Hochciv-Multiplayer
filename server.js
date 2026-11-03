@@ -240,6 +240,8 @@ app.use('/api/maps', require('./routes/maps'));
 app.use('/api/friends', require('./routes/friends'));
 // Ranked seasons and the leaderboard (utils/seasons.js)
 app.use('/api/seasons', require('./routes/seasons'));
+// Weekly challenge (utils/challenge.js)
+app.use('/api/challenge', require('./routes/challenge'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
 

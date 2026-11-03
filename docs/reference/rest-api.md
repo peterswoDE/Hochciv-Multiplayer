@@ -141,6 +141,13 @@ Only public data goes out: names, nations, points, MMR – no e-mail, role or ac
 
 `GET /api/profile/:userId` (first page) also returns `season` (`{ id, endsAt, tier, games, wins, placementGames }`), `seasons` (closed seasons of the account), `badges` (`[{ k }]`) and `progress` (`nations`, `wonders`, `wins`, `played`).
 
+## Weekly challenge – `/api/challenge`
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| GET | `/?week=<YYYY-Www>` | public | The week (default: this one) with `setup` (map, nation, ability, KI count and level, events, wonders), the top 20, `finished` / `playing` counts and – logged in – `me` (`status: playing | finished`, `asyncId`, rank and result) |
+| POST | `/start` | login | Start this week's attempt (a Rundenspiel alone against three KI) → `{ asyncId }`; the running one again with `running: true`; refused after a finished attempt |
+
 ## Friends – `/api/friends` (login)
 
 | Method | Path | Purpose |
