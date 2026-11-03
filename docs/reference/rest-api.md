@@ -133,6 +133,14 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
 
+## Seasons – `/api/seasons`
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/leaderboard?season=<id>&type=human\|bot` | Top 100 of a season (default: the running one) with `tier`, `games`, `wins` of the season; `seasons` (all, newest first), `tiers`, `placementGames`; `me`: one's own row when logged in and not in the top 100 |
+
+`GET /api/profile/:userId` (first page) also returns `season` (`{ id, endsAt, tier, games, wins, placementGames }`), `seasons` (closed seasons of the account), `badges` (`[{ k }]`) and `progress` (`nations`, `wonders`, `wins`, `played`).
+
 ## Friends – `/api/friends` (login)
 
 | Method | Path | Purpose |

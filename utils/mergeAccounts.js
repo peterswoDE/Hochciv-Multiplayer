@@ -54,6 +54,12 @@ async function mergeInto(into, from) {
         }
         await AsyncGame.update({ hostUserId: into.id }, { where: { hostUserId: from.id }, transaction });
         await friends.mergeUser(from.id, into.id, transaction);
+        // season standings: the real account keeps its own where both have one
+        const { SeasonResult } = require('../models');
+        for (const r of await SeasonResult.findAll({ where: { userId: from.id }, transaction })) {
+            if (await SeasonResult.count({ where: { userId: into.id, seasonId: r.seasonId }, transaction })) await r.destroy({ transaction });
+            else await r.update({ userId: into.id, username: into.username }, { transaction });
+        }
 
         // Custom maps (with their codes) move over; equal names get a number
         await mapService.moveOwner(from.id, into.id, transaction);

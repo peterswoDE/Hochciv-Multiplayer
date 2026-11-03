@@ -990,6 +990,7 @@ const MP = {
               ${newGame('', 'MATCH.start()', '🔥 ' + TX('Gewertetes Spiel suchen'), this.user ? TX('Gegner mit ähnlicher MMR, gewertet.') : TX('Nur mit Anmeldung.'),
                     this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`)}
               ${this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots in der Suche zulassen')}</label>` : ''}
+              ${typeof RANKING !== 'undefined' ? `<a href="#" class="mph-rank-link" onclick="RANKING.open(null); return false">🏆 ${TX('Rangliste und Saison')}</a>` : ''}
             </div>` : ''}
           </div>
           ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
@@ -2893,7 +2894,7 @@ MP.arrangeMenu = function () {
     if (cont && first) first.after(cont);
     const more = document.createElement('div');
     more.id = 'mp-menu-more';
-    ['m-tutorial', 'mp-overall-btn', 'm-editor', 'mp-maps-btn', 'm-rules', 'm-options', 'm-load'].forEach(id => {
+    ['m-tutorial', 'mp-overall-btn', 'mp-ranking-btn', 'm-editor', 'mp-maps-btn', 'm-rules', 'm-options', 'm-load'].forEach(id => {
         const b = $(id);
         if (b) more.appendChild(b);
     });
@@ -2908,6 +2909,7 @@ MP.applyLang = function () {
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
     set('mp-live-btn', TX('Multiplayer'));
     set('mp-overall-btn', TX('Statistiken'));
+    set('mp-ranking-btn', '🏆 ' + TX('Rangliste'));
     set('mp-maps-btn', TX('Karten entdecken'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
@@ -2949,6 +2951,15 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.id = 'mp-overall-btn';
         btn.textContent = TX('Statistiken');
         btn.onclick = () => GAMESTATS.open();
+        mNew.parentNode.insertBefore(btn, $('m-continue'));
+    }
+    // Menu button "Rangliste": seasons, tiers, the top 100 (client/ranking.js)
+    if (mNew && !$('mp-ranking-btn') && typeof RANKING !== 'undefined') {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.id = 'mp-ranking-btn';
+        btn.textContent = '🏆 ' + TX('Rangliste');
+        btn.onclick = () => RANKING.open(null);
         mNew.parentNode.insertBefore(btn, $('m-continue'));
     }
     MP.arrangeMenu();
@@ -3086,6 +3097,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-maps small { font-size:12px; font-weight:400; opacity:.75; }
         .mph-ranked .btn { flex:1 1 auto; }
         .mph-bots { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-soft); cursor:pointer; }
+        .mph-rank-link { display:inline-block; font-size:12px; margin-top:4px; color:var(--ink-soft); }
         .mph-bots input[type=checkbox] { width:18px; height:18px; flex:0 0 auto; margin:0; }
         .mph-tabs { display:flex; border-bottom:1px solid var(--rule); margin-bottom:12px; }
         .mph-tab { flex:1; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-1px; padding:10px 6px; font:inherit; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:color .15s, border-color .15s; }

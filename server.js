@@ -187,6 +187,8 @@ sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
     // facts of older matches for the overall statistics (needs the column `facts`)
     require('./utils/facts').startBackfill();
+    // ranked seasons: the current quarter, closing the last one (utils/seasons.js)
+    require('./utils/seasons').start();
     // the admins' words for the chat filter (utils/profanity.js)
     require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`
@@ -236,6 +238,8 @@ app.use('/api/push', require('./routes/push'));
 app.use('/api/maps', require('./routes/maps'));
 // Friends list (utils/friends.js)
 app.use('/api/friends', require('./routes/friends'));
+// Ranked seasons and the leaderboard (utils/seasons.js)
+app.use('/api/seasons', require('./routes/seasons'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
 
