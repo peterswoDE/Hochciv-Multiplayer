@@ -61,6 +61,17 @@ router.post('/sessions/watch', lobbyLimit, (req, res) => {
     res.json(result);
 });
 
+// ── POST /api/sessions/preview — invite link: the lobby behind code + password ──
+router.post('/sessions/preview', lobbyLimit, (req, res) => {
+    const { joinCode, password } = req.body || {};
+    if (typeof joinCode !== 'string' || typeof password !== 'string' || !joinCode || !password) {
+        return res.status(400).json({ error: 'joinCode und password sind erforderlich.' });
+    }
+    const result = sessions.previewSession(joinCode, password);
+    if (typeof result === 'string') return res.status(400).json({ error: result });
+    res.json(result);
+});
+
 // ── GET /api/public-sessions — public lobbies and running public games ──────
 router.get('/public-sessions', (req, res) => {
     res.json(sessions.getPublicSessions());
