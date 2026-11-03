@@ -239,7 +239,7 @@ async function processResult(g) {
             const isWinner = Array.isArray(over.winners) && over.winners.includes(i);
             let scoreDetails = null;
             try { scoreDetails = E.victoryScore(S, i) || null; } catch (_) { }
-            const points = finalPoints(scoreDetails, isWinner);   // + WIN_BONUS for the winner
+            const points = finalPoints(scoreDetails, isWinner);   // × WIN_FACTOR for the winner
             const active = seat.userId && !seat.replaced;
             return {
                 dbUserId: active ? seat.userId : null,

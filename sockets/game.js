@@ -1024,7 +1024,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                     console.error('Error fetching score for player', finalIndex, e);
                 }
             }
-            const points = finalPoints(scoreDetails, isWinner);   // + WIN_BONUS for the winner
+            const points = finalPoints(scoreDetails, isWinner);   // × WIN_FACTOR for the winner
 
             // a player who resigned is out of the rating, like a Rundenspiel seat the KI took over
             const gaveUp = !!lp.resigned;

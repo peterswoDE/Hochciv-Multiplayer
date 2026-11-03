@@ -28,7 +28,7 @@ const MP = {
     user: null,
     asyncId: null,          // id of the open asynchronous game ("Rundenspiel"), else null
     lastTurnKey: null,
-    WIN_BONUS: 10,          // points for the winner on top of victoryScore – same as utils/score.js
+    WIN_FACTOR: 2,          // the winner's victoryScore is multiplied by this – same as utils/score.js
     TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
     turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
     spectator: false,       // watching without a seat (live game or public Rundenspiel)
@@ -339,7 +339,7 @@ const MP = {
         const o = S.over;
         const winners = o.winners || [o.winner];
         // The same points the server stores (utils/score.js): victoryScore for every empire, the
-        // winner gets WIN_BONUS on top. Engines without victoryScore: only the claims are scored.
+        // winner's is multiplied by WIN_FACTOR. Engines without victoryScore: only the claims are scored.
         const score = pi => {
             if (typeof victoryScore === 'function') { try { return victoryScore(S, pi); } catch (e) { /* below */ } }
             return (o.score || []).find(x => x.pi === pi);
@@ -349,12 +349,12 @@ const MP = {
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ };
             const sc = score(i), won = winners.includes(i);
             return { i, won, name: lp.name || civ.n, userId: lp.userId, bot: lp.isBot, civ: civ.n,
-                points: sc ? sc.total + (won ? this.WIN_BONUS : 0) : null };
+                points: sc ? sc.total * (won ? this.WIN_FACTOR : 1) : null };
         }).filter(r => S.players[r.i].kind !== 'barbar')
             .sort((a, b) => (b.points || 0) - (a.points || 0));
         const scored = rows.some(r => r.points != null);
         const pts = r => r.points == null ? '–'
-            : r.won ? `${r.points} <small>(${TX('inkl. +%s Sieg', this.WIN_BONUS)})</small>` : r.points;
+            : r.won ? `${r.points} <small>(${TX('×%s für den Sieg', this.WIN_FACTOR)})</small>` : r.points;
         const html = `<div id="mp-go-players"><table class="tbl" style="margin:10px 0">
             <tr><th>${TX('Spieler')}</th><th>${TX('Reich')}</th>${scored ? `<th>${TX('Punkte')}</th>` : ''}</tr>
             ${rows.map(r => `<tr${r.won ? ' style="font-weight:700"' : ''}>
