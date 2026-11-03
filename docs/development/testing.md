@@ -61,6 +61,7 @@ Tests create their own test accounts and delete them afterwards.
 | `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin page | default |
 | `stats/stats.test.js` | post-game statistics | default |
 | `summary/summary.test.js` | "since your last turn" | default |
+| `teams/teams.test.js` | team mode: the engine patch (no siege of a teammate), shared victory, the lobby (teams, picking, host only), the state, team chat, a team winning after the other resigns | default |
 | `timer/turn-timer.test.js` | turn timer of live games | `TURN_TIMER_SCALE=0.05 TURN_TIMER_AFK_AFTER=2` |
 
 Environment variables for the server are passed from the shell when starting the container, e.g.:

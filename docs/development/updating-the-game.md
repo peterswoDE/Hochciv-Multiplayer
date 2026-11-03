@@ -49,3 +49,7 @@ Running Rundenspiele are not affected by a new version only if their version is 
 | v93 | #48 | v88, v87, v83 (v91 dropped – no running games) |
 | v96 | #51 | v93, v88, v83 (v87 dropped – no running games) |
 | v98 | #59 | v96, v93, v83 (v88 dropped – no running games) |
+
+## Runtime patches to check after an update
+
+* **Team mode** (`utils/teams.js`) wraps the engine's `combatPhase(S, pi, rec)` and relies on `powerOf(S, pi)`, on `S.cities` / `S.armies` with an `owner`, and on the rule that a phase compares powers from its start. If a new version renames these or changes how combat picks its targets, `tests/teams/teams.test.js` (its unit part) fails – adapt the patch before releasing.

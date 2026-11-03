@@ -125,6 +125,7 @@ function joinSession(joinCode, password, playerInfo) {
     if (session.spectators) session.spectators = session.spectators.filter(w => w.clientId !== String(playerInfo.clientId).slice(0, 100));
     session.players.push({
         index: playerIndex,
+        team: session.gameConfig && session.gameConfig.teams ? smallerTeam(session) : undefined,
         name: fallbackName,
         clientId: String(playerInfo.clientId).slice(0, 100),
         civ: cleanKey(playerInfo.civ, 'griechenland'),
@@ -278,6 +279,18 @@ function updateConfig(sessionId, newConfig) {
     return session.gameConfig;
 }
 
+/** Team mode (utils/teams.js): the team with fewer players (A on a tie). */
+function smallerTeam(session) {
+    const n = t => session.players.filter(p => p.kind === 'human' && p.team === t).length;
+    return n(1) < n(0) ? 1 : 0;
+}
+
+/** Team mode switched on: everyone without a team gets one, alternately; off: no teams. */
+function balanceTeams(session) {
+    if (!session.gameConfig.teams) { session.players.forEach(p => { delete p.team; }); return; }
+    session.players.forEach(p => { if (p.team !== 0 && p.team !== 1) p.team = smallerTeam(session); });
+}
+
 function updatePlayer(sessionId, playerIndex, updates) {
     const session = sessions.get(sessionId);
     if (!session || session.status !== 'lobby') return false;
@@ -298,6 +311,7 @@ function updatePlayer(sessionId, playerIndex, updates) {
     } else if (ability) {
         player.ability = ability;
     }
+    if (session.gameConfig.teams && updates && (updates.team === 0 || updates.team === 1)) player.team = updates.team;
     return true;
 }
 
@@ -446,6 +460,7 @@ module.exports = {
     kickPlayer,
     previewSession,
     activityOf,
+    balanceTeams,
     lobbyByCode,
     updateConfig,
     updatePlayer,
