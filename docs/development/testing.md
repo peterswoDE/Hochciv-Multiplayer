@@ -30,6 +30,7 @@ Tests create their own test accounts and delete them afterwards.
 | `account/pages.test.js` | account and admin pages: own pages, sections in the address, admin page only for admins, iframe break-out, phone width | default |
 | `admin/running-games.test.js` | admin page *Laufende Spiele* | default |
 | `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
+| `alerts/alerts.test.js` | sound and tab alerts: tones for join, ready, start, turn and chat, the blinking title of a hidden tab, the sound switch | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
 | `invite/invite.test.js` | invite links: copying, the preview, joining a private lobby and a Rundenspiel, watching a running game, guests, English | default |
 | `lobbies/lobby-filter.test.js` | filters of the open games: every lobby setting in `/api/public-sessions`, each filter and combinations on live lobbies and Rundenspiele, search, reset, kept filters, phone | default |

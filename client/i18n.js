@@ -99,6 +99,16 @@
         'Verbunden': 'Connected',
         'Wartet': 'Waiting',
         'Kick': 'Kick',
+        // sound and tab alerts (client/alerts.js)
+        'Du bist dran': 'Your turn',
+        '%s ist beigetreten': '%s joined',
+        'Alle sind bereit': 'Everyone is ready',
+        'Das Spiel beginnt': 'The game begins',
+        'Gegner gefunden!': 'Opponents found!',
+        'Neue Nachricht von %s': 'New message from %s',
+        'Töne: an': 'Sounds: on',
+        'Töne: aus': 'Sounds: off',
+        'Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten': 'Sounds for your turn, new players, the game start and messages',
         // lobby ready check (mp.js readyCell, startClick)
         'Bereit': 'Ready',
         'Ich bin bereit': "I'm ready",

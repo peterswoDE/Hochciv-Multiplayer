@@ -23,7 +23,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 13 | F15 | [Invite link](#f15-invite-link) | ✔ | ✔ | ✅ |
 | 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ✅ |
 | 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ✅ |
-| 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ⬜ |
+| 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ✅ |
 | 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ⬜ |
 | 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ⬜ |
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ⬜ |
@@ -403,9 +403,18 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** Notice your turn, a full lobby or a found match while the tab is in the background.
 
-**Planned:** a short sound and a blinking tab title (`▶ Du bist dran`) for your turn, a player joining your lobby, the game starting, a ranked match found and a chat message. A switch for the sound, kept per device.
+**Decisions**
+- Tones for: your turn begins, a player joins your lobby, everyone is ready (host only), the game starts, a ranked match is found, a chat message while the chat panel is closed or the tab hidden. Not for one's own messages, not when a Rundenspiel is opened in one's turn (only a turn that begins while it is open).
+- While the tab is hidden, its title alternates with a short text (*▶ Du bist dran*, *%s ist beigetreten*, …) until the player is back.
+- One switch per device, on by default: a checkbox in the multiplayer menu and *🔔 Töne: an/aus* in the game menu.
 
-**Status:** ⬜
+**Implementation**
+- `client/alerts.js` (new, after mp.js via `inject.js`): tones synthesized with the Web Audio API (no sound files), unlocked by the first tap or key (autoplay rules), `notify()`, `blink()`, `soundOn()` / `setSound()` (`hochciv.alerts.sound`), `log` for tests.
+- Calls: `MP.alert()` in `applyState` (turn), `player:joined`, `lobby:player:updated` (all ready), `game:start`; `client/chat.js` `receive()`; `client/matchmaking.js` `match:found`. Texts in `client/i18n.js`.
+
+**Tests:** `tests/alerts/alerts.test.js`. `loading`, `chat`, `i18n`, `match` pass.
+
+**Status:** ✅ on `development`
 
 ## F19 Turn deadline per Rundenspiel
 
