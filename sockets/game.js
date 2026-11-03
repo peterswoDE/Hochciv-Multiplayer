@@ -12,6 +12,7 @@ const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
+const Teams = require('../utils/teams');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -107,7 +108,7 @@ module.exports = function registerHandlers(io) {
             socket.join(sessionId);
 
             ack({ ok: true, playerIndex, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
-            socket.emit('chat:history', { list: s.chat || [], guest: !me.dbUserId, mute: me.chatMute || null });
+            socket.emit('chat:history', { list: (s.chat || []).filter(m => m.team == null || m.team === me.team), guest: !me.dbUserId, mute: me.chatMute || null });
 
             // Tell everyone a player (re-)connected
             io.to(sessionId).emit('player:joined', {
@@ -152,7 +153,7 @@ module.exports = function registerHandlers(io) {
             w.socketId = socket.id;
             socket.join(sessionId);
             ack({ ok: true, spectator: true, playerIndex: -1, status: s.status, players: publicPlayers(s), gameConfig: s.gameConfig, hostIndex: s.hostIndex, spectators: sessions.spectatorCount(s) });
-            socket.emit('chat:history', { list: s.chat || [] });
+            socket.emit('chat:history', { list: (s.chat || []).filter(m => m.team == null) });
             io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(s) });
             if (s.status === 'draft' && s.draft) socket.emit('draft:update', engine.draftPayload(s));
             if (s.status === 'playing' && s.state) {
@@ -211,6 +212,9 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerBots !== undefined) newConfig.playerBots = newConfig.playerBots === true;
                 if (newConfig.playerBotLimit !== undefined) newConfig.playerBotLimit = int(newConfig.playerBotLimit, 1, 8) || null;
                 if (newConfig.isPublic !== undefined) newConfig.isPublic = newConfig.isPublic === true;
+                // team mode (F22): humans only
+                if (newConfig.teams !== undefined) newConfig.teams = newConfig.teams === true;
+                if (newConfig.teams === true || (newConfig.teams === undefined && session.gameConfig.teams)) newConfig.kiCount = 0;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -222,6 +226,10 @@ module.exports = function registerHandlers(io) {
             if (updated) {
                 ack({ ok: true });
                 io.to(sessionId).emit('lobby:config:update', updated);
+                if (newConfig && newConfig.teams !== undefined) {
+                    sessions.balanceTeams(session);
+                    io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+                }
                 // ready check (F17): new settings have to be confirmed again
                 if (session.players.some(p => p.ready)) {
                     session.players.forEach(p => { p.ready = false; });
@@ -245,6 +253,21 @@ module.exports = function registerHandlers(io) {
             } else {
                 ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
+        });
+
+        // ── Team mode (F22): the host puts a player into a team ───────────────
+        on(socket, 'lobby:team', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'lobby') return ack({ error: 'Spiel läuft bereits.' });
+            if (!session.gameConfig.teams) return ack({ error: 'Der Teammodus ist aus.' });
+            const i = Number.isInteger(data.playerIndex) ? data.playerIndex : myIndex();
+            if (i !== myIndex() && !isHost()) return ack({ error: 'Nur der Host kann andere Spieler einteilen.' });
+            const p = session.players[i];
+            if (!p || (data.team !== 0 && data.team !== 1)) return ack({ error: 'Ungültiges Team.' });
+            p.team = data.team;
+            p.ready = false;
+            ack({ ok: true });
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
         });
 
         // ── Ready check (F17): a player confirms the lobby; the host may start anyway ──
@@ -336,6 +359,7 @@ module.exports = function registerHandlers(io) {
                 session.gameConfig.map = engine.getEngine().tileMap(st.plan);
                 try {
                     session.state = engine.createGame(session);
+                    attachTeams(session);
                     session.status = 'playing';
                     emitGameStart(io, session);
                 } catch (e) {
@@ -358,6 +382,14 @@ module.exports = function registerHandlers(io) {
             if (r.msg.kind === 'text') {
                 const v = await reports.moderate({ source: 'live', sourceId: session.id, history: session.chat, msg: r.msg, sender: { id: me.dbUserId, name: me.name }, mute: me.chatMute });
                 if (v) { me.chatMute = v.mute; return ack(v); }
+            }
+            // team mode: a message to the own team only (not kept for spectators either)
+            if (data.team && session.gameConfig.teams && (me.team === 0 || me.team === 1)) {
+                r.msg.team = me.team;
+                session.chat = chat.remember(session.chat, r.msg, chat.LIVE_HISTORY);
+                ack({ ok: true });
+                for (const p of session.players) if (p.team === me.team && p.socketId) io.to(p.socketId).emit('chat:msg', r.msg);
+                return;
             }
             session.chat = chat.remember(session.chat, r.msg, chat.LIVE_HISTORY);
             ack({ ok: true });
@@ -442,6 +474,7 @@ module.exports = function registerHandlers(io) {
                 .filter(i => i !== -1);
             const startedWithKi = session.players.some(p => p.kind !== 'human');
             const end = Resign.endAfterResign(engine.getEngine(), S, humans, startedWithKi);
+            if (end) Teams.expandWin(Object.assign(S, { over: end }));
             ack({ ok: true });
             io.to(sessionId).emit('game:resigned', { index: myIndex(), name: me.name });
             io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
@@ -584,13 +617,21 @@ function startGame(io, session) {
        seats are filled with KI as well. Older lobbies: 4 (or, "Nur Menschen", exactly the
        humans). The map decides how many are possible (mapLimits in engine.js). */
     const humans = session.players.length;
-    const total = Number.isInteger(gc.playerCount) ? gc.playerCount : (gc.noKi ? humans : Math.max(4, humans));
-    const kiSeats = Number.isInteger(gc.kiCount) ? gc.kiCount : 0;
+    let total = Number.isInteger(gc.playerCount) ? gc.playerCount : (gc.noKi ? humans : Math.max(4, humans));
+    let kiSeats = Number.isInteger(gc.kiCount) ? gc.kiCount : 0;
+    // team mode (F22): exactly the players, no KI
+    if (gc.teams) { total = humans; kiSeats = 0; gc.kiCount = 0; }
     const lim = engine.getEngine().mapLimits(isPlaettchen ? 'plaettchen' : gc.mapKey, gc.customMap);
     if (total < lim.min || total > lim.max)
         return lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.`;
     if (humans > total - kiSeats)
         return `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.`;
+    if (gc.teams) {
+        // team mode (F22): both teams with players
+        sessions.balanceTeams(session);
+        const sizes = [0, 1].map(t => session.players.filter(p => p.team === t).length);
+        if (!sizes[0] || !sizes[1]) return 'Im Teammodus braucht jedes Team mindestens einen Spieler.';
+    }
     gc.playerCount = total;
     gc.duel = total === 2;
 
@@ -705,6 +746,7 @@ function startGame(io, session) {
         }
 
         session.state = engine.createGame(session);
+        attachTeams(session);
         session.status = 'playing';
     } catch (err) {
         console.error('Error creating game:', err);
@@ -730,7 +772,17 @@ function sendIndices(io, session) {
 }
 
 /** Finish the game once: notify everyone and record history / MMR. */
+/** Team mode: the teams of the lobby players on the state (utils/teams.js). */
+function attachTeams(session) {
+    if (!session.gameConfig.teams || !session.state) return;
+    const S = session.state;
+    const byState = {};
+    session.players.forEach((lp, li) => { const si = engine.stateIndexOf(S, li, lp); if (si !== -1) byState[si] = lp.team; });
+    Teams.attach(S, i => (byState[i] === 0 || byState[i] === 1 ? byState[i] : null));
+}
+
 function checkGameOver(io, session) {
+    if (session.state && session.state.over) Teams.expandWin(session.state);       // a team wins together
     if (!session.state.over || session.gameOverProcessed) return;
     session.gameOverProcessed = true;
     session.status = 'finished';
@@ -765,6 +817,7 @@ function emitGameStart(io, session) {
 function finishDraft(io, session) {
     try {
         session.state = engine.finishDraft(session);
+        attachTeams(session);
         session.status = 'playing';
         io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
         emitGameStart(io, session);
@@ -789,6 +842,7 @@ function publicPlayers(session) {
         afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
         resigned: !!p.resigned,         // gave up: the KI plays the seat to the end
         ready: !!p.ready || !!p.playerBot,      // lobby ready check; player-bots are always ready
+        team: p.team === 0 || p.team === 1 ? p.team : null,     // team mode (F22)
     }));
 }
 
@@ -843,6 +897,7 @@ function turnSummary(session) {
 
 function broadcastState(io, session) {
     if (!session || !session.state) return;
+    if (session.state.over) Teams.expandWin(session.state);
     recordStats(session, false);
 
     // Instead of deep cloning per-player in a loop, clone the state exactly once.

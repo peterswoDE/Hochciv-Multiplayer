@@ -21,11 +21,12 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, public listing `isPublic`, …); a custom map is checked with `checkCustomMap` |
 | `lobby:player:update` | `{ civ, ability }` | player | Own nation and ability in the lobby |
 | `lobby:ready` | `{ ready }` | player | Ready check: tick or take back; new lobby settings clear every tick. The players in `lobby:player:updated` carry `ready` (player-bots always `true`) |
+| `lobby:team` | `{ playerIndex, team }` | player / host | Team mode: put oneself (or, as host, anyone) into team 0 (A) or 1 (B). `lobby:config { teams: true }` switches team mode on (KI seats 0, teams dealt alternately); the players carry `team` |
 | `game:start` | – | host | Start the game |
 | `draft:pick` | `{ id }` | player | Marathon draft: pick an ability |
 | `placement:action` | placement action | player | Tile map: place the start tile (all players at once) |
 | `action` | `{ type, params }` | player on turn | A game action, applied by the engine (`engine.applyAction`) |
-| `chat:send` | `{ kind: 'text' \| 'emote' \| 'ping', … }` | player | Chat message, emote or map ping (texts need an account) |
+| `chat:send` | `{ kind: 'text' \| 'emote' \| 'ping', … }` | player | Chat message, emote or map ping (texts need an account) | With `team: true` in a team game, only the own team gets it (`msg.team`).
 | `chat:report` | `{ id, reason }` (message id) | player or spectator | Report a message ([chat moderation](../overview/features.md#during-and-after-a-game)) |
 | `session:rematch` | – | host | Back to the lobby after the game |
 | `turn:reclaim` | – | player | *Ich bin zurück*: take the seat back from the KI after missed turns |
