@@ -26,7 +26,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ✅ |
 | 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ✅ |
 | 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ✅ |
-| 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ⬜ |
+| 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ⬜ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | – (solo vs. KI) | ⬜ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ⬜ |
@@ -453,9 +453,22 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 ## F8 Friends list
 
-A friends list with online status and direct invitations to lobbies and Rundenspiele. Needs friends functionality (requests, accept, block) first.
+**Goal:** Play again with people you like: see who is online and bring them into a game.
 
-**Status:** ⬜
+**Decisions**
+- Accounts only (not bots). Requests by name, from a player profile, or from *Zuletzt gespielt mit* (accounts of one's last 20 matches). Two crossing requests accept each other. A chat block (either way) or a ban stops requests. At most 200 friends and open requests.
+- Online = a game page with an open socket (a logged-in page connects right away). The list shows *Online*, *In einer Lobby*, *Spielt · Runde n* or *Offline · vor …*; a friend's public lobby can be joined and a public game watched from there.
+- Live lobbies: *👥 Freunde einladen* lists online friends; the invited friend gets a card (*Ansehen* opens the invite dialog of F15). While playing, only a note – the invitation waits in the list for 15 minutes as long as the lobby waits.
+- Rundenspiele: the existing invitation by name, with friend names to pick in the create form and the invite dialog.
+- Account deletion removes the friendships; a merged Discord Activity account passes them on.
+
+**Implementation**
+- `models/Friendship.js` (`friendships`), `utils/friends.js` (list, request, accept, remove, live invitations, suggestions, delete/merge), `utils/presence.js` (online sockets, last seen), `sessions.js` `activityOf()` / `lobbyByCode()`, `routes/friends.js` (`/api/friends`, rate limit per account), `sockets/friends.js` (`friends:invite`; `friends:changed` / `friends:invited` to the account's sockets). `utils/deleteAccount.js`, `utils/mergeAccounts.js`.
+- `client/friends.js` (after mp.js via `inject.js`): the menu tab with a count of requests and invitations, the lobby panel, the invitation card, `chipsHtml()` for Rundenspiele, `decorateProfile()` for `client/profile.js`. `mp.js`: the third tab, `FRIENDS.start()` after login, `FRIENDS.attach()` on every socket. Texts in `client/i18n.js`.
+
+**Tests:** `tests/friends/friends.test.js`. `loading`, `i18n`, `bots`, `security`, `account/pages`, `maps`, `invite`, `ready` pass.
+
+**Status:** ✅ on `development`
 
 ## F10 Seasons, leaderboard and badges
 

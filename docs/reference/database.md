@@ -17,6 +17,7 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `replay_frames` | `ReplayFrame` | Turn states of Rundenspiele that are still running |
 | `custom_maps` | `CustomMap` | Custom maps in accounts |
 | `map_favorites` | `MapFavorite` | Players' favorites among the published maps |
+| `friendships` | `Friendship` | Friends list: `userId` asked `friendId`, `status` `pending` or `accepted` (one row per pair; declining or removing deletes it) |
 | `passkeys` | `Passkey` | Passkeys (WebAuthn) |
 | `TotpTokens` | `TotpToken` | Authenticator apps (several per account; table name from Sequelize's default) |
 | `device_tokens` | `DeviceToken` | Android devices for push |

@@ -234,6 +234,8 @@ app.use('/api/async', require('./routes/async'));
 app.use('/api/push', require('./routes/push'));
 // Custom maps in the account, published with a code (maps/service.js)
 app.use('/api/maps', require('./routes/maps'));
+// Friends list (utils/friends.js)
+app.use('/api/friends', require('./routes/friends'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
 
@@ -260,6 +262,8 @@ registerGame(io);
 registerAsync(io);
 // Ranked matchmaking (sockets/match.js)
 require('./sockets/match')(io);
+// Friends: online status and live invitations (sockets/friends.js)
+require('./sockets/friends')(io);
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

@@ -38,6 +38,7 @@ Tests create their own test accounts and delete them afterwards.
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
 | `deadline/deadline.test.js` | time per turn of Rundenspiele: the form, the open games and the filter, the deadline in the list, the takeover after 1 "day" while a 7-day game still waits | `ASYNC_TIMEOUT_MS=70000 ASYNC_REMINDER_MS=50000 ASYNC_SWEEP_MS=1000` |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
+| `friends/friends.test.js` | friends list: requests, accepting, crossing requests, refusals and blocks, suggestions, profile button, live invitation into a lobby, Rundenspiel names, removing, offline, account deletion, English | default |
 | `i18n/english.test.js` | every screen in English, no German left | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
 | `maps/maps.test.js` | map browser: browsing, search, sorting, favorites, the detail view, picking a map for a lobby and a Rundenspiel, map reports and the admin's unpublish, the editor's drag painting and undo, phone layout, account merge and deletion | default |

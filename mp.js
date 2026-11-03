@@ -463,6 +463,7 @@ const MP = {
             this.socket = io(this.serverUrl);
             if (typeof CHAT !== 'undefined') CHAT.attach(this.socket);       // client/chat.js
             if (typeof MATCH !== 'undefined') MATCH.attach(this.socket);     // client/matchmaking.js
+            if (typeof FRIENDS !== 'undefined') FRIENDS.attach(this.socket); // client/friends.js
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
@@ -993,7 +994,7 @@ const MP = {
           </div>
           ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
           ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
-          <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
+          <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}${typeof FRIENDS !== 'undefined' ? tabBtn('friends', '👥 ' + TX('Freunde')) : ''}</div>
           <div class="mph-panes">
           <div class="mph-pane" data-pane="running">
             <div id="mph-running"><p class="sub mph-empty">${TX('Lade...')}</p></div>
@@ -1011,6 +1012,7 @@ const MP = {
             ${this.filterHtml()}
             <div id="mph-open"><p class="sub mph-empty">${TX('Lade...')}</p></div>
           </div>
+          ${typeof FRIENDS !== 'undefined' ? `<div class="mph-pane" data-pane="friends"><div id="mph-friends"><p class="sub mph-empty">${TX('Lade...')}</p></div></div>` : ''}
           </div>
         </div>`;
                 modal(TX('Multiplayer'), h);
@@ -1067,7 +1069,9 @@ const MP = {
                 h = `
           <h3>${TX('Lobby')} <span class="sub" style="float:right">${TX('Code')}: <b>${this.joinCode}</b> · ${TX('Passwort')}: <b>${this.password}</b></span></h3>
           <div class="mp-invite-bar"><button class="btn small" id="mp-invite-btn" onclick="MP.shareInvite(MP.joinCode, MP.password)">🔗 ${TX('Einladungslink teilen')}</button>
+            ${typeof FRIENDS !== 'undefined' ? FRIENDS.lobbyButton() : ''}
             <span class="sub">${TX('Wer den Link öffnet, kommt direkt in diese Lobby.')}</span></div>
+          ${typeof FRIENDS !== 'undefined' ? FRIENDS.lobbyPanel() : ''}
           <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
             <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>${TX('Spieler')}</th><th>${TX('Ziv')}</th><th>${TX('Status')}</th><th></th></tr>
             ${trs}
@@ -1177,6 +1181,11 @@ const MP = {
         if (rs) ASYNC.data = rs;
         this._hubLast = [live, rs];
         this.hubDraw(live, rs);
+        // friends: every third refresh (the list asks for the recent games too)
+        if (typeof FRIENDS !== 'undefined') {
+            this._hubFriendsN = (this._hubFriendsN || 0) + 1;
+            if (this._hubFriendsN % 3 === 1 || this.hubTab === 'friends') FRIENDS.load(); else FRIENDS.drawHub();
+        }
     },
 
     hubDraw: function (live, rs) {
@@ -2492,6 +2501,7 @@ const ASYNC = {
               ${opt('', f.playerBotLimit, TX('Unbegrenzt'))}${Array.from({ length: Math.max(1, humans - 1) }, (_, i) => i + 1).map(n => opt(n, f.playerBotLimit, n)).join('')}</select></label>
             <p class="sub">${TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.')}</p>` : ''}
             <label class="row"><span>${TX('Einladen')} <small>(${TX('Benutzernamen, mit Komma')})</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
+            ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-invite', true) : ''}
           </div>
           <p class="sub">${hint}</p>
           <button class="btn wide primary" onclick="ASYNC.create()">${TX('Erstellen')}</button>
@@ -2653,6 +2663,7 @@ const ASYNC = {
             <p class="sub">${TX('Oder Link:')} <span id="mpa-inv-link" style="user-select:all">${this.esc(MP.inviteUrl(code))}</span></p>
             <button class="btn wide" onclick="MP.shareInvite('${this.esc(code)}')">🔗 ${TX('Einladungslink teilen')}</button>
             <label class="row"><span>${TX('Benutzername')}</span><input type="text" id="mpa-inv-name"></label>
+            ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-inv-name') : ''}
             <button class="btn wide primary" onclick="ASYNC.invite('${id}')">${TX('Einladen')}</button>
             <button class="btn wide ghost" onclick="${back}">${TX('Zurück')}</button>`);
     },
@@ -2985,6 +2996,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 0));
     MP.fetchUser().then(() => {
         ASYNC.refreshBadge();
+        if (typeof FRIENDS !== 'undefined') FRIENDS.start();      // online for friends (client/friends.js)
         const params = new URLSearchParams(location.search);
         // Back from Google/Discord: the server redirects here with ?oauth=<result>
         const oauth = params.get('oauth');

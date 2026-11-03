@@ -12,6 +12,7 @@ const { detachUser } = require('./detachUser');
 const { DELETED_NAME } = require('../async/logic');
 const { destroyOtherSessions } = require('./auth');
 const { sendMail } = require('./mailer');
+const friends = require('./friends');
 
 /** A real address that mails can go to (not the placeholder of OAuth accounts without e-mail). */
 const mailable = email => !!email && !email.endsWith('@oauth.local');
@@ -58,6 +59,7 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
         await mapService.removeOwner(user.id, transaction);      // own maps, published ones too
         await TotpToken.destroy({ where: { UserId: user.id }, transaction });
         await DeviceToken.destroy({ where: { UserId: user.id }, transaction });
+        await friends.removeUser(user.id, transaction);
         await user.destroy({ transaction });
     });
     await destroyOtherSessions(sequelize, user.id);
