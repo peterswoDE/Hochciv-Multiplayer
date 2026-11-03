@@ -145,8 +145,8 @@ Only public data goes out: names, nations, points, MMR – no e-mail, role or ac
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| GET | `/?week=<YYYY-Www>` | public | The week (default: this one; from `2026-W45` on) with its bounds, `previous` / `next`, `weeks` (all playable weeks, newest first), `setup` (map, nation, ability, KI count and level, events, wonders), the top 20 (each player's best attempt finished before the week ended), `finished` (players on the leaderboard) / `playing` (running attempts) and – logged in – `me`: `attempts` (finished), `running` (asyncId or null), `ranked` (the leaderboard entry), `best` (a better later attempt, not ranked) |
-| POST | `/start` | login | `{ week?, restart? }`: start an attempt at this week or a past one (a Rundenspiel alone against three KI) → `{ asyncId }`. A running attempt of that week comes back with `running: true`; with `restart: true` it is resigned and a new one starts. At most three running attempts per player |
+| GET | `/?week=<YYYY-Www>` | public | The week (default: this one; back to the oldest week anyone played, older ones are refused) with its bounds, `previous` / `next`, `weeks` (all playable weeks, newest first), `setup` (map, nation, ability, KI count and level, events, wonders), the top 20 (each player's best attempt finished before the week ended), `finished` (players on the leaderboard) / `playing` (running attempts) and – logged in – `me`: `attempts` (finished), `running` (`{ asyncId, week }` of the running attempt of any week, or null), `ranked` (the leaderboard entry), `best` (a better later attempt, not ranked) |
+| POST | `/start` | login | `{ week? }`: start an attempt at this week or a past one (a Rundenspiel alone against three KI) → `{ asyncId }`. A running attempt (of any week) is resigned first: one runs at a time |
 
 ## Friends – `/api/friends` (login)
 
