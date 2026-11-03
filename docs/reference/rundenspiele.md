@@ -57,7 +57,7 @@ With *Teams* (`config.teams`) a Rundenspiel is humans only. The host picks a tea
 
 ## Weekly challenge
 
-The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to `challenge_results`. It is never ranked.
+The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to its row in `challenge_results` (by `asyncId`). It is never ranked. A player can play a week as often as they like, one attempt per week at a time; starting over resigns the running one.
 
 ## Resigning
 

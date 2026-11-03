@@ -494,12 +494,13 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Decisions**
 - A week is an ISO week (Monday 00:00 UTC). Its setup comes from a hash of the week's id, the same for everybody and without storage: original or large map, nation and ability, four empires (three KI with the base ability at one of the two hardest levels), events (on/off, easy/hard), wonders, and a fixed seed.
-- One attempt per account and week, played as a Rundenspiel alone against the KI (own pace, the normal 7 days per turn). It can't be left or cancelled; resigning or a KI takeover counts as a loss. Not ranked; it counts as a game in the history.
-- Leaderboard of the week: a victory first, then fewer rounds, then more points, then who finished first. Top 20, one's own result, how many still play; the previous week can be viewed.
+- Played as a Rundenspiel alone against the KI (own pace, the normal 7 days per turn), as often as a player likes: one attempt per week at a time, *Neu starten* resigns it; at most three running attempts in all. It can't be left or cancelled; resigning or a KI takeover counts as a loss. Not ranked; it counts as a game in the history.
+- Leaderboard of the week: each player's best attempt; a victory first, then fewer rounds, then more points, then who finished first. Top 20, one's own result, how many still play.
+- Past weeks (from 2026-W45 on) can be picked and played again, but their leaderboard is closed: only attempts finished before the week's end count; later ones show as "best attempt, not ranked".
 - *📅 Wochen-Challenge* in the multiplayer menu; the attempt is labelled in the Rundenspiele list.
 
 **Implementation**
-- `utils/challenge.js` (`weekOf`, `setupOf`, `info`, `start`, `recordResult`), `models/ChallengeResult.js` (`challenge_results`), `routes/challenge.js` (`/api/challenge`). `async/logic.js`: `opts.challenge` lets one human play and fills the KI seats at once; leaving and cancelling are refused. `async/service.js`: `create(user, body, internal)` – only the server sets the challenge; `processResult` records it. Account deletion and Activity merges handle the rows.
+- `utils/challenge.js` (`weekOf`, `boundsOf`, `setupOf`, `info`, `start`, `recordResult`, `migrate` drops the old one-attempt unique index), `models/ChallengeResult.js` (`challenge_results`, one row per attempt), `routes/challenge.js` (`/api/challenge`). `async/logic.js`: `opts.challenge` lets one human play and fills the KI seats at once; leaving and cancelling are refused. `async/service.js`: `create(user, body, internal)` – only the server sets the challenge; `processResult` records it. Account deletion and Activity merges handle the rows.
 - `client/challenge.js` (via `inject.js`), the button in the multiplayer menu and the label in `ASYNC.row` (`mp.js`). Texts in `client/i18n.js`.
 
 **Tests:** `tests/challenge/challenge.test.js`. `resign`, `nextgame`, `bots`, `summary`, `i18n` pass.

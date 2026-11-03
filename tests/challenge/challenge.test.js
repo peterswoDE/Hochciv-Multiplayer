@@ -6,13 +6,17 @@
  *   npm i --no-save playwright-core
  *   node tests/challenge/challenge.test.js [http://localhost:3000]
  *
- * Unit: ISO weeks (also week 53 and the turn of the year) and the week's setup. A starts this
- * week's challenge from the multiplayer menu: a Rundenspiel alone against three KI with the
- * week's nation, ability, map and settings, A's turn, labelled in the list. One attempt: a second
+ * Unit: ISO weeks (also week 53 and the turn of the year), week bounds and the week's setup. A
+ * starts this week's challenge from the multiplayer menu: a Rundenspiel alone against three KI
+ * with the week's nation, ability, map and settings, A's turn, labelled in the list. A second
  * start returns the running game; leaving, cancelling and a self-made "challenge" through the
- * normal API are refused. A resigns – a loss with A's points; two other results (wins) rank
- * above it (fewer rounds first). After that A can't start again; the page shows A's result, the
- * leaderboard and the previous week. English.
+ * normal API are refused. A resigns – a loss with A's points; other results (wins) rank above it
+ * (fewer rounds first, each player's best attempt once). A plays again (a new attempt) and starts
+ * over (the running one is resigned); the page shows the result, the attempts, continue / start
+ * over / play again. At most three running attempts. A past week (the local setup starts the
+ * challenge at 2026-W40, docker-compose.local.yml): only attempts finished within it are on its
+ * leaderboard; A plays it – practice, shown as "not ranked". Weeks before the first and future
+ * weeks are refused. English.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -30,6 +34,7 @@ const BROWSER = process.env.HOCHCIV_BROWSER || [
 ].find(p => fs.existsSync(p));
 const CONTAINER = process.env.HOCHCIV_CONTAINER || 'hochciv-multiplayer-local';
 const inServer = code => execFileSync('docker', ['exec', '-i', '-w', '/app', CONTAINER, 'node', '-'], { input: code }).toString().trim().split('\n').filter(l => !/Engine Adapter/.test(l)).join('\n');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const sql = q => execFileSync('docker', ['exec', 'hochciv-db', 'psql', '-U', 'hochciv', '-d', 'hochciv', '-tAc', q]).toString().trim();
 const PASSWORD = 'Test-' + crypto.randomBytes(6).toString('hex');
 const users = [];
@@ -61,10 +66,14 @@ function unit() {
     ok(JSON.stringify(a) === JSON.stringify(b) && civ && civ.abilities.some(x => x.k === a.ability) && ['0', 'gross'].includes(a.mapKey) && a.playerCount === 4 && a.kiCount === 3,
         'unit: the same setup for everybody, a real nation and ability', JSON.stringify(a));
     ok(JSON.stringify(a) !== JSON.stringify(c), 'unit: another week, another setup');
+    const bw = id => { const x = C.boundsOf(id); return x && x.startsAt.toISOString().slice(0, 10) + '/' + x.endsAt.toISOString().slice(0, 10); };
+    ok(bw('2026-W45') === '2026-11-02/2026-11-09' && bw('2026-W53') === '2026-12-28/2027-01-04' && bw('2027-W53') === null && bw('2026-W1') === null,
+        'unit: the bounds of a week id');
 }
 
 (async () => {
     try { unit(); } catch (e) { ok(false, 'unit', e.stack); }
+    const C_setup = w => require('../../utils/challenge').setupOf(w);
     const { chromium } = require('playwright-core');
     const browser = await chromium.launch({ executablePath: BROWSER });
     const errors = [];
@@ -110,26 +119,74 @@ function unit() {
         // A resigns: a loss with A's points
         const res = await api('POST', `/api/async/${v.id}/resign`);
         ok(res.body.ok, 'A resigns');
-        const row = await (async () => { for (let i = 0; i < 40; i++) { const r = sql(`SELECT finished || ':' || won || ':' || coalesce(points, -1) || ':' || ("gameId" IS NOT NULL) FROM challenge_results WHERE "weekId" = '${week}' AND "userId" = '${A.id}'`); if (/^true/.test(r)) return r; await new Promise(x => setTimeout(x, 500)); } return null; })();
+        const rowOf = async id => { for (let i = 0; i < 40; i++) { const r = sql(`SELECT finished || ':' || won || ':' || coalesce(points, -1) || ':' || ("gameId" IS NOT NULL) FROM challenge_results WHERE "asyncId" = '${id}'`); if (/^true/.test(r)) return r; await sleep(500); } return null; };
+        const row = await rowOf(v.id);
         ok(row && /^true:false:\d+:true$/.test(row), 'recorded: finished, no victory, points, the match', row);
 
-        // two other results: wins in 30 and 25 rounds
+        // other results: B wins in 30 rounds (and has a worse attempt), C wins in 25
         sql(`INSERT INTO challenge_results (id, "weekId", "userId", username, finished, won, rounds, points, "finishedAt", "createdAt", "updatedAt") VALUES
             (gen_random_uuid(), '${week}', '${B.id}', '${B.name}', true, true, 30, 40, now(), now(), now()),
+            (gen_random_uuid(), '${week}', '${B.id}', '${B.name}', true, false, 50, 10, now(), now(), now()),
             (gen_random_uuid(), '${week}', '${C.id}', '${C.name}', true, true, 25, 20, now(), now(), now())`);
         const info = (await api('GET', '/api/challenge')).body;
         const order = info.list.filter(r => [A.id, B.id, C.id].includes(r.userId)).map(r => r.userId);
-        ok(order.join() === [C.id, B.id, A.id].join() && info.me.status === 'finished' && info.me.rank === info.list.findIndex(r => r.userId === A.id) + 1,
-            'leaderboard: wins first, fewer rounds first, then the loss', JSON.stringify(info.list.map(r => [r.username, r.won, r.rounds, r.points])));
-        const third = await api('POST', '/api/challenge/start');
-        ok(third.body.error === 'Du hast die Challenge dieser Woche schon gespielt.', 'one attempt per week', third.body.error);
+        ok(order.join() === [C.id, B.id, A.id].join() && info.list.find(r => r.userId === B.id).rounds === 30
+            && info.me.ranked && info.me.ranked.rank === info.list.findIndex(r => r.userId === A.id) + 1 && info.me.attempts === 1 && !info.me.running && !info.me.best,
+            'leaderboard: wins first, fewer rounds first, each player\'s best attempt once', JSON.stringify(info.list.map(r => [r.username, r.won, r.rounds, r.points])));
+
+        // play again, then start over (resigns the running attempt)
+        const second = await api('POST', '/api/challenge/start', {});
+        ok(second.body.asyncId && second.body.asyncId !== v.id && !second.body.running, 'play again: a new attempt', JSON.stringify(second.body));
+        const third = await api('POST', '/api/challenge/start', { restart: true });
+        ok(third.body.asyncId && third.body.asyncId !== second.body.asyncId, 'start over: another new attempt', JSON.stringify(third.body));
+        const secondRow = await rowOf(second.body.asyncId);
+        ok(secondRow && /^true:false:/.test(secondRow), 'starting over resigned the running attempt (a loss)', secondRow);
+        const info2 = (await api('GET', '/api/challenge')).body;
+        ok(info2.me.attempts === 2 && info2.me.running === third.body.asyncId, 'A: two attempts finished, one running', JSON.stringify(info2.me));
 
         await p.evaluate(() => CHALLENGE.open());
-        await p.waitForSelector('#ch-result', { timeout: 10000 });
-        ok(/Dein Ergebnis: Platz \d+ · \d+ Punkte, kein Sieg/.test(await p.textContent('#ch-result')) && await p.$(`.ch-table tr.rk-me[data-user="${A.id}"]`), 'the page: own result, own row marked');
-        await p.click('.ch-nav a');
-        await p.waitForFunction(() => /abgeschlossen/.test(document.getElementById('ch-box').textContent), null, { timeout: 10000 })
-            .then(() => ok(true, 'the previous week'), () => ok(false, 'the previous week'));
+        await p.waitForSelector('#ch-restart', { timeout: 10000 });
+        ok(/Dein Ergebnis: Platz \d+ · \d+ Punkte, kein Sieg/.test(await p.textContent('#ch-result')) && await p.$(`.ch-table tr.rk-me[data-user="${A.id}"]`)
+            && /2 Versuch\(e\) beendet/.test(await p.textContent('#ch-attempts')) && await p.$('#ch-continue') && !(await p.$('#ch-start')),
+            'the page: own result, own row marked, attempts, continue and start over');
+        await api('POST', `/api/async/${third.body.asyncId}/resign`);
+        await rowOf(third.body.asyncId);
+        await p.evaluate(() => CHALLENGE.open());
+        await p.waitForSelector('#ch-start', { timeout: 10000 });
+        ok(/Nochmal spielen/.test(await p.textContent('#ch-start')) && /3 Versuch\(e\) beendet/.test(await p.textContent('#ch-attempts')), 'the page: "Nochmal spielen" after a finished attempt');
+
+        // at most three running attempts in all
+        const prevWeek = info.week.previous;
+        sql(`INSERT INTO challenge_results (id, "weekId", "userId", username, "createdAt", "updatedAt") VALUES
+            (gen_random_uuid(), '2026-W40', '${A.id}', '${A.name}', now(), now()), (gen_random_uuid(), '2026-W41', '${A.id}', '${A.name}', now(), now()),
+            (gen_random_uuid(), '2026-W42', '${A.id}', '${A.name}', now(), now())`);
+        const many = await api('POST', '/api/challenge/start', { week: prevWeek });
+        ok(/drei laufende/.test(many.body.error || ''), 'at most three running attempts', many.body.error);
+        sql(`DELETE FROM challenge_results WHERE "userId" = '${A.id}' AND "weekId" IN ('2026-W40', '2026-W41', '2026-W42')`);
+
+        // a past week: playable, but its leaderboard is closed
+        ok(prevWeek && info.weeks[0] === week && info.weeks.includes(prevWeek) && info.week.next === null, 'the weeks to pick, newest first', JSON.stringify(info.weeks));
+        sql(`INSERT INTO challenge_results (id, "weekId", "userId", username, finished, won, rounds, points, "finishedAt", "createdAt", "updatedAt") VALUES
+            (gen_random_uuid(), '${prevWeek}', '${C.id}', '${C.name}', true, false, 60, 15, now() - interval '7 days', now(), now()),
+            (gen_random_uuid(), '${prevWeek}', '${B.id}', '${B.name}', true, true, 20, 50, now(), now(), now())`);
+        const past = (await api('GET', '/api/challenge?week=' + prevWeek)).body;
+        ok(!past.week.current && past.week.next === week && past.list.some(r => r.userId === C.id) && !past.list.some(r => r.userId === B.id),
+            'a past week: only attempts finished within it count', JSON.stringify(past.list.map(r => r.username)));
+        const ps = await api('POST', '/api/challenge/start', { week: prevWeek });
+        const listed = (await api('GET', '/api/async')).body.mine.find(g => g.id === ps.body.asyncId);
+        ok(ps.body.asyncId && listed && listed.config.challenge === prevWeek && listed.config.mapKey === C_setup(prevWeek).mapKey, 'a past week can be played, with its setup', JSON.stringify(ps.body));
+        await api('POST', `/api/async/${ps.body.asyncId}/resign`);
+        await rowOf(ps.body.asyncId);
+        const past2 = (await api('GET', '/api/challenge?week=' + prevWeek)).body;
+        ok(past2.me.attempts === 1 && !past2.me.ranked && past2.me.best && !past2.list.some(r => r.userId === A.id), 'its attempt is practice: best, not ranked', JSON.stringify(past2.me));
+        await p.evaluate(() => CHALLENGE.open());
+        await p.waitForSelector('#ch-week', { timeout: 10000 });
+        await p.selectOption('#ch-week', prevWeek);
+        await p.waitForSelector('#ch-closed', { timeout: 10000 });
+        ok(/abgeschlossen/.test(await p.textContent('.ch-head')) && /Bester Versuch außer Wertung · \d+ Punkte, kein Sieg/.test(await p.textContent('#ch-best'))
+            && /Nochmal spielen/.test(await p.textContent('#ch-start')) && !(await p.$('#ch-result')), 'the page: a past week, closed, own practice result, play again');
+        const before = await api('GET', '/api/challenge?week=2026-W30'), future = await api('POST', '/api/challenge/start', { week: '2099-W01' });
+        ok(before.body.error === 'Diese Woche gibt es nicht.' && future.body.error === 'Diese Woche hat noch nicht begonnen.', 'weeks before the first and future weeks are refused');
 
         // English
         const pe = await (await browser.newContext({ locale: 'en-US' })).newPage();
