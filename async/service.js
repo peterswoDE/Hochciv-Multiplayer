@@ -462,7 +462,10 @@ async function open(user, id) {
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
     const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);
     if (!e.g.seats.some(s => s.userId === user.id) && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
-    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [], chatMute: (e.g.chatMutes || {})[user.id] || null };
+    // team messages only for the team (spectators see the public ones)
+    const mine = e.g.seats.find(s => s.userId === user.id);
+    const chat = (e.g.chat || []).filter(m => m.team == null || (mine && mine.team === m.team));
+    return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat, chatMute: (e.g.chatMutes || {})[user.id] || null };
 }
 
 /**
@@ -479,6 +482,9 @@ async function chat(user, id, payload) {
     if (isText && reports.muteActive(mute)) return { error: 'Du kannst gerade keine Texte schreiben.', mute };
     const r = chatLib.build({ slot: seat.slot, name: user.username, uid: user.id }, payload, `async:${id}:${user.id}`);
     if (r.error) return { error: r.error };
+    // team mode: a message to the own team only
+    const team = payload.team && e.g.config.teams && (seat.team === 0 || seat.team === 1) ? seat.team : null;
+    if (team != null) r.msg.team = team;
     if (r.msg.kind === 'text') {
         const v = await reports.moderate({ source: 'async', sourceId: id, history: e.g.chat, msg: r.msg, sender: { id: user.id, name: user.username }, mute });
         if (v) {
@@ -503,7 +509,11 @@ async function chat(user, id, payload) {
         e.queue = run.catch(() => {}).finally(() => { e.busy--; });
         await run;
     }
-    if (io) io.to(room(id)).emit('async:chat', { id, msg: r.msg });
+    if (io && team == null) io.to(room(id)).emit('async:chat', { id, msg: r.msg });
+    else if (io) {
+        const mates = new Set(e.g.seats.filter(s => s.userId && s.team === team).map(s => s.userId));
+        for (const s of await io.in(room(id)).fetchSockets()) if (mates.has(s.data.userId)) s.emit('async:chat', { id, msg: r.msg });
+    }
     return { ok: true };
 }
 

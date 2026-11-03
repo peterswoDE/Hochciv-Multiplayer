@@ -408,6 +408,7 @@ function sessionSummary(s) {
         wonders: !!cfg.wonders,
         ranked: !!cfg.ranked,
         turnTime: cfg.turnTime || 0,
+        teams: !!cfg.teams,
     };
 }
 
