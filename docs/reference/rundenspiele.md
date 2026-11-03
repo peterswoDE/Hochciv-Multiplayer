@@ -31,7 +31,7 @@ Leaving is free until your seat has had its first turn (or the pre-phase began).
 
 ## Waiting, reminders and the KI takeover
 
-The server checks every 10 minutes (`ASYNC_SWEEP_MS`) how long each game has been waiting (`waitSince`).
+The server checks every 10 minutes (`ASYNC_SWEEP_MS`) how long each game has been waiting (`waitSince`). The host picks the **time per turn** when creating the game: 1, 3 or 7 days (`config.turnDays`, default 7). The times below are for 7 days; a shorter time per turn scales both (1 day: reminder after about 17 hours, takeover after 1 day). Finding players (setup) always has the full 7 days.
 
 | After | What happens |
 |---|---|

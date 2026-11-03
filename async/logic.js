@@ -38,6 +38,8 @@ const ENG = g => engine.forVersion(engineVersionOf(g));
 const MAP_KEYS = ['0', 'gross', 'plaettchen', 'marathon', 'eigene'];
 const KI_TAKEOVER_LEVEL = { ranked: 'schwer', normal: 'mittel' };
 const MMR_PENALTY = 15;
+/** Time per turn a host can pick for a Rundenspiel (days). */
+const TURN_DAYS = [1, 3, 7];
 
 const isTile = g => g.config.mapKey === 'plaettchen';
 const isCustom = g => g.config.mapKey === 'eigene';
@@ -116,6 +118,8 @@ function create(host, opts) {
         difficulty: engine.kiLevelFor(raw.difficulty),
         ranked: !!raw.ranked,
         isPublic: !!raw.isPublic,
+        // time per turn in days (F19); setup keeps 7 days to find players
+        turnDays: TURN_DAYS.includes(raw.turnDays) ? raw.turnDays : 7,
         seed: Math.floor(Math.random() * 2 ** 31),
     };
     // Ranked: KI on the hardest level (as in live lobbies)
@@ -814,5 +818,5 @@ function view(g, userId) {
 module.exports = {
     create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, resign, DELETED_NAME, IN_PREPHASE,
     waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
-    MMR_PENALTY,
+    MMR_PENALTY, TURN_DAYS,
 };

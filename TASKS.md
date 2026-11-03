@@ -24,7 +24,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ✅ |
 | 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ✅ |
 | 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ✅ |
-| 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ⬜ |
+| 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ✅ |
 | 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ⬜ |
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ⬜ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ⬜ |
@@ -420,9 +420,19 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** Faster Rundenspiele for groups who play daily.
 
-**Planned:** the host picks the time per turn when creating the game: 1, 3 or 7 days (default 7). The reminder comes at 70 % of it. Shown in the game list and the filters.
+**Decisions**
+- The host picks *Zeit pro Zug* when creating a Rundenspiel: 1, 3 or 7 days (default 7, older games 7).
+- Reminder and takeover scale with it (reminder at 5/7, takeover at the end; 1 day: about 17 hours, then 1 day). Finding players (setup) always has 7 days.
+- The open games show *1 Tag pro Zug* / *3 Tage pro Zug*, and the filter *Zeit pro Zug: Mit Zeitlimit* finds them. The list shows the hours left once less than a day is left. The e-mails name the real time.
 
-**Status:** ⬜
+**Implementation**
+- `async/logic.js`: `config.turnDays` (`TURN_DAYS`). `async/service.js`: `timeoutOf()`, `reminderOf()`, `duration()`; the sweep looks at games waiting longer than the shortest reminder and checks each one; `deadline` in the list.
+- `mp.js`: the form's select, `lobbyTraits()` / `traitsHtml()`, hours left in `row()`. Texts in `client/i18n.js`.
+- `docker-compose.local.yml` passes `ASYNC_TIMEOUT_MS`, `ASYNC_REMINDER_MS`, `ASYNC_SWEEP_MS` for tests.
+
+**Tests:** `tests/deadline/deadline.test.js` (scaled-down timeouts). `lobbies/lobby-filter`, `summary`, `i18n` pass.
+
+**Status:** ✅ on `development`
 
 ## F20 "Next game" button
 
