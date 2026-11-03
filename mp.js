@@ -514,6 +514,9 @@ const MP = {
                 if (MP.renderLobby) MP.renderLobby();
             });
             this.socket.on('lobby:config:update', (newConfig) => {
+                // ready check: changed settings have to be confirmed again (the server clears it)
+                const me = (MP.players || []).find(p => p.index === MP.lobbyIndex);
+                if (me && me.ready && MP.lobbyIndex !== MP.hostIndex) toast(TX('Der Host hat die Einstellungen geändert – bitte bestätige erneut.'));
                 MP.gameConfig = newConfig;
                 if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
             });
@@ -985,7 +988,7 @@ const MP = {
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                             ${isMarathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
                         </td>
-                        <td>${p.connected ? TX('Verbunden') : TX('Wartet')}</td>
+                        <td>${this.readyCell(p, isMe, isPlayerHost)}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">${TX('Kick')}</button>` : ''}</td>
                     </tr>
                 `}).join('');
@@ -1064,7 +1067,8 @@ const MP = {
               </label>
           </div>
 
-          ${isHost ? `<button class="btn wide primary" onclick="MP.startGame()">${TX('Spiel starten')}</button>` : ''}
+          ${isHost ? `<button class="btn wide primary" id="mp-start-btn" onclick="MP.startClick()">${TX('Spiel starten')}${this.readyCount().of ? ` <small>(${TX('%s/%s bereit', this.readyCount().ready, this.readyCount().of)})</small>` : ''}</button>`
+                : `<p class="sub mp-ready-hint">${this.readyHint()}</p>`}
         `;
             }
             modal(TX('Multiplayer'), h);
@@ -1654,6 +1658,33 @@ const MP = {
             console.error(e);
             toast(TX('Server nicht erreichbar: %s', e.message));
         }
+    },
+
+    // ── Lobby ready check (F17) ──────────────────────────────────────────────────
+    /** The other humans in the lobby and how many of them are ready (the host doesn't tick). */
+    readyCount: function () {
+        const others = (this.players || []).filter(p => p.index !== this.hostIndex);
+        return { ready: others.filter(p => p.ready).length, of: others.length };
+    },
+    readyCell: function (p, isMe, isHost) {
+        if (!p.connected) return TX('Wartet');
+        if (isHost) return TX('Host');
+        if (isMe) return `<button type="button" class="btn small ${p.ready ? 'mp-ready-on' : 'primary'}" id="mp-ready-btn" onclick="MP.setReady(${!p.ready})"
+            title="${escHtml(p.ready ? TX('Nochmal tippen, um es zurückzunehmen.') : TX('Zeigt dem Host, dass du startklar bist.'))}">${p.ready ? '✓ ' + TX('Bereit') : TX('Ich bin bereit')}</button>`;
+        return p.ready ? `<span class="mp-ready-yes">✓ ${TX('Bereit')}</span>` : `<span class="mp-ready-no">${TX('Wählt noch …')}</span>`;
+    },
+    readyHint: function () {
+        const me = (this.players || []).find(p => p.index === this.lobbyIndex);
+        return me && me.ready ? TX('Du bist bereit. Der Host startet das Spiel.') : TX('Wähle deine Nation und tippe auf „Ich bin bereit".');
+    },
+    setReady: function (ready) {
+        this.socket.emit('lobby:ready', { ready }, res => { if (res && res.error) toast(TXS(res.error)); });
+    },
+    /** The host's start button: asks first when someone isn't ready yet. */
+    startClick: function () {
+        const c = this.readyCount();
+        if (c.ready < c.of && !confirm(TX('%s von %s Mitspielern sind noch nicht bereit. Trotzdem starten?', c.of - c.ready, c.of))) return;
+        this.startGame();
     },
 
     startGame: function () {
@@ -2901,8 +2932,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const style = document.createElement('style');
     style.textContent = `
-        .mp-invite-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 12px; }
-        .mp-invite-bar .sub { font-size:12px; }
+        .mp-ready-yes { color:#2e6b34; font-weight:600; white-space:nowrap; }
+        .mp-ready-no { opacity:.65; }
+        .btn.mp-ready-on { background:#2e6b34; color:#fff; border-color:#2e6b34; }
+        .mp-ready-hint { text-align:center; margin:8px 0 0; }
+        .mp-invite-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 12px; clear:both; }
+        .mp-invite-bar .btn { flex:0 0 auto; width:auto; margin:0; white-space:nowrap; }
+        .mp-invite-bar .sub { font-size:12px; flex:1 1 180px; }
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
         /* Main menu (MP.arrangeMenu): login bar on top, the secondary buttons in a grid */
         #mp-main-auth-container { position:absolute; top:0; left:0; right:0; z-index:1000; display:flex; justify-content:flex-end; align-items:center; padding:12px 20px; }

@@ -22,7 +22,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | ✅ |
 | 13 | F15 | [Invite link](#f15-invite-link) | ✔ | ✔ | ✅ |
 | 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ✅ |
-| 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ⬜ |
+| 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ✅ |
 | 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ⬜ |
 | 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ⬜ |
 | 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ⬜ |
@@ -386,9 +386,18 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** The host starts when everyone has picked a nation, not while someone is still choosing.
 
-**Planned:** every human ticks *Bereit*; the host's start button says how many are ready and asks before starting anyway. A change of the settings clears the ticks. Kicking from the lobby exists already.
+**Decisions**
+- Every player except the host taps *Ich bin bereit* (and can take it back). The status column shows *✓ Bereit* / *Wählt noch …*; the host doesn't tick.
+- The host's *Spiel starten (n/m bereit)* asks before starting while someone isn't ready; the server doesn't block the start.
+- New lobby settings clear every tick, and whoever was ready is told to confirm again. Player-bots are always ready. Kicking from the lobby existed already.
 
-**Status:** ⬜
+**Implementation**
+- `sockets/game.js`: `lobby:ready { ready }`, ticks cleared after `lobby:config`, `ready` in `publicPlayers()`. `sessions.js`: the rematch clears it.
+- `mp.js`: `readyCount()`, `readyCell()`, `readyHint()`, `setReady()`, `startClick()` (the button; `startGame()` stays without the question for the Discord Activity and tests). Texts in `client/i18n.js`. The invite bar and the status column wrap on phones.
+
+**Tests:** `tests/ready/ready.test.js`. `i18n`, `mobile`, `bots`, `rematch` pass.
+
+**Status:** ✅ on `development`
 
 ## F18 Sound and tab alerts
 
