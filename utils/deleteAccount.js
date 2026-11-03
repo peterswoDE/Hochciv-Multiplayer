@@ -14,6 +14,7 @@ const { destroyOtherSessions } = require('./auth');
 const { sendMail } = require('./mailer');
 const friends = require('./friends');
 const seasons = require('./seasons');
+const challenge = require('./challenge');
 
 /** A real address that mails can go to (not the placeholder of OAuth accounts without e-mail). */
 const mailable = email => !!email && !email.endsWith('@oauth.local');
@@ -62,6 +63,7 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
         await DeviceToken.destroy({ where: { UserId: user.id }, transaction });
         await friends.removeUser(user.id, transaction);
         await seasons.removeUser(user.id, transaction);
+        await challenge.removeUser(user.id, transaction);
         await user.destroy({ transaction });
     });
     await destroyOtherSessions(sequelize, user.id);

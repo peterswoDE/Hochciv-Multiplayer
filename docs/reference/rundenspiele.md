@@ -51,6 +51,10 @@ At the 7-day timeout:
 
 A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. In ranked games the player who was replaced loses **15 MMR** on top of the result ([Points and MMR](ranking.md)). Replaced players still see the game in their history (`replacedUserId`).
 
+## Weekly challenge
+
+The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to `challenge_results`. It is never ranked.
+
 ## Resigning
 
 While the game runs, a player can resign (*Aufgeben* in the game menu, `POST /api/async/:id/resign`). The KI plays the seat to the end, like after the 7-day timeout (same level, same 15 MMR in ranked games); the player watches the game read-only. A duel without KI ends at once with the other player's win; when nobody human is left, the most points win.
