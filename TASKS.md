@@ -25,7 +25,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ✅ |
 | 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ✅ |
 | 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ✅ |
-| 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ⬜ |
+| 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ✅ |
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ⬜ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ⬜ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | – (solo vs. KI) | ⬜ |
@@ -438,9 +438,16 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** Play all Rundenspiele that wait for you in one go.
 
-**Planned:** after ending a turn in a Rundenspiel, *Nächstes Spiel (n)* opens the next game where it is your turn; the HUD shows it as well.
+**Decisions**
+- In a Rundenspiel, while it isn't one's turn (or the game is over), *▶ Nächstes Spiel (n)* appears below the waiting note when other games wait for one's turn; it opens the one with the nearest deadline. Hidden during one's own turn.
+- The list is fetched right after one's turn ends and at most every 20 seconds otherwise.
 
-**Status:** ⬜
+**Implementation**
+- `mp.js`: `refreshNext()` (from `syncTurnBlocker`), `drawNextGame()` (below the AFK/resign banner if one is shown), `openNextGame()` (closes the game and opens the next; on an older game version page via `/?async=`). `ASYNC.close()` hides it. Texts in `client/i18n.js`.
+
+**Tests:** `tests/nextgame/nextgame.test.js`.
+
+**Status:** ✅ on `development`
 
 ---
 
