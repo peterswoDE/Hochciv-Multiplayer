@@ -51,6 +51,10 @@ At the 7-day timeout:
 
 A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. In ranked games the player who was replaced loses **15 MMR** on top of the result ([Points and MMR](ranking.md)). Replaced players still see the game in their history (`replacedUserId`).
 
+## Teams
+
+With *Teams* (`config.teams`) a Rundenspiel is humans only. The host picks a team when creating it, joiners when joining (`team: 0 | 1`); each team has half the empires (A the odd one). At the start the teams go onto the state (`S.mpTeams`); a team without players switches team mode off. Teammates don't attack each other and win together ([utils/teams.js](../reference/architecture.md)); team chat messages only reach the team.
+
 ## Weekly challenge
 
 The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to `challenge_results`. It is never ranked.
