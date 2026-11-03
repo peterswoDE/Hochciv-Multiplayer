@@ -99,6 +99,7 @@ The `clientId` is a secret the browser generates and keeps; the game itself then
 | POST | `/:id/join` | Take a seat |
 | POST | `/:id/leave` | Leave before the start |
 | POST | `/:id/cancel` | Host cancels |
+| POST | `/:id/resign` | Resign while the game runs: the KI plays the seat to the end ([Resign](socket-events.md#resign)) |
 | POST | `/:id/invite` | Invite a player by username |
 | POST | `/:id/decline` | Decline an invitation |
 

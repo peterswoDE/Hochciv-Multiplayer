@@ -28,6 +28,7 @@ const engine = require('../engine-adapter');
 const { renameInState } = require('../utils/rename');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
+const Resign = require('../utils/resign');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and are v83. New games get the current one. */
@@ -630,6 +631,29 @@ function timeout(g) {
     return { replaced, penalized };
 }
 
+// ── Resign (F16) ──────────────────────────────────────────────────────────────
+
+/**
+ * The player gives up: the KI plays the seat to the end (like the 7-day takeover, which costs
+ * the same in ranked games). Returns { error } or { penalized: userId | null }.
+ */
+function resign(g, userId) {
+    const seat = seatOf(g, userId);
+    if (!seat) return { error: 'Du bist nicht in diesem Spiel.' };
+    if (g.status !== 'playing' || !g.state || g.state.over) return { error: 'Aufgeben geht nur, solange das Spiel läuft.' };
+    const S = g.state, E = ENG(g).getEngine();
+    const i = stateIndex(g, seat.slot);
+    const penalized = replaceSeat(g, seat);
+    seat.resigned = true;
+    Object.assign(S.players[i], { kind: 'ki', kiLevel: seat.kiLevel });
+    Resign.logResign(E, S, seat.name || (civDef(seat.civ) || {}).n || seat.civ);
+    const humans = g.seats.filter(s => s.kind === 'human' && s.userId && !s.replaced).map(s => stateIndex(g, s.slot));
+    const startedWithKi = g.seats.some(s => s.kind !== 'human' && !s.replaced);
+    const end = Resign.endAfterResign(E, S, humans, startedWithKi);
+    if (end) S.over = end;           // drive() finishes the game; otherwise it plays the KI's turn
+    return { penalized };
+}
+
 // ── Account deletion ─────────────────────────────────────────────────────────
 
 const DELETED_NAME = 'Gelöschter Spieler';
@@ -713,6 +737,7 @@ function summary(g, userId) {
         seats: publicSeats(g),
         mySlot: mine ? mine.slot : null,
         replaced: !!(mine && mine.replaced),
+        resigned: !!(mine && mine.resigned),
         yourTurn: w.userIds.includes(userId),
         waitingFor: w.label,
         round: S ? S.round : 0,
@@ -736,7 +761,7 @@ function publicSeats(g) {
     return g.seats.map(s => ({
         slot: s.slot, civ: s.civ, kind: s.kind, name: s.name, userId: s.userId,
         ability: s.ability, drafted: s.drafted || null, roman: s.roman, color: s.color,
-        replaced: !!s.replaced, started: !!s.started, botAccount: !!s.botAccount,
+        replaced: !!s.replaced, resigned: !!s.resigned, started: !!s.started, botAccount: !!s.botAccount,
     }));
 }
 
@@ -787,7 +812,7 @@ function view(g, userId) {
 }
 
 module.exports = {
-    create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, DELETED_NAME, IN_PREPHASE,
+    create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, resign, DELETED_NAME, IN_PREPHASE,
     waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
     MMR_PENALTY,
 };

@@ -51,6 +51,10 @@ At the 7-day timeout:
 
 A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. In ranked games the player who was replaced loses **15 MMR** on top of the result ([Points and MMR](ranking.md)). Replaced players still see the game in their history (`replacedUserId`).
 
+## Resigning
+
+While the game runs, a player can resign (*Aufgeben* in the game menu, `POST /api/async/:id/resign`). The KI plays the seat to the end, like after the 7-day timeout (same level, same 15 MMR in ranked games); the player watches the game read-only. A duel without KI ends at once with the other player's win; when nobody human is left, the most points win.
+
 ## Notifications
 
 Through `utils/notify.js`, by e-mail and [push](../operations/push-notifications.md): invitation, your turn (with a short "since your last turn" summary), reminder, takeover, game finished. Players switch e-mail and push separately in the Rundenspiele list.

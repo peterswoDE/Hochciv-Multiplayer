@@ -29,6 +29,7 @@ const decompress = promisify(zlib.brotliDecompress);
 /** How the game was won, from S.over (the engine's texts are German on the server). */
 function victoryOf(over) {
     if (!over) return null;
+    if (over.resign) return 'resign';
     if (over.military) return 'military';
     const how = String(over.how || '');
     if (/Forschungssieg/.test(how)) return 'science';
