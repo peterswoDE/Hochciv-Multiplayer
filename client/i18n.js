@@ -397,7 +397,7 @@
         'offline': 'offline',
         'du': 'you',
         'am Zug': 'on turn',
-        'inkl. +%s Sieg': 'incl. +%s for the win',
+        '×%s für den Sieg': '×%s for the win',
         'Spieler': 'Player',
         'Reich': 'Empire',
         'Punkte': 'Points',

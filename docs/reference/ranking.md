@@ -4,7 +4,7 @@
 
 ## Points at the end of a game
 
-`utils/score.js`: the engine's `victoryScore` (population + wonders + technologies) plus a fixed **winner bonus of 10** (`WIN_BONUS`). These points go into the match history and into the MMR calculation. `mp.js` shows the same number on the end screen (`MP.WIN_BONUS` – keep both in step). The game's own tiebreak between several victory claims is not affected; that stays inside the engine.
+`utils/score.js`: the engine's `victoryScore` (population + wonders + technologies); the winner's points are **doubled** (`WIN_FACTOR = 2`). These points go into the match history and into the MMR calculation. `mp.js` shows the same number on the end screen (`MP.WIN_FACTOR` – keep both in step). The game's own tiebreak between several victory claims is not affected; that stays inside the engine.
 
 ## Which games are ranked
 

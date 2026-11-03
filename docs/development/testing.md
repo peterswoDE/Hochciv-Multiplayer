@@ -54,7 +54,7 @@ Tests create their own test accounts and delete them afterwards.
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin section | default |
 | `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
-| `score/win-bonus.test.js` | winner's bonus points | default |
+| `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
 | `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
 | `spectators/spectators.test.js` | spectator mode | default |
