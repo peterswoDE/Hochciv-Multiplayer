@@ -26,6 +26,7 @@ What the multiplayer server adds to the single-player game. The roadmap with the
 
 * **Ranked games and MMR:** Ranked games change every account's MMR by placement and point difference. Details: [Points and MMR](../reference/ranking.md).
 * **Ranked matchmaking:** *🔥 Gewertetes Spiel suchen* in the multiplayer menu (logged in) puts a player in a queue that pairs players by MMR (±100, growing by 50 every 15 seconds). Four players who fit start at once; two or three once the one waiting longest has waited 20 seconds. Everyone confirms within 20 seconds, then the server creates the lobby and starts a ranked game: original map, random nations, 3 minutes per turn, free seats up to four empires played by the KI at its hardest level. Whoever doesn't confirm leaves the queue; the others keep their place.
+* **Friends list:** the tab *👥 Freunde* of the multiplayer menu (logged in): send a request by name, from a player profile or from *Zuletzt gespielt mit* (accounts from your recent games); accept or decline; see who is online and who sits in a lobby or plays (join a friend's public lobby, watch their public game). In a live lobby, *👥 Freunde einladen* sends online friends an invitation card; it also waits in their list for 15 minutes. Friend names can be picked when inviting to a Rundenspiel. Bots can't be friends, and a block stops requests.
 * **Player profiles:** Click a player name anywhere (end screen, history, player list) to see their MMR, games played, wins and match list.
 
 ## During and after a game

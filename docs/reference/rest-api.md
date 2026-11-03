@@ -133,6 +133,17 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
 
+## Friends – `/api/friends` (login)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | `{ friends: [{ id, username, mmr, online, seen, activity }], incoming, outgoing, invites, suggestions, max }`. `activity`: `{ status: lobby | playing, round, hostName }` plus `joinCode` / `password` / `full` of a public session |
+| POST | `/` | `{ username }` or `{ id }`: send a request; accepts at once when the other asked first. Not to oneself, bots, banned accounts or across a block; at most 200 friends and requests |
+| POST | `/:id/accept` | Accept the request of account `:id` |
+| DELETE | `/:id` | Decline, withdraw or end the friendship with account `:id` |
+
+Rate limit: 60 requests a minute per account.
+
 ## Push – `/api/push` (login)
 
 | Method | Path | Purpose |

@@ -31,6 +31,8 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 |---|---|
 | `auth.js` | Login guard, the user object sent to the client, input validation, one-time codes, recent-login check |
 | `bots.js` | Bot accounts: who may own bots and how many, tokens, whether a bot may play ([Bot accounts](bot-accounts.md)) |
+| `friends.js`, `presence.js` | Friends list: requests, the list with online status, live invitations; who is online (open sockets) |
+| `resign.js` | Resigning: when it ends the game, the log line, the MMR penalty |
 | `oauth.js`, `discordStrategy.js` | Google/Discord login strategies from the database configuration |
 | `totp.js`, `webauthn.js` | Authenticator codes; passkey relying party from `BASE_URL` |
 | `origin.js` | Which web pages may use a visitor's login ([Security](security.md#origin-check)) |
@@ -57,6 +59,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/profile.js` | Player profiles |
 | `client/matchmaking.js` | Ranked matchmaking UI |
 | `client/alerts.js` | Sound and tab alerts (own turn, lobby, start, match found, chat) |
+| `client/friends.js` | Friends list: the menu tab, lobby invitations, friend names for Rundenspiel invitations, the profile button |
 | `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |
 | `client/account.html`, `account.js` | Account page and admin panel |

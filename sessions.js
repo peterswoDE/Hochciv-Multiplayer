@@ -397,6 +397,34 @@ function sessionSummary(s) {
     };
 }
 
+/**
+ * Friends list (utils/friends.js): what an account does in a live game right now – null, or
+ * { status: 'lobby' | 'playing', round, hostName } plus code and password of a public session
+ * (those are in the public list anyway).
+ */
+function activityOf(userId) {
+    for (const [, s] of sessions) {
+        if (s.status === 'finished') continue;
+        const p = s.players.find(x => x.dbUserId === userId && x.connected && x.kind === 'human' && !x.resigned);
+        if (!p) continue;
+        const out = {
+            status: s.status === 'lobby' ? 'lobby' : 'playing',
+            round: s.state ? s.state.round : null,
+            hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : null,
+        };
+        if (s.isPublic) Object.assign(out, { joinCode: s.joinCode, password: s.password, full: s.players.length >= humanSeats(s) });
+        return out;
+    }
+    return null;
+}
+
+/** A live lobby by code, for invitations from it (utils/friends.js). */
+function lobbyByCode(joinCode) {
+    const id = codeIndex.get(String(joinCode || '').toUpperCase());
+    const s = id ? sessions.get(id) : null;
+    return s || null;
+}
+
 function recordActivity(sessionId) {
     const s = sessions.get(sessionId);
     if (s) {
@@ -417,6 +445,8 @@ module.exports = {
     cleanup,
     kickPlayer,
     previewSession,
+    activityOf,
+    lobbyByCode,
     updateConfig,
     updatePlayer,
     resetForRematch,

@@ -1,7 +1,7 @@
 /**
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
- *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the sound and tab alerts (client/alerts.js), the Discord Activity bridge, the
+ *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the sound and tab alerts (client/alerts.js), the friends list (client/friends.js), the Discord Activity bridge, the
  *     map browser (client/maps) and the mobile layer (client/mobile) to index.html,
  *   • points mp.js at this server,
  *   • writes a content hash into every script and stylesheet tag (utils/assets.js), so browsers
@@ -38,6 +38,8 @@ const REPLAY = '<script src="/client/replay.js"></script>';
 const MATCH = '<script src="/client/matchmaking.js"></script>';
 // Sound and tab alerts (after mp.js, which calls them)
 const ALERTS = '<script src="/client/alerts.js"></script>';
+// Friends list (after mp.js, which it uses)
+const FRIENDS = '<script src="/client/friends.js"></script>';
 const ACTIVITY = '<script src="js/activity.js"></script>';
 // Map browser (client/maps): published maps and favorites. After mp.js, whose MAPACCOUNT it uses.
 const MAPS_CSS = '<link rel="stylesheet" href="/client/maps/maps.css">';
@@ -68,7 +70,7 @@ if (fs.existsSync(htmlPath)) {
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
     if (!html.includes(MAPS_CSS)) html = html.replace('</head>', MAPS_CSS + '\n</head>');
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, I18N, PROFILE, MP, ALERTS, SCENES, CHAT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, PROFILE, MP, ALERTS, FRIENDS, SCENES, CHAT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     html = Assets.versioned(html, fileOf);
     fs.writeFileSync(htmlPath, html, 'utf8');

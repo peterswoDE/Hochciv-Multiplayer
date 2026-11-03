@@ -213,6 +213,8 @@
             const img = box.querySelector('img');
             img.onload = () => { box.firstChild.textContent = ''; };
         }
+        // friends list (client/friends.js, game page only): add / accept / "Freund"
+        if (window.FRIENDS && window.FRIENDS.decorateProfile) window.FRIENDS.decorateProfile(body.querySelector('.hcp-top'), data);
         const more = body.querySelector('#hcp-more');
         if (more) more.onclick = async () => {
             more.disabled = true;
