@@ -20,12 +20,20 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 10 | F12 | [Chat: word filter, guests emote-only](#f12-chat-word-filter-and-guests-emote-only) | ✔ | ✔ | ✅ |
 | 11 | F13 | [Overall statistics](#f13-overall-statistics) | ✔ | ✔ | ✅ |
 | 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | ✅ |
-| later | F8 | [Friends list](#f8-friends-list) | | | later |
-| later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
+| 13 | F15 | [Invite link](#f15-invite-link) | ✔ | ✔ | ✅ |
+| 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ⬜ |
+| 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ⬜ |
+| 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ⬜ |
+| 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ⬜ |
+| 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ⬜ |
+| 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ⬜ |
+| 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ⬜ |
+| 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | – (solo vs. KI) | ⬜ |
+| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ⬜ |
 
-The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
-All planned features are on `development` (staging). Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
+F1–F14 are in production. Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
 ---
 
@@ -334,14 +342,91 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Status:** ✅ on `development`
 
+## F15 Invite link
+
+**Goal:** Bring a friend into a game with one link instead of a code and a password to type.
+
+**Decisions**
+- Live games: `/?join=CODE&pw=PASSWORD`, also for private lobbies. Rundenspiele: `/?join=CODE`.
+- The lobby has *🔗 Einladungslink teilen*: on phones the system's share sheet, elsewhere the clipboard (a prompt if both fail). The Rundenspiel invite dialog shares the same kind of link (before, its link only worked for public games).
+- Whoever opens a live-game link sees whose game it is (host, map, settings, players) and joins with their name, or watches if the game runs already or the lobby is full. A Rundenspiel link opens the game's join dialog (guests log in first).
+- The address is cleaned right away, so code and password don't stay in the browser history or a reload.
+
+**Implementation**
+- `sessions.js`: `sessionSummary()` (shared with `getPublicSessions()`), `previewSession(code, password)` without password and session id. `routes/api.js`: `POST /api/sessions/preview` (rate-limited like joining).
+- `mp.js`: `inviteUrl()`, `shareInvite()`, `openInvite()`, `acceptInvite()`; `join()` and `joinPublic()` share `joinWith()`. Old game versions (`/v96/` …) pass the link on to `/`.
+- Texts in `client/i18n.js`.
+
+**Tests:** `tests/invite/invite.test.js`: the button copies the link, the preview (fields, no password, wrong password), joining a private lobby through the link, a wrong password, a running game offers watching, a guest's Rundenspiel link asks for the login, a logged-in player joins a private Rundenspiel, English.
+
+**Status:** ✅ on `development`
+
+## F16 Resign
+
+**Goal:** Give up a game you can't win instead of leaving the others waiting.
+
+**Planned:** *Aufgeben* in the game menu, with a confirmation. The KI plays the seat to the end; the player counts as last of the empires still in the game. Live games and Rundenspiele. In ranked games it costs the same as being replaced at the 7-day timeout (the result plus 15 MMR).
+
+**Status:** ⬜
+
+## F17 Lobby ready check
+
+**Goal:** The host starts when everyone has picked a nation, not while someone is still choosing.
+
+**Planned:** every human ticks *Bereit*; the host's start button says how many are ready and asks before starting anyway. A change of the settings clears the ticks. Kicking from the lobby exists already.
+
+**Status:** ⬜
+
+## F18 Sound and tab alerts
+
+**Goal:** Notice your turn, a full lobby or a found match while the tab is in the background.
+
+**Planned:** a short sound and a blinking tab title (`▶ Du bist dran`) for your turn, a player joining your lobby, the game starting, a ranked match found and a chat message. A switch for the sound, kept per device.
+
+**Status:** ⬜
+
+## F19 Turn deadline per Rundenspiel
+
+**Goal:** Faster Rundenspiele for groups who play daily.
+
+**Planned:** the host picks the time per turn when creating the game: 1, 3 or 7 days (default 7). The reminder comes at 70 % of it. Shown in the game list and the filters.
+
+**Status:** ⬜
+
+## F20 "Next game" button
+
+**Goal:** Play all Rundenspiele that wait for you in one go.
+
+**Planned:** after ending a turn in a Rundenspiel, *Nächstes Spiel (n)* opens the next game where it is your turn; the HUD shows it as well.
+
+**Status:** ⬜
+
 ---
 
-## Later
+## F8 Friends list
 
-Not started. These features need groundwork that doesn't exist yet.
-
-### F8 Friends list
 A friends list with online status and direct invitations to lobbies and Rundenspiele. Needs friends functionality (requests, accept, block) first.
 
-### F10 Seasons, leaderboard and badges
+**Status:** ⬜
+
+## F10 Seasons, leaderboard and badges
+
 Seasons with tiers and a soft MMR reset, a public leaderboard, and badges on the profile (wins with each nation, wonders built, …).
+
+**Status:** ⬜
+
+## F21 Weekly challenge
+
+**Goal:** A shared goal for everyone each week, also for players who have no opponent at hand.
+
+**Planned:** every week the same map, seed, nation and settings for everybody, played alone against the KI as a Rundenspiel-like game on the server. A leaderboard ranks the results (victory, then fewer rounds, then points). One scored attempt per week.
+
+**Status:** ⬜
+
+## F22 Team mode
+
+**Goal:** Play together against others, e.g. 2 against 2.
+
+**Planned:** the host splits the empires into teams in the lobby; a team wins together, and teammates have a team chat. The details depend on what the engine allows without changing the game files (alliances, victory check).
+
+**Status:** ⬜

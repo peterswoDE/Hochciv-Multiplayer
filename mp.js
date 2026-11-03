@@ -946,6 +946,8 @@ const MP = {
 
                 h = `
           <h3>${TX('Lobby')} <span class="sub" style="float:right">${TX('Code')}: <b>${this.joinCode}</b> · ${TX('Passwort')}: <b>${this.password}</b></span></h3>
+          <div class="mp-invite-bar"><button class="btn small" id="mp-invite-btn" onclick="MP.shareInvite(MP.joinCode, MP.password)">🔗 ${TX('Einladungslink teilen')}</button>
+            <span class="sub">${TX('Wer den Link öffnet, kommt direkt in diese Lobby.')}</span></div>
           <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
             <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>${TX('Spieler')}</th><th>${TX('Ziv')}</th><th>${TX('Status')}</th><th></th></tr>
             ${trs}
@@ -1376,14 +1378,17 @@ const MP = {
         }
     },
 
-    join: async function () {
+    /** Join form of the menu: code, password and name from the inputs. */
+    join: function () {
         const joinCode = $('mp-c').value.trim();
         const password = $('mp-p').value.trim();
-        const name = $('mp-n').value.trim();
-        localStorage.setItem('mp-name', name);
-
         if (!joinCode || !password) return toast(TX('Bitte Code und Passwort eingeben.'));
+        return this.joinWith(joinCode, password, $('mp-n').value.trim());
+    },
 
+    /** Join a live lobby and open it (form, public list, invite link). */
+    joinWith: async function (joinCode, password, name) {
+        localStorage.setItem('mp-name', name);
         try {
             toast(TX('Verbinde...'));
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
@@ -1396,7 +1401,7 @@ const MP = {
 
             this.sessionId = data.sessionId;
             this.lobbyIndex = data.playerIndex;
-            this.joinCode = joinCode;
+            this.joinCode = joinCode.toUpperCase();
             this.password = password;
 
             await this.connect();
@@ -1428,6 +1433,72 @@ const MP = {
             console.error(e);
             toast(TX('Server nicht erreichbar: %s', e.message));
         }
+    },
+
+    // ── Invite link: /?join=CODE&pw=PASSWORD (live game) or /?join=CODE (Rundenspiel) ──
+    inviteUrl: function (code, pw) {
+        const u = new URL('/', location.origin);
+        u.searchParams.set('join', code);
+        if (pw) u.searchParams.set('pw', pw);
+        return u.href;
+    },
+
+    /** Phones: the system's share sheet; elsewhere (or if it fails) the clipboard, then a prompt. */
+    shareInvite: async function (code, pw) {
+        const url = this.inviteUrl(code, pw);
+        const text = pw ? TX('Spiel mit mir HochCiv! Lobby %s', code) : TX('Spiel mit mir ein HochCiv-Rundenspiel! Code %s', code);
+        if (navigator.share && window.matchMedia && matchMedia('(pointer: coarse)').matches) {
+            try { await navigator.share({ title: 'HochCiv', text, url }); return; }
+            catch (e) { if (e && e.name === 'AbortError') return; }
+        }
+        try { await navigator.clipboard.writeText(url); toast(TX('Einladungslink kopiert.')); }
+        catch (e) { prompt(TX('Einladungslink:'), url); }
+    },
+
+    /** Page opened with an invite link: show whose game it is, then join or watch. */
+    openInvite: async function (code, pw) {
+        code = String(code || '').trim().toUpperCase().slice(0, 8);
+        if (!code) return;
+        if (!pw) { if (await ASYNC.requireLogin()) ASYNC.joinByCode(code); return; }
+        await this.fetchUser();
+        let info;
+        try {
+            const r = await fetch(`${this.serverUrl}/api/sessions/preview`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ joinCode: code, password: String(pw) }),
+            });
+            info = await r.json();
+            if (!r.ok) {
+                return modal(TX('Einladung'), `<div id="mp-invite"><p>${escHtml(info.error ? TXS(info.error) : TX('Fehler beim Beitritt.'))}</p>
+                    <p class="sub">${TX('Vielleicht ist das Spiel schon vorbei oder der Link unvollständig.')}</p>
+                    <button class="btn wide primary" onclick="MP.showLobby('open')">${TX('Multiplayer')}</button>
+                    <button class="btn wide ghost" onclick="closeModal()">${TX('Schließen')}</button></div>`);
+            }
+        } catch (e) { return toast(TX('Server nicht erreichbar: %s', e.message)); }
+        this._invite = { code, pw: String(pw) };
+        const name = (this.user && this.user.username) || localStorage.getItem('mp-name') || '';
+        const lobby = info.status === 'lobby';
+        const canJoin = lobby && info.playersCount < info.maxPlayers;
+        modal(TX('Einladung'), `<div id="mp-invite">
+            <p>${TX('%s lädt dich zu einem Live-Spiel ein.', `<b>${escHtml(info.hostName)}</b>`)}</p>
+            <p><b>${ASYNC.mapName(info.mapKey || '0', info)}</b></p>
+            ${this.traitsHtml(this.lobbyTraits(info, true))}
+            <p class="sub">${TX('Spieler')}: ${info.players.map(n => escHtml(n)).join(', ')} (${TX('%s/%s Spieler', info.playersCount, info.maxPlayers)})</p>
+            ${canJoin ? `<label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-inv-n" value="${escHtml(name)}" maxlength="24" autocomplete="nickname"></label>`
+                : `<p>${lobby ? TX('Die Lobby ist voll.') : TX('Das Spiel läuft schon.')} ${TX('Du kannst zuschauen.')}</p>`}
+            ${canJoin ? `<button class="btn wide primary" onclick="MP.acceptInvite()">${TX('Beitreten')}</button>` : ''}
+            <button class="btn wide ${canJoin ? 'ghost' : 'primary'}" onclick="MP.acceptInvite(true)">${TX('Zuschauen')}</button>
+            <button class="btn wide ghost" onclick="closeModal()">${TX('Abbrechen')}</button></div>`);
+    },
+
+    acceptInvite: async function (watch) {
+        const inv = this._invite;
+        if (!inv) return;
+        const name = ($('mp-inv-n') ? $('mp-inv-n').value : (this.user && this.user.username) || localStorage.getItem('mp-name') || '').trim();
+        if (!watch && !name) return toast(TX('Bitte Namen eingeben.'));
+        if (!this.setMode) await this.showLobby('open');     // the lobby screen lives in showLobby
+        if (watch) return this.watch(inv.code, inv.pw, name);
+        this.joinWith(inv.code, inv.pw, name);
     },
 
     /** Spectator mode: watch a live game (or its lobby) with code and password. */
@@ -1471,58 +1542,12 @@ const MP = {
         else toast(TX('Spiel läuft, lade Zustand...'));
     },
 
-    joinPublic: async function (joinCode, password) {
+    joinPublic: function (joinCode, password) {
         const nameInput = $('mp-n');
         if (!nameInput) return;
         const name = nameInput.value.trim();
         if (!name) return toast(TX('Bitte Namen eingeben.'));
-
-        localStorage.setItem('mp-name', name);
-
-        try {
-            toast(TX('Verbinde...'));
-            const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
-            });
-            const data = await res.json();
-            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
-
-            this.sessionId = data.sessionId;
-            this.lobbyIndex = data.playerIndex;
-            this.joinCode = joinCode;
-            this.password = password;
-
-            await this.connect();
-
-            this.socket.emit('session:connect', {
-                sessionId: this.sessionId,
-                clientId: this.getClientId(),
-                password: this.password
-            }, (ack) => {
-                if (ack.error) return toast(TXS(ack.error));
-                if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
-
-                this.active = true;
-                this.spectator = false;
-                this.players = ack.players;
-                this.gameConfig = ack.gameConfig || {};
-                this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
-
-                this.showCred();
-
-                if (ack.status === 'playing' || ack.status === 'draft') {
-                    toast(TX('Spiel läuft, lade Zustand...'));
-                }
-                else {
-                    this.setMode('waiting');
-                }
-            });
-        } catch (e) {
-            console.error(e);
-            toast(TX('Server nicht erreichbar: %s', e.message));
-        }
+        return this.joinWith(joinCode, password, name);
     },
 
     host: async function () {
@@ -2460,7 +2485,8 @@ const ASYNC = {
         const back = MP.asyncId === id ? 'ASYNC.reopenModal()' : 'ASYNC.showList()';
         modal(TX('Mitspieler einladen'), `
             <p>${TX('Code zum Weitergeben:')} <b style="font-family:monospace;font-size:16px">${code}</b></p>
-            <p class="sub">${TX('Oder Link:')} <span style="user-select:all">${this.esc(location.origin + location.pathname + '?async=' + id)}</span></p>
+            <p class="sub">${TX('Oder Link:')} <span id="mpa-inv-link" style="user-select:all">${this.esc(MP.inviteUrl(code))}</span></p>
+            <button class="btn wide" onclick="MP.shareInvite('${this.esc(code)}')">🔗 ${TX('Einladungslink teilen')}</button>
             <label class="row"><span>${TX('Benutzername')}</span><input type="text" id="mpa-inv-name"></label>
             <button class="btn wide primary" onclick="ASYNC.invite('${id}')">${TX('Einladen')}</button>
             <button class="btn wide ghost" onclick="${back}">${TX('Zurück')}</button>`);
@@ -2799,7 +2825,13 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         const id = params.get('async');
         const replay = params.get('replay');
-        if (replay && typeof REPLAY !== 'undefined') {
+        const join = params.get('join');
+        if (join && OLD_VERSIONS.includes(APP_VERSION_HERE)) {
+            location.replace('/' + location.search);   // invites always open the current version
+        } else if (join) {
+            history.replaceState(null, '', location.pathname);
+            MP.openInvite(join, params.get('pw'));
+        } else if (replay && typeof REPLAY !== 'undefined') {
             history.replaceState(null, '', location.pathname);
             REPLAY.open(replay);
         } else if (id) {
@@ -2812,6 +2844,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const style = document.createElement('style');
     style.textContent = `
+        .mp-invite-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 12px; }
+        .mp-invite-bar .sub { font-size:12px; }
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
         /* Main menu (MP.arrangeMenu): login bar on top, the secondary buttons in a grid */
         #mp-main-auth-container { position:absolute; top:0; left:0; right:0; z-index:1000; display:flex; justify-content:flex-end; align-items:center; padding:12px 20px; }
