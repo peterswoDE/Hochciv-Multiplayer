@@ -14,6 +14,9 @@
    --strict lädt die Dateien im strikten Modus: Schreiben auf eingefrorene Objekte wirft dann.
    --check-risk (mit --strict) rechnet jeden 40. kiRisk noch einmal auf einem tief eingefrorenen
    Spielstand: Das muss gehen und dasselbe ergeben, sonst dürfte kiRisk nichts wiederverwenden.
+   --seats mensch spielt statt der üblichen Partien dieselben Formen mit jedem zweiten Sitz als
+   Mensch (den die KI zieht): Nur gegen Menschen rechnet die KI mit dem entschlossenen Angreifer
+   (kiDetermined), in den Partien nur aus KI und Bots kommt dieser Weg nie vor.
    Die Maschine wird wie in Hochciv-KI/bridge/worker.js geladen und bedient. */
 'use strict';
 const fs = require('fs');
@@ -76,7 +79,7 @@ function makePlayers(E, seats, seed, distinct) {
     const abilities = CIVS.find(c => c.k === civ).abilities || [{ k: 'basis' }];
     const ability = abilities[Math.floor(rnd() * abilities.length)].k;
     const p = { civ, ability, kind: s, diff: 'koenig' };
-    if (s === 'ki') p.kiLevel = 'schwer';
+    if (s !== 'bot') p.kiLevel = 'schwer';
     return p;
   });
 }
@@ -130,7 +133,8 @@ function draftMarathon(E, cfg, seed) {
 }
 function newGameFor(E, g) {
   const seed = g.seed;
-  const seats = Array.from({ length: g.n }, (_, i) => g.seats === 'mix' && i % 2 ? 'bot' : 'ki');
+  const zweiter = { mix: 'bot', mensch: 'human' }[g.seats] || 'ki';
+  const seats = Array.from({ length: g.n }, (_, i) => i % 2 ? zweiter : 'ki');
   const players = makePlayers(E, seats, seed, g.map === 'original');
   const cfg = {
     seed, players, duel: g.n === 2, events: g.events !== 'off', eventMode: g.events === 'easy' ? 'easy' : 'hard',
@@ -163,7 +167,7 @@ function newGameFor(E, g) {
   return E.newGame(cfg);
 }
 
-function gameList(seeds) {
+function gameList(seeds, sitze = ['ki', 'mix']) {
   const forms = [];
   for (const n of [2, 3, 4, 6, 8]) forms.push(['tile', n], ['hex', n]);
   for (const n of [2, 3, 4]) forms.push(['original', n]);
@@ -171,7 +175,7 @@ function gameList(seeds) {
   forms.push(['marathon', 4], ['custom-marathon', 4]);
   const out = [];
   for (const [map, n] of forms) for (const wonders of [false, true]) for (const events of ['off', 'easy', 'hard'])
-    for (const seats of ['ki', 'mix']) for (let s = 0; s < seeds; s++) {
+    for (const seats of sitze) for (let s = 0; s < seeds; s++) {
       const name = [map, n + 'p', wonders ? 'wunder' : 'ohne', 'ev-' + events, seats, 's' + s].join('/');
       out.push({ name, map, n, wonders, events, seats, seed: seedOf(name), maxRounds: map.includes('marathon') ? 12 : 30 });
     }
@@ -282,9 +286,9 @@ function playGame(E, g, opts) {
     S = newGameFor(E, g);
     for (let guard = 0; !S.over && S.round <= g.maxRounds && guard < 2000; guard++) {
       const pi = S.cur, p = S.players[pi];
-      if (opts.hash && p.kind === 'ki') probe(E, S, pi, feed);
+      if (opts.hash && p.kind !== 'bot') probe(E, S, pi, feed);
       if (opts.hash) for (let i = 0; i < S.players.length; i++) { const y = E.income(S, i); feed(`inc ${y.sci} ${y.food} ${y.coins}`); }
-      if (p.kind === 'ki') E.kiTurn(S, pi); else E.botTurn(S, pi);
+      if (p.kind !== 'bot') E.kiTurn(S, pi); else E.botTurn(S, pi);
       if (!S.over) E.endTurn(S);
       if (opts.hash) {
         feed(JSON.stringify(S, treu));
@@ -304,6 +308,7 @@ async function record(dir, out) {
   const seeds = +arg('seeds', 2), procs = +arg('procs', 6);
   const list = gameList(seeds);
   const extra = [flag('check-income') ? '--check-income' : '', flag('strict') ? '--strict' : '', flag('check-risk') ? '--check-risk' : ''].filter(Boolean);
+  if (arg('seats', '')) extra.push('--seats', arg('seats', ''));
   const t0 = Date.now();
   const teile = await Promise.all(Array.from({ length: procs }, (_, i) => new Promise((res, rej) => {
     const file = `${out}.teil${i}`;
@@ -322,7 +327,7 @@ function shard(dir, out) {
   const seeds = +arg('seeds', 2), part = +arg('part', 0), parts = +arg('parts', 1);
   const E = loadEngine(path.resolve(dir), flag('strict'));
   const games = {};
-  gameList(seeds).forEach((g, i) => {
+  gameList(seeds, arg('seats', '') ? arg('seats', '').split(',') : undefined).forEach((g, i) => {
     if (i % parts !== part) return;
     games[g.name] = playGame(E, g, { hash: true, checkIncome: flag('check-income'), checkRisk: flag('check-risk') });
   });
