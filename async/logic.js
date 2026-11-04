@@ -29,7 +29,6 @@ const { renameInState } = require('../utils/rename');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
-const Teams = require('../utils/teams');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and are v83. New games get the current one. */
@@ -142,8 +141,6 @@ function create(host, opts) {
         ki = total - h;
     }
     if (!Number.isInteger(ki) || ki < 0) ki = 0;
-    // team mode (F22, utils/teams.js): humans only, two teams
-    if (raw.teams === true && !(opts && opts.challenge)) { config.teams = true; ki = 0; }
     const lim = limitsOf(null, config.mapKey, config.customMap);
     const cErr = countError(lim, total);
     if (cErr) return { error: cErr };
@@ -209,7 +206,6 @@ function create(host, opts) {
     }
 
     Object.assign(g.seats[hostSlot], { userId: host.id, name: host.username, joinedAt: Date.now(), botAccount: !!host.isBot });
-    if (config.teams) g.seats[hostSlot].team = opts.team === 1 ? 1 : 0;
     config.startPlayer = hostSlot;          // the host always moves first
 
     /* Start right away (the host plays turn 1 while the others join) when the seats are
@@ -231,29 +227,10 @@ function startGame(g) {
     g.config.duel = g.seats.length === 2;     // two empires: duel thresholds, on any map
     ENG(g).assignDoubles(g.seats);            // a nation twice: Roman numerals, own colours
     g.state = ENG(g).createGame(lobbyOf(g));
-    attachTeams(g);
     g.status = 'playing';
     g.hold = false;
     g.pre = null;
     markStarted(g);
-}
-
-/** Team mode: places left per team – half the empires each (A takes the odd one). */
-function teamRoom(g, t) {
-    const total = g.config.playerCount || g.seats.length;
-    const cap = t === 0 ? Math.ceil(total / 2) : Math.floor(total / 2);
-    return cap - g.seats.filter(s => s.userId && s.team === t).length;
-}
-
-/** Team mode: the seats' teams on the state; a team without players switches it off. */
-function attachTeams(g) {
-    if (!g.config.teams || !g.state) return;
-    const sizes = [0, 1].map(t => g.seats.filter(s => s.userId && s.team === t).length);
-    if (!sizes[0] || !sizes[1]) { g.config.teams = false; return; }
-    Teams.attach(g.state, i => {
-        const seat = g.seats[g.state.players[i].slot];
-        return seat && (seat.team === 0 || seat.team === 1) ? seat.team : null;
-    });
 }
 
 function markStarted(g) {
@@ -316,17 +293,8 @@ function join(g, user, opts) {
     }
     if (!seat) return 'Kein freier Platz mehr.';
     if (!ability) return 'Unbekannte Fähigkeit.';
-    let team;
-    if (g.config.teams) {
-        team = opts.team === 0 || opts.team === 1 ? opts.team : (teamRoom(g, 0) > 0 ? 0 : 1);
-        if (teamRoom(g, team) <= 0) {
-            if (freeCivs(g) && seat.civ && !seat.userId) seat.civ = null;
-            return 'Dieses Team ist schon voll.';
-        }
-    }
 
     Object.assign(seat, { userId: user.id, name: user.username, ability, joinedAt: Date.now(), botAccount: !!user.isBot });
-    if (team !== undefined) seat.team = team;
     const inv = g.invites.find(i => i.userId === user.id);
     if (inv) inv.status = 'accepted';
 
@@ -368,7 +336,6 @@ function leave(g, userId) {
     if (!free) return 'Nach deinem ersten Zug kannst du das Spiel nicht mehr verlassen.';
 
     Object.assign(seat, { userId: null, name: null, joinedAt: null });
-    delete seat.team;
     if (g.config.civMode === 'fixed') {
         seat.ability = 'basis';
         if (freeCivs(g)) seat.civ = null;
@@ -569,7 +536,7 @@ async function drive(g, onStep) {
         finishAndAdvance(g);
         if (onStep) await onStep();
     }
-    if (S.over) { Teams.expandWin(S); g.status = 'finished'; }
+    if (S.over) g.status = 'finished';
 }
 
 // ── Inactivity (7 days) ───────────────────────────────────────────────────────
@@ -698,7 +665,7 @@ function resign(g, userId) {
     const humans = g.seats.filter(s => s.kind === 'human' && s.userId && !s.replaced).map(s => stateIndex(g, s.slot));
     const startedWithKi = g.seats.some(s => s.kind !== 'human' && !s.replaced);
     const end = Resign.endAfterResign(E, S, humans, startedWithKi);
-    if (end) { S.over = end; Teams.expandWin(S); }      // drive() finishes the game; otherwise it plays the KI's turn
+    if (end) S.over = end;           // drive() finishes the game; otherwise it plays the KI's turn
     return { penalized };
 }
 
@@ -810,7 +777,6 @@ function publicSeats(g) {
         slot: s.slot, civ: s.civ, kind: s.kind, name: s.name, userId: s.userId,
         ability: s.ability, drafted: s.drafted || null, roman: s.roman, color: s.color,
         replaced: !!s.replaced, resigned: !!s.resigned, started: !!s.started, botAccount: !!s.botAccount,
-        team: s.team === 0 || s.team === 1 ? s.team : null,
     }));
 }
 

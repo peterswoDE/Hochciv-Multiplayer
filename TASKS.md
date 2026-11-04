@@ -29,7 +29,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
-| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ✅ |
+| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ (next PR) | 🔨 |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -523,8 +523,8 @@ Texts with bad language are not sent but reported automatically, and the sender 
 - Live (`sockets/game.js`): `lobby:config { teams }` (KI 0), `lobby:team`, the start check, `attachTeams()` wherever the state is created (start, placement, draft), `expandWin` in `broadcastState` / `checkGameOver`, team messages in `chat:send` and the history. `sessions.js`: `team` per player, `balanceTeams()`, a joiner goes to the smaller team. `utils/resign.js`: one team left wins.
 - `mp.js`: the lobby row and team selects, player-list tags, the power-view filter, "Team A gewinnt!". `client/chat.js`: the team button. Texts in `client/i18n.js`.
 
-**Rundenspiele:** the form's *Teams* (KI 0) with the host's team; joiners pick a team in the join dialog, which offers only teams with room (half the empires each, A takes the odd one). At the start the seats' teams go onto the state (`async/logic.js` `attachTeams`); if a team ended up without players (setup timeout), team mode is switched off. `drive()` and `resign()` expand the win; team messages go only to teammates' open pages and their history (`async/service.js`). Seats are tagged; the open games show *👥 Teams*.
+**Still to do:** team mode for Rundenspiele.
 
-**Tests:** `tests/teams/teams.test.js`, `tests/teams/teams-async.test.js`. `chat`, `resign`, `rematch`, `ready`, `i18n`, `spectators`, `lobby-filter`, `challenge` pass. `scenes` fails on its live part on `development` as well (timing; it passed once and failed once there).
+**Tests:** `tests/teams/teams.test.js`. `chat`, `resign`, `rematch`, `ready`, `i18n`, `spectators` pass. `scenes` fails on its live part on `development` as well (timing; it passed once and failed once there).
 
-**Status:** ✅ on `development`
+**Status:** 🔨 live games on `development`

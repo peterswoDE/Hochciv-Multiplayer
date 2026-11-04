@@ -83,9 +83,7 @@ const CHAT = {
 
     // team mode (F22): messages to the own team only
     teamMode: false,
-    canTeam: () => !MP.spectator && (MP.asyncId
-        ? !!(typeof ASYNC !== 'undefined' && ASYNC.view && ASYNC.view.config && ASYNC.view.config.teams && ASYNC.view.myIndex >= 0)
-        : !!(MP.gameConfig && MP.gameConfig.teams)),
+    canTeam: () => !MP.asyncId && !MP.spectator && !!(MP.gameConfig && MP.gameConfig.teams),
     toggleTeam: function () {
         this.teamMode = !this.teamMode;
         this.render();

@@ -100,11 +100,6 @@
         'Wartet': 'Waiting',
         'Kick': 'Kick',
         // team mode (mp.js, client/chat.js, utils/teams.js)
-        'Dein Team': 'Your team',
-        'Teams': 'Teams',
-        '%s frei': '%s free',
-        'Wer beitritt, wählt sein Team (je die Hälfte der Plätze). Teammitglieder greifen sich nicht an und gewinnen zusammen.': 'Whoever joins picks a team (half of the seats each). Teammates don’t attack each other and win together.',
-        'Dieses Team ist schon voll.': 'This team is full already.',
         'Teams (2 Teams, ohne KI)': 'Teams (2 teams, no AI)',
         'Jeder wählt Team A oder B. Teammitglieder greifen sich nicht an und gewinnen zusammen; es gibt einen Team-Chat. Es spielen so viele Reiche wie Spieler.': 'Everyone picks team A or B. Teammates don’t attack each other and win together; there is a team chat. As many empires play as there are players.',
         'Team %s': 'Team %s',
