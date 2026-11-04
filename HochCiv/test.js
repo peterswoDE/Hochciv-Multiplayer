@@ -6662,6 +6662,46 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   }
 }
 
+/* ==================== Tempo: Einkommen, Kopien und kiRisk bleiben, was sie waren
+   Einkommen und Übersicht rechnen dieselbe Summe, controlledTiles nennt dieselben Felder wie
+   controlledCells, und eine Kopie teilt nichts mit der Partie außer den Kartenfeldern. */
+{
+  const civs = ['russland', 'griechenland', 'england', 'wikinger'];
+  const S = newGame({ seed: 31, wonders: true, events: true, eventMode: 'hard', map: JSON.parse(JSON.stringify(DEFAULT_MAP)), startPlayer: 0,
+    players: civs.map(c => ({ civ: c, kind: 'ki', kiLevel: 'schwer', ability: 'basis' })) });
+  const prüfe = wer => {
+    const y = income(S, wer), t = incomeBreakdown(S, wer).total;
+    return y.sci === t[0] && y.food === t[1] && y.coins === t[2];
+  };
+  let gleich = true, felder = true;
+  const zeigt = new Set();
+  for (let z = 0; z < 60 && !S.over; z++) {
+    S.players.forEach((_, i) => { gleich = gleich && prüfe(i); });
+    S.players.forEach((_, i) => {
+      const c = controlledCells(S, i), t = [...controlledTiles(S, i)];
+      felder = felder && t.length * 2 === c.length && t.every((k, n) => k === c[2 * n] + ',' + c[2 * n + 1]);
+    });
+    kiTurn(S, S.cur);
+    if (!S.over) endTurn(S);
+  }
+  eq(gleich, true, 'income ist in jedem Zug die Summe der Übersicht');
+  eq(felder, true, 'controlledTiles und controlledCells: dieselben Felder, dieselbe Reihenfolge');
+  const X = kiClone(S, 77);
+  const teilt = (a, b, weg, hin) => {
+    if (a === null || typeof a !== 'object') return;
+    if (a === b) hin.push(weg);
+    for (const k in a) teilt(a[k], b && b[k], weg + '.' + k, hin);
+  };
+  const geteilt = [];
+  for (const k in X) if (k !== 'map') teilt(X[k], S[k], k, geteilt);
+  eq(geteilt.join(), '', 'kiClone: kein gemeinsames Objekt außerhalb der Karte');
+  const sauber = o => JSON.parse(JSON.stringify(o));
+  const { log, recipe, evNext, seed, kiSim, ...rest } = X, { log: l2, recipe: r2, evNext: e2, seed: s2, ...rest2 } = S;
+  eq(sauber(rest), sauber(rest2), 'kiClone: dieselben Werte');
+  eq(Object.keys(X).filter(k => k !== 'kiSim').join(), Object.keys(S).join(), 'kiClone: dieselben Schlüssel in derselben Reihenfolge');
+  eq([X.log.length, X.recipe, X.evNext, X.seed, X.kiSim], [0, null, null, 77, true], 'kiClone: Protokoll leer, kein Rezept, kein Ereignis, eigener Seed');
+}
+
 /* ==================================================== Felder außerhalb der Karte */
 {
   const S = newGame({
