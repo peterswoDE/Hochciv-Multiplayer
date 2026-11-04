@@ -43,6 +43,8 @@ const DATA_EN = {
     hex6: 'Tile map (6 triangles)', tri9: 'Tile map (9 triangles)',
     strip10: 'Tile map (10 triangles)', strip14: 'Tile map (14 triangles)',
     strip18: 'Tile map (18 triangles)',
+    hex5: 'Tile map (5 hexagons)', hex7: 'Tile map (7 hexagons)', hex10: 'Tile map (10 hexagons)',
+    hex14: 'Tile map (14 hexagons)', hex20: 'Tile map (20 hexagons)',
   },
   civ: {
     griechenland: 'Greece', england: 'England', russland: 'Russia',
@@ -383,8 +385,8 @@ const UI_EN = {
   'Plättchenkarte: die offenen Dreiecke liegen gleich, das eigene legt jede*r selbst – Lage wählen, Hauptstadt setzen, verdeckt.':
     'Tile map: the open triangles are placed right away, your own one you place yourself – choose an orientation, set the capital, face down.',
   'Experimenteller Plättchenmodus': 'Experimental tile mode',
-  'Experimentell: zehn sechseckige Plättchen zu je 19 Feldern, schräg in Reihen zu 3, 4 und 3 gelegt. Die Startplättchen liegen an den Enden der beiden Dreierreihen; das eigene legt jede*r selbst – Lage wählen (sechs Drehungen), Hauptstadt setzen, verdeckt.':
-    'Experimental: ten hexagonal tiles of 19 hexes each, laid at a slant in rows of 3, 4 and 3. The start tiles sit at the ends of the two rows of three; everyone places their own – choose a rotation (six), set the capital, face down.',
+  'Experimentell: sechseckige Plättchen zu je 19 Feldern, schräg in Reihen gelegt. Zwischen zwei Startplättchen liegt immer ein offenes; das eigene legt jede*r selbst – Lage wählen (sechs Drehungen), Hauptstadt setzen, verdeckt.':
+    'Experimental: hexagonal tiles of 19 hexes each, laid at a slant in rows. There is always an open tile between two start tiles; everyone places their own – choose a rotation (six), set the capital, face down.',
   'Hier darf jeder Platz frei wählen, auch zweimal dieselbe Zivilisation (mit gleicher oder anderer Fähigkeit). Doppelte bekommen Ziffern und eine eigene Farbe. Auf den festen Karten sitzt jede Zivilisation genau einmal.':
     'Here every seat may choose freely, including the same civilisation twice (with the same or a different ability). Duplicates get numerals and a colour of their own. On the fixed maps each civilisation appears exactly once.',
   'Zufall': 'Random',

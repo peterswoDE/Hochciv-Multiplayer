@@ -1934,7 +1934,7 @@ function startFromRecipe(rec) {
       : Math.min(players.length - 1, Math.max(0, +rec.start || 0)),
     events: rec.events, eventMode: rec.eventMode, wonders: rec.wonders,
     seatOrder: platzNummern(rec.mapPick, players.length, rec.randomCivs),   // wie beim ersten Mal (v90)
-    hexTiles: !!rec.hexTiles && rec.mode === 'vier',                   // Sechseck-Plättchen (v99)
+    hexTiles: !!rec.hexTiles && rec.mapPick === 'plaettchen',          // Sechseck-Plättchen (v99)
     // Ein Rezept aus v70–v81 kann noch altTree tragen – egal: jede neue Partie läuft seit
     // v82 im (einzigen) Techtree, auch „Nochmal spielen" nach einer alten Partie.
   };
@@ -2365,10 +2365,10 @@ function mapOptions() {
     : T('%s (eigene Karte, bis %s Reiche)', m.name, m.maxPlayers)]));
   return out;
 }
-/* Experimenteller Plättchenmodus (v99): nur vier Reiche auf der Plättchenkarte. Die Wahl
-   bleibt gemerkt wie die Karte; gilt nur, wo das Häkchen überhaupt zu sehen ist. */
+/* Experimenteller Plättchenmodus (v99): auf der Plättchenkarte, bei jeder Zahl von Reichen. Die
+   Wahl bleibt gemerkt wie die Karte; gilt nur, wo das Häkchen überhaupt zu sehen ist. */
 let setupHexWanted = false;
-const setupHexOffered = () => setupCount() === 4 && setupMapWanted === 'plaettchen';
+const setupHexOffered = () => setupMapWanted === 'plaettchen';
 const setupHex = () => setupHexOffered() && setupHexWanted;
 function fillMapSelect() {
   const sel = $('setup-map');
@@ -2630,7 +2630,7 @@ let placeState = null;
 
 function startPlacement(cfg) {
   const seed = Math.floor(Math.random() * 2 ** 31);
-  // experimenteller Plättchenmodus (v99): Sechsecke statt Dreiecke, nur bei vier Reichen
+  // experimenteller Plättchenmodus (v99): Sechsecke statt Dreiecke
   const plan = tilePlan(cfg.players.map(p => p.civ), seed, { hex: !!cfg.hexTiles });
   if (!plan) return toast(T('Für diese Spielerzahl gibt es keine Plättchenkarte.'));
   /* Erst würfeln, dann legen (v66): Was jedes Reich zu Beginn erforschen kann und welche

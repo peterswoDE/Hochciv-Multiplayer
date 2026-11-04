@@ -5266,7 +5266,7 @@ step('v97: Siedlertrecks wachsen zum Preis der kleineren Stadt, Fruchtbarkeit zw
 
 /* --- v99 (Anweisungen des Autors): experimenteller Plättchenmodus, Welt in Zugfolge und in der
    Legephase, kein Schritt „Spiel beginnen“ mehr, Flüsse und Inseln neu gezeichnet. */
-step('v99: Aufbau – keine große Karte, „Zufällig“ als Startspieler, Häkchen für Sechsecke nur bei vier Reichen', () => {
+step('v99: Aufbau – keine große Karte, „Zufällig“ als Startspieler, Häkchen für Sechsecke auf der Plättchenkarte', () => {
   G('show')('screen-menu');
   $('m-new').onclick();
   G('setupSetMode')('vier');
@@ -5281,13 +5281,17 @@ step('v99: Aufbau – keine große Karte, „Zufällig“ als Startspieler, Häk
   if ($('setup-hex-row').hidden) throw new Error('kein Häkchen „Experimenteller Plättchenmodus“ auf der Plättchenkarte');
   $('setup-hex').checked = true; $('setup-hex').onchange();
   if ($('setup-hex-hint').hidden || !$('setup-tile-hint').hidden) throw new Error('Hinweise passen nicht zum Sechseckmodus');
-  for (const mode of ['drei', 'duell']) {
-    G('setupSetMode')(mode);
-    if (!$('setup-hex-row').hidden) throw new Error('Häkchen sichtbar bei ' + mode);
+  // auf der Plättchenkarte bei jeder Zahl von Reichen (Mehrspieler-Erweiterung)
+  for (const n of ['2', '3', '6', '8']) {
+    $('setup-count').value = n; $('setup-count').onchange();
+    if ($('setup-hex-row').hidden) throw new Error('kein Häkchen bei ' + n + ' Reichen');
   }
-  G('setupSetMode')('vier');
+  $('setup-count').value = '4'; $('setup-count').onchange();
+  $('setup-map').value = 'marathon'; $('setup-map').onchange();
+  if (!$('setup-hex-row').hidden) throw new Error('Häkchen beim Marathon sichtbar');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
   if (!$('setup-hex').checked || $('setup-hex-row').hidden) throw new Error('die Wahl ging beim Moduswechsel verloren');
-  console.log('       Karten: ' + [...$('setup-map').options].map(o => o.text).join(' · ') + ' · Startspieler Zufällig · Häkchen nur bei vier Reichen');
+  console.log('       Karten: ' + [...$('setup-map').options].map(o => o.text).join(' · ') + ' · Startspieler Zufällig · Häkchen auf der Plättchenkarte');
 });
 step('v99: Sechsecke legen – sechs Lagen, Welt in Zugfolge, danach gleich das Spiel', () => {
   // Platz 1 Mensch, die übrigen KI; Startspieler bleibt „Zufällig“
