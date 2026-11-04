@@ -180,7 +180,7 @@ async function live(browser, errors) {
     await b.waitForSelector('#mp-p-civ-1');
     await b.selectOption('#mp-p-civ-1', 'russland');
     await a.waitForFunction(() => MP.players.length === 2 && MP.players[1].civ === 'russland');
-    await a.evaluate(async () => { const big = (await (await fetch('/api/maps/code/GRKART')).json()).map; MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: 'eigene', customMap: big, difficulty: 'mittel' }); });
+    await a.evaluate(async () => { const big = (await (await fetch('/api/maps/code/GRKART')).json()).map; MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: 'eigene', customMap: big, difficulty: 'leicht' }); });
     await a.waitForFunction(() => MP.gameConfig.playerCount === 3);
     const v = await newPage('V');
     await v.evaluate(([c, p]) => MP.watch(c, p, 'ScnV'), [cred.code, cred.pw]);

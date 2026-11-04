@@ -211,6 +211,7 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerBots !== undefined) newConfig.playerBots = newConfig.playerBots === true;
                 if (newConfig.playerBotLimit !== undefined) newConfig.playerBotLimit = int(newConfig.playerBotLimit, 1, 8) || null;
                 if (newConfig.isPublic !== undefined) newConfig.isPublic = newConfig.isPublic === true;
+                if (newConfig.hexTiles !== undefined) newConfig.hexTiles = newConfig.hexTiles === true;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -652,7 +653,7 @@ function startGame(io, session) {
     try {
         if (isPlaettchen) {
             const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
-            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
+            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed, { hex: !!session.gameConfig.hexTiles });
             if (!plan) return 'Für diese Spielerzahl gibt es keine Plättchenkarte.';
 
             // v66+: starting techs and wonder pools are rolled before placement

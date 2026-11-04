@@ -558,6 +558,9 @@
         // ── Turn-based games ─────────────────────────────────────────────────────────────
         'Originalkarte': 'Original map',
         'Große Karte': 'Large map',
+        'Experimenteller Plättchenmodus': 'Experimental tile mode',
+        'Sechseckige Plättchen statt Dreiecke, bei jeder Zahl von Reichen.': 'Hexagonal tiles instead of triangles, for any number of empires.',
+        'Sechsecke': 'Hexagons',
         'Plättchenkarte': 'Tile map',
         'Marathon': 'Marathon',
         'KI (für %s)': 'AI (for %s)',

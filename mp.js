@@ -1100,6 +1100,10 @@ const MP = {
               ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost)
                     : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP.browseMaps()').replace(/ · $/, '')}</p>` : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
+              ${this.gameConfig.mapKey === 'random' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span>
+                <input type="checkbox" id="mp-set-hex" onchange="MP.updateLobbyConfig()" ${this.gameConfig.hexTiles ? 'checked' : ''}>
+              </label>
+              ${this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Sechseckige Plättchen statt Dreiecke, bei jeder Zahl von Reichen.')}</p>` : ''}` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
@@ -1360,7 +1364,7 @@ const MP = {
             kind: 'live', map: x.mapKey === 'random' ? 'plaettchen' : String(x.mapKey || '0'),
             customMapName: x.customMapName, empires: x.empires || x.maxPlayers, ki: x.kiCount || 0,
             level: this.kiLevel(x.difficulty), civs: x.randomCivs ? 'random' : 'fixed',
-            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off',
+            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off', hexTiles: !!x.hexTiles,
             ranked: x.ranked ? 'yes' : 'no', turn: x.turnTime ? 'timed' : 'free', turnTime: x.turnTime || 0,
             bots: x.playerBots ? 'yes' : 'no', free: x.playersCount < x.maxPlayers,
             names: [x.hostName],
@@ -1371,7 +1375,7 @@ const MP = {
             kind: 'async', map: c.mapKey === 'random' ? 'plaettchen' : String(c.mapKey || '0'),
             customMapName: c.customMapName, empires, ki: Math.max(0, empires - (c.humanCount || empires)),
             level: this.kiLevel(c.difficulty), civs: c.civMode === 'random' ? 'random' : 'fixed',
-            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off',
+            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off', hexTiles: !!c.hexTiles,
             // Rundenspiele have days per turn (F19): fewer than 7 count as "with time limit"
             ranked: c.ranked ? 'yes' : 'no', turn: c.turnDays && c.turnDays < 7 ? 'timed' : 'free', turnTime: 0,
             turnDays: c.turnDays && c.turnDays < 7 ? c.turnDays : 0,
@@ -1404,6 +1408,7 @@ const MP = {
             t.civs === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')];
         if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
         if (t.wonders === 'on') parts.push(TX('Weltwunder'));
+        if (t.hexTiles) parts.push(TX('Sechsecke'));
         if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
         if (t.turnDays) parts.push(t.turnDays === 1 ? TX('1 Tag pro Zug') : TX('%s Tage pro Zug', t.turnDays));
         if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
@@ -1475,6 +1480,7 @@ const MP = {
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
+            hexTiles: $('mp-set-hex') ? $('mp-set-hex').checked : !!this.gameConfig.hexTiles,
             difficulty: diff,
             ranked: isRanked,
             // empires in all and KI seats; "noKi" of older lobbies is replaced by them
@@ -2445,7 +2451,7 @@ const ASYNC = {
     showCreate: function () {
         const f = this.form = this.form || {
             mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
-            events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
+            events: false, eventMode: 'hard', wonders: false, hexTiles: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
             playerBots: false, playerBotLimit: '',
         };
         const civ = this.civ(f.civ) || CIVS[0];
@@ -2494,6 +2500,7 @@ const ASYNC = {
               ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
             ${random || marathon ? '' : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-ab">
               ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select></label>`}
+            ${f.mapKey === 'plaettchen' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span><input type="checkbox" id="mpa-hex" ${f.hexTiles ? 'checked' : ''}></label>` : ''}
             <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
             ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
               ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
@@ -2524,7 +2531,7 @@ const ASYNC = {
             mapKey: v('mpa-map'), civMode: v('mpa-mode'),
             playerCount: +v('mpa-total') || f.playerCount, kiCount: v('mpa-ki') != null ? +v('mpa-ki') : f.kiCount,
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
-            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
+            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), hexTiles: c('mpa-hex'),
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
             turnDays: +v('mpa-days') || f.turnDays || 7,
             customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
@@ -2590,7 +2597,7 @@ const ASYNC = {
             const r = await this.api('', {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
-                    wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic, turnDays: f.turnDays || 7,
+                    wonders: f.wonders, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },

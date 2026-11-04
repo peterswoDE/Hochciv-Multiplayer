@@ -4,7 +4,7 @@
  *
  *   g = {
  *     id, joinCode, hostUserId, status, engine (version the game is played with, see ENG),      // setup → placement | draft → playing → finished | cancelled
- *     config: { mapKey, civMode, humanCount, events, eventMode, wonders, difficulty, ranked,
+ *     config: { mapKey, civMode, humanCount, events, eventMode, wonders, hexTiles, difficulty, ranked,
  *               isPublic, noKi, duel, seed, startPlayer, order, map?, setup?, marathon? },
  *     seats:  [{ slot, civ, ability, kind, userId, name, roman, color, drafted, kiLevel,
  *                started, replaced, penalty, joinedAt }],   // index = slot = newGame() players index
@@ -114,6 +114,7 @@ function create(host, opts) {
         events: !!raw.events,
         eventMode: raw.eventMode === 'easy' ? 'easy' : 'hard',
         wonders: !!raw.wonders,
+        hexTiles: raw.hexTiles === true && raw.mapKey === 'plaettchen',
         // older clients still send a bot difficulty – kiLevelFor maps it
         difficulty: engine.kiLevelFor(raw.difficulty),
         ranked: !!raw.ranked,
@@ -396,7 +397,7 @@ function startPrephase(g) {
     ENG(g).assignDoubles(g.seats);
     if (isTile(g)) {
         const seed = g.config.seed;
-        const plan = ENG(g).getEngine().tilePlan(g.seats.map(s => s.civ), seed);
+        const plan = ENG(g).getEngine().tilePlan(g.seats.map(s => s.civ), seed, { hex: !!g.config.hexTiles });
         if (!plan) throw new Error('Für diese Spielerzahl gibt es keine Plättchenkarte.');
         g.config.setup = ENG(g).rollSetup(lobbyOf(g), seed);
         const rnd = ENG(g).getEngine().mapRng(seed + 12345);
