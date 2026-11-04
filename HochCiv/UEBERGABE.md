@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 30.10., `sw.js` v98)
+# Hochzeivilization — Projekt-Übergabe (Stand 4.11., `sw.js` v100)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v98)
+## Letzte Sitzungen auf einen Blick (v61 → v100)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -53,6 +53,16 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v96 | Fünf Anweisungen des Autors: **Handelsroute über Eisenbahn +4** (vorher +2; `TRADE_RAIL_BONUS`); **per Kolonialismus gekaufte Felder zählen zur Hauptstadt** – mit Bürokratie doppelt; **Kacheln ohne Bürokratie-Zusatz** (Bürokratie: „Hauptstadt produziert doppelt"), der ganze Text nur im Regelbogen (`voll`, `techEffectFull`); **die KI erforscht die Wissenschaftliche Methode vor den übrigen Technologien eines Zugs** (`kiMethodeZuerst`, Neuplanen nach dem Freischalten) – vermeidbar verschenkter Rabatt in 40 Duellen 206 → 0; **laufender Vorrat in der Kopfzeile** beim Nachspielen von KI- und Bot-Zügen, mit „−x"/„+x" unter dem Kästchen (`hudStand`, `animKopf`, `animVorrat`) | Regel + KI + Oberfläche |
 | v97 | Sechs Anweisungen des Autors: **Siedlertrecks** wachsen zum Preis einer um 1 kleineren Stadt (`growPrice`; eine Stadt mit 1 Bevölkerung damit für 0), **Fruchtbarkeit** bringt ein bezahltes Wachstum mehr (`growLimits`), **Günstige Forschung 1/1/2/2/5**, **Freie Forschung zweimal je Partie** aus jedem Zeitalter, nicht die Singularität (`FREE_TECH_USES`, `p.freeTechsUsed`; die KI hebt sie für die Moderne auf, `kiFreeTechChoices`), **Wissenschaftliche Methode 2/3/4/5/10** (der alte Techtree – das Tutorial – behält 2/4/6/8/10, `OLD_METHOD_DISCOUNT`), **Kriegerkultur +1** je Armee und Burgstadt (`WARRIOR_POWER`). Im Ersten Spiel siegt der Forschungsweg jetzt in Runde 7. Spieltipp zur Freien Forschung neu, Draftwerte im Marathon geschätzt | Regel + KI |
 | v98 | Anweisung des Autors: **Startausgleich 2/4/6** Münzen für den Zweiten, Dritten und Vierten (bis v97 1/2/3), **zu zweit der Zweite 4** (bis v97 1; `START_BONUS_DUEL`, „zu zweit" = zwei Reiche ohne Barbaren), zu dritt 2 und 4. Der Satz im Regelbogen kommt aus den Zahlen (`startBonusText`) | Regel |
+| v99 | Zehn Anweisungen des Autors: **große Karte entfernt**; Startspieler ab Werk **„Zufällig"**; **Freie Forschung einmal je Runde**, jede erforschbare Technologie **samt Singularität**, in jeder Spielart (`freeTechOptions` = `researchable`, `p.freeTechUsed` = Runde); **drei Reiche nur auf der Plättchenkarte** (dort und im Duell sind damit Doppelte erlaubt, `setupPick`); **experimenteller Plättchenmodus** für vier Reiche: 10 von 20 **Sechsecken** zu 19 Feldern, schräg 3/4/3, Start an den Enden der Dreierreihen, sechs Lagen (`HEX_POOL`, `TILE_SHAPES.hex4`); **Flüsse** als Wasserlauf auf grünem Flusstal, **Inseln** mit Wasserrand (`riverLines`); **Welt in Zugfolge** und als Knopf in der **Legephase**; nach dem Legen **kein Schritt „Spiel beginnen"** mehr; Erstes Spiel: **Basiskosten 1/3/6/10** im Schritt „Eine zweite Stadt" | Regel + Modus + Oberfläche |
+| v100 | Zwei Anweisungen des Autors: Englands **Kolonisten halbieren die Gründungskosten, aufgerundet** – Stadtkosten plus Weg, mit Kartografie nur die Stadtkosten (`foundCostOf`, für Regel und KI; bis v99 keine Stadtkosten und mit Kartografie die günstigere der beiden – diese Sonderregel ist weg; das doppelte Wachstum bleibt); **Marathon ohne Grenze von fünf Gründungen je Zug** (`MARATHON_MAX_FOUNDS`, `foundedThisTurn`, `p.foundRound`/`p.foundCount` weg, `migrateState` räumt den Zähler aus alten Ständen) | Regel |
+
+Neu in v100: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Kolonisten halbieren, Marathon ohne Gründungsgrenze (v100)"), Fragilität „Gründungen je
+Zug" gestrichen, „Gründungskosten" neu gefasst, offener Punkt 25 überholt, Punkt 59.
+
+Neu in v99: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Zehn Anweisungen des Autors (v99)"), zwei Fragilitäten (Sechseckform, Zugfolge an einer
+Stelle), offene Punkte 56–58.
 
 Neu in v98: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Startausgleich 2/4/6, zu zweit 4 (v98)"), die Fragilität zum Startausgleich ergänzt,
@@ -191,28 +201,28 @@ Schritt unbekannt), seit v98 Punkt 55 (Auslegungen zum Startausgleich zu zweit).
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1637 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1640 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 551 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/data.js` | 533 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 157 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
-| `js/tiles.js` | 334 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4), Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2254 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/tiles.js` | 444 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4), Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
+| `js/engine.js` | 2255 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 489 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
-| `js/ki.js` | 1945 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
+| `js/ki.js` | 1935 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
-| `js/marathon.js` | 312 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
-| `js/ui.js` | 3070 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
+| `js/marathon.js` | 323 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
+| `js/ui.js` | 3205 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
 | `js/tutorial.js` | 692 | Geführtes Übungsspiel: **29 Schritte** (19 mit Aufgabe), feste Würfelfolge, Schienen, feste Texte |
-| `js/firstgame.js` | 1458 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 7863 | **1977 Assertions**, `node test.js` |
-| `smoke.js` | 4906 | **182 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `js/firstgame.js` | 1461 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
+| `test.js` | 8010 | **2020 Assertions**, `node test.js` |
+| `smoke.js` | 4996 | **185 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 21 / 83 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 69 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 72 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
 | `tools_civs.js` | 82 | `data/civs.json` → `js/civs.js` |
-| `tools_ki.js` | 372 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase) |
+| `tools_ki.js` | 374 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase) |
 | `tools_startplaettchen_dump.js` / `tools_startplaettchen_pdf.py` | 34 / 176 | Druckbogen `Startplaettchen.pdf` aus `js/tiles.js` (A4 quer, 3 Seiten, Spieloptik, verzahnt mit 4 mm Luft, ohne Umriss) |
 | `ANNAHMEN.md` | — | **Alle Regelauslegungen und Entscheidungen.** Bei Regelfragen zuerst hier nachsehen. |
 
@@ -235,6 +245,42 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v100 auf einen Blick.** Gründungskosten: `foundCostOf(p, stadt, dist)` (`js/engine.js`) –
+  Kartografie streicht den Weg, Kolonisten halbiert den Rest, aufgerundet, nie unter 1; `foundCost`
+  und `kiSitesAll` (`js/ki.js`, bis v99 mit eigener Kopie der Regel) rufen sie. Marathon:
+  `MARATHON_MAX_FOUNDS` (`js/data.js`), `foundedThisTurn`, der Zähler in `foundCity` und die Sperren
+  in `foundSiteError`, `toggleFoundMode` (`js/ui.js`) und `kiCandidates` sind weg; `migrateState`
+  löscht `p.foundRound`/`p.foundCount`. Texte: `data/civs.json` (→ `node tools_civs.js`), `DATA_EN`,
+  Marathonhinweis im Aufbau (`index.html`) und im Regelbogen samt Übersetzung, der Satz „Höchstens
+  %s neue Städte je Zug (Marathon)." gestrichen. `KI_DRAFT_BASE['england:gruenden']` 14,5 → 7
+  (geschätzt). Tests: `test.js` Gründungskosten neu (Halbierung, Aufrunden, Kartografie, KI wie
+  Regel), Marathon ohne Grenze samt altem Spielstand, KI-Marathonpartie zählt Gründungen je Zug
+  selbst; `smoke.js` Marathonschritt.
+- **v99 auf einen Blick.** Große Karte: `MAP_GROSS` weg, `MAPS = [MAP_ORIGINAL]`, `DATA_EN.maps` mit
+  einem Namen. Aufbau (`js/ui.js`): `mapOptions` (feste/eigene Karte nur bei vier Reichen),
+  `setupPick()` (die wirklich angebotene Karte – Zivilisationswahl, Platznummern und `setup-go`
+  fragen sie), `setupHexOffered/setupHex`, Häkchen `#setup-hex` mit Hinweis `#setup-hex-hint`
+  (`index.html`), Rezept `hexTiles`, `recipeNow` (alte Drei-Reiche-Rezepte → Plättchenkarte),
+  `refreshStart` mit „Zufällig" als Vorgabe. Freie Forschung: `freeTechOptions` = `researchable`
+  einmal je Runde (`p.freeTechUsed`), `useFreeTech` vermerkt die Runde, `FREE_TECH_USES` und
+  `freeTechsLeft` weg, `migrateState` löscht `p.freeTechsUsed`, `kiFreeTechChoices` gibt alles
+  zurück, `KI_DRAFT_BASE` 12 (geschätzt), Texte in `data/civs.json`/`DATA_EN`, Spieltipp 3.
+  Sechsecke (`js/tiles.js`): `HEX_DXYZ`, `HEX_INDEX`, `HEX_ROT` (6), `HEX_MIDDLE` (7), `hexRing`,
+  `HEX_POOL` (20), Platztyp `'H'` (`SLH`), `TILE_SHAPES.hex4` (`hex10`), `tilePlan(civs, seed, {hex})`,
+  `planShape/planRotations/planMiddle/planFace`, `hexFaceTerrain`; `placeSeat`, `botPlaceSeat`,
+  `placeYieldTable`, `tileMap`, `kiPlaceSeat`, `placeRotate` und die Lagenanzeige („Lage %s von %s")
+  fragen die Zahl der Lagen. Zeichnung: `riverLines` (Baum über die Flussfelder, Mündung, Quelle),
+  `terrainGlyph('I')` (Eiland), Insel gefüllt in Meerfarbe, `TERRAIN.F/I.color` neu. Welt:
+  `civRowsHTML`, `worldModal` sortiert nach `turnPosition`, `placeWorldView`, Knopf `#pl-world`;
+  `seatingOrder(cfg)` (`js/engine.js`) rechnet die Zugfolge für `newGame` und die Legephase.
+  Legephase: `placeReveal` ruft `placeGo`, `drawPlace` zeichnet keinen Endstand mehr, Knöpfe der
+  Legephase `flex:none` (`css/style.css`). Erstes Spiel: `gruenden1.info` mit dem Kostensatz,
+  `gut` neu. Tests: `test.js` Freie Forschung (Runde, Singularität samt Sieganmeldung, Dunkles
+  Zeitalter, Spielstände v96/v97/v98, KI nimmt die Singularität), „Fähigkeiten"-Zahl, neuer Block
+  „Experimenteller Plättchenmodus" (Geometrie, Vorratsregeln samt Startgüte, Form und Gitter,
+  Sitzplätze, Plan, Legen, KI, Karte, eine ganze KI-Partie); `smoke.js` Duell und drei Reiche mit
+  Doppelten, Startspieler „Zufällig", Legephase ohne Schlussschritt, drei neue v99-Schritte (Aufbau,
+  Sechsecke legen samt Welt in Zugfolge, Flüsse und Inseln).
 - **v98 auf einen Blick.** `START_BONUS_COINS` [0, 2, 4, 6] und `START_BONUS_DUEL` 4 (`js/data.js`);
   `startBonus` fragt `empireCount(S)` (Reiche ohne Barbaren, neu in `js/engine.js`, von `turnPosition`
   mitbenutzt): bei zwei Reichen bekommt Platz 1 `START_BONUS_DUEL`, sonst gilt die Reihe. Regelbogen:
@@ -438,7 +484,7 @@ Gedächtnis rekonstruieren.
 - **v84 auf einen Blick.** Sklaverei bringt 7 Münzen (`SLAVERY_COINS`). Militär der Antike:
   Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5 – im Tutorial (alter Techtree,
   `OLD_TECH_COSTS`) die alten 5/2/4. Marathon: Singularität 300 (`MARATHON_SINGULARITY`),
-  höchstens fünf Gründungen je Zug (`MARATHON_MAX_FOUNDS`, `foundedThisTurn`), Militärsieg
+  höchstens fünf Gründungen je Zug (`MARATHON_MAX_FOUNDS`, `foundedThisTurn`; seit v100 weg), Militärsieg
   mit der zweiten eroberten Hauptstadt (`MARATHON_CAPITALS`, `p.capTaken`, `capitalsToWin`);
   eine eroberte Hauptstadt ist eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt
   weiter. Kolonien: ein per Kolonialismus gekauftes Feld ist ohne Siedlerweg besiedelbar,
@@ -995,10 +1041,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 1977 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2020 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (182 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (185 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -1059,6 +1105,14 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
 
 - **`sw.js`-Version** nach *jeder* Änderung hochzählen, sonst behält das installierte iPad
   den alten Stand.
+- **Sechseckform (seit v99)**: `TILE_SHAPES.hex4` muss in einer geraden Zeile beginnen (oberste
+  Feldzeile −6), sonst kippt der Versatz der Zeilen (`cubeToRC`, odd-r) und die Karte verzerrt sich.
+  Wer Plätze verschiebt, verschiebt um ganze Gitterschritte ((5, −2), (2, 3), (−3, 5) axial) – nur so
+  schließen die Sechsecke lückenlos. `test.js` „Experimenteller Plättchenmodus" prüft Überlappung,
+  Zusammenhang, Zeilenbeginn und die Gitterschritte.
+- **Zugfolge an einer Stelle (seit v99)**: `seatingOrder(cfg)` rechnet sie für `newGame` und für die
+  Weltansicht der Legephase. Wer die Zugfolge ändert, ändert sie dort – sonst zeigt „Welt" beim Legen
+  eine andere Reihenfolge als im Spiel (`smoke.js` vergleicht beide).
 - **Spielerreihenfolge** (seit v90 zweierlei): ohne `cfg.seatOrder` fest Russland → Griechenland
   → England → Wikinger (klassische Aufstellung, Marathon, Tutorial, Tests, `tools_ki.js`), mit
   ihm die Reihenfolge der Aufbau-Liste (Plätze; die Oberfläche setzt es über `platzNummern`).
@@ -1359,9 +1413,6 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   Stelle, die eine Hauptstadt braucht, nimmt `capitalOf(S, pi) || citiesOf(S, pi)[0]` oder
   prüft auf leer. `p.capTaken` zählt genommene Hauptstädte; die Regel steht allein in
   `captureCity` (`capitalsToWin`).
-- **Gründungen je Zug zählen über die Runde** (`p.foundRound`/`p.foundCount`, seit v84): jedes
-  Reich hat genau einen Zug je Runde. Wer einen zweiten Zug in derselben Runde einführt, muss
-  den Zähler beim Zugbeginn zurücksetzen.
 - **Kolonien stecken in `foundDistance`** (seit v84): ohne Weg zählt für eigene gekaufte Felder
   die Luftlinie. Die KI rechnet Siedelplätze selbst (`kiSitesAll`) und fragt für Kolonien
   außerhalb ihrer Suche `foundDistance`; ihr Merker (`kiSiteKey`) enthält die gekauften Felder.
@@ -1409,14 +1460,15 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   Städte Wege sperren oder als Straße zählen, ändert es dort mit – `effectiveRoad` allein
   reicht nicht. `test.js` vergleicht über eine ganze Marathonpartie mit der Fassung bis v82.
 
-### Gründungskosten (geändert in v51)
+### Gründungskosten (geändert in v51 und v100)
 
-`foundCost` rechnet Stadtkosten (1/3/6/10 …) + Distanzkosten. Englands **Kolonisten**
-streicht die Stadtkosten, **Kartografie** die Distanzkosten. Beides zusammen kostete bis
-v50 pauschal 1 Nahrung – ab der dritten Stadt praktisch gratis. Jetzt zahlt man die
-**günstigere der beiden** Kosten, also anfangs die Stadtkosten und später den Weg. Die
-Einzelvergünstigungen sind unverändert; der Mindestbetrag von 1 bleibt nur als Sperre
-gegen 0-Kosten-Sonderfälle (Reich ohne Stadt).
+`foundCost` rechnet Stadtkosten (1/3/6/10 …) + Distanzkosten; die Vergünstigungen stehen seit
+v100 allein in `foundCostOf`, und auch die KI (`kiSitesAll`) rechnet damit – bis v99 hatte sie
+eine eigene Kopie der Regel, die mitgeändert werden musste. **Kartografie** streicht die
+Distanzkosten, Englands **Kolonisten** halbiert, was übrig bleibt, aufgerundet (Anweisung des
+Autors, v100). Vorher strich Kolonisten die Stadtkosten; beides zusammen kostete bis v50 pauschal
+1 Nahrung, v51–v99 die **günstigere der beiden** Kosten. Diese Sonderregel ist weg. Der
+Mindestbetrag von 1 bleibt als Sperre gegen 0-Kosten-Sonderfälle (Reich ohne Stadt).
 
 ### Siegansprüche (neu in v51)
 
@@ -1912,7 +1964,8 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    bei gleicher Stärke wäre es ein Viertel. Auf der großen Karte mit teurer Forschung ist
    Gründen ohne Grundkosten offenbar das Stärkste. Ob Menschen das genauso ausnutzen, ist
    nicht gemessen; eine Balancefrage für den Autor (etwa Kolonisten im Marathon schwächer,
-   oder höchstens einmal im Vorrat).
+   oder höchstens einmal im Vorrat). **Seit v100 überholt:** Kolonisten halbiert nur noch die
+   Gründungskosten (siehe Punkt 59).
 26. **Kriegerkultur zu viert (v83, gemessen).** Mit Burgenbau gewinnen die Wikinger mit
    Kriegerkultur 17 von 40 KI-Partien zu viert (v82: 12, gleich stark wären 10). Gewollt war
    die Stärkung; ob es so viel sein soll, entscheidet das Spielen.
@@ -2136,6 +2189,28 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    bekommen weiter nichts; ist ein Bot Startspieler, bekommt der Mensch als Zweiter 4. (d) Im Ersten
    Spiel bekommt England (KI, Zweite) jetzt 4 statt 1 Münze im ersten Zug – sein Drehbuch gibt sie nicht
    aus (gründen, Hauptstadt wachsen), der Verlauf ist derselbe.
+
+56. **Getroffene Auslegungen (v99) – zum Ändern angeboten.** (a) Im Duell sind jetzt Doppelte erlaubt
+   – Folge davon, dass Zivilisationswahl und Platznummern die wirklich angebotene Karte fragen
+   (`setupPick`); bis v98 löste der Aufbau die Doppelung im Duell auf, obwohl Hinweis und „Nochmal
+   spielen" sie zuließen. (b) Sechsecke: Zugfolge Platz 1 oben links, 2 oben rechts, 3 unten links,
+   4 unten rechts (wie auf der Dreieckskarte); offene Plättchen in zufälliger Lage; jedes Feld des
+   Startplättchens als Hauptstadt erlaubt. (c) Flusstal grün statt blau – der Wasserlauf macht den
+   Fluss kenntlich. (d) Erstes Spiel: „1./2./3./4. Stadt" zählt die neuen Städte, die Hauptstadt nicht
+   (so rechnet `foundCost`). (e) „Zufällig" als Startspieler auch mit nur einem Menschen.
+57. **Freie Forschung (v99) nur zu viert gemessen.** Einmal je Runde ohne Grenze und samt Singularität:
+   KI gegen KI zu viert 25,0 % auf den Dreiecken, 31,2 % auf den Sechsecken (gleiche Chance 25 %). Duell,
+   drei Reiche, Originalkarte und Marathon nicht gemessen; der Draftwert im Marathon (12) ist geschätzt.
+58. **Sechseckmodus: Balance nur von der KI gemessen** (400 Partien, `ANNAHMEN.md` Abschnitt v99):
+   Startspieler 35,4 % (Dreiecke 47,9 %), Startplättchen von Karst 13,4 % bis Taiga 35,7 % – kaum mehr
+   Streuung als Zufall. Karst und Taiga sind die Kandidaten, falls sich das im Spiel bestätigt; wie
+   Menschen dort legen, zeigt erst das Spielen.
+59. **Kolonisten (v100) nur zu viert gemessen, Marathon geschätzt.** Gepaart gegen v99 (je 400
+   KI-Partien, dieselben Aufstellungen): auf den Sechsecken 49,6 % → 37,4 % (−12,2 Punkte,
+   Intervall −21,9 … −2,5), auf den Dreiecken 29,6 % → 33,3 % (keine erkennbare Änderung), gleiche
+   Chance 25 %. Duell, drei Reiche, Originalkarte und Marathon nicht gemessen; der Draftwert im
+   Marathon (7) ist geschätzt, ebenso, wie sich der Marathon ohne Gründungsgrenze spielt (eine
+   Testpartie: höchstens 5 Gründungen in einem Zug).
 
 ## Arbeitsweise, die der Autor schätzt
 

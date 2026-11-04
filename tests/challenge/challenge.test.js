@@ -63,7 +63,7 @@ function unit() {
     const a = C.setupOf('2026-W45'), b = C.setupOf('2026-W45'), c = C.setupOf('2026-W46');
     const civs = require('../../engine-adapter').engineConst('CIVS');
     const civ = civs.find(x => x.k === a.civ);
-    ok(JSON.stringify(a) === JSON.stringify(b) && civ && civ.abilities.some(x => x.k === a.ability) && ['0', 'gross'].includes(a.mapKey) && a.playerCount === 4 && a.kiCount === 3,
+    ok(JSON.stringify(a) === JSON.stringify(b) && civ && civ.abilities.some(x => x.k === a.ability) && a.mapKey === '0' && a.playerCount === 4 && a.kiCount === 3,
         'unit: the same setup for everybody, a real nation and ability', JSON.stringify(a));
     ok(JSON.stringify(a) !== JSON.stringify(c), 'unit: another week, another setup');
     const bw = id => { const x = C.boundsOf(id); return x && x.startsAt.toISOString().slice(0, 10) + '/' + x.endsAt.toISOString().slice(0, 10); };

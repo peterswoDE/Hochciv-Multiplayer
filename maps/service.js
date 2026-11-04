@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { sequelize, CustomMap, MapFavorite, User } = require('../models');
 const engine = require('../engine-adapter');
+const BUILTIN_MAPS = require('./builtin');
 
 const MAX_MAPS = 30;                       // the browser library holds as many (MY_MAPS_MAX)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -115,7 +116,7 @@ async function byCode(code, viewerId) {
     if (!c) return { error: `Ein Kartencode hat ${CODE_LENGTH} Zeichen (Buchstaben und Ziffern).` };
     const row = await CustomMap.findOne({ where: { code: c } });
     if (!row) return { error: 'Zu diesem Code gibt es keine veröffentlichte Karte.' };
-    if (row.ownerId !== viewerId) await row.increment('loads');
+    if (!viewerId || row.ownerId !== viewerId) await row.increment('loads');
     const owner = await User.findByPk(row.ownerId, { attributes: ['username'] });
     return { code: c, map: row.map, author: owner ? owner.username : null };
 }
@@ -173,7 +174,7 @@ async function browse(viewer, { sort, only, q, players, page, limit } = {}) {
     const { rows, count } = await CustomMap.findAndCountAll({
         where: { [Op.and]: and }, order: SORTS[sort] || SORTS.popular, offset, limit: size,
     });
-    const owners = [...new Set(rows.map(r => r.ownerId))];
+    const owners = [...new Set(rows.map(r => r.ownerId).filter(Boolean))];
     const authors = new Map(owners.length
         ? (await User.findAll({ where: { id: owners }, attributes: ['id', 'username'] })).map(u => [u.id, u.username]) : []);
     const favs = new Set(viewer && rows.length
@@ -234,6 +235,21 @@ async function adminUnpublish(admin, id) {
     return { ok: true };
 }
 
+/**
+ * The maps without an owner (maps/builtin.js), at server start. Each is created once and left alone
+ * after that – an admin who unpublishes one has the last word.
+ */
+async function seedBuiltin() {
+    for (const { id, code, map } of BUILTIN_MAPS) {
+        const r = engine.checkCustomMap(map);
+        if (r.error) throw new Error(`${map.name}: ${r.error}`);
+        await CustomMap.findOrCreate({
+            where: { id },
+            defaults: { ownerId: null, name: r.map.name, map: r.map, code, publishedAt: new Date() },
+        });
+    }
+}
+
 // ── Account lifecycle (utils/deleteAccount.js, utils/mergeAccounts.js) ────────
 
 /** The account is deleted: its maps go with it (games already played keep their copy in the state). */
@@ -273,6 +289,6 @@ async function moveOwner(fromId, intoId, transaction) {
 
 module.exports = {
     list, save, remove, publish, unpublish, byCode,
-    browse, pick, setFavorite, forReport, adminUnpublish,
+    browse, pick, setFavorite, forReport, adminUnpublish, seedBuiltin,
     removeOwner, moveOwner, normalizeCode, MAX_MAPS, CODE_LENGTH,
 };

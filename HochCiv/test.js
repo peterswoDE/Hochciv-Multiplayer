@@ -2412,41 +2412,50 @@ const setEvent = (S, k) => {
   eq(typeof canFound(S, 0, spot[0], spot[1]), 'string', 'Menschen auch nicht');
 }
 
-/* =========================== Gründungskosten: Kolonisten und Kartografie zusammen
-   Stadtkosten (1/3/6/10 …) + Distanzkosten. Kolonisten streicht die Stadtkosten,
-   Kartografie die Distanzkosten – zusammen zahlt man die günstigere der beiden, nicht
-   pauschal 1 (so war es bis v50, was ab der dritten Stadt praktisch gratis war).       */
+/* =========================== Gründungskosten: Kolonisten und Kartografie (v100)
+   Stadtkosten (1/3/6/10 …) + Distanzkosten. Kartografie streicht die Distanzkosten,
+   Kolonisten halbiert, was übrig bleibt, aufgerundet (Anweisung des Autors, v100). Bis v99
+   strich Kolonisten die Stadtkosten, und mit beidem zahlte man die günstigere der beiden –
+   die Sonderregel ist weg, beides zusammen ergibt sich von selbst.                      */
 {
   const A = mkA('england', 'gruenden', ['kartografie']);
   const cap = capitalOf(A, 0);
   const spot = within(cap.r, cap.c, 5).find(([r, c]) => !canFound(A, 0, r, c));
   const weg = foundDistance(A, 0, spot[0], spot[1]);
-  eq(foundCost(A, 0, spot[0], spot[1]), Math.min(1, weg),
-    'mit einer Stadt: Stadtkosten 1 sind günstiger als der Weg');
-  // Städte dazuerfinden: die Stadtkosten steigen 1/3/6/10, der Weg bleibt gleich
   const stadtkosten = n => n * (n + 1) / 2;
+  const halb = x => Math.ceil(x / 2);
+  eq(foundCost(A, 0, spot[0], spot[1]), 1, 'beides, eine Stadt: Stadtkosten 1, halbiert und aufgerundet 1');
+  // Städte dazuerfinden: die Stadtkosten steigen 1/3/6/10/15, der Weg zählt nicht
+  const reihe = [];
   for (const n of [2, 3, 4, 5]) {
     while (citiesOf(A, 0).length < n)
       A.cities.push({ id: 900 + A.cities.length, owner: 0, r: 0, c: 0, pop: 1, cap: false, grown: 0, born: 1 });
-    const erwartet = Math.min(stadtkosten(n), weg);
-    eq(foundCost(A, 0, spot[0], spot[1]), erwartet,
-      `bei ${n} Städten kostet es ${erwartet} (Stadt ${stadtkosten(n)}, Weg ${weg})`);
+    reihe.push(foundCost(A, 0, spot[0], spot[1]));
   }
-  eq(foundCost(A, 0, spot[0], spot[1]), weg,
-    'ab genug Städten zahlt man den Weg – die Kosten bleiben nicht bei 1 stehen');
-  // die einzelnen Vergünstigungen bleiben, wie sie waren
-  const B = mkA('england', 'gruenden');
-  eq(foundCost(B, 0, spot[0], spot[1]), foundDistance(B, 0, spot[0], spot[1]),
-    'Kolonisten allein: nur die Distanzkosten');
-  const C = mk('griechenland', ['kartografie']);
-  eq(foundCost(C, 0, spot[0], spot[1]), 1, 'Kartografie allein: Stadtkosten der ersten Stadt = 1');
-  const D = mk('griechenland');
-  eq(foundCost(D, 0, spot[0], spot[1]), 1 + foundDistance(D, 0, spot[0], spot[1]),
-    'ohne beides: Stadtkosten plus Weg');
+  eq(reihe, [2, 3, 5, 8], 'beides: die Hälfte der Stadtkosten 3/6/10/15, aufgerundet – der Weg zählt nicht');
+  // die Vergünstigungen einzeln – alle als England, also dieselbe Hauptstadt und derselbe Weg;
+  // mit 1, 2 und 3 Städten ist die Summe mal gerade, mal ungerade
+  const B = mkA('england', 'gruenden'), C = mkA('england', 'basis', ['kartografie']), D = mkA('england', 'basis');
+  const [r, c] = spot;
+  eq([B, C, D].map(X => foundDistance(X, 0, r, c)), [weg, weg, weg], 'derselbe Weg in allen drei Partien');
+  for (const n of [1, 2, 3]) {
+    for (const X of [B, C, D]) while (citiesOf(X, 0).length < n)
+      X.cities.push({ id: 900 + X.cities.length, owner: 0, r: 0, c: 0, pop: 1, cap: false, grown: 0, born: 1 });
+    const st = stadtkosten(n);
+    eq([foundCost(B, 0, r, c), foundCost(C, 0, r, c), foundCost(D, 0, r, c)], [halb(st + weg), st, st + weg],
+      `${n} ${n === 1 ? 'Stadt' : 'Städte'}, Weg ${weg}: Kolonisten ${halb(st + weg)} (die Hälfte von ${st} + ${weg}, aufgerundet), Kartografie ${st}, ohne beides ${st + weg}`);
+  }
+  eq([1, 2, 3].some(n => (stadtkosten(n) + weg) % 2 === 1), true, 'darunter eine ungerade Summe – dort wird aufgerundet');
   // nie unter 1, auch wenn ein Reich alle Städte verloren hat
   const E = mkA('england', 'gruenden', ['kartografie']);
   E.cities.length = 0;
   eq(foundCost(E, 0, spot[0], spot[1]) >= 1, true, 'gegründet wird nie für null Nahrung');
+  // Die KI rechnet dieselben Kosten (kiSites über foundCostOf)
+  for (const X of [A, mkA('england', 'gruenden')]) {
+    const plan = kiSitesAll(X, 0, kiContext(X, 0));
+    eq(plan.length > 0 && plan.every(s => s.cost === foundCost(X, 0, s.r, s.c)), true,
+      `KI-Siedelplätze kosten wie die Regel (${X === A ? 'mit' : 'ohne'} Kartografie, ${plan.length} Plätze)`);
+  }
 }
 
 /* ============================== Gründungsdistanz nur über passierbare Felder */
@@ -3414,30 +3423,31 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   eq(['schrift', 'papier'].map(k => copyableTechs(M, gr).find(o => o.tech.k === k).paidCoins), [8, 18],
     'Kopieren zahlt die Grundkosten des Marathons (Schrift 4 × 2, Papier 6 × 3)');
 
-  // --- Höchstens fünf Gründungen je Zug (v84, Anweisung des Autors) – nur im Marathon
+  // --- Gründungen je Zug: im Marathon v84–v99 höchstens fünf, seit v100 ohne Grenze
+  //     (Anweisung des Autors) – wie außerhalb des Marathons
   {
     const gruende = (marathon, seed) => {
       const X = newGame({ seed, map: marathonMap(seed), marathon,
         players: CIVS.map(c => ({ civ: c.k, kind: 'human', drafted: ['england:gruenden', 'russland:basis'] })) });
       const pi = X.cur;
       X.players[pi].res.food = 9999;
-      let n = 0, sechste = null;
+      let n = 0;
       for (let r = 0; r < X.map.rows.length && n < 7; r++) for (let c = 0; c < X.map.rows[r].length && n < 7; c++) {
-        if (foundSiteError(X, pi, r, c)) {
-          if (n === 5 && sechste == null && X.marathon) sechste = foundSiteError(X, pi, r, c);
-          continue;
-        }
+        if (foundSiteError(X, pi, r, c)) continue;
         if (!foundCity(X, pi, r, c)) n++;
       }
-      return { X, pi, n, sechste };
+      return { X, pi, n };
     };
     const a = gruende(true, 31);
-    eq([a.n, foundedThisTurn(a.X, a.pi)], [5, 5], 'Marathon: fünf Städte in einem Zug, dann ist Schluss');
-    eq(a.sechste, 'Höchstens 5 neue Städte je Zug (Marathon).', 'die sechste: Meldung mit dem Grund');
-    eq(canFound(a.X, a.pi, 0, 0), 'Höchstens 5 neue Städte je Zug (Marathon).', 'jeder Platz nennt dann den Grund zuerst');
-    for (let i = 0; i < 4; i++) endTurn(a.X);                // eine Runde weiter
-    eq([a.X.cur, foundedThisTurn(a.X, a.pi)], [a.pi, 0], 'im nächsten Zug zählt es von vorn');
-    eq(gruende(false, 31).n, 7, 'außerhalb des Marathons gibt es keine Grenze');
+    eq(a.n, 7, 'Marathon: sieben Städte in einem Zug (v84–v99: höchstens fünf)');
+    eq(['foundRound', 'foundCount'].some(k => k in a.X.players[a.pi]), false, 'kein Zähler der Gründungen mehr im Spielstand');
+    eq(gruende(false, 31).n, 7, 'außerhalb des Marathons ebenso');
+    // ein Spielstand von v84–v99 trägt noch den Zähler – migrateState räumt ihn weg
+    const alt = JSON.parse(JSON.stringify(a.X));
+    alt.players[a.pi].foundRound = alt.round; alt.players[a.pi].foundCount = 5;
+    migrateState(alt);
+    eq(['foundRound', 'foundCount'].some(k => k in alt.players[a.pi]), false, 'alter Spielstand: migrateState räumt den Zähler weg');
+    eq(String(canFound(alt, a.pi, 0, 0)).includes('je Zug'), false, '… und keine Meldung über eine Grenze');
   }
 
   // --- Militärsieg erst mit der zweiten eroberten Hauptstadt (v84) – nur im Marathon
@@ -3615,10 +3625,10 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   let guard = 0, langsam = 0, err = null, routen = 0, routenAnders = [], gainAnders = 0, gruendungen = 0;
   try {
     while (!S.over && guard++ < 400) {
-      const t0 = Date.now();
+      const t0 = Date.now(), wer = S.cur, vorher = new Set(S.cities.map(c => c.id));
       kiTurn(S, S.cur);
       langsam = Math.max(langsam, Date.now() - t0);
-      gruendungen = Math.max(gruendungen, foundedThisTurn(S, S.cur));
+      gruendungen = Math.max(gruendungen, S.cities.filter(c => !vorher.has(c.id) && c.owner === wer).length);
       if (S.over) break;
       endTurn(S);
       S.players.forEach((_, pi) => {
@@ -3641,7 +3651,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   // einem zweiten Prüflauf bis gut 8 s (vor der Beschleunigung von kiRisk in v84)
   eq(langsam < 10000, true, `kein KI-Zug über 10 s auf der großen Karte (längster ${langsam} ms)`);
   eq([routenAnders, routen > 0], [[], true], `Handelsrouten schnell gerechnet = wie bis v82 (${routen} Routen über die Partie)`);
-  eq(gruendungen <= MARATHON_MAX_FOUNDS, true, `die KI gründet höchstens fünf Städte je Zug (höchstens ${gruendungen})`);
+  eq(gruendungen > 0, true, `die KI gründet Städte, seit v100 ohne Grenze je Zug (höchstens ${gruendungen} in einem Zug)`);
   if (S.over && S.over.military)
     eq(capitalsTaken(S.players[S.over.winner]), 2, 'ein Militärsieg der KI kommt mit zwei Hauptstädten');
   eq(gainAnders, 0, 'Ertrag beim Siedeln mit vorab gerechnetem Einkommen = ohne');
@@ -3955,52 +3965,63 @@ const duellKarte = (civA, civB, seed) => {
 }
 
 /* Griechenland: Alternativen ersetzen den Kostenrabatt.
-   Freie Forschung seit v97 (Anweisung des Autors): zweimal je Partie eine verfügbare Technologie
-   aus jedem Zeitalter, auch beide im selben Zug – bis v96 einmal je Runde und nur bis zur
-   Industrialisierung. Die Singularität nicht (wie bei der Raumfahrt). */
+   Freie Forschung seit v99 (Anweisung des Autors): einmal je Runde jede erforschbare Technologie,
+   aus jedem Zeitalter und auch die Singularität – also der Forschungssieg. v97–v98 zweimal je
+   Partie ohne die Singularität, bis v96 einmal je Runde und nur bis zur Industrialisierung. */
 {
   const S = mkA('griechenland', 'gratistech'), p = S.players[0];
   eq(techCost(S, 0, TECH_BY_KEY.papier), 6, 'Alternative: kein Kostenrabatt mehr');
-  eq([FREE_TECH_USES, freeTechsLeft(p)], [2, 2], 'zwei Freie Forschungen je Partie, beide offen');
   p.avail.papier = true; p.avail.robotik = true;
   eq(freeTechOptions(S, 0).some(t => t.k === 'papier'), true, 'verfügbare Tech ist gratis erforschbar');
   eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), true, 'auch aus der Moderne (bis v96 nur bis Industrialisierung)');
   eq(freeTechOptions(S, 0).some(t => t.k === 'chemie'), false, 'nur Verfügbares (Chemie ist nicht ausgewürfelt)');
   eq(useFreeTech(S, 0, 'chemie'), T('Nicht möglich.'), '… und nicht Verfügbares geht auch nicht');
+  eq(freeTechOptions(S, 0).map(t => t.k).sort(), researchable(S, 0).map(t => t.k).sort(),
+    'zur Wahl steht genau, was der Bogen erforschbar nennt');
   const vorrat = JSON.stringify(p.res);
   eq(useFreeTech(S, 0, 'papier'), null, 'Gratisforschung klappt');
-  eq([has(p, 'papier'), JSON.stringify(p.res) === vorrat, freeTechsLeft(p), p.freeTechsUsed], [true, true, 1, 1], 'Tech ist erforscht, nichts bezahlt, eine bleibt');
-  eq(freeTechOptions(S, 0).map(t => t.k).includes('papier'), false, 'Erforschtes steht nicht mehr zur Wahl');
-  eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), true, 'die zweite geht im selben Zug');
-  eq(useFreeTech(S, 0, 'robotik'), null, 'zweite Gratisforschung: Robotik (Moderne)');
-  eq([has(p, 'robotik'), freeTechsLeft(p)], [true, 0], 'erforscht, keine mehr offen');
-  p.avail.chemie = true;
-  S.round += 3;
-  eq([freeTechOptions(S, 0).length, useFreeTech(S, 0, 'chemie')], [0, T('Nicht möglich.')],
-    'danach nie wieder – auch Runden später nicht');
-  // die Singularität nicht, auch wenn sie erforschbar wäre
+  eq([has(p, 'papier'), JSON.stringify(p.res) === vorrat, p.freeTechUsed], [true, true, S.round],
+    'Tech ist erforscht, nichts bezahlt, die Runde ist vermerkt');
+  eq([freeTechOptions(S, 0).length, useFreeTech(S, 0, 'robotik')], [0, T('Nicht möglich.')],
+    'einmal je Runde: eine zweite im selben Zug geht nicht');
+  S.round += 1;
+  eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), true, 'in der nächsten Runde wieder');
+  eq([useFreeTech(S, 0, 'robotik'), has(p, 'robotik')], [null, true], 'nächste Runde: Robotik (Moderne) umsonst');
+  // die Singularität auch, sobald sie erforschbar ist – das ist der Forschungssieg
   const G = mkA('griechenland', 'gratistech'), q = G.players[0];
+  eq(freeTechOptions(G, 0).some(t => t.k === 'singularitaet'), false, 'ohne die Moderne in jedem Feld keine Singularität');
   for (const f of [0, 1, 2, 3]) q.techs[TECHS.find(t => t.f === f && t.age === 3).k] = true;
-  eq(researchable(G, 0).some(t => t.k === 'singularitaet'), true, 'Ausgangslage: die Singularität ist erforschbar');
-  eq([freeTechOptions(G, 0).some(t => t.k === 'singularitaet'), useFreeTech(G, 0, 'singularitaet')], [false, T('Nicht möglich.')],
-    'die Singularität gibt es nicht umsonst');
+  eq(freeTechOptions(G, 0).some(t => t.k === 'singularitaet'), true, 'mit je einer Technologie der Moderne steht die Singularität zur Wahl');
+  eq(useFreeTech(G, 0, 'singularitaet'), null, 'die Singularität umsonst (bis v98 nicht)');
+  eq([has(q, 'singularitaet'), (G.claims || []).some(c => c.pi === 0 && /Singularität/.test(c.how))], [true, true],
+    'erforscht – und als Forschungssieg angemeldet (gewonnen wird am Rundenende)');
   // ohne die Fähigkeit nichts, Bots auch nicht
   const N = mkA('griechenland', 'basis');
   N.players[0].avail.papier = true;
   eq(freeTechOptions(N, 0).length, 0, 'ohne Freie Forschung keine Gratiswahl');
-  // ein Spielstand von v96 hatte die Runde der letzten Nutzung – migrateState räumt sie ab
+  // ein Dunkles Zeitalter sperrt sie wie jede Forschung
+  const D = mkA('griechenland', 'gratistech');
+  D.players[0].avail.papier = true;
+  setEvent(D, 'dunkles_zeitalter');
+  eq([evActive(D, 0, 'dunkles_zeitalter'), freeTechOptions(D, 0).length], [true, 0], 'Dunkles Zeitalter: keine Freie Forschung');
+  // Spielstand von v97/v98: der Zähler (p.freeTechsUsed) bedeutet nichts mehr
   const A = mkA('griechenland', 'gratistech');
-  A.players[0].freeTechUsed = A.round;
+  A.players[0].freeTechsUsed = 2;
   A.players[0].avail.papier = true;
   migrateState(A);
-  eq(['freeTechUsed' in A.players[0], freeTechsLeft(A.players[0]), freeTechOptions(A, 0).some(t => t.k === 'papier')], [false, 2, true],
-    'Spielstand von v96: die alte Runde verschwindet, beide Freien Forschungen sind offen');
+  eq(['freeTechsUsed' in A.players[0], freeTechOptions(A, 0).some(t => t.k === 'papier')], [false, true],
+    'Spielstand von v97/v98: der Zähler verschwindet, die Freie Forschung ist wieder offen');
+  // Spielstand von v96: die Runde der letzten Nutzung gilt weiter (dieselbe Bedeutung wie heute)
+  const B = mkA('griechenland', 'gratistech');
+  B.players[0].freeTechUsed = B.round; B.players[0].avail.papier = true;
+  migrateState(B);
+  eq(freeTechOptions(B, 0).length, 0, 'Spielstand von v96: in dieser Runde schon genutzt – bleibt so');
 }
 
 /* Marathon (v85, Anweisung des Autors): Griechenlands Günstige Forschung und die
    Wissenschaftliche Methode ziehen doppelt ab – seit v97 also 2/2/4/4/10 bzw. 4/6/8/10/20. Die
    Freie Forschung reichte im Marathon nur bis ins Mittelalter; seit v97 gilt sie überall gleich
-   (zweimal je Partie, jedes Zeitalter). Im normalen Spiel zieht nichts doppelt ab. */
+   (v99: einmal je Runde, alles Erforschbare). Im normalen Spiel zieht nichts doppelt ab. */
 {
   const spiel = (marathon, ab) => {
     const S = newGame({ seed: 7, map: marathon ? marathonMap(7) : undefined, marathon,
@@ -4065,14 +4086,18 @@ const duellKarte = (civA, civB, seed) => {
   const minus = METHOD_DISCOUNT.map(n => '−' + n).join('/');
   eq([TECH_BY_KEY.wiss_methode.e.includes(minus), DATA_EN.tech.wiss_methode[1].includes(minus)], [true, true],
     `Wissenschaftliche Methode nennt ${minus}, deutsch und englisch`);
-  eq([ab('griechenland:gratistech').e.startsWith(FREE_TECH_USES + '× pro Partie'), FREE_TECH_USES === 2 && en('griechenland', 'gratistech').startsWith('Twice per game')],
-    [true, true], 'Freie Forschung nennt, wie oft je Partie');
+  eq([ab('griechenland:gratistech').e.startsWith('1× pro Runde') && ab('griechenland:gratistech').e.includes('auch die Singularität'),
+    en('griechenland', 'gratistech').startsWith('Once per round') && en('griechenland', 'gratistech').includes('the Singularity included')],
+    [true, true], 'Freie Forschung: einmal je Runde, auch die Singularität (v99), deutsch und englisch');
   eq([ab('wikinger:armeemacht').e.includes('+' + WARRIOR_POWER + ' Macht'), en('wikinger', 'armeemacht').includes('+' + WARRIOR_POWER + ' power')],
     [true, true], `Kriegerkultur nennt +${WARRIOR_POWER} Macht`);
   eq([ab('russland:wachstum').e, en('russland', 'wachstum')].map(t => /zusätzliches Wachstum|extra growth/.test(t)), [true, true],
     'Fruchtbarkeit nennt das zusätzliche Wachstum');
   eq([ab('russland:siedler').e, en('russland', 'siedler')].map(t => /kleineren Stadt|one size smaller/.test(t)), [true, true],
     'Siedlertrecks nennen den Preis der kleineren Stadt');
+  eq([ab('england:gruenden').e, en('england', 'gruenden')].map(t => /die Hälfte \(aufgerundet\)|half \(rounded up\)/.test(t) &&
+    /doppelt|double/.test(t) && !/Basiskosten|base cost|Kartografie|Cartography/.test(t)), [true, true],
+    'Kolonisten (v100): die Hälfte, aufgerundet, Wachstum doppelt – keine Sonderregel mit Kartografie mehr');
   // das Erste Spiel (Griechenland, Grundfähigkeit) erklärt den Rabatt mit denselben Zahlen
   eq(FG_BY_ID.faehigkeit.gut(), T('Griechenland forscht günstiger: Jede Technologie kostet %s weniger in der Antike, %s im Mittelalter, %s in der Industrialisierung und %s in der Moderne (die Singularität %s).', ...GREEK_DISCOUNT),
     'Erstes Spiel: der Satz zur Fähigkeit liest GREEK_DISCOUNT');
@@ -4165,10 +4190,10 @@ const duellKarte = (civA, civB, seed) => {
   const far = within(cap.r, cap.c, 6).find(([r, c]) => isLand(A, r, c) &&
     foundDistance(A, 0, r, c) != null &&           // erreichbar, sonst gibt es keine Kosten
     !A.cities.some(x => hexDistance(x.r, x.c, r, c) < 3));
-  // Basiskosten bei einer Stadt = 1; die Distanzkosten sind in beiden Spielen gleich
-  eq(foundCost(B, 0, far[0], far[1]) - foundCost(A, 0, far[0], far[1]), 1,
-    'Alternative "Kolonisten": Basiskosten fallen weg, Distanz bleibt');
-  eq(foundCost(A, 0, far[0], far[1]) > 0, true, 'Distanzkosten werden weiter berechnet');
+  // Basiskosten bei einer Stadt = 1, die Distanzkosten sind in beiden Spielen gleich (v100)
+  const voll = foundCost(B, 0, far[0], far[1]);
+  eq([voll, foundCost(A, 0, far[0], far[1])], [1 + foundDistance(B, 0, far[0], far[1]), Math.ceil(voll / 2)],
+    'Alternative "Kolonisten": Stadtkosten plus Weg, halbiert und aufgerundet');
   eq(rates(A, 0).foodToCoins, Infinity, 'Alternative: kein 1:1-Pool mehr');
 }
 {
@@ -5097,15 +5122,13 @@ const duellKarte = (civA, civB, seed) => {
 {
   const art = (S) => freeActions(S, 0);
   // Griechenland, Freie Forschung
-  // (seit v97 zweimal je Partie: die Zahl steht, bis beide verbraucht sind)
+  // (seit v99 wieder einmal je Runde: genutzt zählt sie nicht mehr, in der nächsten Runde wieder)
   const S = mkA('griechenland', 'gratistech');
   eq(art(S), ['forschung'], 'Freie Forschung offen: eine Art');
   eq(useFreeTech(S, 0, freeTechOptions(S, 0)[0].k), null, 'Freie Forschung genutzt');
-  eq(art(S), ['forschung'], 'eine bleibt – weiter eine Art');
-  eq(useFreeTech(S, 0, freeTechOptions(S, 0)[0].k), null, 'die zweite genutzt');
-  eq(art(S), [], 'danach nichts mehr');
+  eq(art(S), [], 'diese Runde genutzt – keine Art mehr');
   S.round++;
-  eq(art(S), [], '… auch in der nächsten Runde nicht');
+  eq(art(S), ['forschung'], 'in der nächsten Runde wieder eine Art');
   // Verbundwerkstoffe in drei Städten: EINE Art; an der Nahrungsgrenze keine
   const W = mkA('russland', 'basis', ['verbundwerkstoffe']);
   W.map.rows = W.map.rows.map(z => 'G'.repeat(z.length));
@@ -6459,6 +6482,133 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   }
 }
 
+/* ==================================================== Experimenteller Plättchenmodus (v99)
+   Vier Reiche, zehn Sechsecke mit Seitenlänge 3 (19 Felder) aus einem Vorrat von 20, schräg in
+   Reihen zu 3/4/3; Startplättchen an den Enden der beiden Dreierreihen (Anweisung des Autors). */
+{
+  const K = c => c.join(',');
+  const nbCube = c => CUBE_DIRS.map(d => [c[0] + d[0], c[1] + d[1], c[2] + d[2]]);
+  // --- Geometrie eines Plättchens
+  eq(HEX_DXYZ.length, HEX_TILE_CELLS, 'ein Sechseck hat 19 Felder');
+  eq([-2, -1, 0, 1, 2].map(dz => HEX_DXYZ.filter(d => d[2] === dz).length).join(), '3,4,5,4,3',
+    'notiert in Zeilen zu 3/4/5/4/3');
+  eq(HEX_DXYZ.every(d => d[0] + d[1] + d[2] === 0 && Math.max(...d.map(Math.abs)) <= 2), true,
+    'alle Felder höchstens 2 von der Mitte');
+  eq(HEX_ROT.length, 6, 'sechs Lagen je Plättchen');
+  eq(HEX_ROT.every(r => new Set(r).size === HEX_TILE_CELLS), true, 'jede Lage ist eine Umordnung');
+  const sechsmal = HEX_ROT[0].map(n => { let m = n; for (let i = 0; i < 6; i++) m = HEX_ROT[1][m]; return m; });
+  eq(sechsmal.join(), HEX_ROT[0].join(), 'sechsmal gedreht ist wieder die Ausgangslage');
+  eq(HEX_ROT.every((r, o) => r.every((m, n) => hexRing(m) === hexRing(n))), true, 'Drehen lässt jedes Feld in seinem Ring');
+  eq(HEX_MIDDLE.length, 7, 'Mitte und erster Ring: sieben Felder (dort setzen Bots)');
+  eq(HEX_MIDDLE.every(n => nbCube(HEX_DXYZ[n]).every(c => HEX_INDEX[K(c)] != null)), true,
+    'die Nachbarn der mittigen Felder liegen alle auf dem Plättchen');
+
+  // --- Vorrat: die Entwurfsregeln aus js/tiles.js
+  const face = t => tileTerrain(t);
+  const nbIdx = n => nbCube(HEX_DXYZ[n]).map(c => HEX_INDEX[K(c)]);
+  const spot = (f, n) => {              // Hauptstadt mit 1 Bevölkerung: Stadt [1,−1,1] + sechs Nachbarn
+    let y = [1, -1, 1];
+    nbIdx(n).forEach(m => { y = y.map((v, i) => v + TERRAIN[f[m]].yield[i]); });
+    return { food: y[1] + Math.floor(y[2] / 2), wert: Math.round((y[0] + 1.1 * y[1] + 0.8 * y[2]) * 10) / 10 };
+  };
+  eq(HEX_POOL.length, 20, 'der Sechseck-Vorrat hat 20 Plättchen');
+  eq(new Set(HEX_POOL.map(t => t.n)).size, 20, 'die Namen sind verschieden');
+  eq(HEX_POOL.every(t => t.a.map(r => r.length).join() === '3,4,5,4,3' && face(t).length === 19), true,
+    'jedes Plättchen: 19 Felder in Zeilen zu 3/4/5/4/3');
+  eq(HEX_POOL.every(t => face(t).every(c => 'GWBFMI'.includes(c))), true, 'nur bespielbares Gelände');
+  eq(HEX_POOL.filter(t => HEX_MIDDLE.some(n => !'GWBF'.includes(face(t)[n]))).map(t => t.n), [],
+    'innen (Mitte und erster Ring) nur Grasland, Wald, Gebirge oder Fluss');
+  eq(HEX_POOL.every(t => face(t).every((c, n) => !'MI'.includes(c) || hexRing(n) === 2)), true,
+    'Meer und Inseln nur im äußeren Ring');
+  eq(Math.max(...HEX_POOL.map(t => face(t).filter(c => c === 'I').length)) <= 2, true, 'höchstens zwei Inseln je Plättchen');
+  eq(HEX_POOL.filter(t => HEX_MIDDLE.some(n => nbIdx(n).filter(m => face(t)[m] === 'I').length > 1)).map(t => t.n), [],
+    'kein inneres Feld grenzt an zwei Inseln');
+  eq(HEX_POOL.filter(t => HEX_MIDDLE.some(n => spot(face(t), n).food < 4)).map(t => t.n), [],
+    'jedes innere Feld bringt als Hauptstadt mindestens 4 Nahrung (Münzen 2:1)');
+  const beste = HEX_POOL.map(t => Math.max(...HEX_MIDDLE.map(n => spot(face(t), n).wert)));
+  eq(beste.every(b => b >= 8.8 && b <= 9.7), true,
+    `beste innere Hauptstadt je Plättchen zwischen 8,8 und 9,7 (${Math.min(...beste)}–${Math.max(...beste)})`);
+  const triBeste = TILE_POOL.map(t => Math.max(...TRI_MIDDLE.map(n => {
+    let y = [1, -1, 1];
+    const [i, j, k] = TRI_IJK[n];
+    [[i + 1, j - 1, k], [i - 1, j + 1, k], [i + 1, j, k - 1], [i - 1, j, k + 1], [i, j + 1, k - 1], [i, j - 1, k + 1]]
+      .forEach(c => { y = y.map((v, x) => v + TERRAIN[tileTerrain(t)[TRI_INDEX[c.join(',')]]].yield[x]); });
+    return y[0] + 1.1 * y[1] + 0.8 * y[2];
+  })));
+  console.log(`       Startgüte (bestes mittiges Feld): Sechsecke ${Math.min(...beste)}–${Math.max(...beste)}, ` +
+    `Dreiecke ${Math.min(...triBeste).toFixed(1)}–${Math.max(...triBeste).toFixed(1)}`);
+  const alle = HEX_POOL.flatMap(face), meer = alle.filter(c => c === 'M').length;
+  eq(meer > alle.length * 0.15 && meer < alle.length * 0.30, true,
+    `Meeranteil im Vorrat zwischen 15 und 30 % (${(100 * meer / alle.length).toFixed(0)} %)`);
+  eq(HEX_POOL.filter(t => face(t).includes('M')).length >= 15, true, 'Meer liegt auf den meisten Plättchen');
+  const arten = HEX_POOL.map(t => new Set(face(t)).size);
+  eq(Math.min(...arten) >= 3 && arten.filter(a => a >= 4).length >= 15, true,
+    `mindestens 3 Geländearten je Plättchen, meist 4 oder mehr (${arten.filter(a => a >= 4).length} von 20)`);
+
+  // --- Form: zehn Plätze, schräg 3/4/3
+  const sh = TILE_SHAPES.hex4;
+  const zellen = sh.slots.flatMap(slotCells);
+  eq([sh.slots.length, zellen.length, new Set(zellen.map(K)).size], [10, 190, 190], 'zehn Sechsecke, 190 Felder, keines doppelt');
+  const echt = new Set(zellen.map(K));
+  const gesehen = new Set([K(zellen[0])]), offen = [zellen[0]];
+  while (offen.length) for (const n of nbCube(offen.pop())) if (echt.has(K(n)) && !gesehen.has(K(n))) { gesehen.add(K(n)); offen.push(n); }
+  eq(gesehen.size, 190, 'die Form hängt zusammen');
+  eq(Math.min(...zellen.map(c => c[2])) % 2, 0, 'die Form beginnt in einer geraden Zeile');
+  const nachbar = (i, j) => slotCells(sh.slots[i]).some(a => slotCells(sh.slots[j]).some(b => cubeDist(a, b) === 1));
+  const grad = sh.slots.map((_, i) => sh.slots.filter((_, j) => j !== i && nachbar(i, j)).length);
+  eq(grad.join(), '3,4,3,3,6,6,3,3,4,3', 'Reihen zu 3/4/3: Ecken grenzen an drei Plättchen, die beiden mittleren an sechs');
+  // Nachbarmitten auf dem schrägen Gitter (5, −2), (2, 3), (−3, 5) – axial (x, z)
+  const ax = i => [sh.slots[i].a[0], sh.slots[i].a[2]];
+  const schritt = (i, j) => K([ax(j)[0] - ax(i)[0], ax(j)[1] - ax(i)[1]]);
+  eq([schritt(0, 1), schritt(1, 2), schritt(0, 3), schritt(3, 4), schritt(4, 5), schritt(5, 6), schritt(3, 7), schritt(7, 8), schritt(8, 9)],
+    ['5,-2', '5,-2', '-3,5', '5,-2', '5,-2', '5,-2', '2,3', '5,-2', '5,-2'], 'Reihen entlang (5, −2), versetzt um (−3, 5) und (2, 3)');
+  const set = sh.seatSets[0];
+  eq([sh.seatSets.length, set.join()], [1, '0,2,7,9'], 'gesessen wird an den Enden der Dreierreihen (0, 2 oben, 7, 9 unten)');
+  eq(set.every((a, i) => set.every((b, j) => i === j || !nachbar(a, b))), true, 'zwischen zwei Startplättchen liegt immer ein offenes');
+  const frei = set.map((_, i) => seatFreeCells(sh, set, i));
+  eq(frei.map(f => f.filter(Boolean).length).join(), '19,19,19,19', 'jedes Feld eines Startplättchens ist als Hauptstadt erlaubt');
+  let aufVerdecktem = 0;
+  set.forEach((s, i) => {
+    const fremd = new Set(set.filter((_, j) => j !== i).flatMap(t => slotCells(sh.slots[t])).map(K));
+    slotCells(sh.slots[s]).forEach(x => { if (nbCube(x).some(y => fremd.has(K(y)))) aufVerdecktem++; });
+  });
+  eq(aufVerdecktem, 0, 'kein Umland einer möglichen Hauptstadt liegt auf einem fremden Startplättchen');
+
+  // --- Plan, Legen, Karte
+  const civs4 = ['russland', 'griechenland', 'england', 'wikinger'];
+  const plan = tilePlan(civs4, 7071, { hex: true });
+  eq([plan.hex, plan.shapeKey, planRotations(plan), plan.tiles.length, new Set(plan.tiles).size],
+    [true, 'hex10', 6, 10, 10], 'Plan: Sechsecke, sechs Lagen, zehn verschiedene Plättchen');
+  eq(plan.tiles.every(t => t >= 0 && t < 20) && plan.ori.every(o => o >= 0 && o < 6), true, 'aus dem Vorrat von 20, Lagen 0–5');
+  eq(tilePlan(civs4.slice(0, 3), 7071, { hex: true }).hex, false, 'nur für vier Reiche – bei drei bleibt es bei den Dreiecken');
+  eq(tilePlan(civs4, 7071).hex, false, 'ohne den Schalter die Dreiecke');
+  const seat0 = plan.seats[0];
+  eq(placeYieldTable(plan, seat0, { civ: 'russland', ability: 'basis' }).length, 6, 'Ertragstafel: sechs Lagen');
+  eq([placeSeat(plan, seat0, 6, 9), placeSeat(plan, seat0, -1, 9)], ['Ungültige Lage.', 'Ungültige Lage.'], 'Lage 7 gibt es nicht');
+  const landMitte = o => placeOptions(plan, seat0, o).findIndex((v, n) => v && HEX_MIDDLE.includes(n));
+  const o5 = 5, c5 = landMitte(o5);
+  eq(placeSeat(plan, seat0, o5, c5), null, 'Lage 6 geht');
+  const rnd = mapRng(3);
+  const setup = rollSetup({ players: civs4.map(c => ({ civ: c, kind: 'ki' })), seed: 7071 });
+  eq(kiPlaceSeat(plan, plan.seats[1], { civ: 'griechenland', kind: 'ki', ability: 'basis' }, setup), null, 'die KI legt ein Sechseck');
+  [2, 3].forEach(i => botPlaceSeat(plan, plan.seats[i], rnd));
+  eq(plan.seats.slice(2).every(s => HEX_MIDDLE.includes(s.cell) && s.o >= 0 && s.o < 6), true, 'Bots: Hauptstadt auf einem mittigen Feld');
+  const karte = tileMap(plan);
+  const felder = karte.rows.join('').split('').filter(c => c !== 'X').length;
+  eq([felder, karte.capitals.filter(Boolean).length, karte.tiles], [190, 4, 'hex10'], 'Karte: 190 Felder, vier Hauptstädte');
+  // die Lage zeigt wirklich das gedrehte Plättchen
+  eq(hexFaceTerrain(plan.tiles[0], o5).join(''), HEX_ROT[o5].map(k => tileTerrain(HEX_POOL[plan.tiles[0]])[k]).join(''),
+    'Gelände in Lage o: der Text an HEX_ROT[o]');
+  const R = slotRC(plan, seat0.slot), cap = karte.capitals[0];
+  eq([R[c5][0], R[c5][1]], [cap.r, cap.c], 'die Hauptstadt steht auf dem gewählten Feld');
+  const S = newGame({ seed: 7071, map: karte, seatOrder: true, startPlayer: 0, avail: setup.avail, wpool: setup.wpool,
+    players: civs4.map(c => ({ civ: c, kind: 'ki', kiLevel: 'mittel', ability: 'basis' })) });
+  eq(S.cities.length, 4, 'die Partie beginnt mit vier Hauptstädten');
+  let runden = 0;
+  while (!S.over && runden++ < 400) { kiTurn(S, S.cur); if (S.over) break; endTurn(S); }
+  eq(!!S.over, true, `eine KI-Partie auf der Sechseckkarte endet regulär (${S.over ? S.over.how : 'offen'}, Runde ${S.round})`);
+}
+
 /* ==================================================== Felder außerhalb der Karte */
 {
   const S = newGame({
@@ -7330,7 +7480,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
         else botPlaceSeat(plan, seat, mapRng(g + 1));
       });
       Object.assign(cfg, { map: tileMap(plan), avail: setup.avail, wpool: setup.wpool });
-    } else cfg.map = MAPS[g % 2];
+    } else cfg.map = MAP_ORIGINAL;          // die große Karte gibt es seit v99 nicht mehr
     const S = newGame(cfg);
     let guard = 0;
     while (!S.over && guard++ < 300) {
@@ -7747,8 +7897,9 @@ function kiAbwehrLage(popKI, gross) {
   eq([kiMethodeAnteil(N), kiMethodeAnteil(O)], [12 / 18, 1], 'KI: Zuschlag der Methode auf zwei Drittel, im alten Techtree wie bisher');
 }
 {
-  /* --- v97: Freie Forschung zweimal je Partie – die KI hebt sie für die Moderne auf (kiFreeTechChoices)
-     und nimmt gegen Ende, was geht: dann bleiben nicht mehr Runden, als Freie Forschungen offen sind. */
+  /* --- v99: Freie Forschung einmal je Runde – die KI erwägt jede Runde alles, was zur Wahl steht
+     (bis v98 hob sie die zwei Freien Forschungen je Partie für die Moderne auf), und mit der
+     Moderne in jedem Feld holt sie sich die Singularität umsonst. */
   const lage = (runde, avail) => {
     const S = newGame({ seed: 5, players: [{ civ: 'griechenland', kind: 'ki', kiLevel: 'schwer', ability: 'gratistech' }, { civ: 'england', kind: 'bot' }] });
     const pi = S.players.findIndex(p => p.kind === 'ki'), p = S.players[pi];
@@ -7758,19 +7909,15 @@ function kiAbwehrLage(popKI, gross) {
   };
   const a = lage(2, { robotik: true });
   const K = kiContext(a.S, a.pi);
-  const wahl = kiFreeTechChoices(a.S, a.pi, K).map(t => t.k);
-  eq([K.R > 2, wahl, freeTechOptions(a.S, a.pi).length > 1], [true, ['robotik'], true],
-    'früh in der Partie: nur die Moderne zur Wahl (Robotik), obwohl mehr ginge');
-  K.R = 2;
-  eq(kiFreeTechChoices(a.S, a.pi, K).length, freeTechOptions(a.S, a.pi).length, 'bleiben so viele Runden wie Freie Forschungen: alles');
+  eq(kiFreeTechChoices(a.S, a.pi, K).map(t => t.k).sort(), freeTechOptions(a.S, a.pi).map(t => t.k).sort(),
+    'die KI erwägt jede Freie Forschung, die zur Wahl steht');
   kiTurn(a.S, a.pi);
-  eq([has(a.p, 'robotik'), freeTechsLeft(a.p)], [true, 1], 'ein Zug der KI: Robotik umsonst, eine bleibt');
-  const b = lage(2, {});
+  eq(a.p.freeTechUsed, 2, 'ein Zug der KI: die Freie Forschung dieser Runde ist genutzt');
+  const b = lage(3, {});
+  for (const f of [0, 1, 2, 3]) b.p.techs[TECHS.find(t => t.f === f && t.age === 3).k] = true;
   kiTurn(b.S, b.pi);
-  eq(freeTechsLeft(b.p), 2, 'ohne Moderne verbraucht die KI früh keine Freie Forschung');
-  const c = lage(KI_W.endRound, {});
-  kiTurn(c.S, c.pi);
-  eq(freeTechsLeft(c.p) < 2, true, 'in der letzten erwarteten Runde nimmt sie, was geht');
+  eq([has(b.p, 'singularitaet'), (b.S.claims || []).some(c => c.pi === b.pi)], [true, true],
+    'mit der Moderne in jedem Feld: die KI nimmt die Singularität umsonst und meldet den Forschungssieg an');
 }
 {
   // --- Entschlossener Angreifer (Menschen): sein Budget enthält Alchemie, wenn er sie diesen

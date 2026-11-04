@@ -1752,6 +1752,10 @@ Vergünstigungen sind unverändert (Kolonisten: nur der Weg, Kartografie: nur di
 Stadtkosten). Der Mindestbetrag von 1 bleibt als Sperre für Sonderfälle stehen, etwa ein
 Reich, das alle Städte verloren hat und dessen Weglänge deshalb 0 wäre.
 
+**Seit v100 überholt** (Anweisung des Autors): Kolonisten halbiert die Gründungskosten,
+aufgerundet, und die Sonderregel für beides zusammen ist weg – siehe „Kolonisten halbieren,
+Marathon ohne Gründungsgrenze (v100)". Mit 9 Feldern Weg kostet die Kombination jetzt 1/2/3/5/8.
+
 ## Startgüte nachgerechnet: Russland mit Bevölkerung 2, England mit zwei Städten (v51)
 
 Zwei Nachfragen des Autors, beide nachgerechnet statt geschätzt.
@@ -1793,7 +1797,9 @@ Geprüft an 11 671 Startplätzen (alle Lagen, alle erlaubten Felder, 360 Karten)
 
 **Kolonisten ist der Fall, der auffällt:** rund jeder elfte Startplatz erlaubt zwei Städte
 im ersten Zug (Beispiel: Bergsee, Budget 7, Kosten 3 + 4). Das ist kein Fehler, sondern
-die Fähigkeit – sie streicht genau die Kosten, die das sonst verhindern.
+die Fähigkeit – sie streicht genau die Kosten, die das sonst verhindern. *Seit v100 kosten
+zwei Städte mit Kolonisten mindestens 2 + 3 = 5 Nahrung (die Hälfte von 1 + 3 und von 3 + 3,
+aufgerundet) – nicht neu nachgezählt, siehe Abschnitt v100.*
 
 **Seemacht kommt rechnerisch auf 10 und damit knapp heran, praktisch aber nie:** die
 Küstenprämie (+2 Nahrung, +2 Münzen) reicht nur, wenn die Hauptstadt außerdem fünf
@@ -3724,7 +3730,7 @@ und Fortsetzen), „Nochmal spielen" in einen neuen Draft, der Draft auf Englisc
 
 * **Singularität 300** (`MARATHON_SINGULARITY`; v83: das 2,5-Fache, 250). Rabatte ziehen
   danach ab, der Kreml schlägt seine 50 danach auf.
-* **Höchstens fünf Gründungen je Zug** (`MARATHON_MAX_FOUNDS`). Gezählt in `p.foundRound` /
+* *Seit v100 weg (Anweisung des Autors), siehe Abschnitt v100.* **Höchstens fünf Gründungen je Zug** (`MARATHON_MAX_FOUNDS`). Gezählt in `p.foundRound` /
   `p.foundCount` beim Gründen (`foundCity`) – jedes Reich hat genau einen Zug je Runde. Ist die
   Grenze erreicht, nennt `foundSiteError` das als ersten Grund („Höchstens 5 neue Städte je
   Zug"), die Karte im Gründungsmodus blendet jeden Platz ab, und „Stadt gründen" geht gar
@@ -5853,3 +5859,250 @@ Richtungen –, im Duell auch für die KI, zu dritt 2 und 4, Bots nichts (die KI
 gegen einen Bot als Startspieler 4 für den Menschen, der Satz des Regelbogens deutsch und englisch.
 `smoke.js`: der ganze Satz im Regelbogen des normalen Spiels, im Marathon deutsch und englisch, die
 Protokollsätze der beiden KI. Das Erste Spiel: alle drei Wege wie in v97.
+
+## Zehn Anweisungen des Autors (v99)
+
+Große Karte weg · Startspieler „Zufällig" · Freie Forschung einmal je Runde samt Singularität ·
+drei Reiche nur auf der Plättchenkarte · experimenteller Plättchenmodus mit Sechsecken · Flüsse und
+Inseln neu gezeichnet · Welt in Zugfolge und in der Legephase · kein Schritt „Spiel beginnen" ·
+Basiskosten im Ersten Spiel. Vor dem Start zwei Rückfragen, vom Autor beantwortet (unten jeweils
+genannt).
+
+### Große Karte entfernt
+
+`MAP_GROSS` ist gestrichen, `MAPS` enthält nur noch die Originalkarte (englischer Name in
+`DATA_EN.maps` ebenso). Eine laufende oder gespeicherte Partie auf der großen Karte spielt weiter –
+die Karte steckt im Spielstand (`S.map`). „Nochmal spielen" mit einem Rezept, das sie nannte
+(`mapPick` '1'), landet auf der Originalkarte (`MAPS[1]` fehlt → `DEFAULT_MAP`). In der App verweist
+nichts mehr auf sie.
+
+### Startspieler: „Zufällig" als Vorgabe
+
+`refreshStart`: ohne bewusste Wahl steht „Zufällig", auch mit nur einem Menschen (bis v98 war dann
+dieser vorausgewählt, Zufall nur bei mehreren Menschen). Eine bewusste Wahl bleibt wie bisher stehen,
+auch wenn man danach die Besetzung ändert (`startWanted`). Auslegung von „before changing": bis man
+selbst etwas wählt.
+
+### Freie Forschung: einmal je Runde, alles Erforschbare samt Singularität
+
+`freeTechOptions` bietet einmal je Runde (`p.freeTechUsed === S.round` sperrt) genau an, was
+`researchable` liefert – jedes Zeitalter, und die **Singularität**, sobald sie erforschbar ist (je Feld
+eine Technologie der Moderne). Dann ist es der Forschungssieg, angemeldet wie jeder andere und
+gewonnen am Rundenende (`claimVictory`). Ein Dunkles Zeitalter sperrt sie wie bisher. **Rückfrage**:
+gilt das auch im Marathon, wo die Freie Forschung zuletzt (v85–v96, einmal je Runde) nur bis ins
+Mittelalter reichte? Antwort des Autors: **keine Grenze, nirgends**.
+
+* `FREE_TECH_USES` und `freeTechsLeft` sind weg. `migrateState` löscht den Zähler von v97/v98
+  (`p.freeTechsUsed`); ein Stand von v96 trägt die Runde der letzten Nutzung (`p.freeTechUsed`), und
+  die bedeutet wieder dasselbe.
+* Blatt **Fähigkeiten**: die Knöpfe wie bisher; ist sie genutzt, steht „Diese Runde schon genutzt."
+  (der Satz von v96 ist zurück, die zwei Sätze von v97 über „Noch x von 2" sind weg).
+* Texte: `data/civs.json` „1× pro Runde eine erforschbare Technologie beliebigen Zeitalters umsonst
+  erforschen, auch die Singularität", englisch „Once per round, research one researchable technology
+  of any age for free, the Singularity included"; der Spieltipp (Index 3) neu, beide Sprachen.
+* **KI:** `kiFreeTechChoices` gibt wieder alles zurück, was zur Wahl steht – was nicht genutzt wird,
+  verfällt mit der Runde, also gibt es nichts aufzuheben; `kiValue` entscheidet wie bei bezahlter
+  Forschung, die Singularität ist dort der Sieg. Der Draftwert im Marathon ist **geschätzt**: 12
+  (gemessen war 8,5 für die alte Fassung bis ins Mittelalter; ohne Grenze und mit Singularität sicher
+  stärker, aber nicht gemessen).
+* **Gemessen nur zu viert** (KI Schwer gegen KI Schwer, Regeln von v99, je 400 Partien mit
+  ausgelosten Fähigkeiten und wanderndem Startspieler): Griechenland mit Freier Forschung gewann auf
+  der Dreiecks-Plättchenkarte **25,0 %** (132 Spieler), auf den Sechsecken **31,2 %** (138) – bei
+  gleicher Chance 25 %. Zum Vergleich der Sweep vom 30.10. (v96 gegen v98, Dreiecke zu viert): v96
+  (einmal je Runde, bis zur Industrialisierung) 28,0 %, v98 (zweimal je Partie) 6,8 %. Duell, drei
+  Reiche, Originalkarte und Marathon sind mit v99 nicht gemessen.
+
+### Drei Reiche: nur die Plättchenkarte
+
+`mapOptions`: die feste und die eigene Karte stehen nur noch bei vier Reichen zur Wahl; bei drei
+Reichen bleibt wie im Duell nur die Plättchenkarte, und die Kartenzeile ist weg. Rezepte von vor v99
+mit drei Reichen auf einer festen Karte legen bei „Nochmal spielen" die Plättchenkarte
+(`recipeNow`).
+
+**Nebenwirkung, zum Ändern angeboten:** Zivilisationswahl und Platznummern fragen jetzt die Karte,
+die der Aufbau wirklich anbietet (`setupPick()`), nicht die zuletzt gemerkte Wahl. Damit gilt die
+Regel der Plättchenkarte – jeder Platz wählt frei, auch zweimal dieselbe – bei drei Reichen und
+**auch im Duell**. Bis v98 löste der Aufbau eine Doppelung im Duell auf, obwohl der Hinweis darunter
+„Hier darf jeder Platz frei wählen, auch zweimal dieselbe Zivilisation" sagte und „Nochmal spielen"
+Doppelte zuließ. Wer im Duell keine Doppelten will: in `freieCivWahl` den Duellmodus ausnehmen (dann
+auch den Hinweis und `rematch`).
+
+### Experimenteller Plättchenmodus: Sechsecke
+
+Häkchen „Experimenteller Plättchenmodus" im Aufbau, sichtbar nur bei vier Reichen auf der
+Plättchenkarte (`setupHexOffered`), gemerkt wie die Karte (`setupHexWanted`), im Rezept als
+`hexTiles` – „Nochmal spielen" legt wieder Sechsecke.
+
+* **Plättchen:** Seitenlänge 3, also 19 Felder (Mitte, erster Ring 6, zweiter 12). Notiert in fünf
+  Zeilen zu 3/4/5/4/3, so wie es in Lage 0 liegt – oben und unten gerade, links und rechts spitz.
+  Sechs Lagen (`HEX_ROT`, Drehung (x, y, z) → (−z, −x, −y)), gespiegelt wird nie.
+* **Anordnung, Rückfrage:** Sechsecke aus 19 Feldern schließen nur auf einem schrägen Gitter
+  lückenlos aneinander (Nachbarmitten um (5, −2), (2, 3), (−3, 5) versetzt, axial); Reihen zu 3/4/3
+  steigen dann um gut 23° an. Die Alternative waren waagrechte Reihen mit Meer in den Lücken. Antwort
+  des Autors: **schräg, ohne Lücken; die Startplättchen an den Enden der beiden Dreierreihen**.
+  Ergebnis (`TILE_SHAPES.hex4`, Schlüssel `hex10`): 10 Plätze, 190 Felder, Karte 17 × 17, keine
+  Löcher; die oberste Feldzeile ist gerade (sonst kippte der Zeilenversatz). Die Ecken grenzen an drei
+  Plättchen, die beiden mittleren der Viererreihe an sechs.
+* **Startplätze** `[0, 2, 7, 9]`: zwischen zwei Startplättchen liegt immer ein offenes. Die Legeregel
+  ist dieselbe wie bei den Dreiecken (`seatFreeCells`) – hier sperrt sie nichts, **jedes der 19 Felder
+  ist als Hauptstadt erlaubt**, und kein Umland liegt auf einem fremden Startplättchen.
+* **Zugfolge** nach Plätzen wie auf der Dreieckskarte: Platz 1 oben links, 2 oben rechts, 3 unten
+  links, 4 unten rechts (dieselbe Zuordnung wie `[1, 3, 6, 8]` dort). Auslegung.
+* **Offene Plättchen** liegen in zufälliger Lage (eine von sechs), wie die Dreiecke in einer von drei.
+* **Bots** drehen zufällig und setzen auf die Mitte oder den ersten Ring (`HEX_MIDDLE`, 7 Felder);
+  die **KI** rechnet alle 6 × 19 Möglichkeiten wie sonst 3 × 15 (`kiPlaceSeat` fragt
+  `planRotations`). Die Ertragstafel der Legephase rechnet 6 × 19 Wegwerf-Partien (gemessen gut
+  30 ms).
+* **Vorrat** `HEX_POOL`, 20 Plättchen, von Hand entworfen und mit einem Hilfsskript abgeglichen.
+  Entwurfsregeln (Anweisung des Autors: nicht zu viele Inseln, keine übermächtigen Startplätze):
+  innen nur Grasland, Wald, Gebirge, Fluss; Meer und Inseln nur im äußeren Ring; höchstens zwei
+  Inseln je Plättchen (zusammen 7, fast alle an Ecken), kein inneres Feld an zwei Inseln; jedes innere
+  Feld bringt als Hauptstadt mindestens 4 Nahrung (Münzen 2:1); die **beste innere Hauptstadt** jedes
+  Plättchens liegt zwischen **8,8 und 9,7** (1·🔬 + 1,1·🌾 + 0,8·🪙, die Gewichte der KI beim Legen).
+  Im Dreiecksvorrat reicht derselbe Wert von 6,7 (Küste) bis 12,8 (Ferne Riffe). Anteile: Grasland
+  48 %, Fluss 14 %, Wald und Gebirge je 10 %, Meer 16 %, Inseln 2 % (Dreiecke: 39/12/11/10/24/5 %).
+  Flüsse hängen meist zusammen und münden ins Meer – passend zur neuen Zeichnung. 14 der 20 Namen
+  stammen aus dem Dreiecksvorrat (Auslegung von „ähnlich wie die bestehenden": gleiches Thema, eigenes
+  Plättchen); beide Vorräte kommen nie auf dieselbe Karte, „Taiga" heißt also je nach Modus ein
+  anderes Plättchen.
+* Nicht ausgedruckt: `Startplaettchen.pdf` und seine Werkzeuge kennen nur die Dreiecke.
+* **Gemessen** (KI Schwer gegen KI Schwer, Regeln von v99, je 400 Partien, Fähigkeiten ausgelost, der
+  Startspieler wandert; zum Vergleich dieselbe Messung auf der Dreiecks-Plättchenkarte):
+  * Siege nach Platz in der Zugfolge: Sechsecke **35,4 / 29,8 / 19,1 / 15,8 %**, Dreiecke
+    47,9 / 26,0 / 14,4 / 11,8 % – der Vorteil des Startspielers ist auf den Sechsecken deutlich
+    kleiner (95-%-Intervall für Platz 1: 30,8–40,2 % gegen 43,0–52,8 %).
+  * Siegarten: Sechsecke 250 Militär-, 145 Forschungs-, 5 Wirtschaftssiege, Median Runde 6; Dreiecke
+    333/63/4, Median Runde 5.
+  * Startplättchen: Siegquote je Plättchen als Startplättchen (63–98 Mal je Plättchen) von 13,4 %
+    (Karst) bis 35,7 % (Taiga). Die Streuung um 25 % (5,1 Punkte) ist kaum größer, als der Zufall bei
+    diesen Zahlen allein ergäbe (4,8). Nur bei Karst und Taiga schließt das 95-%-Intervall 25 % aus –
+    bei 20 Plättchen ist etwa eines zufällig zu erwarten. Beide sind Kandidaten zum Nachbessern, falls
+    sich das im Spiel bestätigt. Woran es liegt, ist nicht untersucht: Taiga hat die wenigste Nahrung
+    des Vorrats (8 🌾 auf 19 Feldern, im Mittel 12) und den meisten Wald (6, im Mittel 2); an Karst
+    fällt in diesen Zahlen nichts auf.
+  * Was das nicht sagt: wie Menschen dort legen, und ob die KI die Sechsecke anders nutzt als ein
+    Mensch.
+
+### Flüsse und Inseln neu gezeichnet
+
+Anweisung des Autors: Inseln deutlicher als Inseln (ein schmaler Wasserrand rundum), Flüsse
+deutlicher und klar anders als Meer. Umgesetzt in `drawMap`/`terrainGlyph`/`riverLines`
+(`js/ui.js`), an den Regeln ändert sich nichts.
+
+* **Fluss:** das Feld ist grünes Flusstal (`TERRAIN.F.color` #a3c482, bis v98 blau #70a0ba), darauf
+  ein blauer Wasserlauf von der Mitte zu den Kanten, an denen der Fluss weiterläuft. Zusammenhängende
+  Flussfelder werden wie ein Baum verbunden (feste Reihenfolge), damit drei aneinanderliegende keinen
+  Kreis zeichnen. Ein Ende des Laufs mündet ins angrenzende Meer – in das Meerfeld, das dem übrigen
+  Lauf am weitesten gegenüberliegt; ohne Meer endet es als Quelle im Feld. Ein einzelnes Flussfeld
+  ohne Nachbarn wird als kurzer Bach gezeichnet.
+* **Insel:** das Feld trägt die Meerfarbe, darauf ein Eiland mit Strand (`TERRAIN.I.color` #e2d199)
+  und Grün, mit leicht unregelmäßiger Küste und heller Brandung. Die Farbe in der Ertragsübersicht
+  und der Palette des Editors ist die des Strands.
+* Auslegung: Das grüne Flusstal soll den Fluss als Land erkennen lassen (er ist Land, bringt 🌾 und
+  🪙) – das Erkennungszeichen ist der Wasserlauf. Wer das Feld lieber bläulich will: nur
+  `TERRAIN.F.color` ändern.
+
+### Welt in Zugfolge, Welt in der Legephase
+
+* **Welt** listet die Reiche **in Zugfolge**, durchnummeriert ab dem Startspieler (`civRowsHTML`,
+  sortiert nach `turnPosition`; bis v98 in der Reihenfolge des Spielstands, also etwa Russland zuerst,
+  auch wenn England anfing).
+* In der **Legephase** steht neben „Forschung" ein Knopf **Welt** (`placeWorldView`): die Reiche in
+  Zugfolge mit ihren Fähigkeiten, der legende Platz hervorgehoben, dazu „Mit Ereignissen – das erste
+  fällt zu Beginn der ersten Runde." bzw. der Wunderstapel. Die Zugfolge steht dann schon fest; damit
+  Legephase und Partie sie gleich rechnen, kommt sie aus derselben Funktion (`seatingOrder` in
+  `js/engine.js`, von `newGame` benutzt). Fähigkeiten sind kein Geheimnis – im Spiel zeigt „Welt"
+  dasselbe; verdeckt bleiben nur die Startplättchen.
+
+### Kein Schritt „Spiel beginnen" nach dem Legen
+
+Nach dem letzten Plättchen deckt `placeReveal` auf und startet gleich die Partie (`placeGo`). Bis v98
+kam dazwischen ein eigener Bildschirm – die ganze Karte offen, ein Knopf „Spiel beginnen"; die
+Spielkarte zeigt dasselbe. Der Satz „Alle Plättchen liegen offen …" ist mit seiner Übersetzung weg.
+Die Knöpfe der Legephase nehmen seitdem nur ihre eigene Breite, damit der Hinweis bei vier Knöpfen
+Platz hat.
+
+### Erstes Spiel: Basiskosten im Schritt „Eine zweite Stadt"
+
+Der Schritt nennt die Kosten jetzt vor dem Gründen: „Eine Stadt kostet 🌾 Nahrung: Basiskosten plus
+1 je Feld Weg von der Hauptstadt. Die Basiskosten steigen 1/3/6/10/… für die 1./2./3./4./… neue
+Stadt – die Hauptstadt zählt nicht mit." (englisch entsprechend). Die Rückmeldung danach sagt nur noch,
+dass die nächste neue Stadt schon 3 kostet (bis v98 stand dort „die zweite 1, die dritte 3, die
+vierte 6 …"). **Auslegung**: Die Anweisung nannte „1/3/6/10 für die 1./2./3./4. Stadt" – gezählt
+werden die neuen Städte; die Hauptstadt steht von Anfang an, die zweite Stadt kostet 1
+(`foundCost`: n(n+1)/2 bei n bestehenden Städten). Die drei Wege des Ersten Spiels siegen wie in v98
+(Runde 6, 6, 7).
+
+## Kolonisten halbieren, Marathon ohne Gründungsgrenze (v100)
+
+Zwei Anweisungen des Autors (4.11.): Englands „Kolonisten" soll die Gründungskosten halbieren,
+aufgerundet, statt die Basiskosten zu streichen – damit entfällt die Regel, dass man mit
+Kartografie dazu nur eine der beiden Kosten erlassen bekommt; und im Marathon fällt die Grenze
+für Gründungen weg.
+
+### Kolonisten: Gründungskosten halbiert, aufgerundet
+
+* **Regel:** Eine Stadt kostet weiter Stadtkosten (1/3/6/10 … nach der Zahl der eigenen Städte)
+  plus Distanzkosten (Weg von der Hauptstadt). **Kartografie** streicht die Distanzkosten,
+  **Kolonisten** halbiert, was übrig bleibt, **aufgerundet**; nie unter 1. Gerechnet in
+  `foundCostOf(p, stadt, dist)` (`js/engine.js`); `foundCost` und die KI (`kiSitesAll`) rufen
+  sie – bis v99 hatte die KI eine eigene Kopie der Regel.
+* **Die Sonderregel für beides zusammen ist weg.** v51–v99 strich Kolonisten die Stadtkosten und
+  Kartografie den Weg; zusammen zahlte man die günstigere der beiden, sonst wäre alles frei
+  gewesen. Mit dem Halbieren ergibt sich die Kombination von selbst: ohne Weg die Hälfte der
+  Stadtkosten.
+* **Auslegung:** Halbiert wird die Summe und einmal aufgerundet, nicht jeder Teil für sich (das
+  käme bis zu 1 teurer). Das **doppelte Bevölkerungswachstum bleibt** – die Anweisung ersetzt
+  nur den ersten Teil der Fähigkeit.
+* Texte: `data/civs.json` „Städte gründen kostet nur die Hälfte (aufgerundet).
+  Bevölkerungswachstum kostet doppelt", englisch „Founding cities costs only half (rounded up).
+  Population growth costs double". Kartografie behält „Keine Distanzkosten beim Gründen".
+* **Was sich ändert**, Beispiel mit 4 Feldern Weg:
+
+  | neue Stadt | Stadtkosten | ohne Fähigkeit | Kolonisten bis v99 | Kolonisten seit v100 | dazu Kartografie bis v99 | dazu Kartografie seit v100 |
+  |---|---|---|---|---|---|---|
+  | 1. | 1 | 5 | 4 | **3** | 1 | 1 |
+  | 2. | 3 | 7 | 4 | **4** | 3 | **2** |
+  | 3. | 6 | 10 | 4 | **5** | 4 | **3** |
+  | 4. | 10 | 14 | 4 | **7** | 4 | **5** |
+  | 5. | 15 | 19 | 4 | **10** | 4 | **8** |
+
+  Die ersten zwei neuen Städte werden nie teurer als bis v99 (der Weg ist immer mindestens 3),
+  bei diesem Weg ab der dritten teurer – je länger der Weg, desto später kippt es. Fünf neue
+  Städte kosten hier zusammen 29 statt 20 (ohne Fähigkeit 55). Zwei Städte im ersten Zug
+  kosten mit Kolonisten mindestens 2 + 3 = **5** Nahrung (bis v99 6, ohne Kolonisten 10) – wie
+  viele Startplätze das erlauben, ist nicht neu nachgezählt (v51: 8,8 % mit 6, damals noch ohne
+  den Startausgleich von v98).
+* **Gemessen** (KI Schwer gegen KI Schwer zu viert, je 400 Partien mit denselben Startwerten wie
+  die Messung von v99 – gleiche Reiche, Fähigkeiten und Startspieler, also gepaart; Partien ohne
+  Kolonisten laufen in beiden Fassungen gleich):
+  * **Sechsecke:** Kolonisten gewinnen **37,4 %** statt 49,6 % (Änderung −12,2 Punkte,
+    95-%-Intervall −21,9 … −2,5) – weiter über der gleichen Chance von 25 % (Intervall
+    29,8–45,7 %), jetzt hinter Englands Handelsreich (45,6 %, unverändert). Städte am Ende im
+    Mittel 6,5 statt 7,8.
+  * **Dreiecke:** **33,3 %** statt 29,6 % (+3,7, Intervall −4,4 … +11,8) – keine erkennbare
+    Änderung; Städte am Ende 5,1 statt 5,2. Vermutlich, weil die Partien dort kurz sind (Median
+    Runde 5) und die ersten zwei neuen Städte billiger oder gleich teuer werden.
+  * Startspielervorteil und Siegarten kaum verändert (Sechsecke: Platz 1 36,1 % statt 35,4 %;
+    240 Militär- statt 250, 153 Forschungs- statt 145 Siege).
+  * Was das nicht sagt: wie Menschen siedeln; Duell, drei Reiche, Originalkarte und Marathon sind
+    mit v100 nicht gemessen.
+* Marathon: Draftwert der KI **geschätzt 7** (`KI_DRAFT_BASE`; gemessen waren 14,5 für die alte
+  Fassung, mit der Reiche bis 58 Städte gründeten). Jetzt steigen die Stadtkosten weiter mit
+  jeder Stadt, nur halb so schnell. Dazu kommt wie bisher der Landanteil um die Hauptstadt (im
+  Mittel +1,5). Zum Vergleich: die Siegquote auf den Sechsecken entspräche nach derselben Formel
+  (6 + 2,5 · Logit-Stärke) samt Karte etwa 7,5 – keine Marathonmessung. Die Freie Forschung (12)
+  steht damit im Draft vorn.
+
+### Marathon: keine Grenze für Gründungen je Zug
+
+* Weg sind `MARATHON_MAX_FOUNDS`, `foundedThisTurn`, der Zähler in `foundCity`
+  (`p.foundRound`/`p.foundCount`) und die Sperren in `foundSiteError`, `toggleFoundMode` und
+  bei der KI (`kiCandidates`). `migrateState` löscht den Zähler aus Spielständen von v84–v99 –
+  wer dort nach fünf Gründungen mitten im Zug gespeichert hat, gründet nach dem Laden weiter.
+* Texte: der Marathonhinweis im Aufbau und der Satz im Regelbogen nennen die Grenze nicht mehr,
+  die Meldung „Höchstens %s neue Städte je Zug (Marathon)." ist gestrichen, beide Sprachen.
+* Die Grenze kam in v84 als Anweisung des Autors, zu einer Zeit, als Kolonisten im Marathon
+  jede Stadt nur den Weg kostete. In der Marathonpartie von `test.js` (vier KI Schwer, Draft)
+  gründete die KI ohne Grenze höchstens 5 Städte in einem Zug; der längste KI-Zug dauerte
+  2,3 s (Grenze im Test 10 s). Eine Partie, keine Messung.

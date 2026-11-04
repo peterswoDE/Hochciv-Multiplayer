@@ -76,7 +76,7 @@ async function live(browser, errors, user) {
         await MP.host();
     }, user.name);
     await page.waitForFunction(() => MP.active && MP.lobbyIndex === 0);
-    await page.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 2, mapKey: 'gross', wonders: true }));
+    await page.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 2, mapKey: '0', wonders: true }));
     await page.waitForFunction(() => MP.gameConfig.playerCount === 3);
     await page.evaluate(() => MP.startGame());
     await page.waitForFunction(() => typeof S !== 'undefined' && S && document.getElementById('screen-game').classList.contains('show'));

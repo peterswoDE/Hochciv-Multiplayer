@@ -64,7 +64,7 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 
 ## Other tables
 
-* **`custom_maps`:** `ownerId`, `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null – every published map is in the map browser), `publishedAt`, `loads` (loaded by code or picked in the browser, by others), `favorites` (count of `map_favorites` rows, for sorting).
+* **`custom_maps`:** `ownerId` (null: a map that belongs to nobody, `maps/builtin.js`), `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null – every published map is in the map browser), `publishedAt`, `loads` (loaded by code or picked in the browser, by others), `favorites` (count of `map_favorites` rows, for sorting).
 * **`map_favorites`:** `userId`, `mapId` (unique together). A favorite of an unpublished map stays and shows again when it is published again; it goes when the map or the account is deleted, and moves when accounts are merged.
 * **`oauth_providers`:** `provider` (`google`/`discord`), `clientId`, `clientSecret`, `botToken` (Discord Activity), `enabled`.
 * **`passkeys`:** `credentialID`, `credentialPublicKey`, `counter`, `transports`.

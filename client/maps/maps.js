@@ -159,12 +159,14 @@
             const label = m.fav ? TX('Aus den Favoriten nehmen') : TX('Zu den Favoriten');
             return `<button class="mb-fav${m.fav ? ' on' : ''}" ${attr} aria-pressed="${m.fav}" title="${esc(label)}" aria-label="${esc(label)}">${m.fav ? '★' : '☆'}</button>`;
         },
+        // a map without an author is one of ours (maps/builtin.js): its name is in client/i18n.js
+        title: m => (m.author ? m.name : TX(m.name)),
         card: function (m, i) {
             return `<div class="mb-card">
-                <button class="mb-thumb" data-open="${i}" aria-label="${esc(m.name)}">${mapThumb(m.map)}</button>
+                <button class="mb-thumb" data-open="${i}" aria-label="${esc(this.title(m))}">${mapThumb(m.map)}</button>
                 ${this.favBtn(m, `data-fav="${i}"`)}
                 <div class="mb-info" data-open="${i}">
-                  <b>${esc(m.name)}</b>
+                  <b>${esc(this.title(m))}</b>
                   <small>${m.author ? TX('von %s', esc(m.author)) : ''}${m.own ? ` <span class="mb-own">${TX('deine')}</span>` : ''}</small>
                   <small>${this.meta(m)}</small>
                   <span class="mb-stats"><span title="${esc(TX('Favoriten'))}">★ ${m.favorites}</span><span title="${esc(TX('Gespielt'))}">▶ ${m.loads}</span></span>
@@ -182,7 +184,7 @@
             const date = m.publishedAt ? new Date(m.publishedAt).toLocaleDateString(HC_I18N.locale()) : '';
             d.innerHTML = `<div class="mb-d-top">
                   <button class="icon-btn mb-back" aria-label="${esc(TX('Zurück'))}">‹</button>
-                  <h4>${esc(m.name)}</h4>
+                  <h4>${esc(this.title(m))}</h4>
                   ${this.favBtn(m, 'id="mb-d-fav"')}
                 </div>
                 <div class="mb-d-body">
@@ -286,7 +288,8 @@
             } catch (e) { toast(e.message); }
         },
         unlist: async function (m) {
-            if (!confirm(TX('„%s" aus dem Browser entfernen? Die Karte bleibt im Konto von %s, ihr Code funktioniert nicht mehr.', m.name, m.author || '?'))) return;
+            if (!confirm(m.author ? TX('„%s" aus dem Browser entfernen? Die Karte bleibt im Konto von %s, ihr Code funktioniert nicht mehr.', m.name, m.author)
+                : TX('„%s" aus dem Browser entfernen? Ihr Code funktioniert dann nicht mehr.', m.name))) return;
             try {
                 const res = await fetch(`${MP.serverUrl}/api/admin/maps/${encodeURIComponent(m.id)}/unpublish`, { method: 'POST', credentials: 'include' });
                 const data = await res.json().catch(() => ({}));
