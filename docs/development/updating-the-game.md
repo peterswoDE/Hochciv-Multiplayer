@@ -54,7 +54,3 @@ Running Rundenspiele are not affected by a new version only if their version is 
 ## Removed maps
 
 v99 removed the big map from the game, so `mapKey: 'gross'` is no longer offered. Rundenspiele on kept versions still play it, and a lobby that was set to it falls back to the original map. The map lives on in the map browser as a published map without an owner, code `GRKART` (`maps/builtin.js`).
-
-## Runtime patches to check after an update
-
-* **Team mode** (`utils/teams.js`) wraps the engine's `combatPhase(S, pi, rec)` and relies on `powerOf(S, pi)`, on `S.cities` / `S.armies` with an `owner`, and on the rule that a phase compares powers from its start. If a new version renames these or changes how combat picks its targets, `tests/teams/teams.test.js` (its unit part) fails – adapt the patch before releasing.

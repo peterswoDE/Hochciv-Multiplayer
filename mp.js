@@ -325,7 +325,7 @@ const MP = {
                 : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
                 <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
-                <span class="mp-pl-name">${this.teamOf(i) != null ? `<span class="mp-team-tag mp-team-${this.teamOf(i)}" title="${TX('Team %s', String.fromCharCode(65 + this.teamOf(i)))}">${String.fromCharCode(65 + this.teamOf(i))}</span> ` : ''}${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ` <small>(${TX('du')})</small>` : ''}</span>
+                <span class="mp-pl-name">${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ` <small>(${TX('du')})</small>` : ''}</span>
                 ${status}
                 <span class="mp-pl-civ">${esc(civ.n)}</span>
               </div>`;
@@ -664,7 +664,6 @@ const MP = {
             });
 
             this.socket.on('game:over', winData => {
-                if (winData && Array.isArray(winData.teamWin) && winData.teamWin.length === 1) toast('👥 ' + TX('Team %s gewinnt!', String.fromCharCode(65 + winData.teamWin[0])));
                 S.over = MP.translateOver(winData);
                 gameOver();
             });
@@ -1000,8 +999,10 @@ const MP = {
               ${typeof RANKING !== 'undefined' ? `<a href="#" class="mph-rank-link" onclick="RANKING.open(null); return false">🏆 ${TX('Rangliste und Saison')}</a>` : ''}
             </div>` : ''}
           </div>
-          ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
-          ${typeof CHALLENGE !== 'undefined' ? CHALLENGE.hubButton() : ''}
+          <div class="mph-more">
+            ${typeof MAPBROWSER !== 'undefined' ? newGame('mph-maps', 'MAPBROWSER.open()', '🗺 ' + TX('Karten entdecken'), TX('Karten anderer Spieler ansehen, favorisieren und spielen.')) : ''}
+            ${typeof CHALLENGE !== 'undefined' ? newGame('mph-challenge', 'CHALLENGE.open()', '📅 ' + TX('Wochen-Challenge'), CHALLENGE.hubText()) : ''}
+          </div>
           ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}${typeof FRIENDS !== 'undefined' ? tabBtn('friends', '👥 ' + TX('Freunde')) : ''}</div>
           <div class="mph-panes">
@@ -1070,7 +1071,7 @@ const MP = {
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                             ${isMarathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
                         </td>
-                        <td>${this.gameConfig.teams ? this.teamSelect(p, isMe || isHost) : ''}${this.readyCell(p, isMe, isPlayerHost)}</td>
+                        <td>${this.readyCell(p, isMe, isPlayerHost)}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">${TX('Kick')}</button>` : ''}</td>
                     </tr>
                 `}).join('');
@@ -1141,10 +1142,6 @@ const MP = {
               </label>
               ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
               ${this.playerBotRows(cnt.total - cnt.ki)}
-              <label class="row"><span>👥 ${TX('Teams (2 Teams, ohne KI)')}</span>
-                <input type="checkbox" id="mp-set-teams" onchange="MP.updateLobbyConfig()" ${this.gameConfig.teams ? 'checked' : ''}>
-              </label>
-              ${this.gameConfig.teams ? `<p class="hint" style="margin:4px 0 8px">${TX('Jeder wählt Team A oder B. Teammitglieder greifen sich nicht an und gewinnen zusammen; es gibt einen Team-Chat. Es spielen so viele Reiche wie Spieler.')}</p>` : ''}
               <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span>
                 <input type="checkbox" id="mp-set-public" onchange="MP.updateLobbyConfig()" ${this.gameConfig.isPublic ? 'checked' : ''}>
               </label>
@@ -1366,7 +1363,7 @@ const MP = {
             events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off',
             ranked: x.ranked ? 'yes' : 'no', turn: x.turnTime ? 'timed' : 'free', turnTime: x.turnTime || 0,
             bots: x.playerBots ? 'yes' : 'no', free: x.playersCount < x.maxPlayers,
-            names: [x.hostName], teams: !!x.teams,
+            names: [x.hostName],
         };
         const c = x.config || {};
         const empires = c.playerCount || (c.noKi ? c.humanCount : 4);
@@ -1379,7 +1376,7 @@ const MP = {
             ranked: c.ranked ? 'yes' : 'no', turn: c.turnDays && c.turnDays < 7 ? 'timed' : 'free', turnTime: 0,
             turnDays: c.turnDays && c.turnDays < 7 ? c.turnDays : 0,
             bots: c.playerBots ? 'yes' : 'no', free: !!(x.freeSeats && x.freeSeats.length),
-            names: (x.seats || []).map(s => s.name).filter(Boolean), teams: !!c.teams,
+            names: (x.seats || []).map(s => s.name).filter(Boolean),
         };
     },
 
@@ -1410,7 +1407,6 @@ const MP = {
         if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
         if (t.turnDays) parts.push(t.turnDays === 1 ? TX('1 Tag pro Zug') : TX('%s Tage pro Zug', t.turnDays));
         if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
-        if (t.teams) parts.push('👥 ' + TX('Teams'));
         return `<div class="mpa-traits">${parts.join(' · ')}</div>`;
     },
 
@@ -1491,7 +1487,6 @@ const MP = {
             playerBots: $('mp-set-bots') ? $('mp-set-bots').checked : undefined,
             playerBotLimit: $('mp-set-botlimit') ? (+$('mp-set-botlimit').value || null) : undefined,
             isPublic: $('mp-set-public') ? $('mp-set-public').checked : undefined,
-            teams: $('mp-set-teams') ? $('mp-set-teams').checked : undefined,
         };
         // a map with fewer empires: keep the numbers within what it allows
         const old = this.gameConfig;
@@ -1499,7 +1494,7 @@ const MP = {
         const cnt = this.lobbyCounts();
         this.gameConfig = old;
         newConfig.playerCount = cnt.total;
-        newConfig.kiCount = newConfig.teams ? 0 : cnt.ki;     // team mode: humans only
+        newConfig.kiCount = cnt.ki;
         // Switching to "Eigene Karte" without a map yet: take the newest one from the library
         if (mapKey === 'eigene' && !this.gameConfig.customMap && typeof myMaps !== 'undefined' && myMaps[0])
             newConfig.customMap = myMaps[0];
@@ -1756,20 +1751,6 @@ const MP = {
         }
     },
 
-    // ── Team mode (F22) ──────────────────────────────────────────────────────────
-    teamSelect: function (p, editable) {
-        const t = p.team === 1 ? 1 : 0;
-        return `<select class="mp-team-sel mp-team-${t}" id="mp-p-team-${p.index}" ${editable ? '' : 'disabled'} onchange="MP.setTeam(${p.index}, +this.value)">
-            <option value="0" ${t === 0 ? 'selected' : ''}>${TX('Team %s', 'A')}</option><option value="1" ${t === 1 ? 'selected' : ''}>${TX('Team %s', 'B')}</option></select> `;
-    },
-    setTeam: function (index, team) {
-        this.socket.emit('lobby:team', { playerIndex: index, team }, res => { if (res && res.error) toast(TXS(res.error)); });
-    },
-    /** The team of a state index (S.mpTeams), null without teams. */
-    teamOf: function (i) {
-        return typeof S !== 'undefined' && S && Array.isArray(S.mpTeams) && S.mpTeams[i] != null ? S.mpTeams[i] : null;
-    },
-
     // ── Lobby ready check (F17) ──────────────────────────────────────────────────
     /** The other humans in the lobby and how many of them are ready (the host doesn't tick). */
     readyCount: function () {
@@ -1991,22 +1972,6 @@ window.addEventListener('DOMContentLoaded', () => {
         <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>
         <button class="btn small ghost" id="mp-afk-x" hidden title="${TX('Schließen')}" onclick="MP._resignBannerClosed = true; MP.drawAfkBanner()">✕</button>`;
     document.body.appendChild(afk);
-});
-
-// Team mode (F22): the power view leaves teammates out – they never attack each other (utils/teams.js)
-window.addEventListener('DOMContentLoaded', () => {
-    if (typeof powerView !== 'function' || window.__mpTeamPowerView) return;
-    window.__mpTeamPowerView = true;
-    const orig = powerView;
-    powerView = function (St) {
-        const v = orig.apply(this, arguments);
-        const t = St && Array.isArray(St.mpTeams) ? St.mpTeams : null;
-        if (!t || !v) return v;
-        const same = (a, b) => t[a] != null && t[a] === t[b];
-        (v.cities || []).forEach(x => { x.atk = (x.atk || []).filter(a => !same(a.pi, x.city.owner)); });
-        (v.armies || []).forEach(x => { x.flank = (x.flank || []).filter(f => !same(f.pi, x.army.owner)); });
-        return v;
-    };
 });
 
 // --- Monkey Patch redraw() to fix army reference sync bug ---
@@ -2384,8 +2349,7 @@ const ASYNC = {
         return `<div class="mpa-seats">${seats.map(s => {
             const who = s.kind === 'bot' ? TX('Bot') : s.resigned ? TX('KI (%s hat aufgegeben)', this.esc(s.name)) : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
                 : s.name ? this.esc(s.name) + (s.botAccount ? ' 🤖' : '') : `<i>${TX('frei')}</i>`;
-            const tag = s.team === 0 || s.team === 1 ? `<span class="mp-team-tag mp-team-${s.team}">${String.fromCharCode(65 + s.team)}</span> ` : '';
-            return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${tag}${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
+            return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
         }).join('')}</div>`;
     },
 
@@ -2482,14 +2446,14 @@ const ASYNC = {
         const f = this.form = this.form || {
             mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
             events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
-            playerBots: false, playerBotLimit: '', teams: false, team: 0,
+            playerBots: false, playerBotLimit: '',
         };
         const civ = this.civ(f.civ) || CIVS[0];
         // how many empires the chosen map allows (mapLimits in the game's engine.js)
         const custom = f.mapKey === 'eigene' && typeof myMap === 'function' ? myMap(f.customName) : null;
         const lim = typeof mapLimits === 'function' ? mapLimits(f.mapKey, custom) : { min: 2, max: 4, marathon: f.mapKey === 'marathon' };
         f.playerCount = Math.max(lim.min, Math.min(lim.max, f.playerCount || 4));
-        f.kiCount = f.teams ? 0 : Math.max(0, Math.min(f.playerCount - 2, f.kiCount || 0));     // team mode: humans only
+        f.kiCount = Math.max(0, Math.min(f.playerCount - 2, f.kiCount || 0));
         const marathon = lim.marathon, random = f.civMode === 'random';
         const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
         let hint;
@@ -2526,9 +2490,6 @@ const ASYNC = {
               ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ` (${TX('1 gegen 1')})` : ''))).join('')}</select></label>
             <label class="row"><span>${TX('davon KI')}</span><select id="mpa-ki">
               ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ` (${TX('nur Menschen')})` : ''))).join('')}</select></label>
-            <label class="row"><span>👥 ${TX('Teams (2 Teams, ohne KI)')}</span><input type="checkbox" id="mpa-teams" ${f.teams ? 'checked' : ''}></label>
-            ${f.teams ? `<label class="row"><span>${TX('Dein Team')}</span><select id="mpa-team">${opt(0, f.team, TX('Team %s', 'A'))}${opt(1, f.team, TX('Team %s', 'B'))}</select></label>
-              <p class="hint" style="margin:-4px 0 8px">${TX('Wer beitritt, wählt sein Team (je die Hälfte der Plätze). Teammitglieder greifen sich nicht an und gewinnen zusammen.')}</p>` : ''}
             ${random ? '' : `<label class="row"><span>${TX('Deine Nation')}</span><select id="mpa-civ">
               ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
             ${random || marathon ? '' : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-ab">
@@ -2566,7 +2527,6 @@ const ASYNC = {
             events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
             turnDays: +v('mpa-days') || f.turnDays || 7,
-            teams: c('mpa-teams'), team: $('mpa-team') ? +v('mpa-team') : (f.team || 0),
             customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
                 : v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
             invite: v('mpa-invite') || '',
@@ -2632,9 +2592,9 @@ const ASYNC = {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
                     wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
-                    customMap, teams: !!f.teams,
+                    customMap,
                 },
-                civ: f.civ, ability: f.ability, team: f.teams ? f.team || 0 : undefined,
+                civ: f.civ, ability: f.ability,
                 invite: f.invite.split(',').map(x => x.trim()).filter(Boolean),
             });
             if (r.inviteErrors && r.inviteErrors.length) toast(r.inviteErrors.map(TXS).join(' '));
@@ -2676,19 +2636,10 @@ const ASYNC = {
             <p><b>${this.mapName(c.mapKey, c)}</b> · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${g.engine ? ' · ' + this.esc(g.engine) : ''}</p>
             ${this.seatsHtml(g.seats, null)}
             ${pickHtml}
-            ${c.teams ? this.teamJoinHtml(g) : ''}
             <p class="sub">${TX('Du kannst sofort beitreten – ziehen kannst du, sobald du an der Reihe bist. Bis zu deinem ersten Zug kannst du ohne Folgen wieder aussteigen.')}</p>
             <button class="btn wide primary" onclick="ASYNC.join()">${TX('Beitreten')}</button>
             <button class="btn wide ghost" onclick="ASYNC.showList()">${TX('Zurück')}</button>`);
         this.joinAbilities();
-    },
-
-    /** Team mode: the teams that still have room (half the empires each, A takes the odd one). */
-    teamJoinHtml: function (g) {
-        const total = g.config.playerCount || g.seats.length;
-        const room = t => (t === 0 ? Math.ceil(total / 2) : Math.floor(total / 2)) - g.seats.filter(s => s.userId && s.team === t).length;
-        const opts = [0, 1].filter(t => room(t) > 0).map(t => `<option value="${t}">${TX('Team %s', String.fromCharCode(65 + t))} (${TX('%s frei', room(t))})</option>`).join('');
-        return `<label class="row"><span>${TX('Dein Team')}</span><select id="mpa-jteam">${opts}</select></label>`;
     },
 
     joinAbilities: function () {
@@ -2705,7 +2656,6 @@ const ASYNC = {
             await this.api(`/${j.id}/join`, {
                 code: j.code, civ: $('mpa-jciv') ? $('mpa-jciv').value : undefined,
                 ability: $('mpa-jab') ? $('mpa-jab').value : undefined,
-                team: $('mpa-jteam') ? +$('mpa-jteam').value : undefined,
             });
             this.open(j.id);
         } catch (e) { toast(e.message); }
@@ -3113,14 +3063,6 @@ window.addEventListener('DOMContentLoaded', () => {
     style.textContent = `
         .mph-sound { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); margin:10px 0 0; cursor:pointer; }
         .mph-sound input { width:auto; margin:0; }
-        .mp-chat-team { background:#2f6db3; color:#fff; border-radius:3px; font-size:10px; padding:0 4px; vertical-align:1px; }
-        #mp-chat-team-btn.on { background:#2f6db3; color:#fff; border-radius:4px; }
-        .mp-team-sel { width:auto; margin:0 0 4px; padding:2px 4px; font-size:12px; }
-        .mp-team-0 { border-left:4px solid #2f6db3 !important; }
-        .mp-team-1 { border-left:4px solid #c0622b !important; }
-        .mp-team-tag { display:inline-block; min-width:16px; text-align:center; border-radius:3px; font-size:11px; font-weight:700; color:#fff; padding:0 3px; border:none !important; }
-        .mp-team-tag.mp-team-0 { background:#2f6db3; }
-        .mp-team-tag.mp-team-1 { background:#c0622b; }
         .mp-ready-yes { color:#2e6b34; font-weight:600; white-space:nowrap; }
         .mp-ready-no { opacity:.65; }
         .btn.mp-ready-on { background:#2e6b34; color:#fff; border-color:#2e6b34; }
@@ -3160,8 +3102,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-mode.primary:not([disabled]):hover { filter:brightness(1.1); }
         /* the player-bot switch belongs to the ranked search only (lobbies have their own) */
         .mph-ranked { display:flex; flex-direction:column; gap:6px; }
-        .mph-maps { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; width:100%; margin:-8px 0 16px; padding:9px 14px; text-align:left; font-weight:600; }
-        .mph-maps small { font-size:12px; font-weight:400; opacity:.75; }
+        .mph-more { display:flex; gap:10px; margin:-8px 0 16px; }
+        .mph-more .btn { flex:1 1 0; min-width:0; min-height:0; padding:10px 14px; }
         .mph-ranked .btn { flex:1 1 auto; }
         .mph-bots { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-soft); cursor:pointer; }
         .mph-rank-link { display:inline-block; font-size:12px; margin-top:4px; color:var(--ink-soft); }
@@ -3197,6 +3139,8 @@ window.addEventListener('DOMContentLoaded', () => {
         @media (max-width:640px) {
             .mph-new { flex-direction:column; gap:8px; }
             .mph-new > .btn, .mph-ranked { flex:0 0 auto; }
+            .mph-more { flex-direction:column; gap:8px; }
+            .mph-more .btn { flex:0 0 auto; }
             .mph-mode { min-height:0; padding:10px 14px; }
             .mph-name input { flex:1 1 auto; }
             .mph-code { flex-wrap:wrap; }

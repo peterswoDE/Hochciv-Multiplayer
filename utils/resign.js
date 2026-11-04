@@ -26,11 +26,6 @@ const inGame = (S, i) => !!S.players[i] && !S.players[i].dead && S.players[i].ki
 function endAfterResign(E, S, humans, startedWithKi) {
     if (S.over) return null;
     const left = humans.filter(i => inGame(S, i));
-    // team mode (utils/teams.js): everyone left is in one team – that team wins
-    const teams = Array.isArray(S.mpTeams) ? S.mpTeams : null;
-    if (teams && left.length > 1 && !startedWithKi && left.every(i => teams[i] === teams[left[0]])) {
-        return { winner: left[0], winners: left, resign: true, how: 'Alle anderen haben aufgegeben' };
-    }
     if (left.length === 1 && !startedWithKi) {
         return { winner: left[0], winners: [left[0]], resign: true, how: 'Alle anderen haben aufgegeben' };
     }
