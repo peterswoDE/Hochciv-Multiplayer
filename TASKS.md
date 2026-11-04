@@ -29,7 +29,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
-| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ⬜ |
+| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -513,4 +513,4 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Planned:** the host splits the empires into teams in the lobby; a team wins together, and teammates have a team chat. The details depend on what the engine allows without changing the game files (alliances, victory check).
 
-**Status:** ⬜
+**Status:** built (PRs #90, #91), then removed before it reached `main`: it does not fit the game for now. It may come back; the code is in the history of `development` (commits 56152c0 and 7bf2a65).

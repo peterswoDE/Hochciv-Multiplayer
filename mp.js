@@ -999,8 +999,10 @@ const MP = {
               ${typeof RANKING !== 'undefined' ? `<a href="#" class="mph-rank-link" onclick="RANKING.open(null); return false">🏆 ${TX('Rangliste und Saison')}</a>` : ''}
             </div>` : ''}
           </div>
-          ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
-          ${typeof CHALLENGE !== 'undefined' ? CHALLENGE.hubButton() : ''}
+          <div class="mph-more">
+            ${typeof MAPBROWSER !== 'undefined' ? newGame('mph-maps', 'MAPBROWSER.open()', '🗺 ' + TX('Karten entdecken'), TX('Karten anderer Spieler ansehen, favorisieren und spielen.')) : ''}
+            ${typeof CHALLENGE !== 'undefined' ? newGame('mph-challenge', 'CHALLENGE.open()', '📅 ' + TX('Wochen-Challenge'), CHALLENGE.hubText()) : ''}
+          </div>
           ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}${typeof FRIENDS !== 'undefined' ? tabBtn('friends', '👥 ' + TX('Freunde')) : ''}</div>
           <div class="mph-panes">
@@ -3100,8 +3102,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-mode.primary:not([disabled]):hover { filter:brightness(1.1); }
         /* the player-bot switch belongs to the ranked search only (lobbies have their own) */
         .mph-ranked { display:flex; flex-direction:column; gap:6px; }
-        .mph-maps { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; width:100%; margin:-8px 0 16px; padding:9px 14px; text-align:left; font-weight:600; }
-        .mph-maps small { font-size:12px; font-weight:400; opacity:.75; }
+        .mph-more { display:flex; gap:10px; margin:-8px 0 16px; }
+        .mph-more .btn { flex:1 1 0; min-width:0; min-height:0; padding:10px 14px; }
         .mph-ranked .btn { flex:1 1 auto; }
         .mph-bots { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-soft); cursor:pointer; }
         .mph-rank-link { display:inline-block; font-size:12px; margin-top:4px; color:var(--ink-soft); }
@@ -3137,6 +3139,8 @@ window.addEventListener('DOMContentLoaded', () => {
         @media (max-width:640px) {
             .mph-new { flex-direction:column; gap:8px; }
             .mph-new > .btn, .mph-ranked { flex:0 0 auto; }
+            .mph-more { flex-direction:column; gap:8px; }
+            .mph-more .btn { flex:0 0 auto; }
             .mph-mode { min-height:0; padding:10px 14px; }
             .mph-name input { flex:1 1 auto; }
             .mph-code { flex-wrap:wrap; }

@@ -20,9 +20,7 @@
     const CHALLENGE = {
         data: null,
 
-        hubButton: function () {
-            return `<button class="btn ghost mph-maps mph-challenge" onclick="CHALLENGE.open()">📅 ${T('Wochen-Challenge')}<small>${T('Jede Woche dieselbe Aufgabe für alle: allein gegen drei KI, so oft du willst.')}</small></button>`;
-        },
+        hubText: () => T('Jede Woche dieselbe Aufgabe für alle: allein gegen drei KI, so oft du willst.'),
 
         load: async function (week) {
             const r = await fetch('/api/challenge' + (week ? '?week=' + encodeURIComponent(week) : ''), { credentials: 'same-origin' });
@@ -137,7 +135,6 @@
         .ch-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .ch-actions .btn { flex:1 1 140px; }
         .ch-nav { margin:10px 0 0; font-size:13px; display:flex; justify-content:space-between; gap:12px; }
-        .mph-challenge { margin-top:-8px; }
     `;
     document.head.appendChild(style);
 
