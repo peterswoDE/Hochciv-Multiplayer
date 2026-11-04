@@ -39,7 +39,7 @@ function victoryOf(over) {
     return 'other';
 }
 
-/** The engine a match was played with ('v93' → HochCiv-v93, anything else → the current one). */
+/** The engine a match was played with ('v98' → HochCiv-v98, anything else → the current one). */
 const engineFor = version => engine.forVersion(version).getEngine();
 
 const isBarbarian = p => p && p.kind === 'barbar';

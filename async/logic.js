@@ -31,7 +31,8 @@ const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
-   the game shipped with this server have none and are v83. New games get the current one. */
+   the game shipped with this server have none and count as v83, a label only by now: forVersion
+   runs them on the current engine. New games get the current one. */
 const engineVersionOf = g => (g && g.engine) || engine.LEGACY_VERSION;
 const ENG = g => engine.forVersion(engineVersionOf(g));
 
@@ -745,7 +746,7 @@ function summary(g, userId) {
     const S = g.state;
     return {
         id: g.id,
-        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v98/, /v96/, /v93/, /v83/)
+        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v98/)
         joinCode: g.joinCode,
         status: g.status,
         isHost: g.hostUserId === userId,

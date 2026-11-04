@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v98', 'v96', 'v93', 'v83'];
+const OLD_VERSIONS = ['v98'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -3062,7 +3062,7 @@ window.addEventListener('DOMContentLoaded', () => {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
         } else if (OLD_VERSIONS.includes(APP_VERSION_HERE)) {
-            location.replace('/');           // /v98/, /v96/, /v93/, /v83/ only open Rundenspiele and replays of that version
+            location.replace('/');           // /v98/ only opens Rundenspiele and replays of that version
         }
     });
 

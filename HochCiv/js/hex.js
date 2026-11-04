@@ -25,9 +25,11 @@ function toCube(r, c) {
   const z = r;
   return [x, -x - z, z];
 }
+/* Dieselbe Rechnung wie toCube, nur ohne die beiden Felder (Tempo): die meistgerufene Funktion
+   der Regeln. Genau so geschrieben, damit auch krumme Werte dasselbe ergeben. */
 function hexDistance(r1, c1, r2, c2) {
-  const a = toCube(r1, c1), b = toCube(r2, c2);
-  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
+  const x1 = c1 - (r1 - (r1 & 1)) / 2, x2 = c2 - (r2 - (r2 & 1)) / 2;
+  return Math.max(Math.abs(x1 - x2), Math.abs((-x1 - r1) - (-x2 - r2)), Math.abs(r1 - r2));
 }
 /* Liegen a und b einander gegenüber, gespiegelt an m? In Würfelkoordinaten heißt das
    genau a + b = 2·m – auf allen drei Achsen, in jeder Entfernung. (Bis v74 wurde in

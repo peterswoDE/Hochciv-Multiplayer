@@ -630,21 +630,39 @@ function cityPopYield(S, pi) {
    nichts; auf den festen Karten liegt das Umland jenseits des Rands ohnehin außerhalb
    des Rasters. */
 function controlledTiles(S, pi) {
-  const set = new Set();
-  /* Tempo (v86): die Stadtfelder einmal als Menge statt je Feld cityAt über alle Städte – mit
-     vielen gekauften Feldern (im Marathon über 200 bei einem Reich) lief das je
-     Einkommensrechnung zehntausendfach. Gleiches Ergebnis, gleiche Reihenfolge. */
-  const stadtFeld = new Set(S.cities.map(ct => key(ct.r, ct.c)));
-  for (const city of citiesOf(S, pi))
-    for (const [r, c] of neighbors(city.r, city.c)) {
+  const cells = controlledCells(S, pi), set = new Set();
+  for (let i = 0; i < cells.length; i += 2) set.add(key(cells[i], cells[i + 1]));
+  return set;
+}
+/* Dieselben Felder als flache Liste [z0, s0, z1, s1, …], jedes einmal, in derselben Reihenfolge –
+   für die Einkommensrechnung, die sie je Bewertung mehrmals braucht. Tempo: gemerkt wird je
+   Feld eine Zahl statt des Textes „z,s", den die Rechnung danach wieder zerlegen müsste.
+   Tempo (v86): die Stadtfelder einmal als Menge statt je Feld cityAt über alle Städte – mit
+   vielen gekauften Feldern (im Marathon über 200 bei einem Reich) lief das je
+   Einkommensrechnung zehntausendfach. */
+const CELL_ROW = 4096;        // größer als jede Karte breit ist (eigene Karten bis 48 Spalten)
+function controlledCells(S, pi) {
+  const stadtFeld = new Set(), seen = new Set(), out = [];
+  for (const ct of S.cities) stadtFeld.add(ct.r * CELL_ROW + ct.c);
+  for (const city of citiesOf(S, pi)) {
+    const dirs = (city.r & 1) ? DIRS_ODD : DIRS_EVEN;
+    for (let d = 0; d < 6; d++) {
+      const r = city.r + dirs[d][0], c = city.c + dirs[d][1];
       const t = terrainAt(S, r, c);
       if (!t || isOff(t)) continue;
-      const k = key(r, c);
-      if (stadtFeld.has(k)) continue;
-      set.add(k);
+      const n = r * CELL_ROW + c;
+      if (stadtFeld.has(n) || seen.has(n)) continue;
+      seen.add(n);
+      out.push(r, c);
     }
-  for (const k of (S.bought[pi] || [])) if (!stadtFeld.has(k)) set.add(k);
-  return set;
+  }
+  for (const k of (S.bought[pi] || [])) {
+    const [r, c] = unkey(k), n = r * CELL_ROW + c;
+    if (stadtFeld.has(n) || seen.has(n)) continue;
+    seen.add(n);
+    out.push(r, c);
+  }
+  return out;
 }
 /* Grenzt die Stadt an Meer? (Für Englands Alternative "Seemacht".) */
 function cityAtSea(S, city) {
@@ -688,11 +706,12 @@ function raidYield(S, pi) {
 
 /* Aufschlüsselung des Einkommens für die Übersicht: je Geländetyp die Anzahl
    kontrollierter Felder und ihr Gesamtertrag, dazu Sonderzeilen, die Stadtbevölkerung
-   und die Summe. Die Summe ist per Definition das Einkommen – income() liest sie hier ab,
-   damit Übersicht und Rechnung nicht auseinanderlaufen können. */
-function incomeBreakdown(S, pi) {
+   und die Summe. Die Summe ist per Definition das Einkommen – income() und die Übersicht (incomeBreakdown)
+   rechnen beide hier, damit sie nicht auseinanderlaufen können. Mit `view` (rows, extra, pop)
+   kommen die Zeilen der Übersicht dazu; ohne sparen Regeln und KI sich deren Namen und Objekte. */
+function incomeTotal(S, pi, view) {
   const p = S.players[pi];
-  const rows = [], extra = [], byTerrain = {};
+  const byTerrain = {};
   const revolution = evActive(S, pi, 'revolution');
   const cap = capitalOf(S, pi);
   // Revolution: die Hauptstadt produziert nichts – auch ihr Umland nicht, sofern das
@@ -701,17 +720,21 @@ function incomeBreakdown(S, pi) {
     !citiesOf(S, pi).some(ct => !ct.cap && hexDistance(ct.r, ct.c, r, c) === 1);
   // tileYieldAt: Hauptstadt und Geländeertrag einmal (v86), die gekauften Felder als Menge (v96)
   const pre = { cap, y: {}, kol: has(p, 'buerokratie') ? new Set(S.bought[pi] || []) : null };
-  for (const k of controlledTiles(S, pi)) {
-    const [r, c] = unkey(k);
+  const cells = controlledCells(S, pi);
+  for (let i = 0; i < cells.length; i += 2) {
+    const r = cells[i], c = cells[i + 1];
     if (deadTile(r, c)) continue;
     const t = terrainAt(S, r, c);
     const y = tileYieldAt(S, pi, r, c, pre);
     const e = byTerrain[t] || (byTerrain[t] = { count: 0, y: [0, 0, 0] });
     e.count++; e.y[0] += y[0]; e.y[1] += y[1]; e.y[2] += y[2];
   }
+  const total = [0, 0, 0];
   for (const t of Object.keys(TERRAIN)) {
     const e = byTerrain[t];
-    if (e && !isOff(t)) rows.push({ key: t, name: TERRAIN[t].name, count: e.count, y: e.y });
+    if (!e || isOff(t)) continue;
+    if (view) view.rows.push({ key: t, name: TERRAIN[t].name, count: e.count, y: e.y });
+    for (let i = 0; i < 3; i++) total[i] += e.y[i];
   }
   // Bevölkerung als eigene Zeile
   const py = cityPopYield(S, pi);
@@ -741,10 +764,13 @@ function incomeBreakdown(S, pi) {
     for (let i = 0; i < 3; i++) pyy[i] += eco;
   }
   // Seemacht (v53): +1 je Küstenstadt auf alle drei Erträge, vorher +2
-  if (sea) extra.push({
-    name: T('Städte am Meer'), glyph: '⚓', count: sea,
-    y: [SEA_CITY_BONUS * sea, SEA_CITY_BONUS * sea, SEA_CITY_BONUS * sea],
-  });
+  if (sea) {
+    if (view) view.extra.push({
+      name: T('Städte am Meer'), glyph: '⚓', count: sea,
+      y: [SEA_CITY_BONUS * sea, SEA_CITY_BONUS * sea, SEA_CITY_BONUS * sea],
+    });
+    for (let i = 0; i < 3; i++) total[i] += SEA_CITY_BONUS * sea;
+  }
   // Handelsrouten: Städte, die über Straßen (+1) oder durchgehend Eisenbahn (+4, bis v95 +2)
   // an der Hauptstadt hängen. Grundregel, gilt also auch für Bots.
   // Mit Bürokratie doppelt (v86). Die Übersicht sagt seit v88 nicht mehr dazu, warum
@@ -752,17 +778,18 @@ function incomeBreakdown(S, pi) {
   const tr = tradeRoutes(S, pi);
   if (tr.bonus) {
     const b = tr.bonus * buro;
-    extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b] });
+    if (view) view.extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b] });
+    for (let i = 0; i < 3; i++) total[i] += b;
   }
   // Wallfahrt (Erweiterung): je eigenem Weltwunder +3 auf alle drei Erträge
   if (has(p, 'wallfahrt') && p.kind !== 'bot') {
     const w = wondersOf(S, pi).length;
-    if (w) extra.push({ name: T('Wallfahrt'), glyph: '⛪', count: w, y: [3 * w, 3 * w, 3 * w] });
+    if (w) {
+      if (view) view.extra.push({ name: T('Wallfahrt'), glyph: '⛪', count: w, y: [3 * w, 3 * w, 3 * w] });
+      for (let i = 0; i < 3; i++) total[i] += 3 * w;
+    }
   }
   // Summe, danach die Ereignis- und Wundereffekte auf das Gesamteinkommen
-  const total = [0, 0, 0];
-  for (const r of rows) for (let i = 0; i < 3; i++) total[i] += r.y[i];
-  for (const e of extra) for (let i = 0; i < 3; i++) total[i] += e.y[i];
   for (let i = 0; i < 3; i++) total[i] += pyy[i];
   if (evActive(S, pi, 'hungersnot')) total[1] = 0;        // keine Nahrung produziert
   if (evActive(S, pi, 'wirtschaftskrise')) total[2] = 0;  // keine Münzen produziert
@@ -779,19 +806,26 @@ function incomeBreakdown(S, pi) {
   if (has(p, 'gentechnik') && !evActive(S, pi, 'hungersnot')) {
     const gen = Math.floor(total[0] / GENE_SCI_PER_FOOD) * buro;
     if (gen > 0) {
-      extra.push({ name: T('Gentechnik'), glyph: '🧬', y: [0, gen, 0] });
+      if (view) view.extra.push({ name: T('Gentechnik'), glyph: '🧬', y: [0, gen, 0] });
       total[1] += gen;
     }
   }
+  if (view) view.pop = { count: pop, y: pyy };
+  return total;
+}
+function incomeBreakdown(S, pi) {
+  const p = S.players[pi];
+  const view = { rows: [], extra: [], pop: null };
+  const total = incomeTotal(S, pi, view);
   // Vorschau, kein Einkommen: was die Armeen bei jetziger Stellung zu Zugende erbeuten
   const preview = [];
   const raid = raidYield(S, pi);
   if (raid.sum) preview.push({ name: T('Beutezüge zu Zugende'), glyph: '⚔︎', y: [raid.sum, raid.sum, raid.sum] });
   if (p.raidPending) preview.push({ name: T('Beute (schon gutgeschrieben)'), glyph: '⚔︎', y: [p.raidPending, p.raidPending, p.raidPending] });
-  return { rows, extra, preview, pop: { count: pop, y: pyy }, total };
+  return { rows: view.rows, extra: view.extra, preview, pop: view.pop, total };
 }
 function income(S, pi) {
-  const t = incomeBreakdown(S, pi).total;
+  const t = incomeTotal(S, pi, null);
   return { sci: t[0], food: t[1], coins: t[2] };
 }
 /* Was eine Stadt auf diesem Feld dem Reich ab der nächsten Runde einbrächte:
@@ -1966,7 +2000,8 @@ function attackValue(S, pi, count, pow) {
   if (has(p, 'dynamit')) per *= 2;
   return per * (COMBAT.attackStacks ? count : 1);
 }
-function defenseValue(S, city, pow) {
+// `helpersIn` (Tempo): die Armeen in Reichweite, falls schon gezählt (kiRisk)
+function defenseValue(S, city, pow, helpersIn) {
   const o = S.players[city.owner], oi = city.owner;
   if (o.kind === 'barbar') return city.pop;      // Barbarenstädte verteidigen nur mit Bevölkerung
   const macht = pow != null ? pow : powerOf(S, oi);      // v94: in der Kampfphase festgehalten
@@ -1975,10 +2010,13 @@ function defenseValue(S, city, pow) {
   let d = base * (has(o, 'maschinengewehr') ? 3 : 1);
   if (has(o, 'stadtmauern')) d += 5;
   if (has(o, 'burgenbau')) d += macht;                   // virtuelle Armee in der Stadt
-  const rng = projectRange(S, oi);
-  let helpers = 0;
-  for (const a of armiesOf(S, oi))
-    if (hexDistance(a.r, a.c, city.r, city.c) <= rng) helpers++;
+  let helpers = helpersIn;
+  if (helpers == null) {
+    const rng = projectRange(S, oi);
+    helpers = 0;
+    for (const a of armiesOf(S, oi))
+      if (hexDistance(a.r, a.c, city.r, city.c) <= rng) helpers++;
+  }
   if (helpers) d += macht * (COMBAT.defenseStacks ? helpers : 1);
   return d;
 }
