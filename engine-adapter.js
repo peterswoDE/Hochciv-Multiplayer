@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v98/, HochCiv-v96/, HochCiv-v93/ and HochCiv-v83/ versions deployed before it. Every version gets its own sandbox
+ * HochCiv-v98/ the version deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -30,12 +30,10 @@ const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
     v98: path.resolve(__dirname, 'HochCiv-v98', 'js'),
-    v96: path.resolve(__dirname, 'HochCiv-v96', 'js'),
-    v93: path.resolve(__dirname, 'HochCiv-v93', 'js'),
-    v83: path.resolve(__dirname, 'HochCiv-v83', 'js'),
 };
 const OLD_VERSIONS = Object.keys(GAME_DIRS).filter(v => v !== 'current');
-// Rundenspiele from before the version was recorded were started on v83
+// Rundenspiele from before the version was recorded were started on v83. Its folder is gone, so
+// this is only their label: forVersion runs them on the current engine.
 const LEGACY_VERSION = 'v83';
 
 function makeAdapter(engineDir, label) {

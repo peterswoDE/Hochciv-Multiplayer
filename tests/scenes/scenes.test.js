@@ -8,7 +8,7 @@
  *
  * 1. Recording, with the engine: the chain of diffs rebuilds exactly the engine's snapshot,
  *    actions / battles / silent steps are recorded, the game is the same with and without
- *    recording, trim() keeps what comes after the earliest mark, v93 records nothing.
+ *    recording, trim() keeps what comes after the earliest mark.
  * 2. Live game (A and B through the game page, one KI, a spectator): A sees the KI's and B's
  *    actions played, never its own; the turn starts only after them; a tap skips everything
  *    queued; the spectator sees A's actions too; "Animationen: Keine" plays nothing.
@@ -127,11 +127,6 @@ function unit() {
     ok(holder.scenes.frames.length < before && holder.scenes.frames.every(f => f.seq > m.seq), 'unit: trim keeps only what comes after the mark',
         `${before} → ${holder.scenes.frames.length}`);
     ok(Scenes.trim(holder.scenes, { last: null }, S) === undefined && holder.scenes.frames.length > 0, 'unit: without a mark of every human nothing goes');
-
-    // a version without js/anim.js
-    const old = engine.forVersion('v93');
-    const So = old.createGame({ gameConfig: { mapKey: 'gross', playerCount: 2, seed: 1 }, players: [{ civ: 'griechenland', kind: 'human', ability: 'basis' }, { civ: 'england', kind: 'ki', kiLevel: 'leicht', ability: 'basis' }] });
-    ok(old.attachScenes(So, {}) === null, 'unit: v93 records nothing');
 }
 
 // In the page: scenes played (pi, art, text) and when the turn started; short timings
