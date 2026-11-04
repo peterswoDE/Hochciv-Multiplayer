@@ -17,9 +17,10 @@ module.exports = (sequelize) => {
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
         },
+        // null: a map that belongs to nobody (maps/builtin.js)
         ownerId: {
             type: DataTypes.UUID,
-            allowNull: false,
+            allowNull: true,
         },
         // same as map.name – a column for the (ownerId, name) index
         name: {

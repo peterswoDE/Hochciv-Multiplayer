@@ -36,7 +36,7 @@ const E = () => engine.getEngine();
 const engineVersionOf = g => (g && g.engine) || engine.LEGACY_VERSION;
 const ENG = g => engine.forVersion(engineVersionOf(g));
 
-const MAP_KEYS = ['0', 'gross', 'plaettchen', 'marathon', 'eigene'];
+const MAP_KEYS = ['0', 'plaettchen', 'marathon', 'eigene'];
 const KI_TAKEOVER_LEVEL = { ranked: 'schwer', normal: 'mittel' };
 const MMR_PENALTY = 15;
 /** Time per turn a host can pick for a Rundenspiel (days). */
@@ -777,7 +777,7 @@ function summary(g, userId) {
     const S = g.state;
     return {
         id: g.id,
-        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v96/, /v93/, /v83/)
+        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v98/, /v96/, /v93/, /v83/)
         joinCode: g.joinCode,
         status: g.status,
         isHost: g.hostUserId === userId,
@@ -831,7 +831,7 @@ function view(g, userId) {
             plan, setup: g.config.setup,
             placed: !!(ps && ps.cell != null),
             players: g.seats.map(s => ({ civ: s.civ, kind: s.kind, ability: s.ability, name: s.name, roman: s.roman, color: s.color })),
-            wonders: g.config.wonders,
+            wonders: g.config.wonders, events: g.config.events, startPlayer: g.config.startPlayer,
         };
     }
     if (g.status === 'draft') out.draft = deepCopy(g.pre.draft);

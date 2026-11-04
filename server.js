@@ -130,7 +130,7 @@ app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__di
 app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
-// The older versions (/v96/, /v93/, /v83/ – Rundenspiele started on them) get the same no-op service
+// The older versions (/v98/, /v96/, /v93/, /v83/ – Rundenspiele started on them) get the same no-op service
 // worker and Activity bridge
 const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
 app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
@@ -191,6 +191,8 @@ sequelize.sync({ alter: true }).then(() => {
     require('./utils/challenge').migrate().catch(err => console.error('[Challenge] Migration failed:', err));
     // ranked seasons: the current quarter, closing the last one (utils/seasons.js)
     require('./utils/seasons').start();
+    // the maps that belong to nobody (maps/builtin.js)
+    require('./maps/service').seedBuiltin().catch(err => console.error('[Maps] Seeding the built-in maps failed:', err));
     // the admins' words for the chat filter (utils/profanity.js)
     require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`

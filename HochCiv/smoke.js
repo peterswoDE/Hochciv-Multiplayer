@@ -375,7 +375,7 @@ step('1-gegen-1-Modus im Aufbau', () => {
   // Mehrspieler-Erweiterung: das Duell ist eine Partie zu zweit – die Kartenliste hängt nicht mehr an der Zahl
   // der Reiche (feste Karten, Plättchenkarte, Marathon), die Zahl der Reiche an der Karte
   const karten = [...$('setup-map').options].map(o => o.value);
-  if (!['0', '1', 'plaettchen', 'marathon'].every(k => karten.includes(k))) throw new Error('Kartenauswahl: ' + karten.join(','));
+  if (!['0', 'plaettchen', 'marathon'].every(k => karten.includes(k))) throw new Error('Kartenauswahl: ' + karten.join(','));
   if ($('setup-map-row').hidden || $('setup-map').disabled) throw new Error('Kartenwahl im Duell nicht bedienbar');
   if ($('setup-count').value !== '2') throw new Error('Reiche: ' + $('setup-count').value);
   if ($('setup-duel-hint').hidden) throw new Error('kein Hinweis auf die Duellregeln');
@@ -384,10 +384,20 @@ step('1-gegen-1-Modus im Aufbau', () => {
   if (picks.some(p => !p) || picks[0].options.length !== 5)
     throw new Error('Zivilisationsliste hat ' + (picks[0] ? picks[0].options.length : 0) + ' Einträge');
   if ([...picks[0].options].pop().value !== 'zufall') throw new Error('kein Zufall in der Liste');
-  // Kollision muss aufgelöst werden
-  picks[0].value = slots[1].dataset.civ; picks[0].onchange();
+  /* Dieselbe Zivilisation zweimal: auf der Plättchenkarte wählt jeder Platz frei, auch im Duell
+     (Doppelte bekommen Ziffern und eine eigene Farbe). Bis v98 löste der Aufbau die Doppelung
+     im Duell trotzdem auf; seit v99 gilt die Regel der Plättchenkarte auch hier. Die feste Karte
+     bleibt in der Mehrspieler-Erweiterung auch zu zweit wählbar. */
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  const vorher = [...$('setup-list').children].map(x => x.dataset.civ);
+  const erster = $('setup-list').children[0].querySelector('[data-civpick]');
+  erster.value = vorher[1]; erster.onchange();
   const now = [...$('setup-list').children].map(x => x.dataset.civ);
-  if (now[0] === now[1]) throw new Error('beide Plätze mit derselben Zivilisation');
+  if (now[0] !== now[1]) throw new Error('im Duell keine Doppelten: ' + now.join(','));
+  if ($('setup-double-hint').hidden) throw new Error('kein Hinweis auf die freie Wahl');
+  const zurueck = $('setup-list').children[0].querySelector('[data-civpick]');
+  zurueck.value = vorher[0]; zurueck.onchange();
+  $('setup-map').value = '0'; $('setup-map').onchange();
   if (![...$('setup-list').children][1].querySelector('[data-abil]').options.length)
     throw new Error('keine Fähigkeiten im zweiten Platz');
   console.log('       ' + now.join(' gegen ') + ', Startspieler-Auswahl: ' +
@@ -462,6 +472,9 @@ step('Fähigkeitswahl je Zivilisation', () => {
   console.log('       ' + [...sels[0].options].map(o => o.text).join(' · '));
 });
 step('Spiel starten (mit Ereignissen und Weltwundern)', () => {
+  // Seit v99 steht der Startspieler ab Werk auf „Zufällig“ – die folgenden Schritte brauchen den
+  // Menschen (Platz 1) am Zug, also wird er hier ausdrücklich gewählt.
+  $('setup-start').value = '0'; $('setup-start').onchange();
   mitBots(() => $('setup-go').onclick());
   const S = G('S');
   if (!S.ev || !S.wo) throw new Error('Erweiterungen nicht übernommen');
@@ -1941,17 +1954,14 @@ step('Bestätigen gibt an die zweite Person weiter', () => {
   const felder = $('pl-map').querySelectorAll('[data-r]').length;
   if (felder !== 75) throw new Error('das fremde Plättchen ist zu sehen (' + felder + ')');
 });
-step('Aufdecken zeigt alle Plättchen, dann startet das Spiel', () => {
+step('Nach dem letzten Plättchen beginnt gleich das Spiel (v99: ohne Schritt „Spiel beginnen“)', () => {
   const rcs = legeHelfer.rcs(), frei = legeHelfer.frei();
   const gut = frei.indexOf(true);
   G('plTap')(rcs[gut][0], rcs[gut][1]);
-  G('placeConfirm')();
   const st = G('placeState');
-  if (!st.done) throw new Error('nicht aufgedeckt');
-  const felder = $('pl-map').querySelectorAll('[data-r]').length;
-  if (felder !== 90) throw new Error('nach dem Aufdecken nur ' + felder + ' Felder');
-  if (!$('pl-rot').hidden) throw new Error('Drehen ist nach dem Aufdecken noch möglich');
   G('placeConfirm')();
+  if (!st.done || !st.plan.revealed) throw new Error('nicht aufgedeckt');
+  if (G('placeState') !== null) throw new Error('die Legephase steht noch – erst ein weiterer Knopf?');
   const S = G('S');
   if (!$('screen-game').classList.contains('show')) throw new Error('Spiel startet nicht');
   if (!S.duel) throw new Error('Duellregeln nicht übernommen');
@@ -2269,7 +2279,7 @@ step('Zwei gleiche Reiche spielen auf der Plättchenkarte', () => {
   // ein Mensch: legt selbst, danach wird aufgedeckt und gestartet
   const rcs = legeHelfer.rcs(), frei = legeHelfer.frei();
   G('plTap')(rcs[frei.indexOf(true)][0], rcs[frei.indexOf(true)][1]);
-  G('placeConfirm')(); G('placeConfirm')();
+  G('placeConfirm')();            // legt – seit v99 beginnt danach gleich das Spiel
   const S = G('S');
   const wik = S.players.filter(p => p.civ === 'wikinger');
   if (wik.length !== 2) throw new Error('nicht zwei Wikingerreiche im Spiel');
@@ -2322,12 +2332,17 @@ step('Zufall als Zivilisation, Fähigkeit und Startspieler', () => {
   }
   console.log('       aufgelöst, vier verschiedene Farben, Startspieler zufällig');
 });
-step('Bei einem Menschen bleibt er selbst der Startspieler', () => {
+step('Auch bei einem Menschen steht „Zufällig“ als Startspieler (v99)', () => {
+  /* Bis v98 war mit nur einem Menschen dieser vorausgewählt; seit v99 (Anweisung des Autors)
+     steht immer „Zufällig“, bis jemand etwas anderes wählt – dann bleibt diese Wahl stehen. */
   [...$('setup-list').children].slice(1).forEach(x => x.querySelector('[data-kind="ki"]').onclick());
   $('setup-list').children[0].querySelector('[data-kind="human"]').onclick();
-  if ($('setup-start').value === 'zufall')
-    throw new Error('mit nur einem Menschen sollte er vorausgewählt sein');
-  if ($('setup-start').value !== '0') throw new Error('nicht Platz 1: ' + $('setup-start').value);
+  if ($('setup-start').value !== 'zufall')
+    throw new Error('mit einem Menschen nicht „Zufällig“: ' + $('setup-start').value);
+  $('setup-start').value = '0'; $('setup-start').onchange();
+  $('setup-list').children[1].querySelector('[data-kind="ki"]').onclick();
+  if ($('setup-start').value !== '0') throw new Error('die bewusste Wahl blieb nicht stehen: ' + $('setup-start').value);
+  G('__set')('startWanted', null); G('refreshStart')();
 });
 step('Doppelte Zivilisation bekommt eine andere Zivilisationsfarbe, keine Schattierung', () => {
   const setze = (i, k) => {
@@ -2583,18 +2598,17 @@ step('Ausgeloste Fähigkeit ist im Spiel ablesbar', () => {
   G('switchLang')('de'); G('redraw')();
   console.log(`       ausgelost: ${de} · englisch: ${en}`);
 });
-step('Drei Reiche im Aufbau', () => {
+step('Drei Reiche im Aufbau: nur die Plättchenkarte, Doppelte erlaubt (v99)', () => {
   $('m-new').onclick();
   G('setupSetMode')('drei');
   // auf einer festen Karte sitzt jede Zivilisation genau einmal
   $('setup-map').value = '0'; $('setup-map').onchange();
   const slots = [...$('setup-list').children];
   if (slots.length !== 3) throw new Error('nicht drei Plätze, sondern ' + slots.length);
-  const civs = slots.map(x => x.dataset.civ);
-  if (new Set(civs).size !== 3) throw new Error('zweimal dieselbe Zivilisation: ' + civs.join(','));
-  // Kollision auflösen: Platz 1 auf die Zivilisation von Platz 2 setzen
-  const picks = slots.map(x => x.querySelector('[data-civpick]'));
-  picks[0].value = civs[1]; picks[0].onchange();
+  // Plättchenkarte: jeder Platz wählt frei, auch dieselbe Zivilisation zweimal
+  const setze = (i, k) => { const el = $('setup-list').children[i].querySelector('[data-civpick]'); el.value = k; el.onchange(); };
+  ['griechenland', 'wikinger', 'russland'].forEach((k, i) => setze(i, k));
+  setze(0, 'wikinger');
   const jetzt = [...$('setup-list').children].map(x => x.dataset.civ);
   if (new Set(jetzt).size !== 3) throw new Error('Kollision nicht aufgelöst: ' + jetzt.join(','));
   const karten = [...$('setup-map').options].map(o => o.text);
@@ -2616,8 +2630,7 @@ step('Drei Reiche spielen auf der Plättchenkarte', () => {
   const rcs = legeHelfer.rcs(), frei = legeHelfer.frei();
   const gut = frei.indexOf(true);
   G('plTap')(rcs[gut][0], rcs[gut][1]);
-  G('placeConfirm')();          // legt und deckt auf
-  G('placeConfirm')();          // Spiel beginnen
+  G('placeConfirm')();          // legt, deckt auf und beginnt (v99: ohne eigenen Schritt)
   const S = G('S');
   if (S.players.length !== 3) throw new Error('nicht drei Reiche im Spiel');
   if (S.cities.length !== 3) throw new Error('nicht drei Hauptstädte');
@@ -2774,7 +2787,7 @@ step('Techtree: auch der Bogen in der Legephase – und die Partie danach', () =
   const rcs = legeHelfer.rcs(), frei = legeHelfer.frei();
   const gut = frei.indexOf(true);
   G('plTap')(rcs[gut][0], rcs[gut][1]);
-  G('placeConfirm')(); G('placeConfirm')();
+  G('placeConfirm')();            // legt – seit v99 beginnt danach gleich das Spiel
   if (!$('screen-game').classList.contains('show')) throw new Error('das Spiel beginnt nicht');
   if (G('S').oldTree !== false) throw new Error('nach dem Legen läuft die Partie im alten Techtree');
   console.log('       Legephase: ' + fo);
@@ -3099,8 +3112,7 @@ step('KI: in der Legephase legt die KI selbst, gefragt wird nur der Mensch', () 
   const rcs = G('slotRC')(st.plan, seat.slot), ok = G('placeOptions')(st.plan, seat, st.o);
   const i = ok.indexOf(true);
   G('plTap')(rcs[i][0], rcs[i][1]);
-  G('placeConfirm')();            // aufdecken
-  G('placeConfirm')();            // Spiel beginnen
+  G('placeConfirm')();            // aufdecken und beginnen (v99: ohne eigenen Schritt)
   const S = G('S');
   if (!S || S.cities.length !== 2) throw new Error('das Spiel beginnt nicht mit zwei Hauptstädten');
   let n = 0;
@@ -3319,22 +3331,21 @@ step('Marathon: das Spiel beginnt mit genau dieser Karte und den gedrafteten Fä
   if (!L.marathon || JSON.stringify(G('abilitiesOf')(L.players[ich])) !== JSON.stringify(D.picks[ich])) throw new Error('nach dem Fortsetzen anders');
   console.log('       ' + $('hud-name').textContent + ' · ' + S.map.name);
 });
-step('Marathon (v84): höchstens fünf Gründungen je Zug, eroberte Hauptstädte im Weltblatt', () => {
+step('Marathon (v100): Gründen ohne Grenze je Zug, eroberte Hauptstädte im Weltblatt', () => {
   const S = G('S');
   if (!S.marathon) throw new Error('kein Marathon');
   while (AUTO(G('P')(S)) && !S.over && $('bot-next')) $('bot-next').onclick();
   const ich = S.cur, p = S.players[ich];
-  // fünf Städte gegründet: „Stadt gründen" geht nicht erst in den Modus, sondern sagt warum
+  // v84–v99 sperrte „Stadt gründen" nach fünf Gründungen in einem Zug; seit v100 gibt es keine
+  // Grenze, auch nicht mit dem Zähler eines alten Spielstands
   p.foundRound = S.round; p.foundCount = 5;
   G('endFoundMode')();
   $('a-found').onclick();
-  if (G('ui').mode === 'found') throw new Error('Gründungsmodus trotz fünf Gründungen');
-  if (!/Höchstens 5 neue Städte je Zug/.test($('toast').textContent)) throw new Error('Meldung: ' + $('toast').textContent);
-  if (G('canFound')(S, ich, 0, 0) !== 'Höchstens 5 neue Städte je Zug (Marathon).') throw new Error('Regel kennt die Grenze nicht');
-  p.foundCount = 0;
-  $('a-found').onclick();
-  if (G('ui').mode !== 'found') throw new Error('nach dem Zurücksetzen kein Gründungsmodus');
+  if (G('ui').mode !== 'found') throw new Error('kein Gründungsmodus');
+  if (/je Zug/.test(String(G('canFound')(S, ich, 0, 0)))) throw new Error('Regel nennt eine Grenze');
   G('endFoundMode')();
+  delete p.foundRound; delete p.foundCount;
+  if (/je Zug/.test($('setup-marathon-hint').textContent)) throw new Error('Aufbau nennt noch eine Grenze');
   // Weltblatt: wer wie viele Hauptstädte erobert hat, wer keine mehr hat (ohne echte Eroberung
   // nachgestellt – die Regel selbst prüft test.js)
   const andere = S.players.findIndex((x, i) => i !== ich && x.kind !== 'bot');
@@ -3349,32 +3360,35 @@ step('Marathon (v84): höchstens fünf Gründungen je Zug, eroberte Hauptstädte
   } finally { delete p.capTaken; kap.cap = true; }
   G('redraw')();
 });
-step('Marathon (v85, v97): Regelbogen mit doppeltem Rabatt, Freie Forschung wie sonst, Startausgleich', () => {
+step('Marathon (v85, v97, v100): Regelbogen mit doppeltem Rabatt, Freie Forschung wie sonst, Startausgleich, ohne Gründungsgrenze', () => {
   const S = G('S');
   if (!S.marathon) throw new Error('kein Marathon');
   const soll = {
     de: ['Techs 2/2/4/4/10 günstiger (je Zeitalter, im Marathon doppelt)',
-      '2× pro Partie eine verfügbare Technologie beliebigen Zeitalters umsonst erforschen (nicht die Singularität)',
+      '1× pro Runde eine erforschbare Technologie beliebigen Zeitalters umsonst erforschen, auch die Singularität',
       'Techkosten −4/−6/−8/−10/−20 (je Zeitalter, im Marathon doppelt)',
       'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte',
       'geprüft am Ende jeder Runde, wenn alle gleich oft gezogen haben',
-      'Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Höchstens'],
+      'Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Militärsieg erst mit 2',
+      'Städte gründen kostet nur die Hälfte (aufgerundet). Bevölkerungswachstum kostet doppelt'],
     en: ['Techs 2/2/4/4/10 cheaper (by age, doubled in marathon)',
-      'Twice per game, research one available technology of any age for free (not the Singularity)',
+      'Once per round, research one researchable technology of any age for free, the Singularity included',
       'Tech costs −4/−6/−8/−10/−20 (by age, doubled in marathon)',
       'Starting compensation: on their very first turn',
       'checked at the end of every round, when everyone has had the same number of turns',
-      'the scientific method take off twice as much. At most'],
+      'the scientific method take off twice as much. A military victory takes 2',
+      'Founding cities costs only half (rounded up). Population growth costs double'],
   };
   const lesen = () => { G('rulesModal')(); const t = $('ov-body').textContent.replace(/\s+/g, ' '); G('closeModal')(); return t; };
   const de = lesen();
   for (const t of soll.de) if (!de.includes(t)) throw new Error('fehlt: ' + t);
-  if (/oder früher umsonst|reicht nur bis ins Mittelalter|2\/4\/6\/8\/10 günstiger|−4\/−8\/−12/.test(de)) throw new Error('alter Text im Regelbogen');
+  if (/oder früher umsonst|reicht nur bis ins Mittelalter|2\/4\/6\/8\/10 günstiger|−4\/−8\/−12|neue Städte je Zug|günstigere der beiden/.test(de)) throw new Error('alter Text im Regelbogen');
   G('switchLang')('en');
   try {
     G('clearMissing')();
     const en = lesen();
     for (const t of soll.en) if (!en.includes(t)) throw new Error('fehlt auf Englisch: ' + t);
+    if (/new cities per turn|whichever of the two/.test(en)) throw new Error('alter Text im Regelbogen (englisch)');
     const fehlt = G('missingStrings')();
     if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
   } finally { G('switchLang')('de'); }
@@ -3426,7 +3440,7 @@ step('Normales Spiel (v85): Griechenland und Methode wie bisher, Startausgleich 
   G('rulesModal')();
   const txt = $('ov-body').textContent.replace(/\s+/g, ' ');
   G('closeModal')();
-  for (const t of ['Techs 1/1/2/2/5 günstiger', '2× pro Partie eine verfügbare Technologie beliebigen Zeitalters umsonst erforschen',
+  for (const t of ['Techs 1/1/2/2/5 günstiger', '1× pro Runde eine erforschbare Technologie beliebigen Zeitalters umsonst erforschen',
     'Techkosten −2/−3/−4/−5/−10 (je Zeitalter)',
     'Startausgleich: Im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge 2, 4 bzw. 6 Münzen dazu – zu zweit bekommt der Zweite 4.',
     'Bevölkerungswachstum kostet keine Nahrung; 1× zusätzliches Wachstum pro Stadt',
@@ -3546,21 +3560,12 @@ step('Fähigkeiten: Freie Forschung und Rückschau leben hier, nicht mehr im Tec
   const soll = G('freeTechOptions')(S, pi).map(t => t.k);
   const ist = [...$('sheet-body').querySelectorAll('[data-act^="forschung:"]')].map(b => b.dataset.act.slice(10));
   if (!soll.length || ist.join() !== soll.join()) throw new Error('zur Wahl ' + ist + ' statt ' + soll);
-  // seit v97 zweimal je Partie: der Rest steht da, die zweite geht im selben Zug, danach keine mehr
-  if (!/Noch 2 von 2 kostenlosen Forschungen in dieser Partie/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „noch 2 von 2"');
+  // seit v99 wieder einmal je Runde: nach der Nutzung nichts mehr in dieser Runde, die Zahl fällt
   $('sheet-body').querySelector(`[data-act="forschung:${ist[0]}"]`).onclick();
   if (!p.techs[ist[0]]) throw new Error('nicht erforscht');
-  if (!/Noch 1 von 2/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „noch 1 von 2"');
-  if (zahlAbil() !== 1) throw new Error('mit einer offenen Freien Forschung Zahl ' + zahlAbil());
-  const zweite = $('sheet-body').querySelector('[data-act^="forschung:"]');
-  if (!zweite) throw new Error('die zweite Freie Forschung fehlt');
-  const k2 = zweite.dataset.act.slice(10);
-  G('sheetCalm').until = 0;
-  zweite.onclick();
-  if (!p.techs[k2]) throw new Error('die zweite nicht erforscht');
-  if ($('sheet-body').querySelector('[data-act^="forschung:"]')) throw new Error('eine dritte Freie Forschung');
-  if (!/Die kostenlosen Forschungen dieser Partie sind verbraucht/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „verbraucht"');
-  if (zahlAbil()) throw new Error('Zahl bleibt nach beiden Freien Forschungen');
+  if ($('sheet-body').querySelector('[data-act^="forschung:"]')) throw new Error('eine zweite Freie Forschung in derselben Runde');
+  if (!/Diese Runde schon genutzt/.test($('sheet-body').textContent)) throw new Error('kein Hinweis „diese Runde schon genutzt“');
+  if (zahlAbil()) throw new Error('Zahl bleibt nach der Freien Forschung dieser Runde');
   G('closeSheet')();
   // Rückschau: eine Technologie des Mittelalters erforschen – die Wahl steht unter „Fähigkeiten"
   const S2 = griechenSpiel('rueckschau'), p2 = G('P')(S2);
@@ -4033,7 +4038,7 @@ step('v90: Zugfolge nach Plätzen – Plättchenkarte zu dritt mit zweimal Russl
     const st = G('placeState'), seat = G('placeSeatNow')();
     const rcs = G('slotRC')(st.plan, seat.slot), ok = G('placeOptions')(st.plan, seat, st.o);
     const i = ok.indexOf(true);
-    G('plTap')(rcs[i][0], rcs[i][1]); G('placeConfirm')(); G('placeConfirm')();
+    G('plTap')(rcs[i][0], rcs[i][1]); G('placeConfirm')();
   }
   const S = G('S');
   const reihe = S.players.map(p => p.civ + '/' + p.slot).join(' ');
@@ -4047,7 +4052,7 @@ step('v90: Zugfolge nach Plätzen – Plättchenkarte zu dritt mit zweimal Russl
 });
 
 step('Duell auf den festen Karten: zwei Hauptstädte auf ihren Sternen, Duellschwellen', () => {
-  for (const karte of ['0', '1']) {
+  for (const karte of ['0']) {
     $('m-new').onclick();
     G('setupSetMode')('duell');
     $('setup-map').value = karte; $('setup-map').onchange();
@@ -4137,7 +4142,7 @@ step('Meine Karten: im Aufbau wählbar (vier Reiche und Duell), das Spiel läuft
 });
 step('Meine Karten: die alte Einzelkarte wird übernommen', () => {
   window.localStorage.removeItem('hochciv.maps');
-  const alt = JSON.parse(JSON.stringify(G('MAP_GROSS')));
+  const alt = JSON.parse(JSON.stringify(G('MAP_ORIGINAL')));
   window.localStorage.setItem('hochciv.map', JSON.stringify(alt));
   G('loadMyMaps')();
   const l = G('myMaps');
@@ -4301,8 +4306,6 @@ step('Reiche: die Karte bestimmt, wie viele (feste Karten 2–4, Plättchenkarte
   const zahlen = () => [...$('setup-count').options].map(o => +o.value).join();
   $('setup-map').value = '0'; $('setup-map').onchange();
   if (zahlen() !== '2,3,4') throw new Error('Originalkarte: ' + zahlen());
-  $('setup-map').value = '1'; $('setup-map').onchange();
-  if (zahlen() !== '2,3,4') throw new Error('Große Karte: ' + zahlen());
   $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
   if (zahlen() !== '2,3,4,5,6,7,8') throw new Error('Plättchenkarte: ' + zahlen());
   $('setup-count').value = '8'; $('setup-count').onchange();
@@ -5251,7 +5254,7 @@ step('v97: Siedlertrecks wachsen zum Preis der kleineren Stadt, Fruchtbarkeit zw
     G('rulesModal')();
     const txt = $('ov-body').textContent.replace(/\s+/g, ' ');
     G('closeModal')();
-    for (const t of ['Techs cost 1/1/2/2/5 less', 'Twice per game, research one available technology of any age for free (not the Singularity)',
+    for (const t of ['Techs cost 1/1/2/2/5 less', 'Once per round, research one researchable technology of any age for free, the Singularity included',
       'Population growth costs no food; one extra growth per city', 'grow at the price of a city one size smaller',
       'Each of your armies grants +1 power', 'Tech costs −2/−3/−4/−5/−10 (by age)'])
       if (!txt.includes(t)) throw new Error('fehlt auf Englisch: ' + t);
@@ -5259,6 +5262,86 @@ step('v97: Siedlertrecks wachsen zum Preis der kleineren Stadt, Fruchtbarkeit zw
     if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.slice(0, 3).join(' | '));
   } finally { G('switchLang')('de'); }
   console.log(`       Siedlertrecks 2 → 3: ${vorher} · Fruchtbarkeit 1 → 2 → 3: ${erst}, ${dann}, dann gesperrt · Regelbogen englisch`);
+});
+
+/* --- v99 (Anweisungen des Autors): experimenteller Plättchenmodus, Welt in Zugfolge und in der
+   Legephase, kein Schritt „Spiel beginnen“ mehr, Flüsse und Inseln neu gezeichnet. */
+step('v99: Aufbau – keine große Karte, „Zufällig“ als Startspieler, Häkchen für Sechsecke nur bei vier Reichen', () => {
+  G('show')('screen-menu');
+  $('m-new').onclick();
+  G('setupSetMode')('vier');
+  G('__set')('startWanted', null); G('refreshStart')();
+  const karten = [...$('setup-map').options].map(o => o.value);
+  if (karten.includes('1') || [...$('setup-map').options].some(o => /Große|Large/.test(o.text)))
+    throw new Error('die große Karte steht noch im Menü: ' + karten.join(','));
+  if ($('setup-start').value !== 'zufall') throw new Error('Startspieler nicht „Zufällig“: ' + $('setup-start').value);
+  $('setup-map').value = '0'; $('setup-map').onchange();
+  if (!$('setup-hex-row').hidden) throw new Error('Häkchen auf der festen Karte sichtbar');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  if ($('setup-hex-row').hidden) throw new Error('kein Häkchen „Experimenteller Plättchenmodus“ auf der Plättchenkarte');
+  $('setup-hex').checked = true; $('setup-hex').onchange();
+  if ($('setup-hex-hint').hidden || !$('setup-tile-hint').hidden) throw new Error('Hinweise passen nicht zum Sechseckmodus');
+  for (const mode of ['drei', 'duell']) {
+    G('setupSetMode')(mode);
+    if (!$('setup-hex-row').hidden) throw new Error('Häkchen sichtbar bei ' + mode);
+  }
+  G('setupSetMode')('vier');
+  if (!$('setup-hex').checked || $('setup-hex-row').hidden) throw new Error('die Wahl ging beim Moduswechsel verloren');
+  console.log('       Karten: ' + [...$('setup-map').options].map(o => o.text).join(' · ') + ' · Startspieler Zufällig · Häkchen nur bei vier Reichen');
+});
+step('v99: Sechsecke legen – sechs Lagen, Welt in Zugfolge, danach gleich das Spiel', () => {
+  // Platz 1 Mensch, die übrigen KI; Startspieler bleibt „Zufällig“
+  [...$('setup-list').children].forEach((x, i) => x.querySelector(i ? '[data-kind="ki"]' : '[data-kind="human"]').onclick());
+  $('setup-go').onclick();
+  const st = G('placeState');
+  if (!st || !st.plan.hex) throw new Error('kein Sechseckplan');
+  if (st.plan.tiles.length !== 10 || st.queue.length !== 1) throw new Error('nicht zehn Plättchen / ein Mensch');
+  if (st.plan.seats.filter(x => x.cell != null).length !== 3) throw new Error('die KI hat nicht schon gelegt');
+  if (!/Lage 1 von 6/.test($('pl-note').textContent)) throw new Error('Lagenanzeige: ' + $('pl-note').textContent.slice(0, 80));
+  const lagen = new Set();
+  for (let i = 0; i < 6; i++) { lagen.add(G('tileMap')(st.plan, { show: [G('placeSeatNow')().slot], seat: G('placeSeatNow')(), o: st.o }).rows.join('')); G('placeRotate')(); }
+  if (st.o !== 0) throw new Error('nach sechs Drehungen nicht wieder Lage 1');
+  if (lagen.size < 2) throw new Error('Drehen ändert das Plättchen nicht');
+  // Welt in der Legephase: die Reiche in Zugfolge, der legende Platz hervorgehoben
+  $('pl-world').onclick();
+  const namen = [...$('ov-body').querySelectorAll('.civ-n')].map(e => e.textContent.trim());
+  const { ordered, startIdx } = G('seatingOrder')(st.cfg);
+  const soll = ordered.slice(startIdx).concat(ordered.slice(0, startIdx)).map((p, i) => `${i + 1}. ${G('civOf')(p).n}`);
+  if (namen.join('|') !== soll.join('|')) throw new Error('Welt in der Legephase: ' + namen.join(', ') + ' statt ' + soll.join(', '));
+  if ($('ov-body').querySelectorAll('.civ-row.self').length !== 1) throw new Error('der legende Platz ist nicht hervorgehoben');
+  G('closeModal')();
+  // Hauptstadt setzen, Fertig – und schon läuft die Partie
+  const rcs = legeHelfer.rcs(), frei = legeHelfer.frei();
+  G('plTap')(rcs[frei.indexOf(true)][0], rcs[frei.indexOf(true)][1]);
+  G('placeConfirm')();
+  const S = G('S');
+  if (G('placeState') !== null || !$('screen-game').classList.contains('show')) throw new Error('das Spiel beginnt nicht gleich');
+  if (S.map.tiles !== 'hex10' || S.cities.length !== 4) throw new Error('keine Sechseckpartie mit vier Hauptstädten');
+  if (!S.recipe.hexTiles) throw new Error('„Nochmal spielen“ wüsste nichts vom Sechseckmodus');
+  // dieselbe Reihenfolge im Spiel
+  G('worldModal')();
+  const imSpiel = [...$('ov-body').querySelectorAll('.civ-n')].map(e => e.textContent.trim().split(' · ')[0]);
+  if (imSpiel.join('|') !== soll.join('|')) throw new Error('Welt im Spiel: ' + imSpiel.join(', '));
+  G('closeModal')();
+  console.log('       ' + S.map.name + ' · Zugfolge ' + imSpiel.join(', '));
+});
+step('v99: Flüsse als Wasserlauf, Inseln mit Wasser rundum', () => {
+  // die Originalkarte hat Flüsse und Inseln – gezeichnet in ein eigenes SVG, wie im Editor
+  const svg = window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const karte = G('MAP_ORIGINAL');
+  G('drawMap')(svg, karte, {});
+  const rows = karte.rows;
+  let fluesse = 0, inseln = 0;
+  rows.forEach(r => { for (const t of r) { if (t === 'F') fluesse++; if (t === 'I') inseln++; } });
+  const laeufe = svg.querySelectorAll('path[stroke="#3576b0"]').length;
+  if (laeufe !== fluesse) throw new Error(`${laeufe} Wasserläufe für ${fluesse} Flussfelder`);
+  const polys = [...svg.querySelectorAll('polygon[data-r]')];
+  const farbe = (t) => polys.filter(p => rows[+p.dataset.r][+p.dataset.c] === t).map(p => p.getAttribute('fill'));
+  if (!farbe('I').every(f => f === G('TERRAIN').M.color)) throw new Error('Inselfelder nicht in Meerfarbe');
+  if (farbe('F').some(f => f === G('TERRAIN').M.color)) throw new Error('Flussfelder in Meerfarbe');
+  const strand = svg.querySelectorAll(`path[fill="${G('TERRAIN').I.color}"]`).length;
+  if (strand !== inseln) throw new Error(`${strand} Eilande für ${inseln} Inseln`);
+  console.log(`       ${fluesse} Flussfelder mit Wasserlauf, ${inseln} Inseln mit Strand im Wasser`);
 });
 
 step('kein abgefangener Fehler im Zugablauf', () => {

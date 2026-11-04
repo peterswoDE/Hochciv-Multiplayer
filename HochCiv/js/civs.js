@@ -8,7 +8,7 @@ const CIVS = [
     ability: "Techs 1/1/2/2/5 günstiger (je Zeitalter)",
     abilities: [
       { k: "basis", n: "Günstige Forschung", e: "Techs 1/1/2/2/5 günstiger (je Zeitalter)" },
-      { k: "gratistech", n: "Freie Forschung", e: "2× pro Partie eine verfügbare Technologie beliebigen Zeitalters umsonst erforschen (nicht die Singularität)" },
+      { k: "gratistech", n: "Freie Forschung", e: "1× pro Runde eine erforschbare Technologie beliebigen Zeitalters umsonst erforschen, auch die Singularität" },
       { k: "rueckschau", n: "Rückschau", e: "Bei jeder erforschten Technologie zusätzlich eine beliebige (auch nicht freigeschaltete) eines früheren Zeitalters umsonst" },
     ],
   },
@@ -17,7 +17,7 @@ const CIVS = [
     ability: "Münzen = Nahrung für alle Belange (1:1 in beide Richtungen)",
     abilities: [
       { k: "basis", n: "Handelsreich", e: "Münzen = Nahrung für alle Belange (1:1 in beide Richtungen)" },
-      { k: "gruenden", n: "Kolonisten", e: "Städte gründen kostet keine Basiskosten (nur Distanzkosten; mit Kartografie die günstigere der beiden). Bevölkerungswachstum kostet doppelt" },
+      { k: "gruenden", n: "Kolonisten", e: "Städte gründen kostet nur die Hälfte (aufgerundet). Bevölkerungswachstum kostet doppelt" },
       { k: "kuestenstaedte", n: "Seemacht", e: "Jede Stadt, die an Meer angrenzt, bringt +1 Wissenschaft, Nahrung und Münzen" },
     ],
   },

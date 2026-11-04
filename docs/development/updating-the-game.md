@@ -49,6 +49,11 @@ Running Rundenspiele are not affected by a new version only if their version is 
 | v93 | #48 | v88, v87, v83 (v91 dropped – no running games) |
 | v96 | #51 | v93, v88, v83 (v87 dropped – no running games) |
 | v98 | #59 | v96, v93, v83 (v88 dropped – no running games) |
+| v100 | – | v98, v96, v93, v83 |
+
+## Removed maps
+
+v99 removed the big map from the game, so `mapKey: 'gross'` is no longer offered. Rundenspiele on kept versions still play it, and a lobby that was set to it falls back to the original map. The map lives on in the map browser as a published map without an owner, code `GRKART` (`maps/builtin.js`).
 
 ## Runtime patches to check after an update
 

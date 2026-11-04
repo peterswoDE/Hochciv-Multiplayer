@@ -50,6 +50,7 @@ Tests create their own test accounts and delete them afterwards.
 | `push/push.test.js` | push notifications | override file with an FCM stub (see header) |
 | `resign/resign.test.js` | resigning: when it ends the game, a ranked live duel (MMR, match record), a live game with KI, Rundenspiele | default |
 | `ready/ready.test.js` | lobby ready check: status column, the count on the start button, settings clear the ticks, the host's question, English | default |
+| `placement/world.test.js` | the "Welt" button while start tiles are placed in a live game | default |
 | `rematch/rematch.test.js` | rematch of a live game | default |
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin section | default |
@@ -79,7 +80,7 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 
 | Change | Run |
 |---|---|
-| new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
+| new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `placement`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
 | `client/mobile/` | `mobile`, `maps` (editor painting) |
 | custom maps, map browser, editor | `maps`, `i18n` |
 | new or changed texts | `i18n` |

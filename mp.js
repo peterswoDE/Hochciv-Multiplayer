@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v96', 'v93', 'v83'];
+const OLD_VERSIONS = ['v98', 'v96', 'v93', 'v83'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -571,6 +571,12 @@ const MP = {
                 Math.random = () => (data.seed / (Math.pow(2, 31)));
                 try {
                     window.startPlacement(data.cfg);
+                    // the world view shows everybody as they are – as bots they would have no ability
+                    if ($('pl-world')) $('pl-world').onclick = () => {
+                        const disguised = placeState.cfg.players;
+                        placeState.cfg.players = MP.players;
+                        try { placeWorldView(); } finally { placeState.cfg.players = disguised; }
+                    };
                 } finally {
                     Math.random = origRandom;
                 }
@@ -1085,7 +1091,6 @@ const MP = {
               <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
                   <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>${TX('Originalkarte (12 × 18)')}</option>
-                  <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>${TX('Große Karte (15 × 24)')}</option>
                   <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
                   ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>${TX('Marathon (24 × 36)')}</option>` : ''}
                   ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>${TX('Eigene Karte')}</option>` : ''}
@@ -1267,7 +1272,7 @@ const MP = {
     FILTER_KEYS: ['kind', 'map', 'empires', 'ki', 'level', 'civs', 'events', 'wonders', 'ranked', 'turn', 'bots'],
 
     filterDefs: function () {
-        const maps = [['0', TX('Originalkarte')], ['gross', TX('Große Karte')], ['plaettchen', TX('Plättchenkarte')]]
+        const maps = [['0', TX('Originalkarte')], ['plaettchen', TX('Plättchenkarte')]]
             .concat(typeof marathonMap === 'function' ? [['marathon', TX('Marathon')]] : [])
             .concat(typeof checkCustomMap === 'function' ? [['eigene', TX('Eigene Karte')]] : []);
         return {
@@ -2505,7 +2510,7 @@ const ASYNC = {
         modal(TX('Neues Rundenspiel'), `
           <div class="mpa-form" onchange="ASYNC.readForm(true)">
             <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
-              ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}${opt('gross', f.mapKey, TX('Große Karte (15 × 24)'))}
+              ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}
               ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
               ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36, 4 Reiche)')) : ''}
               ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
@@ -2906,13 +2911,14 @@ const ASYNC = {
         closeModal();
         this.placing = true;
         placeState = {
-            cfg: { players: pl.players, wonders: pl.wonders }, plan: pl.plan, rnd: mapRng(1),
+            cfg: { players: pl.players, wonders: pl.wonders, events: pl.events, startPlayer: pl.startPlayer }, plan: pl.plan, rnd: mapRng(1),
             setup: pl.setup, queue: [seat], at: 0, o: 0, cell: null, done: false,
         };
         show('screen-place');
         placeStep();
         // "Fertig" is bound to placeConfirm at boot – route it to the server while placing
         $('pl-ok').onclick = () => (ASYNC.placing && MP.asyncId ? ASYNC.confirmPlacement() : placeConfirm());
+        if ($('pl-world')) $('pl-world').onclick = placeWorldView;
     },
 
     confirmPlacement: function () {
@@ -3099,7 +3105,7 @@ window.addEventListener('DOMContentLoaded', () => {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
         } else if (OLD_VERSIONS.includes(APP_VERSION_HERE)) {
-            location.replace('/');           // /v96/, /v93/, /v83/ only open Rundenspiele and replays of that version
+            location.replace('/');           // /v98/, /v96/, /v93/, /v83/ only open Rundenspiele and replays of that version
         }
     });
 

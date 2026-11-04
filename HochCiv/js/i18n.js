@@ -38,7 +38,7 @@ const DATA_EN = {
     hard: 'Hard (an event every round)',
     easy: 'Light (roughly every other round)',
   },
-  maps: ['Original map (12 × 18)', 'Large map (15 × 24)'],
+  maps: ['Original map (12 × 18)'],
   shapes: {
     hex6: 'Tile map (6 triangles)', tri9: 'Tile map (9 triangles)',
     strip10: 'Tile map (10 triangles)', strip14: 'Tile map (14 triangles)',
@@ -53,12 +53,12 @@ const DATA_EN = {
   abil: {
     griechenland: {
       basis: ['Cheap research', 'Techs cost 1/1/2/2/5 less (by age)'],
-      gratistech: ['Free research', 'Twice per game, research one available technology of any age for free (not the Singularity)'],
+      gratistech: ['Free research', 'Once per round, research one researchable technology of any age for free, the Singularity included'],
       rueckschau: ['Hindsight', 'With every technology researched, also get one of an earlier age for free (even a locked one)'],
     },
     england: {
       basis: ['Trading empire', 'Coins = food for all purposes (1:1 both ways)'],
-      gruenden: ['Colonists', 'Founding cities costs no base cost (distance cost only; with Cartography whichever of the two is cheaper). Population growth costs double'],
+      gruenden: ['Colonists', 'Founding cities costs only half (rounded up). Population growth costs double'],
       kuestenstaedte: ['Sea power', 'Every city adjacent to sea yields +1 science, food and coins'],
     },
     russland: {
@@ -190,7 +190,7 @@ const DATA_EN = {
     'Researching free technologies immediately with Greece\u2019s base ability is not always right. With Philosophy, researching later can be valuable too.',
     'Greece\u2019s Hindsight starts slowly but keeps getting better towards the end.',
     'The key to Greece\u2019s Hindsight is being able to research a technology of the Middle Ages as early as possible.',
-    'Greece\u2019s Free research comes only twice per game. Save it for expensive technologies of the Modern Age instead of spending it early on cheap ones.',
+    'Greece\u2019s Free research works every round on any researchable technology \u2013 the Singularity too, and with it the research victory. Once you reach the Modern Age in all four fields, you need no science for it.',
     'England\u2019s Trading empire allows for great flexibility.',
     'With England\u2019s Sea power, settling by the sea can be better than inland cities \u2013 but it does not have to be.',
     'England\u2019s Colonists are only an advantage while there is still room to settle on the map. Plan accordingly.',
@@ -343,8 +343,8 @@ const UI_EN = {
   'Ereignisstärke': 'Event strength',
   'Mit Weltwundern': 'With wonders',
   'Marathon': 'Marathon',
-  'Marathon: vier Reiche auf einer Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter das Zwei- bis Fünffache, die Singularität 300; Griechenlands Rabatt und die Wissenschaftliche Methode zählen doppelt. Höchstens fünf neue Städte je Zug, und der Militärsieg verlangt zwei eroberte Hauptstädte. Vor dem ersten Zug sehen alle die Karte und die Starttechnologien und draften dann ihre Fähigkeiten: je zwei, in Schlangenreihenfolge.':
-    'Marathon: four empires on a random map four times the size of the original map. Technologies cost two to five times as much depending on the age, the Singularity 300; Greece’s discount and the scientific method count double. At most five new cities per turn, and a military victory takes two captured capitals. Before the first turn everyone sees the map and the starting technologies and then drafts their abilities: two each, in snake order.',
+  'Marathon: vier Reiche auf einer Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter das Zwei- bis Fünffache, die Singularität 300; Griechenlands Rabatt und die Wissenschaftliche Methode zählen doppelt. Der Militärsieg verlangt zwei eroberte Hauptstädte. Vor dem ersten Zug sehen alle die Karte und die Starttechnologien und draften dann ihre Fähigkeiten: je zwei, in Schlangenreihenfolge.':
+    'Marathon: four empires on a random map four times the size of the original map. Technologies cost two to five times as much depending on the age, the Singularity 300; Greece’s discount and the scientific method count double. A military victory takes two captured capitals. Before the first turn everyone sees the map and the starting technologies and then drafts their abilities: two each, in snake order.',
   'Fähigkeiten werden vor dem ersten Zug gedraftet – je zwei, auch fremde.': 'Abilities are drafted before the first turn – two each, from any civilisation.',
   'Marathon · Fähigkeiten draften': 'Marathon · draft abilities',
   'Marathonkarte (%s × %s)': 'Marathon map (%s × %s)',
@@ -361,9 +361,8 @@ const UI_EN = {
   'Starttechnologien: %s': 'Starting technologies: %s',
   '%s · Starttechnologien': '%s · starting technologies',
   'Ausgewürfelt vor dem Draft – im Spiel steht genau das hier. Kosten ohne Fähigkeiten.': 'Rolled before the draft – this is exactly what the game will have. Costs without abilities.',
-  'Marathon: Technologien kosten je Zeitalter das Zwei-, Drei-, Vier- und Fünffache, die Singularität %s – die Kosten hier sind schon umgerechnet. Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Höchstens %s neue Städte je Zug. Militärsieg erst mit %s eroberten Hauptstädten; eine eroberte Hauptstadt ist danach eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt weiter.':
-    'Marathon: technologies cost two, three, four and five times as much depending on the age, the Singularity %s – the costs shown here already include that. Greece’s cheap research and the scientific method take off twice as much. At most %s new cities per turn. A military victory takes %s captured capitals; a captured capital becomes an ordinary city, and its former empire plays on without a capital.',
-  'Höchstens %s neue Städte je Zug (Marathon).': 'At most %s new cities per turn (marathon).',
+  'Marathon: Technologien kosten je Zeitalter das Zwei-, Drei-, Vier- und Fünffache, die Singularität %s – die Kosten hier sind schon umgerechnet. Griechenlands Günstige Forschung und die Wissenschaftliche Methode ziehen doppelt ab. Militärsieg erst mit %s eroberten Hauptstädten; eine eroberte Hauptstadt ist danach eine gewöhnliche Stadt, ihr altes Reich spielt ohne Hauptstadt weiter.':
+    'Marathon: technologies cost two, three, four and five times as much depending on the age, the Singularity %s – the costs shown here already include that. Greece’s cheap research and the scientific method take off twice as much. A military victory takes %s captured capitals; a captured capital becomes an ordinary city, and its former empire plays on without a capital.',
   'Techs %s günstiger (je Zeitalter, im Marathon doppelt)': 'Techs %s cheaper (by age, doubled in marathon)',
   'Techkosten %s (je Zeitalter, im Marathon doppelt)': 'Tech costs %s (by age, doubled in marathon)',
   'Techkosten %s (je Zeitalter)': 'Tech costs %s (by age)',
@@ -383,6 +382,9 @@ const UI_EN = {
   'Spiel beginnen': 'Start game',
   'Plättchenkarte: die offenen Dreiecke liegen gleich, das eigene legt jede*r selbst – Lage wählen, Hauptstadt setzen, verdeckt.':
     'Tile map: the open triangles are placed right away, your own one you place yourself – choose an orientation, set the capital, face down.',
+  'Experimenteller Plättchenmodus': 'Experimental tile mode',
+  'Experimentell: zehn sechseckige Plättchen zu je 19 Feldern, schräg in Reihen zu 3, 4 und 3 gelegt. Die Startplättchen liegen an den Enden der beiden Dreierreihen; das eigene legt jede*r selbst – Lage wählen (sechs Drehungen), Hauptstadt setzen, verdeckt.':
+    'Experimental: ten hexagonal tiles of 19 hexes each, laid at a slant in rows of 3, 4 and 3. The start tiles sit at the ends of the two rows of three; everyone places their own – choose a rotation (six), set the capital, face down.',
   'Hier darf jeder Platz frei wählen, auch zweimal dieselbe Zivilisation (mit gleicher oder anderer Fähigkeit). Doppelte bekommen Ziffern und eine eigene Farbe. Auf den festen Karten sitzt jede Zivilisation genau einmal.':
     'Here every seat may choose freely, including the same civilisation twice (with the same or a different ability). Duplicates get numerals and a colour of their own. On the fixed maps each civilisation appears exactly once.',
   'Zufall': 'Random',
@@ -661,8 +663,6 @@ const UI_EN = {
   '<p class="sub">%s <b>%s</b> ist dran. Das eigene Startplättchen sehen die anderen erst nach dem Aufdecken – jetzt also Gerät übergeben.</p> <button class="btn primary wide" id="pl-gate">Plättchen ansehen</button>':
     '<p class="sub">%s <b>%s</b> is up. The others only see your starting tile after the reveal – so hand the device over now.</p> <button class="btn primary wide" id="pl-gate">Look at the tile</button>',
   'Alle Plättchen liegen schon.': 'All tiles are already placed.',
-  'Alle Plättchen liegen offen. %s Reiche, %s Dreiecke.':
-    'All tiles are face up. %s empires, %s triangles.',
   'Andere Reiche':
     'Other empires',
   'Angriffswert %s':
@@ -952,8 +952,8 @@ const UI_EN = {
     'Cost %s coins · this city has %s/2 wonders · available: %s coins',
   'Kostenlos wachsen':
     'Grow for free',
-  'Lage %s von 3':
-    'Orientation %s of 3',
+  'Lage %s von %s':
+    'Orientation %s of %s',
   'Macht kaufen':
     'Buy power',
   'Menü':
@@ -1373,7 +1373,9 @@ const UI_EN = {
   'Nein – alles erklären':
     'No – explain everything',
 
-  'Die Reiche': 'The empires',
+  'Die Reiche in Zugfolge': 'The empires in turn order',
+  'Mit Ereignissen – das erste fällt zu Beginn der ersten Runde.': 'With events – the first one comes at the start of round one.',
+  'Weltwunder im Stapel, Stufe %s': 'World wonders in the stack, level %s',
   'Bots haben keine Fähigkeit': 'Bots have no ability',
   'ausgeschieden': 'eliminated',
 
@@ -1418,8 +1420,7 @@ const UI_EN = {
   'Fähigkeiten': 'Abilities',
   'Deine Fähigkeit': 'Your ability',
   'Deine Fähigkeiten': 'Your abilities',
-  'Noch %s von %s kostenlosen Forschungen in dieser Partie.': 'Free research left this game: %s of %s.',
-  'Die kostenlosen Forschungen dieser Partie sind verbraucht.': 'This game\u2019s free research is used up.',
+  'Diese Runde schon genutzt.': 'Already used this round.',
   'Gerade ist keine passende Technologie verfügbar.': 'No suitable technology is available right now.',
   'Gerade nichts offen. Jede Technologie ab dem Mittelalter, die du erforschst, bringt hier eine kostenlose aus einem früheren Zeitalter desselben Feldes – nur im selben Zug.':
     'Nothing open right now. Every technology from the Middle Ages on that you research brings a free one here from an earlier age of the same field – in the same turn only.',
@@ -1608,8 +1609,10 @@ const UI_EN = {
   'Gründe eine Stadt dort, wo sie dir am meisten 🌾 Nahrung bringt.': 'Found a city where it brings you the most 🌾 food.',
   'Tippe unten auf <b>Stadt gründen</b>: Jedes mögliche Feld zeigt dann seinen Preis. Tippst du ein Feld an, steht im Blatt sein Ertrag beim Siedeln. Gesucht ist das golden umrandete Feld.':
     'Tap <b>Found city</b> at the bottom: every possible tile then shows its price. Tap a tile and the sheet shows its yield when settling. You are looking for the tile with the golden outline.',
-  'Eine Stadt kostet 🌾: die zweite <b>1</b>, die dritte 3, die vierte 6 … – plus <b>1 je Feld</b> Weg von der Hauptstadt.':
-    'A city costs 🌾: the second <b>1</b>, the third 3, the fourth 6 … – plus <b>1 per tile</b> of path from the capital.',
+  'Eine Stadt kostet 🌾 Nahrung: Basiskosten plus <b>1 je Feld</b> Weg von der Hauptstadt. Die Basiskosten steigen <b>1/3/6/10/…</b> für die 1./2./3./4./… neue Stadt – die Hauptstadt zählt nicht mit.':
+    'A city costs 🌾 food: the base cost plus <b>1 per tile</b> of path from your capital. The base cost rises <b>1/3/6/10/…</b> for the 1st/2nd/3rd/4th/… new city – your capital does not count.',
+  'Die nächste neue Stadt kostet schon <b>3</b> Basiskosten plus Weg.':
+    'The next new city already costs <b>3</b> base cost plus path.',
   'Was am Zugende übrig ist, verfällt – nur ⚔︎ Macht bleibt.':
     'Whatever is left at the end of the turn is lost – only ⚔︎ power stays.',
   'Lass deine Hauptstadt wachsen.': 'Let your capital grow.',

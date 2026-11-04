@@ -919,8 +919,7 @@ function kiCandidates(S, pi, K, memo, billig) {
     else if (canFeed(p) && paidGrowthAvailable(S, pi, city) && !growBlockReason(S, pi, city))
       add(() => T('Stadt wächst'), X => { kiFeedFor(X, pi, growPrice(X, pi, kiCity(X, id)).food); return growCity(X, pi, kiCity(X, id), 'paid'); }, 'grow:' + id);
   }
-  // --- Städte gründen: die besten erreichbaren Plätze (Marathon: höchstens fünf je Zug)
-  if (!(S.marathon && foundedThisTurn(S, pi) >= MARATHON_MAX_FOUNDS))
+  // --- Städte gründen: die besten erreichbaren Plätze
   for (const s of kiSites(S, pi, K, memo).slice(0, 6)) {
     add(() => T('gründet eine Stadt auf %s/%s', s.r, s.c), X => {
       if (canFeed(X.players[pi])) kiFeedFor(X, pi, foundCost(X, pi, s.r, s.c));
@@ -952,18 +951,12 @@ function kiCandidates(S, pi, K, memo, billig) {
   if (!billig) for (const m of kiMilitaryCandidates(S, pi, K, memo)) out.push(m);
   return out;
 }
-/* Freie Forschung (seit v97 zweimal je Partie, aus jedem Zeitalter): Was jetzt verbraucht wird,
-   fehlt später, wenn die Technologien teurer sind – das sieht die Bewertung nicht (übrige
-   Ressourcen zählen in kiValue nicht, eine aufgesparte Freie Forschung ebenso wenig). Bis v96 galt
-   sie je Runde und war jede Runde zu nutzen. Jetzt erwägt die KI sie nur für Technologien der
-   Moderne – die teuersten, und je Feld eine verlangt die Singularität – oder gegen Ende: Bleiben
-   nicht mehr Runden (K.R), als Freie Forschungen offen sind, für alles, was geht. Abgeleitet;
-   gemessen ist nur, wie sie sie dann nutzt (ANNAHMEN.md, v97: in 60 Duellen 101 von 109 Nutzungen
-   in der Moderne, in 4 Partien keine). */
+/* Freie Forschung: seit v99 wieder einmal je Runde (wie bis v96), jetzt alles Erforschbare samt
+   Singularität. Was nicht genutzt wird, verfällt mit der Runde – also erwägt die KI jede Runde
+   jede Möglichkeit, und kiValue entscheidet wie bei bezahlter Forschung; die Singularität ist
+   dort der Sieg. v97–v98 (zweimal je Partie) hob sie sie für die Moderne auf. */
 function kiFreeTechChoices(S, pi, K) {
-  const opts = freeTechOptions(S, pi);
-  if (!opts.length || K.R <= freeTechsLeft(S.players[pi])) return opts;
-  return opts.filter(t => t.age >= 3);
+  return freeTechOptions(S, pi);
 }
 /* Mit Massenmedien (1 Münze ernährt 3) oder Gentechnik (1 Wissenschaft ernährt 1) Nahrung
    freimachen, bevor Nahrung gebraucht wird. Massenmedien ist fast immer der bessere Kurs
@@ -1030,10 +1023,7 @@ function kiSitesAll(S, pi, K) {
   for (const [k, dd] of dist) {
     const [r, c] = unkey(k);
     if (!kiSiteOk(S, pi, r, c)) continue;
-    // Kosten wie foundCost
-    const ohneStadt = isAbil(p, 'gruenden'), ohneWeg = has(p, 'kartografie');
-    let cost = ohneStadt && ohneWeg ? Math.min(base, dd) : ohneStadt ? dd : ohneWeg ? base : base + dd;
-    cost = Math.max(1, cost);
+    const cost = foundCostOf(p, base, dd);          // dieselbe Rechnung wie foundCost
     const g = settleGain(S, pi, r, c, vorher);
     // Nutzen: Ertrag über den Horizont
     const v = K.H * (K.w.sci * g.sci + K.w.food * Math.max(g.food, -1) + K.w.coins * g.coins);
@@ -1908,7 +1898,7 @@ function kiUsePicks(S, pi, K) {
    dem Platz zum Siedeln: die besten Gründungsplätze in Reichweite auf der sichtbaren Karte. */
 function kiPlaceSeat(plan, seat, player, setup) {
   const best = [];
-  for (let o = 0; o < 3; o++) {
+  for (let o = 0; o < planRotations(plan); o++) {
     const ok = placeOptions(plan, seat, o);
     ok.forEach((v, cell) => {
       if (!v) return;

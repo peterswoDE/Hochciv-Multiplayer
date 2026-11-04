@@ -265,10 +265,21 @@ function draftPick(D, pi, id) {
    8,5 → 4,5 (zweimal je Partie statt jede Runde – der frühe, sich aufschaukelnde Vorsprung fällt
    weg), Günstige Forschung 5 → 4 (im Marathon 2/2/4/4/10 statt 2/4/6/8/10), Kriegerkultur
    3,5 → 2,5 (+1 statt +2 Macht), Siedlertrecks 3 → 5,5 (jedes Wachstum eine Stufe billiger),
-   Fruchtbarkeit 5 → 7 (dazu ein Wachstum mehr je Stadt und Runde). */
+   Fruchtbarkeit 5 → 7 (dazu ein Wachstum mehr je Stadt und Runde).
+   Seit v99 (Anweisung des Autors) gilt die Freie Forschung wieder jede Runde – jetzt ohne
+   Grenze beim Zeitalter (im Marathon bis v96 nur bis ins Mittelalter, gemessen 8,5) und samt
+   Singularität, also dem Forschungssieg ohne die 300 Wissenschaft: geschätzt 12, knapp hinter
+   den Kolonisten. Ebenfalls nicht gemessen.
+   Seit v100 (Anweisung des Autors) halbiert Kolonisten die Gründungskosten (aufgerundet), statt
+   die Stadtkosten zu streichen, und die Grenze von fünf Gründungen je Zug ist weg. Gemessen
+   waren 14,5 für die alte Fassung, bei der jede weitere Stadt nur den Weg kostete (Reiche mit
+   Kolonisten hatten bis 58 Städte); jetzt steigen die Stadtkosten weiter mit jeder Stadt, nur
+   halb so schnell, und das doppelte Wachstum bleibt. GESCHÄTZT 7: etwas über dem Mittel, weil
+   sich mehr Städte im langen Marathon aufsummieren. Nicht gemessen; die Freie Forschung (12)
+   steht damit vorn. */
 const KI_DRAFT_BASE = {
-  'england:gruenden': 14.5, 'england:basis': 5.5, 'england:kuestenstaedte': 2,
-  'griechenland:gratistech': 4.5, 'griechenland:basis': 4, 'griechenland:rueckschau': 7,
+  'england:gruenden': 7, 'england:basis': 5.5, 'england:kuestenstaedte': 2,
+  'griechenland:gratistech': 12, 'griechenland:basis': 4, 'griechenland:rueckschau': 7,
   'wikinger:armeemacht': 2.5, 'wikinger:basis': 4, 'wikinger:kampfertrag': 5,
   'russland:siedler': 5.5, 'russland:wachstum': 7, 'russland:basis': 0,
 };

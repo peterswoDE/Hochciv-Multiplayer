@@ -32,6 +32,8 @@
    Startwerten reproduzierbar: gleiche Befehlszeile, gleiche Zahlen.
    alterbaum (v82): die Partien laufen im alten Techtree (bis v81 Standard, heute nur noch
    im Tutorial) – zum Vergleich mit Messungen von vor v82.
+   sechsecke (v99): bei vier Reichen der experimentelle Plättchenmodus (zehn Sechsecke statt
+   der Dreiecke), etwa `node tools_ki.js selbst 100 reiche=4 sechsecke`.
    reihenfolge, kampflaenge (v90): Messhaken zur Kampfphase, siehe unten.          */
 const fs = require('fs'), vm = require('vm');
 for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js',
@@ -119,7 +121,7 @@ function partie(players, seed, start, vorbereiten) {
     seed, players, duel: players.length === 2, events: flag('events'), eventMode: 'hard',
     wonders: flag('wonders'), startPlayer: start, oldTree: flag('alterbaum'),
   };
-  const plan = tilePlan(players.map(p => p.civ), seed);
+  const plan = tilePlan(players.map(p => p.civ), seed, { hex: flag('sechsecke') });
   const setup = rollSetup(Object.assign({}, cfg));
   const rnd = mapRng(seed + 12345);
   plan.seats.forEach(seat => {

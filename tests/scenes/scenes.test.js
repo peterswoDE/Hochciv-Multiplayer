@@ -68,7 +68,7 @@ function unit() {
     const canon = v => Array.isArray(v) ? v.map(canon) : v && typeof v === 'object'
         ? Object.keys(v).sort().reduce((o, k) => (o[k] = canon(v[k]), o), {}) : v;
     const game = () => engine.createGame({
-        gameConfig: { mapKey: 'gross', playerCount: 4, seed: 5, wonders: true },
+        gameConfig: { mapKey: '0', playerCount: 4, seed: 5, wonders: true },
         players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'ki', kiLevel: 'schwer' },
             { civ: 'russland', kind: 'ki', kiLevel: 'schwer' }, { civ: 'wikinger', kind: 'ki', kiLevel: 'schwer' }].map(p => ({ ability: 'basis', ...p })),
     });
@@ -180,7 +180,7 @@ async function live(browser, errors) {
     await b.waitForSelector('#mp-p-civ-1');
     await b.selectOption('#mp-p-civ-1', 'russland');
     await a.waitForFunction(() => MP.players.length === 2 && MP.players[1].civ === 'russland');
-    await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: 'gross', difficulty: 'mittel' }));
+    await a.evaluate(async () => { const big = (await (await fetch('/api/maps/code/GRKART')).json()).map; MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: 'eigene', customMap: big, difficulty: 'mittel' }); });
     await a.waitForFunction(() => MP.gameConfig.playerCount === 3);
     const v = await newPage('V');
     await v.evaluate(([c, p]) => MP.watch(c, p, 'ScnV'), [cred.code, cred.pw]);

@@ -110,7 +110,7 @@ async function attempt(newPage) {
         await b.selectOption('#mp-p-civ-1', 'russland');
         await a.waitForFunction(() => MP.players.length === 2 && MP.players[1].civ === 'russland');
         // the large map with two easy KI empires: a passive A survives long enough for the checks
-        await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 2, turnTime: 60, mapKey: 'gross', difficulty: 'leicht' }));
+        await a.evaluate(async () => { const big = (await (await fetch('/api/maps/code/GRKART')).json()).map; MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 2, turnTime: 60, mapKey: 'eigene', customMap: big, difficulty: 'leicht' }); });
         await a.waitForFunction(() => MP.gameConfig.playerCount === 4);
         await a.evaluate(() => MP.startGame());
         await a.waitForFunction(() => typeof S !== 'undefined' && S && MP.playerIndex != null && document.getElementById('screen-game').classList.contains('show'));

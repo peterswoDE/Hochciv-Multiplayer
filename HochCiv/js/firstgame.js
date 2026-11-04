@@ -483,17 +483,20 @@ const FG_STEPS = [
   },
   {
     id: 'gruenden1', runde: 1, t: 'Eine zweite Stadt',
+    /* Die Kosten stehen seit v99 hier (Anweisung des Autors: deutlicher) – bis v98 erst in der
+       Rückmeldung danach, als „die zweite 1, die dritte 3, die vierte 6 …“. */
     info: () => T('Mehr Städte heißt mehr Felder – Ausbreitung ist der Kern des Spiels.') + ' ' +
       fgJe(T('Nahrung lässt Städte wachsen – und Bevölkerung verteidigt sie.'),
         T('Nahrung lässt Städte wachsen – und auf Bevölkerung kommt es dir an.'),
-        T('Nahrung lässt Städte wachsen – und jede Bevölkerung forscht mit: +1 🔬.')),
+        T('Nahrung lässt Städte wachsen – und jede Bevölkerung forscht mit: +1 🔬.')) + ' ' +
+      T('Eine Stadt kostet 🌾 Nahrung: Basiskosten plus <b>1 je Feld</b> Weg von der Hauptstadt. Die Basiskosten steigen <b>1/3/6/10/…</b> für die 1./2./3./4./… neue Stadt – die Hauptstadt zählt nicht mit.'),
     ziel: () => T('Gründe eine Stadt dort, wo sie dir am meisten 🌾 Nahrung bringt.'),
     tipp: () => T('Tippe unten auf <b>Stadt gründen</b>: Jedes mögliche Feld zeigt dann seinen Preis. Tippst du ein Feld an, steht im Blatt sein Ertrag beim Siedeln. Gesucht ist das golden umrandete Feld.'),
     hl: () => fgBestePlaetze('food').list, leiste: ['#a-found'], knopf: () => ['Hier gründen'],
     fertig: () => citiesOf(S, FG_ICH).length >= 2,
     erlaubt: ['gruenden'],
     darf: a => fgPlatzVeto(a, 'food'),
-    gut: () => T('Eine Stadt kostet 🌾: die zweite <b>1</b>, die dritte 3, die vierte 6 … – plus <b>1 je Feld</b> Weg von der Hauptstadt.'),
+    gut: () => T('Die nächste neue Stadt kostet schon <b>3</b> Basiskosten plus Weg.'),
     loesung: () => { const [r, c] = fgBestePlaetze('food').list[0]; fgTu({ art: 'gruenden', r, c }, () => foundCity(S, FG_ICH, r, c)); },
   },
   {

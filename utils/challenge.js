@@ -20,7 +20,6 @@ const engine = require('../engine-adapter');
 
 const DAY = 86400000;
 const BOARD_SIZE = 20;
-const MAPS = ['0', 'gross'];
 
 /** The ISO week of a date: { id: '2026-W45', startsAt (Monday 00:00 UTC), endsAt }. */
 function weekOf(date) {
@@ -73,7 +72,7 @@ function setupOf(weekId) {
     const levels = (engine.engineConst('KI_LEVELS') || [{ k: 'mittel' }, { k: 'schwer' }]).map(l => l.k);
     return {
         week: weekId,
-        mapKey: MAPS[h[0] % MAPS.length],
+        mapKey: '0',
         civ: civ.k,
         ability: abilities[h[2] % abilities.length].k,
         playerCount: 4,
