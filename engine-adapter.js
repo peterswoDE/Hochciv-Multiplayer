@@ -86,8 +86,6 @@ function makeAdapter(engineDir, label) {
                 try { Scenes.onLog(sandbox, S, e); } catch (err) { console.error('[Scenes] Recording failed:', err); }
             };
             vm.runInContext('if (typeof animSnap === "function" && typeof LOG_HOOK !== "undefined") LOG_HOOK = (S, e) => __sceneHook(S, e);', sandbox);
-            // team mode (utils/teams.js): no combat between teammates
-            try { require('./utils/teams').patchEngine(sandbox); } catch (e) { console.error('[Engine Adapter] Team patch failed:', e); }
 
             console.log(`[Engine Adapter] Loaded Hochciv game engine ${label} from ${dir}`);
             return true;

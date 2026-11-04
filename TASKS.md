@@ -29,7 +29,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
-| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ (next PR) | 🔨 |
+| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | ⬜ |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -511,20 +511,6 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** Play together against others, e.g. 2 against 2.
 
-**Decisions**
-- The game has no alliances; every foreign city next to an army is besieged automatically. So the server adds alliances at runtime (the game files stay unchanged): in an empire's combat phase its teammates' cities and armies count as its own – never attacked, and helping to besiege and flank. The power stays the one from the start of the phase (as the engine does since v94).
-- A team wins together: when an empire wins, every member of its team wins (MMR: winners as usual).
-- Humans only: the KI knows no allies and would march on its partner's cities. As many empires as players (KI 0); two teams A and B, dealt alternately when switched on; players pick their team, the host can move anyone. Each team needs a player.
-- Team chat: 👥 in the chat panel sends to the own team only (spectators don't see it). The player list tags the teams; the power view leaves teammates out.
-- Resigning: when everyone left is in one team, that team wins.
+**Planned:** the host splits the empires into teams in the lobby; a team wins together, and teammates have a team chat. The details depend on what the engine allows without changing the game files (alliances, victory check).
 
-**Implementation**
-- `utils/teams.js` (`patchEngine` – applied to every engine in `engine-adapter.js` –, `attach`, `expandWin`), `S.mpTeams` (team per state index).
-- Live (`sockets/game.js`): `lobby:config { teams }` (KI 0), `lobby:team`, the start check, `attachTeams()` wherever the state is created (start, placement, draft), `expandWin` in `broadcastState` / `checkGameOver`, team messages in `chat:send` and the history. `sessions.js`: `team` per player, `balanceTeams()`, a joiner goes to the smaller team. `utils/resign.js`: one team left wins.
-- `mp.js`: the lobby row and team selects, player-list tags, the power-view filter, "Team A gewinnt!". `client/chat.js`: the team button. Texts in `client/i18n.js`.
-
-**Still to do:** team mode for Rundenspiele.
-
-**Tests:** `tests/teams/teams.test.js`. `chat`, `resign`, `rematch`, `ready`, `i18n`, `spectators` pass. `scenes` fails on its live part on `development` as well (timing; it passed once and failed once there).
-
-**Status:** 🔨 live games on `development`
+**Status:** ⬜

@@ -61,7 +61,6 @@ const CHAT = {
     },
 
     send: function (payload) {
-        if (this.teamMode && this.canTeam()) payload = Object.assign({}, payload, { team: true });
         const done = res => {
             if (!res || !res.error) return;
             if (res.mute) this.setMute(res.mute);
@@ -79,16 +78,6 @@ const CHAT = {
         if (!text) return;
         input.value = '';
         this.send({ kind: 'text', text });
-    },
-
-    // team mode (F22): messages to the own team only
-    teamMode: false,
-    canTeam: () => !MP.asyncId && !MP.spectator && !!(MP.gameConfig && MP.gameConfig.teams),
-    toggleTeam: function () {
-        this.teamMode = !this.teamMode;
-        this.render();
-        const input = $('mp-chat-input');
-        if (input) input.focus();
     },
 
     mine: m => m.slot === MP.lobbyIndex,
@@ -307,8 +296,8 @@ const CHAT = {
         const blocked = this.blocked();
         const rows = this.list.filter(m => !this.isBlocked(m)).map(m => {
             const me = this.mine(m);
-            const body = (m.team != null ? `<span class="mp-chat-team">${TX('Team')}</span> ` : '') + (m.kind === 'emote' ? `<span class="mp-chat-emote">${escHtml(m.emote)}</span>`
-                : `<span class="mp-chat-txt">${escHtml(m.text)}</span>`);
+            const body = m.kind === 'emote' ? `<span class="mp-chat-emote">${escHtml(m.emote)}</span>`
+                : `<span class="mp-chat-txt">${escHtml(m.text)}</span>`;
             const attrs = me ? '' : ` data-msg="${escHtml(m.id)}" title="${TX('Optionen')}" tabindex="0"`;
             return `<div class="mp-chat-msg${me ? ' me' : ''}"${attrs}><span class="mp-pl-dot" style="background:${escHtml(this.colorOf(m.slot))}"></span>
                 <span><b>${escHtml(m.name)}</b> ${body}</span>${me ? '' : '<span class="mp-chat-more">⋯</span>'}</div>`;
@@ -330,14 +319,6 @@ const CHAT = {
         if (note) { note.hidden = !why; note.textContent = why || ''; }
         $('mp-chat-input').hidden = !!why;
         $('mp-chat-send').hidden = !!why;
-        const tb = $('mp-chat-team-btn');
-        if (tb) {
-            tb.hidden = !this.canTeam();
-            if (!this.canTeam()) this.teamMode = false;
-            tb.classList.toggle('on', this.teamMode);
-            tb.title = this.teamMode ? TX('Nur an dein Team – tippen für alle') : TX('An alle – tippen für nur dein Team');
-            $('mp-chat-input').placeholder = this.teamMode ? TX('Nachricht ans Team …') : TX('Nachricht …');
-        }
         if (this.menuMsg && !this.list.some(m => m.id === this.menuMsg.id && !this.isBlocked(m))) this.closeMenu();
         if (atBottom) this.scrollDown();
     },
@@ -396,7 +377,6 @@ const CHAT = {
             <form id="mp-chat-form" autocomplete="off">
               <button type="button" id="mp-chat-emote-btn" title="${TX('Emoji senden')}">🙂</button>
               <button type="button" id="mp-chat-ping-btn" title="${TX('Auf ein Feld zeigen')}">📍</button>
-              <button type="button" id="mp-chat-team-btn" hidden onclick="CHAT.toggleTeam()">👥</button>
               <span id="mp-chat-note" hidden></span>
               <input id="mp-chat-input" maxlength="300" placeholder="${TX('Nachricht …')}">
               <button type="submit" id="mp-chat-send" title="${TX('Senden')}">➤</button>

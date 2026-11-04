@@ -34,7 +34,6 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `friends.js`, `presence.js` | Friends list: requests, the list with online status, live invitations; who is online (open sockets) |
 | `resign.js` | Resigning: when it ends the game, the log line, the MMR penalty |
 | `challenge.js` | Weekly challenge: ISO weeks, the week's setup, starting attempts (also of past weeks, start over), recording the results, the leaderboard (closed when the week ends) |
-| `teams.js` | Team mode: the runtime patch of the engine's combat phase (no friendly fire), teams on the state, shared victory |
 | `seasons.js`, `badges.js` | Ranked seasons (closing, soft reset, tiers, leaderboard); badges from the match history |
 | `oauth.js`, `discordStrategy.js` | Google/Discord login strategies from the database configuration |
 | `totp.js`, `webauthn.js` | Authenticator codes; passkey relying party from `BASE_URL` |

@@ -325,7 +325,7 @@ const MP = {
                 : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
                 <span class="mp-pl-dot" style="background:${esc(civ.color)}"></span>
-                <span class="mp-pl-name">${this.teamOf(i) != null ? `<span class="mp-team-tag mp-team-${this.teamOf(i)}" title="${TX('Team %s', String.fromCharCode(65 + this.teamOf(i)))}">${String.fromCharCode(65 + this.teamOf(i))}</span> ` : ''}${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ` <small>(${TX('du')})</small>` : ''}</span>
+                <span class="mp-pl-name">${this.nameLink(name, lp.userId)}${i === this.playerIndex ? ` <small>(${TX('du')})</small>` : ''}</span>
                 ${status}
                 <span class="mp-pl-civ">${esc(civ.n)}</span>
               </div>`;
@@ -664,7 +664,6 @@ const MP = {
             });
 
             this.socket.on('game:over', winData => {
-                if (winData && Array.isArray(winData.teamWin) && winData.teamWin.length === 1) toast('👥 ' + TX('Team %s gewinnt!', String.fromCharCode(65 + winData.teamWin[0])));
                 S.over = MP.translateOver(winData);
                 gameOver();
             });
@@ -1070,7 +1069,7 @@ const MP = {
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                             ${isMarathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
                         </td>
-                        <td>${this.gameConfig.teams ? this.teamSelect(p, isMe || isHost) : ''}${this.readyCell(p, isMe, isPlayerHost)}</td>
+                        <td>${this.readyCell(p, isMe, isPlayerHost)}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">${TX('Kick')}</button>` : ''}</td>
                     </tr>
                 `}).join('');
@@ -1141,10 +1140,6 @@ const MP = {
               </label>
               ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
               ${this.playerBotRows(cnt.total - cnt.ki)}
-              <label class="row"><span>👥 ${TX('Teams (2 Teams, ohne KI)')}</span>
-                <input type="checkbox" id="mp-set-teams" onchange="MP.updateLobbyConfig()" ${this.gameConfig.teams ? 'checked' : ''}>
-              </label>
-              ${this.gameConfig.teams ? `<p class="hint" style="margin:4px 0 8px">${TX('Jeder wählt Team A oder B. Teammitglieder greifen sich nicht an und gewinnen zusammen; es gibt einen Team-Chat. Es spielen so viele Reiche wie Spieler.')}</p>` : ''}
               <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span>
                 <input type="checkbox" id="mp-set-public" onchange="MP.updateLobbyConfig()" ${this.gameConfig.isPublic ? 'checked' : ''}>
               </label>
@@ -1490,7 +1485,6 @@ const MP = {
             playerBots: $('mp-set-bots') ? $('mp-set-bots').checked : undefined,
             playerBotLimit: $('mp-set-botlimit') ? (+$('mp-set-botlimit').value || null) : undefined,
             isPublic: $('mp-set-public') ? $('mp-set-public').checked : undefined,
-            teams: $('mp-set-teams') ? $('mp-set-teams').checked : undefined,
         };
         // a map with fewer empires: keep the numbers within what it allows
         const old = this.gameConfig;
@@ -1498,7 +1492,7 @@ const MP = {
         const cnt = this.lobbyCounts();
         this.gameConfig = old;
         newConfig.playerCount = cnt.total;
-        newConfig.kiCount = newConfig.teams ? 0 : cnt.ki;     // team mode: humans only
+        newConfig.kiCount = cnt.ki;
         // Switching to "Eigene Karte" without a map yet: take the newest one from the library
         if (mapKey === 'eigene' && !this.gameConfig.customMap && typeof myMaps !== 'undefined' && myMaps[0])
             newConfig.customMap = myMaps[0];
@@ -1755,20 +1749,6 @@ const MP = {
         }
     },
 
-    // ── Team mode (F22) ──────────────────────────────────────────────────────────
-    teamSelect: function (p, editable) {
-        const t = p.team === 1 ? 1 : 0;
-        return `<select class="mp-team-sel mp-team-${t}" id="mp-p-team-${p.index}" ${editable ? '' : 'disabled'} onchange="MP.setTeam(${p.index}, +this.value)">
-            <option value="0" ${t === 0 ? 'selected' : ''}>${TX('Team %s', 'A')}</option><option value="1" ${t === 1 ? 'selected' : ''}>${TX('Team %s', 'B')}</option></select> `;
-    },
-    setTeam: function (index, team) {
-        this.socket.emit('lobby:team', { playerIndex: index, team }, res => { if (res && res.error) toast(TXS(res.error)); });
-    },
-    /** The team of a state index (S.mpTeams), null without teams. */
-    teamOf: function (i) {
-        return typeof S !== 'undefined' && S && Array.isArray(S.mpTeams) && S.mpTeams[i] != null ? S.mpTeams[i] : null;
-    },
-
     // ── Lobby ready check (F17) ──────────────────────────────────────────────────
     /** The other humans in the lobby and how many of them are ready (the host doesn't tick). */
     readyCount: function () {
@@ -1990,22 +1970,6 @@ window.addEventListener('DOMContentLoaded', () => {
         <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>
         <button class="btn small ghost" id="mp-afk-x" hidden title="${TX('Schließen')}" onclick="MP._resignBannerClosed = true; MP.drawAfkBanner()">✕</button>`;
     document.body.appendChild(afk);
-});
-
-// Team mode (F22): the power view leaves teammates out – they never attack each other (utils/teams.js)
-window.addEventListener('DOMContentLoaded', () => {
-    if (typeof powerView !== 'function' || window.__mpTeamPowerView) return;
-    window.__mpTeamPowerView = true;
-    const orig = powerView;
-    powerView = function (St) {
-        const v = orig.apply(this, arguments);
-        const t = St && Array.isArray(St.mpTeams) ? St.mpTeams : null;
-        if (!t || !v) return v;
-        const same = (a, b) => t[a] != null && t[a] === t[b];
-        (v.cities || []).forEach(x => { x.atk = (x.atk || []).filter(a => !same(a.pi, x.city.owner)); });
-        (v.armies || []).forEach(x => { x.flank = (x.flank || []).filter(f => !same(f.pi, x.army.owner)); });
-        return v;
-    };
 });
 
 // --- Monkey Patch redraw() to fix army reference sync bug ---
@@ -3097,14 +3061,6 @@ window.addEventListener('DOMContentLoaded', () => {
     style.textContent = `
         .mph-sound { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); margin:10px 0 0; cursor:pointer; }
         .mph-sound input { width:auto; margin:0; }
-        .mp-chat-team { background:#2f6db3; color:#fff; border-radius:3px; font-size:10px; padding:0 4px; vertical-align:1px; }
-        #mp-chat-team-btn.on { background:#2f6db3; color:#fff; border-radius:4px; }
-        .mp-team-sel { width:auto; margin:0 0 4px; padding:2px 4px; font-size:12px; }
-        .mp-team-0 { border-left:4px solid #2f6db3 !important; }
-        .mp-team-1 { border-left:4px solid #c0622b !important; }
-        .mp-team-tag { display:inline-block; min-width:16px; text-align:center; border-radius:3px; font-size:11px; font-weight:700; color:#fff; padding:0 3px; border:none !important; }
-        .mp-team-tag.mp-team-0 { background:#2f6db3; }
-        .mp-team-tag.mp-team-1 { background:#c0622b; }
         .mp-ready-yes { color:#2e6b34; font-weight:600; white-space:nowrap; }
         .mp-ready-no { opacity:.65; }
         .btn.mp-ready-on { background:#2e6b34; color:#fff; border-color:#2e6b34; }
