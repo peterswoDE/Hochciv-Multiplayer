@@ -392,6 +392,7 @@ function sessionSummary(s) {
         events: !!cfg.events,
         eventMode: cfg.eventMode === 'easy' ? 'easy' : 'hard',
         wonders: !!cfg.wonders,
+        hexTiles: !!cfg.hexTiles && (cfg.mapKey === 'random' || cfg.mapKey === 'plaettchen'),
         ranked: !!cfg.ranked,
         turnTime: cfg.turnTime || 0,
     };

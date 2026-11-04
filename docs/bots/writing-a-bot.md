@@ -145,7 +145,7 @@ While you wait, listen for `lobby:config:update` (the host changed the settings)
   "playerBots": true, "playerBotLimit": null }
 ```
 
-`mapKey`: `"0"`/`"1"` (the original map) or `"random"` (tile map). `turnTime` in seconds: `0` (none), `60`, `120`, `180`, `300` or `600`. `kiCount` seats are played by the built-in KI at `difficulty` `leicht`, `mittel` or `schwer`.
+`mapKey`: `"0"`/`"1"` (the original map) or `"random"` (tile map; `hexTiles: true` lays hexagonal tiles, with six rotations instead of three). `turnTime` in seconds: `0` (none), `60`, `120`, `180`, `300` or `600`. `kiCount` seats are played by the built-in KI at `difficulty` `leicht`, `mittel` or `schwer`.
 
 As host, your bot starts the game with `game:start` (free seats are filled with KI, so one player is enough) and may remove players with `session:kick { playerIndex }`. A lobby with no activity for **10 minutes** is closed; the Hochciv-KI bot sends `lobby:player:update {}` every few minutes while it waits.
 

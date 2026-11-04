@@ -16,8 +16,7 @@
    so sieht es in einem A-Platz in Lage 0 auch auf der Karte aus (in einem B-Platz um
    180° gedreht, also weiterhin dasselbe Plättchen, nur andersherum gelegt).
 
-   Seit v99 gibt es für vier Reiche den experimentellen Plättchenmodus mit SECHSECKIGEN
-   Plättchen (Seitenlänge 3, 19 Felder; Abschnitt „Sechseck-Plättchen“ weiter unten).    */
+   Seit v99 gibt es den experimentellen Plättchenmodus mit SECHSECKIGEN Plättchen (Seitenlänge 3, 19 Felder; Abschnitt „Sechseck-Plättchen“ weiter unten).    */
 
 const TILE_CELLS = 15;
 const TILE_SIDE = 5;
@@ -79,8 +78,7 @@ const TILE_POOL = [
 function tileTerrain(tile) { return tile.a.join('').split(''); }
 
 /* ---------------------------------------------------------------- Sechseck-Plättchen (v99)
-   Experimenteller Plättchenmodus (Anweisung des Autors), nur für vier Reiche: sechseckige
-   Plättchen mit der Seitenlänge 3 – 19 Felder: die Mitte, sechs im ersten und zwölf im
+   Experimenteller Plättchenmodus (Anweisung des Autors): sechseckige Plättchen mit der Seitenlänge 3 – 19 Felder: die Mitte, sechs im ersten und zwölf im
    zweiten Ring. Ein solches Plättchen ist oben und unten gerade und läuft links und rechts
    spitz zu; notiert wird es in fünf Zeilen von 3/4/5/4/3 Feldern, so wie es in Lage 0 auf der
    Karte liegt:
@@ -250,6 +248,39 @@ function stripShape(n) {
   return { key: 'strip' + 2 * L, name: `Plättchenkarte (${2 * L} Dreiecke)`, slots, holes: [], seatSets };
 }
 for (let n = 5; n <= 8; n++) TILE_SHAPES[n] = stripShape(n);
+/* Sechsecke für jede Zahl von Reichen (Mehrspieler-Erweiterung, zu vier Reichen siehe hex4): dasselbe
+   schräge Gitter, geschrieben als i·(5, −2) + j·(2, 3) – die Lage (i, j) grenzt an (i ± 1, j),
+   (i, j ± 1), (i + 1, j − 1) und (i − 1, j + 1). Wie dort liegt zwischen zwei Startplättchen immer
+   ein offenes, und jedes Reich hat 44 bis 54 Felder (zu viert 47,5):
+     zwei Reiche    5 Sechsecke   die beiden Enden einer Dreierreihe, je eines darüber und darunter
+     drei Reiche    7 Sechsecke   eine Blüte, gesessen wird auf jedem zweiten Blatt
+     fünf, sechs   14 Sechsecke   Reihen zu 5, 4 und 5, gesessen an der Ober- und Unterkante
+     sieben, acht  20 Sechsecke   Reihen zu 7, 6 und 7 – so viele hat der Vorrat
+   Bei ungerader Zahl bleibt wie im Dreiecksstreifen auf einer Kante die Mitte frei. Gelegt wird
+   so, dass die oberste Feldzeile gerade ist (siehe hex4). */
+function hexForm(n, lage, seatSets) {
+  const mitten = lage.map(([i, j]) => [5 * i + 2 * j, -2 * i + 3 * j]);
+  const dz = (Math.min(...mitten.map(m => m[1])) - 2) & 1;
+  const platz = ([i, j]) => lage.findIndex(l => l[0] === i && l[1] === j);
+  TILE_SHAPES['hex' + n] = {
+    key: 'hex' + lage.length, name: `Plättchenkarte (${lage.length} Sechsecke)`, hex: true,
+    slots: mitten.map(([q, r]) => SLH(q, r + dz)), holes: [],
+    seatSets: seatSets.map(s => s.map(platz)),
+  };
+}
+const hexReihe = (j, von, bis) => Array.from({ length: bis - von + 1 }, (_, k) => [von + k, j]);
+hexForm(2, [[0, -1], ...hexReihe(0, -1, 1), [0, 1]], [[[-1, 0], [1, 0]]]);
+hexForm(3, [[0, -1], [1, -1], ...hexReihe(0, -1, 1), [-1, 1], [0, 1]],
+  [[[1, 0], [-1, 1], [0, -1]], [[0, 1], [-1, 0], [1, -1]]]);
+function hexStreifen(n) {
+  const L = n <= 6 ? 5 : 7;                       // Sechsecke in der oberen und unteren Reihe
+  const oben = hexReihe(0, 0, L - 1).filter(l => l[0] % 2 === 0);
+  const unten = hexReihe(2, -1, L - 2).filter(l => l[0] % 2 !== 0);
+  const drop = list => list.filter((_, i) => i !== Math.floor(list.length / 2));
+  hexForm(n, [...hexReihe(0, 0, L - 1), ...hexReihe(1, 0, L - 2), ...hexReihe(2, -1, L - 2)],
+    oben.length + unten.length === n ? [oben.concat(unten)] : [oben.concat(drop(unten)), drop(oben).concat(unten)]);
+}
+for (let n = 5; n <= 8; n++) hexStreifen(n);
 /* Mindestabstand einer Hauptstadt zu jedem Feld der fremden Startplättchen – eine der
    beiden Bedingungen in seatFreeCells. Bis v72 war es 3 und die einzige Bedingung. */
 const PLACE_MIN_GAP = 2;
@@ -310,9 +341,9 @@ function seatFreeCells(shape, seats, seatIdx) {
    eigenes Plättchen (Lage + Hauptstadt); die offenen liegen sofort fest.            */
 function tilePlan(civs, seed, opts) {
   const n = civs.length;
-  // experimenteller Plättchenmodus (v99): nur für vier Reiche, sonst die Dreiecke
-  const hex = !!(opts && opts.hex) && n === 4;
-  const shape = hex ? TILE_SHAPES.hex4 : TILE_SHAPES[n];
+  // experimenteller Plättchenmodus (v99): Sechsecke statt Dreiecke
+  const hex = !!(opts && opts.hex) && !!TILE_SHAPES['hex' + n];
+  const shape = TILE_SHAPES[hex ? 'hex' + n : n];
   if (!shape) return null;
   const rnd = mapRng(seed);
   const pool = (hex ? HEX_POOL : TILE_POOL).map((_, i) => i);
@@ -335,7 +366,7 @@ function tilePlan(civs, seed, opts) {
   };
   return plan;
 }
-const planShape = plan => plan.hex ? TILE_SHAPES.hex4 : TILE_SHAPES[plan.n];
+const planShape = plan => TILE_SHAPES[plan.hex ? 'hex' + plan.n : plan.n];
 // Lagen je Plättchen (Dreieck 3, Sechseck 6) und die Felder, auf die Bots ihre Hauptstadt setzen
 const planRotations = plan => plan.hex ? 6 : 3;
 const planMiddle = plan => plan.hex ? HEX_MIDDLE : TRI_MIDDLE;

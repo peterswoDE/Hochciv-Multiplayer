@@ -6580,7 +6580,6 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   eq([plan.hex, plan.shapeKey, planRotations(plan), plan.tiles.length, new Set(plan.tiles).size],
     [true, 'hex10', 6, 10, 10], 'Plan: Sechsecke, sechs Lagen, zehn verschiedene Plättchen');
   eq(plan.tiles.every(t => t >= 0 && t < 20) && plan.ori.every(o => o >= 0 && o < 6), true, 'aus dem Vorrat von 20, Lagen 0–5');
-  eq(tilePlan(civs4.slice(0, 3), 7071, { hex: true }).hex, false, 'nur für vier Reiche – bei drei bleibt es bei den Dreiecken');
   eq(tilePlan(civs4, 7071).hex, false, 'ohne den Schalter die Dreiecke');
   const seat0 = plan.seats[0];
   eq(placeYieldTable(plan, seat0, { civ: 'russland', ability: 'basis' }).length, 6, 'Ertragstafel: sechs Lagen');
@@ -6607,6 +6606,60 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   let runden = 0;
   while (!S.over && runden++ < 400) { kiTurn(S, S.cur); if (S.over) break; endTurn(S); }
   eq(!!S.over, true, `eine KI-Partie auf der Sechseckkarte endet regulär (${S.over ? S.over.how : 'offen'}, Runde ${S.round})`);
+}
+
+/* ==================== Sechsecke bei jeder Zahl von Reichen (Mehrspieler-Erweiterung)
+   Dieselben Regeln wie zu viert: Plättchen lückenlos und ohne Überschneidung, zwischen zwei
+   Startplättchen ein offenes, überall ein Platz für die Hauptstadt, und die Partie läuft. */
+{
+  const K = c => c.join(',');
+  const mitte = sl => [sl.a[0], sl.a[2]];
+  const benachbart = (a, b) => {
+    const m = mitte(a), o = mitte(b), d = [m[0] - o[0], m[1] - o[1]];
+    return [[5, -2], [2, 3], [-3, 5], [-5, 2], [-2, -3], [3, -5]].some(v => v[0] === d[0] && v[1] === d[1]);
+  };
+  const FORM = { 2: ['hex5', 5], 3: ['hex7', 7], 4: ['hex10', 10], 5: ['hex14', 14], 6: ['hex14', 14], 7: ['hex20', 20], 8: ['hex20', 20] };
+  const CIV = ['russland', 'griechenland', 'england', 'wikinger'];
+  for (const n of [2, 3, 4, 5, 6, 7, 8]) {
+    const sh = TILE_SHAPES['hex' + n], [key, zahl] = FORM[n];
+    eq([sh.key, sh.slots.length, sh.hex], [key, zahl, true], `${n} Reiche: ${zahl} Sechsecke`);
+    const zellen = sh.slots.flatMap(slotCells);
+    eq(new Set(zellen.map(K)).size, zahl * HEX_TILE_CELLS, `${n} Reiche: kein Feld doppelt`);
+    eq((-Math.max(...zellen.map(c => -c[2]))) & 1, 0, `${n} Reiche: die oberste Feldzeile ist gerade`);
+    const erreicht = new Set([0]);
+    for (let w = 0; w < zahl; w++) sh.slots.forEach((sl, i) => {
+      if (sh.slots.some((o, j) => erreicht.has(j) && benachbart(sl, o))) erreicht.add(i);
+    });
+    eq(erreicht.size, zahl, `${n} Reiche: die Plättchen hängen zusammen`);
+    for (const set of sh.seatSets) {
+      eq([set.length, new Set(set).size, set.every(s => s >= 0)], [n, n, true], `${n} Reiche: ${n} verschiedene Startplätze`);
+      eq(set.some((a, i) => set.some((b, j) => i < j && benachbart(sh.slots[a], sh.slots[b]))), false,
+        `${n} Reiche: kein Startplättchen grenzt an ein anderes`);
+      eq(set.every((_, i) => seatFreeCells(sh, set, i).filter(Boolean).length >= 7), true,
+        `${n} Reiche: jedes Startplättchen hat mindestens die sieben mittigen Felder frei`);
+    }
+    eq(Math.floor(zahl * HEX_TILE_CELLS / n) >= 44, true, `${n} Reiche: mindestens 44 Felder je Reich`);
+    const civs = Array.from({ length: n }, (_, i) => CIV[i % 4]);
+    for (let seed = 1; seed <= 25; seed++) {
+      const plan = tilePlan(civs, seed, { hex: true });
+      eq([plan.hex, planShape(plan) === sh, new Set(plan.tiles).size], [true, true, zahl], `${n} Reiche, Plan ${seed}`);
+      const setup = rollSetup({ players: civs.map(c => ({ civ: c, kind: 'ki', ability: 'basis' })), wonders: true, seed });
+      const rnd = mapRng(seed + 12345);
+      plan.seats.forEach(st => {
+        if (kiPlaceSeat(plan, st, { civ: st.civ, kind: 'ki', ability: 'basis' }, setup)) botPlaceSeat(plan, st, rnd);
+      });
+      eq(plan.seats.every(st => st.cell != null), true, `${n} Reiche, Plan ${seed}: alle Hauptstädte gesetzt`);
+      if (seed > 1) continue;
+      const karte = tileMap(plan);
+      eq(karte.rows.join('').split('').filter(c => c !== 'X').length, zahl * HEX_TILE_CELLS, `${n} Reiche: die ganze Karte liegt`);
+      const S = newGame({ seed, map: karte, seatOrder: true, startPlayer: 0, duel: n === 2, avail: setup.avail, wpool: setup.wpool,
+        players: civs.map(c => ({ civ: c, kind: 'ki', kiLevel: 'leicht', ability: 'basis' })) });
+      eq(S.cities.length, n, `${n} Reiche: die Partie beginnt mit ${n} Hauptstädten`);
+      let z = 0;
+      while (!S.over && z++ < 60 * n) { kiTurn(S, S.cur); if (S.over) break; endTurn(S); }
+      eq(S.round > 1, true, `${n} Reiche: die KI spielt (${S.over ? S.over.how : 'offen'}, Runde ${S.round})`);
+    }
+  }
 }
 
 /* ==================================================== Felder außerhalb der Karte */

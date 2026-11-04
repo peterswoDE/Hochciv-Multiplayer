@@ -24,7 +24,7 @@ const send = (res, p) => p.then(r => {
 // List: own games, invitations, open public games
 router.get('/', (req, res) => send(res, service.list(req.user)));
 
-// Create { config: { mapKey, civMode, humanCount, events, eventMode, wonders, difficulty, ranked, isPublic }, civ, ability, invite: [usernames] }
+// Create { config: { mapKey, civMode, humanCount, events, eventMode, wonders, hexTiles, difficulty, ranked, isPublic }, civ, ability, invite: [usernames] }
 router.post('/', (req, res) => {
     if (serverState.state.maintenanceMode)
         return res.status(503).json({ error: 'Der Server befindet sich im Wartungsmodus.' });
