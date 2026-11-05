@@ -606,7 +606,7 @@ const MP = {
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
 
-                window.placeState = null;
+                if (typeof placeState !== 'undefined') placeState = null;
                 if (typeof draftState !== 'undefined') draftState = null;
                 document.body.classList.remove('mp-waiting');
 
@@ -3121,8 +3121,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph .sub { font-size:13px; color:var(--ink-soft); margin:0 0 8px; line-height:1.45; }
         .mph-name { display:flex; gap:10px; align-items:center; margin-bottom:12px; font-size:13px; font-weight:600; color:var(--ink-soft); }
         .mph-name input { flex:0 1 220px; color:var(--ink); font-weight:500; }
-        .mph-new { display:flex; gap:10px; align-items:flex-start; margin-bottom:18px; }
-        .mph-new > .btn, .mph-ranked { flex:1 1 0; min-width:0; }
+        /* a grid: with flex:1 1 0 the buttons stay wider than .mph-ranked by their padding */
+        .mph-new { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0, 1fr); gap:10px; align-items:start; margin-bottom:18px; }
         .mph-mode { display:flex; flex-direction:column; justify-content:center; gap:3px; min-height:72px; text-align:left; padding:12px 14px; font-weight:600; }
         .mph-mode small { font-size:12px; font-weight:400; line-height:1.35; opacity:.75; }
         .mph-mode:not([disabled]):hover { filter:brightness(1.04); }
@@ -3164,8 +3164,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph a { color:var(--red); }
         /* phones: the new games one below the other, title and line side by side */
         @media (max-width:640px) {
-            .mph-new { flex-direction:column; gap:8px; }
-            .mph-new > .btn, .mph-ranked { flex:0 0 auto; }
+            .mph-new { grid-auto-flow:row; align-items:stretch; gap:8px; }
             .mph-more { flex-direction:column; gap:8px; }
             .mph-more .btn { flex:0 0 auto; }
             .mph-mode { min-height:0; padding:10px 14px; }
