@@ -81,6 +81,7 @@ async function live(browser, errors, n) {
     await page.waitForFunction(() => typeof S !== 'undefined' && S && document.getElementById('screen-game').classList.contains('show'), null, { timeout: 30000 });
     const g = await page.evaluate(() => ({ tiles: S.map.tiles, cities: S.cities.length, players: S.players.length }));
     ok(g.tiles === FORM[n] && g.cities === n, `${n} empires: the game runs on ${FORM[n]}`, JSON.stringify(g));
+    ok(await page.evaluate(() => placeState === null), `${n} empires: nothing of the placement stays behind`);
     await ctx.close();
 }
 

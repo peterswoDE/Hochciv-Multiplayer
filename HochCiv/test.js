@@ -6662,6 +6662,22 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   }
 }
 
+/* ==================== baseIncome lässt den Spielstand, wie er war
+   Es schaltet Ereignisse und den Taj Mahal kurz ab; was vorher nicht da war, bleibt auch weg. */
+{
+  const S = newGame({ seed: 7, map: JSON.parse(JSON.stringify(DEFAULT_MAP)), startPlayer: 0,
+    players: ['russland', 'england'].map(c => ({ civ: c, kind: 'ki', kiLevel: 'schwer', ability: 'basis' })) });
+  const p = S.players[0], y = income(S, 0);
+  delete S.evMuted; delete p.doubleIncome;
+  const b = baseIncome(S, 0);
+  eq(!('evMuted' in S) && !('doubleIncome' in p), true, 'baseIncome hinterlässt keinen Schlüssel im Spielstand');
+  p.doubleIncome = S.round; S.evMuted = false;
+  eq(baseIncome(S, 0).coins === b.coins && p.doubleIncome === S.round && S.evMuted === false, true,
+    'baseIncome stellt vorhandene Werte wieder her und rechnet ohne den Taj Mahal');
+  delete p.doubleIncome; delete S.evMuted;
+  eq(income(S, 0).coins, y.coins, 'danach ist das Einkommen dasselbe');
+}
+
 /* ==================== Tempo: Einkommen, Kopien und kiRisk bleiben, was sie waren
    Einkommen und Übersicht rechnen dieselbe Summe, controlledTiles nennt dieselben Felder wie
    controlledCells, und eine Kopie teilt nichts mit der Partie außer den Kartenfeldern. */
