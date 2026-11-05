@@ -4,6 +4,7 @@
  *
  *   · accounts (website, Android app): after the login, kept with the account; declining logs out;
  *   · guests: when they open the multiplayer, kept on the device; declining goes back to the menu;
+ *   · "Ablehnen" first says what it means, with the way back to agreeing;
  *   · Discord Activity: no site cookie, so the server asks before it gives a seat (HTTP 428) and
  *     activity/bridge.js calls CONSENT.ask() and stores the answer with the Discord login.
  *
@@ -17,6 +18,8 @@ const CONSENT = {
 
     /** Shows the popup; resolves with true (agreed) or false (declined). */
     ask: function () {
+        const declined = this.discord ? TX('Schließen')
+            : MP.user ? TX('Abmelden und offline spielen') : TX('Offline spielen');
         if (this.open) return this.open;
         const box = document.createElement('div');
         box.id = 'mp-consent';
@@ -29,12 +32,23 @@ const CONSENT = {
                 · <a href="/datenschutzerklaerung.html" target="_blank" rel="noopener">${TX('Datenschutzerklärung')}</a></p>
             <p class="mp-consent-small">${TX('Mit „Zustimmen“ akzeptierst du die Nutzungsbedingungen und bestätigst, dass du mindestens 13 Jahre alt bist. Die Datenschutzerklärung hast du zur Kenntnis genommen.')}</p>
             <div class="mp-consent-btns">
-                <button type="button" class="btn" data-answer="no">${TX('Ablehnen')}</button>
+                <button type="button" class="btn" data-step="decline">${TX('Ablehnen')}</button>
                 <button type="button" class="btn primary" data-answer="yes">${TX('Zustimmen')}</button>
+            </div></div>
+            <div class="mp-consent-card" hidden>
+            <h2>${TX('Nicht zugestimmt')}</h2>
+            <p>${TX('Ohne Zustimmung kannst du nicht online spielen: keine Live-Spiele, Rundenspiele, Rangliste oder Chat.')}</p>
+            <div class="mp-consent-btns">
+                <button type="button" class="btn" data-answer="no">${declined}</button>
+                <button type="button" class="btn primary" data-answer="yes">${TX('Doch zustimmen')}</button>
             </div></div>`;
         document.body.appendChild(box);
         this.open = new Promise(resolve => {
             box.addEventListener('click', e => {
+                if (e.target.closest('[data-step]')) {
+                    box.querySelectorAll('.mp-consent-card').forEach(card => { card.hidden = !card.hidden; });
+                    return;
+                }
                 const btn = e.target.closest('[data-answer]');
                 if (!btn) return;
                 box.remove();
@@ -98,6 +112,7 @@ const CONSENT = {
     style.textContent = `
         #mp-consent { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center;
             padding: 16px; background: rgba(42, 39, 33, .6); overflow-y: auto; }
+        .mp-consent-card[hidden] { display: none; }
         .mp-consent-card { width: 100%; max-width: 460px; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 20px;
             background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 12px; }
         .mp-consent-card h2 { margin: 0 0 10px; font-family: var(--serif); font-size: 22px; }

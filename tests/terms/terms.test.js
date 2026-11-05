@@ -43,7 +43,10 @@ function makeUser() {
     return { name, id };
 }
 const popup = page => page.isVisible('#mp-consent');
-const answer = (page, a) => page.click(`#mp-consent [data-answer="${a}"]`);
+const answer = async (page, a) => {
+    if (a === 'no') await page.click('#mp-consent [data-step="decline"]');
+    await page.click(`#mp-consent .mp-consent-card:not([hidden]) [data-answer="${a}"]`);
+};
 
 async function open(browser, user, errors) {
     const ctx = await browser.newContext({ locale: 'de-DE' });
@@ -97,10 +100,18 @@ async function accounts(browser, errors) {
 
         const d = await open(browser, no, errors);
         await d.page.waitForSelector('#mp-consent');
-        await answer(d.page, 'no');
+        await d.page.click('#mp-consent [data-step="decline"]');
+        const said = await d.page.textContent('#mp-consent .mp-consent-card:not([hidden])');
+        ok(said.includes('Ohne Zustimmung kannst du nicht online spielen') && said.includes('Abmelden und offline spielen'), 'account: "Ablehnen" says what it means');
+        ok(sql(`SELECT "termsVersion" IS NULL FROM users WHERE id = '${no.id}'`) === 't' && (await d.ctx.request.get(BASE + '/api/auth/me')).status() === 200, 'account: still logged in until that is confirmed');
+        await d.page.click('#mp-consent .mp-consent-card:not([hidden]) [data-answer="no"]');
         await d.page.waitForFunction(() => typeof MP !== 'undefined' && !document.getElementById('mp-consent'));
-        const me = await d.ctx.request.get(BASE + '/api/auth/me');
-        ok(me.status() === 401, 'account: declining logs out');
+        let status = 0;       // the popup closes first, the logout follows
+        for (let i = 0; i < 25 && status !== 401; i++) {
+            await d.page.waitForTimeout(200);
+            status = (await d.ctx.request.get(BASE + '/api/auth/me')).status();
+        }
+        ok(status === 401, 'account: declining logs out', String(status));
         ok(sql(`SELECT "termsVersion" IS NULL FROM users WHERE id = '${no.id}'`) === 't', 'account: nothing is stored on declining');
         await d.ctx.close();
     } finally {
@@ -121,9 +132,11 @@ async function guests(browser, errors) {
     ok(await page.evaluate(() => !document.querySelector('.mph')), 'guest: declining stays out of the lobby');
     page.evaluate(() => { MP.showLobby(); });
     await page.waitForSelector('#mp-consent');
+    await page.click('#mp-consent [data-step="decline"]');
+    ok((await page.textContent('#mp-consent .mp-consent-card:not([hidden]) [data-answer="no"]')) === 'Offline spielen', 'guest: can go back to offline play');
     await answer(page, 'yes');
     await page.waitForSelector('.mph');
-    ok(true, 'guest: agreeing opens the lobby');
+    ok(true, 'guest: "Doch zustimmen" opens the lobby');
     await page.reload();
     await page.waitForFunction(() => typeof CONSENT !== 'undefined' && typeof MP.showLobby === 'function');
     page.evaluate(() => { MP.showLobby(); });
