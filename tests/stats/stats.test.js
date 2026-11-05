@@ -55,7 +55,7 @@ function recording() {
     const engine = require('../../engine-adapter');
     const Stats = require('../../utils/stats');
     const session = {
-        gameConfig: { mapKey: 'gross', playerCount: 4, seed: 7, wonders: true },
+        gameConfig: { mapKey: '0', playerCount: 4, seed: 7, wonders: true },
         players: ['griechenland', 'england', 'russland', 'wikinger'].map(civ => ({ civ, ability: 'basis', kind: 'ki', kiLevel: 'mittel' })),
     };
     const S = engine.createGame(session);
@@ -116,7 +116,7 @@ async function live(browser, errors) {
             await MP.host();
         }, 'Gastgeber');
         await page.waitForFunction(() => MP.active && MP.lobbyIndex === 0);
-        await page.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 3, mapKey: 'gross', wonders: true }));
+        await page.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 3, mapKey: '0', wonders: true }));
         await page.waitForFunction(() => MP.gameConfig.playerCount === 4);
         await page.evaluate(() => MP.startGame());
         await page.waitForFunction(() => typeof S !== 'undefined' && S && document.getElementById('screen-game').classList.contains('show'));

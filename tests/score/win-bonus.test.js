@@ -1,5 +1,5 @@
 /**
- * The winner's bonus points (utils/score.js, WIN_BONUS = 10) in live games, Rundenspiele and on
+ * The winner's doubled points (utils/score.js, WIN_FACTOR = 2) in live games, Rundenspiele and on
  * the end screen (mp.js), against the local docker setup.
  *
  *   docker compose -f docker-compose.local.yml up -d --build
@@ -14,7 +14,7 @@ const { execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { WIN_BONUS, finalPoints } = require('../../utils/score');
+const { WIN_FACTOR, finalPoints } = require('../../utils/score');
 const { calculateMMR } = require('../../utils/mmr');
 
 const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
@@ -58,10 +58,10 @@ async function serverSide(mode) {
     ok(winners.length >= 1, `${mode}: the game has a winner`, winners.map(w => w.name).join(', '));
     for (const s of game.scores) {
         const p = parts.find(x => x.name === s.name);
-        const want = s.total + (s.winner ? WIN_BONUS : 0);
+        const want = s.total * (s.winner ? WIN_FACTOR : 1);
         ok(p && p.points === want && p.isWinner === s.winner,
-            `${mode}: ${s.winner ? 'winner' : 'loser'} has ${s.winner ? 'victory score + ' + WIN_BONUS : 'victory score'}`,
-            `${p && p.points} = ${s.total}${s.winner ? ' + ' + WIN_BONUS : ''}`);
+            `${mode}: ${s.winner ? 'winner' : 'loser'} has ${s.winner ? 'victory score × ' + WIN_FACTOR : 'victory score'}`,
+            `${p && p.points} = ${s.total}${s.winner ? ' × ' + WIN_FACTOR : ''}`);
         ok(p && p.scoreDetails && p.scoreDetails.total === s.total, `${mode}: ${s.winner ? 'winner' : 'loser'}: details keep the engine's score`);
     }
 
@@ -108,21 +108,21 @@ async function endScreen() {
         const rows = [...document.querySelectorAll('#mp-go-players tr')].slice(1).map(tr => tr.innerText);
         const expect = S.players.map((p, i) => ({ civ: civOf(p).n, total: victoryScore(S, i).total, won: S.over.winners.includes(i) }));
         MP.active = false;
-        return { rows, expect, bonus: MP.WIN_BONUS };
+        return { rows, expect, factor: MP.WIN_FACTOR };
     });
-    ok(r.bonus === WIN_BONUS, 'mp.js and utils/score.js use the same bonus', `${r.bonus} / ${WIN_BONUS}`);
+    ok(r.factor === WIN_FACTOR, 'mp.js and utils/score.js use the same factor', `${r.factor} / ${WIN_FACTOR}`);
     for (const e of r.expect) {
         const row = r.rows.find(t => t.includes(e.civ)) || '';
-        const want = e.won ? `${e.total + WIN_BONUS} (inkl. +${WIN_BONUS} Sieg)` : String(e.total);
-        ok(row.includes(want), `end screen: ${e.won ? 'winner' : 'other empire'} shows ${e.won ? 'points incl. bonus' : 'its points'}`, row.replace(/\s+/g, ' '));
+        const want = e.won ? `${e.total * WIN_FACTOR} (×${WIN_FACTOR} für den Sieg)` : String(e.total);
+        ok(row.includes(want), `end screen: ${e.won ? 'winner' : 'other empire'} shows ${e.won ? 'doubled points' : 'its points'}`, row.replace(/\s+/g, ' '));
     }
     ok(!errors.length, 'no page errors', errors.join(' | '));
     await browser.close();
 }
 
 (async () => {
-    ok(finalPoints({ total: 40 }, true) === 40 + WIN_BONUS && finalPoints({ total: 40 }, false) === 40
-        && finalPoints(null, true) === WIN_BONUS, 'finalPoints adds the bonus only for the winner');
+    ok(finalPoints({ total: 40 }, true) === 80 && finalPoints({ total: 40 }, false) === 40
+        && finalPoints(null, true) === 0, 'finalPoints doubles only the winner\'s points');
 
     const users = [];
     try {

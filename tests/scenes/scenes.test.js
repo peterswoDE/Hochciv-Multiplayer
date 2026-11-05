@@ -8,7 +8,7 @@
  *
  * 1. Recording, with the engine: the chain of diffs rebuilds exactly the engine's snapshot,
  *    actions / battles / silent steps are recorded, the game is the same with and without
- *    recording, trim() keeps what comes after the earliest mark, v93 records nothing.
+ *    recording, trim() keeps what comes after the earliest mark.
  * 2. Live game (A and B through the game page, one KI, a spectator): A sees the KI's and B's
  *    actions played, never its own; the turn starts only after them; a tap skips everything
  *    queued; the spectator sees A's actions too; "Animationen: Keine" plays nothing.
@@ -68,7 +68,7 @@ function unit() {
     const canon = v => Array.isArray(v) ? v.map(canon) : v && typeof v === 'object'
         ? Object.keys(v).sort().reduce((o, k) => (o[k] = canon(v[k]), o), {}) : v;
     const game = () => engine.createGame({
-        gameConfig: { mapKey: 'gross', playerCount: 4, seed: 5, wonders: true },
+        gameConfig: { mapKey: '0', playerCount: 4, seed: 5, wonders: true },
         players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'ki', kiLevel: 'schwer' },
             { civ: 'russland', kind: 'ki', kiLevel: 'schwer' }, { civ: 'wikinger', kind: 'ki', kiLevel: 'schwer' }].map(p => ({ ability: 'basis', ...p })),
     });
@@ -127,11 +127,6 @@ function unit() {
     ok(holder.scenes.frames.length < before && holder.scenes.frames.every(f => f.seq > m.seq), 'unit: trim keeps only what comes after the mark',
         `${before} → ${holder.scenes.frames.length}`);
     ok(Scenes.trim(holder.scenes, { last: null }, S) === undefined && holder.scenes.frames.length > 0, 'unit: without a mark of every human nothing goes');
-
-    // a version without js/anim.js
-    const old = engine.forVersion('v93');
-    const So = old.createGame({ gameConfig: { mapKey: 'gross', playerCount: 2, seed: 1 }, players: [{ civ: 'griechenland', kind: 'human', ability: 'basis' }, { civ: 'england', kind: 'ki', kiLevel: 'leicht', ability: 'basis' }] });
-    ok(old.attachScenes(So, {}) === null, 'unit: v93 records nothing');
 }
 
 // In the page: scenes played (pi, art, text) and when the turn started; short timings
@@ -180,8 +175,8 @@ async function live(browser, errors) {
     await b.waitForSelector('#mp-p-civ-1');
     await b.selectOption('#mp-p-civ-1', 'russland');
     await a.waitForFunction(() => MP.players.length === 2 && MP.players[1].civ === 'russland');
-    await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: 'gross', difficulty: 'mittel' }));
-    await a.waitForFunction(() => MP.gameConfig.playerCount === 3);
+    await a.evaluate(async () => { const big = (await (await fetch('/api/maps/code/GRKART')).json()).map; MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 2, mapKey: 'eigene', customMap: big, difficulty: 'leicht' }); });
+    await a.waitForFunction(() => MP.gameConfig.playerCount === 4);
     const v = await newPage('V');
     await v.evaluate(([c, p]) => MP.watch(c, p, 'ScnV'), [cred.code, cred.pw]);
     await v.waitForFunction(() => MP.spectator);
@@ -207,14 +202,15 @@ async function live(browser, errors) {
     const enough = await until(() => a.evaluate(([ki, ib]) => window.__played.some(s => s.pi === ki) && window.__played.some(s => s.pi === ib) && S.round >= 3, [kiIndex, ib]), 90000, 300);
     clearInterval(driver);
     await until(() => a.evaluate(() => !MP.scenesBusy), 20000);
-    const pa = await a.evaluate(() => ({ played: window.__played, starts: window.__turnStarts, researched: window.__researched || [] }));
+    const pa = await a.evaluate(() => ({ played: window.__played, starts: window.__turnStarts, researched: window.__researched || [], myTurn: MP.isMyTurn() && !S.over }));
     const pb = await b.evaluate(() => ({ researched: window.__researched || [] }));
     ok(!!enough, 'live: A sees the KI\'s and B\'s actions played', `${pa.played.length} scenes`);
     ok(pa.played.some(s => s.pi === ib && s.art === 'forschen') || !pb.researched.length, 'live: B\'s research is a scene for A', pb.researched.join());
     ok(pa.played.every(s => s.pi !== ia), 'live: A\'s own actions are not played to A');
     ok(pa.played.every(s => s.busy), 'live: scenes play from the queue (state applied after them)');
     const lastKi = Math.max(...pa.played.filter(s => s.pi === kiIndex).map(s => s.t));
-    ok(pa.starts.some(t => t > lastKi), 'live: A\'s turn starts after the scenes before it');
+    // only if A is on turn by now: the driver stops right after a scene, often before A's next turn
+    ok(!pa.myTurn || pa.starts.some(t => t > lastKi), 'live: A\'s turn starts after the scenes before it');
     const pv = await v.evaluate(() => window.__played);
     ok(pv.some(s => s.pi === ia) || !pa.researched.length, 'live: the spectator sees A\'s actions as well', pa.researched.join());
 

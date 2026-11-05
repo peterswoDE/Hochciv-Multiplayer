@@ -30,23 +30,34 @@ Tests create their own test accounts and delete them afterwards.
 | `account/pages.test.js` | account and admin pages: own pages, sections in the address, admin page only for admins, iframe break-out, phone width | default |
 | `admin/running-games.test.js` | admin page *Laufende Spiele* | default |
 | `abilities/grow-all.test.js` | opening *Fähigkeiten* sends no action (planned growth stays local) | default |
+| `alerts/alerts.test.js` | sound and tab alerts: tones for join, ready, start, turn and chat, the blinking title of a hidden tab, the sound switch | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
+| `invite/invite.test.js` | invite links: copying, the preview, joining a private lobby and a Rundenspiel, watching a running game, guests, English | default |
 | `lobbies/lobby-filter.test.js` | filters of the open games: every lobby setting in `/api/public-sessions`, each filter and combinations on live lobbies and Rundenspiele, search, reset, kept filters, phone | default |
 | `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups | default |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
+| `challenge/challenge.test.js` | weekly challenge: weeks and setup, starting from the menu, the running attempt, refused shortcuts, the result after resigning, the leaderboard order (best attempt per player), play again, start over (one running attempt, also across weeks), past weeks (playable, closed leaderboard, none before the first played week), English | default |
+| `deadline/deadline.test.js` | time per turn of Rundenspiele: the form, the open games and the filter, the deadline in the list, the takeover after 1 "day" while a 7-day game still waits | `ASYNC_TIMEOUT_MS=70000 ASYNC_REMINDER_MS=50000 ASYNC_SWEEP_MS=1000` |
 | `filter/filter.test.js` | word filter, guests emote-only | `CHAT_MUTE_MS=4000` |
+| `friends/friends.test.js` | friends list: requests, accepting, crossing requests, refusals and blocks, suggestions, profile button, live invitation into a lobby, Rundenspiel names, removing, offline, account deletion, English | default |
 | `i18n/english.test.js` | every screen in English, no German left | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
 | `maps/maps.test.js` | map browser: browsing, search, sorting, favorites, the detail view, picking a map for a lobby and a Rundenspiel, map reports and the admin's unpublish, the editor's drag painting and undo, phone layout, account merge and deletion | default |
 | `loading/loading.test.js` | fast page load: content hashes, year-long caching, gzip, page files without session queries | default |
 | `match/match.test.js` | ranked matchmaking | `MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000` |
 | `mobile/mobile.test.js` | mobile layer (touch, zoom, narrow layout) | default |
+| `nextgame/nextgame.test.js` | "next game" in Rundenspiele: hidden on one's turn, the count, opening the next game, none left, English, leaving | default |
 | `push/push.test.js` | push notifications | override file with an FCM stub (see header) |
+| `resign/resign.test.js` | resigning: when it ends the game, a ranked live duel (MMR, match record), a live game with KI, Rundenspiele | default |
+| `ready/ready.test.js` | lobby ready check: status column, the count on the start button, settings clear the ticks, the host's question, English | default |
+| `placement/world.test.js` | the "Welt" button while start tiles are placed in a live game | default |
+| `placement/hex.test.js` | hexagonal tiles in lobbies and Rundenspiele, for every number of empires | default |
 | `rematch/rematch.test.js` | rematch of a live game | default |
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin section | default |
 | `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
-| `score/win-bonus.test.js` | winner's bonus points | default |
+| `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
+| `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
 | `spectators/spectators.test.js` | spectator mode | default |
 | `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin page | default |
@@ -68,7 +79,7 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 
 | Change | Run |
 |---|---|
-| new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
+| new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `placement`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
 | `client/mobile/` | `mobile`, `maps` (editor painting) |
 | custom maps, map browser, editor | `maps`, `i18n` |
 | new or changed texts | `i18n` |

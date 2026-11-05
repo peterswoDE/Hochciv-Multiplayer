@@ -20,6 +20,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `session:kick` | `{ playerIndex }` | host | Remove a player from the lobby |
 | `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, public listing `isPublic`, …); a custom map is checked with `checkCustomMap` |
 | `lobby:player:update` | `{ civ, ability }` | player | Own nation and ability in the lobby |
+| `lobby:ready` | `{ ready }` | player | Ready check: tick or take back; new lobby settings clear every tick. The players in `lobby:player:updated` carry `ready` (player-bots always `true`) |
 | `game:start` | – | host | Start the game |
 | `draft:pick` | `{ id }` | player | Marathon draft: pick an ability |
 | `placement:action` | placement action | player | Tile map: place the start tile (all players at once) |
@@ -28,6 +29,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `chat:report` | `{ id, reason }` (message id) | player or spectator | Report a message ([chat moderation](../overview/features.md#during-and-after-a-game)) |
 | `session:rematch` | – | host | Back to the lobby after the game |
 | `turn:reclaim` | – | player | *Ich bin zurück*: take the seat back from the KI after missed turns |
+| `game:resign` | – | player | Resign: the KI plays the seat to the end; may end the game ([Resign](#resign)) |
 
 ### Server → client
 
@@ -44,6 +46,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `game:start` | `{ state, yourIndex, turn }` – the game begins (or the state after a reconnect) |
 | `state:update` | New state after every action or KI turn, with turn/timer info and the scenes since the last update (`scenes`, `client/scenes.js`) |
 | `turn:timeout` | Your turn ran out; `{ afk }` when the KI keeps the seat |
+| `game:resigned` | `{ index, name }`: a player resigned (the player list follows with `resigned: true`) |
 | `chat:history` | `{ list, guest, mute }` – the chat so far, on connect |
 | `chat:msg` | A new chat message or ping |
 | `game:over` | The result |
@@ -65,6 +68,7 @@ Handled by `sockets/async.js`; login required. A client has one Rundenspiel open
 | `async:draft` | → server | `{ id, abilityId }` | Marathon draft pick |
 | `async:chat` | → server | `{ id, kind, … }` | Chat message, emote or ping |
 | `async:report` | → server | `{ id, msgId, reason }` | Report a message |
+| `async:resign` | → server | `{ id }` | Resign (same as `POST /api/async/:id/resign`) |
 | `async:update` | → client | view | The player's new view after every change (also KI turns); `scenes`: what happened since the player's last turn |
 | `async:chat` | → client | `{ id, msg }` | A new chat message |
 | `chat:history` | → client | `{ id, list, guest, mute }` | The chat so far |
@@ -85,3 +89,17 @@ Handled by `sockets/match.js`; login required. Queue and pending matches live in
 | `match:ready` | → client | `{ sessionId, joinCode, password, clientId }` | Join the created lobby; the game starts when everyone is there |
 
 Rules (MMR window, group sizes, waits): [Features → Ranking](../overview/features.md#ranking).
+
+## Resign
+
+A player who resigns (live `game:resign`, Rundenspiel `async:resign`) gives the seat to the KI (level *mittel*, ranked *schwer*) for the rest of the game, and the game log says so. Two cases end the game at once (`utils/resign.js`, `S.over.resign = true`): the game began without KI seats and one human is left (that human wins), or nobody human is left (the most points win). A resigned player is out of the rating like a Rundenspiel seat taken over by the KI: the match record has `resigned`, `replaced`, `replacedUserId`, and in ranked games `penalty: -15`.
+
+## Friends
+
+A logged-in page keeps its socket open; while it is connected the account counts as online for its friends (`utils/presence.js`).
+
+| Event | Direction | Payload | Meaning |
+|---|---|---|---|
+| `friends:invite` | → server | `{ userId, joinCode }` | Invite an online friend into the live lobby one sits in (at most 10 a minute) |
+| `friends:invited` | ← server | `{ fromId, fromName, joinCode, password, hostName, at }` | An invitation; it is also listed in `GET /api/friends` for 15 minutes while the lobby waits |
+| `friends:changed` | ← server | `{ type: request | accepted | removed | self, from? }` | The friends list changed – reload it |

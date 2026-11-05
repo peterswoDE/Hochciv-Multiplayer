@@ -61,7 +61,7 @@ function unit() {
     const engine = require('../../engine-adapter');
     const Summary = require('../../utils/summary');
     const S = engine.createGame({
-        gameConfig: { mapKey: 'gross', playerCount: 3, seed: 3, wonders: true },
+        gameConfig: { mapKey: '0', playerCount: 3, seed: 3, wonders: true },
         players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'ki', kiLevel: 'mittel' }, { civ: 'russland', kind: 'ki', kiLevel: 'mittel' }]
             .map(p => ({ ability: 'basis', ...p })),
     });
@@ -129,7 +129,7 @@ async function live(browser, errors) {
     await b.waitForSelector('#mp-p-civ-1');
     await b.selectOption('#mp-p-civ-1', 'russland');
     await a.waitForFunction(() => MP.players.length === 2 && MP.players[1].civ === 'russland');
-    await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: 'gross', difficulty: 'leicht' }));
+    await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 3, kiCount: 1, mapKey: '0', difficulty: 'leicht' }));
     await a.waitForFunction(() => MP.gameConfig.playerCount === 3);
     // a spectator
     const v = await newPage('V');
@@ -195,7 +195,7 @@ async function live(browser, errors) {
     await c.fill('#mp-n', 'SumC');
     await c.evaluate(() => MP.host());
     await c.waitForSelector('#mp-p-civ-0');
-    await c.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 1, mapKey: 'gross', difficulty: 'leicht' }));
+    await c.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 1, mapKey: '0', difficulty: 'leicht' }));
     await c.waitForFunction(() => MP.gameConfig.playerCount === 2);
     await c.evaluate(() => MP.startGame());
     await c.waitForFunction(() => typeof S !== 'undefined' && S && MP.isMyTurn());

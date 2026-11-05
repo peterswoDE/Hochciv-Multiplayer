@@ -17,6 +17,10 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `replay_frames` | `ReplayFrame` | Turn states of Rundenspiele that are still running |
 | `custom_maps` | `CustomMap` | Custom maps in accounts |
 | `map_favorites` | `MapFavorite` | Players' favorites among the published maps |
+| `seasons` | `Season` | Ranked seasons, one per quarter (`2026-Q4`); `closedAt` once the next one began |
+| `season_results` | `SeasonResult` | Final standing per account and closed season: MMR, rank (humans and bots apart), tier, games, wins |
+| `challenge_results` | `ChallengeResult` | Weekly challenge: one row per attempt (any number per account and week; `weekId` like `2026-W45`), its Rundenspiel (`asyncId`) and, once finished, victory, rounds, points, `finishedAt` (before the week's end: on the leaderboard) |
+| `friendships` | `Friendship` | Friends list: `userId` asked `friendId`, `status` `pending` or `accepted` (one row per pair; declining or removing deletes it) |
 | `passkeys` | `Passkey` | Passkeys (WebAuthn) |
 | `TotpTokens` | `TotpToken` | Authenticator apps (several per account; table name from Sequelize's default) |
 | `device_tokens` | `DeviceToken` | Android devices for push |
@@ -60,7 +64,7 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 
 ## Other tables
 
-* **`custom_maps`:** `ownerId`, `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null – every published map is in the map browser), `publishedAt`, `loads` (loaded by code or picked in the browser, by others), `favorites` (count of `map_favorites` rows, for sorting).
+* **`custom_maps`:** `ownerId` (null: a map that belongs to nobody, `maps/builtin.js`), `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null – every published map is in the map browser), `publishedAt`, `loads` (loaded by code or picked in the browser, by others), `favorites` (count of `map_favorites` rows, for sorting).
 * **`map_favorites`:** `userId`, `mapId` (unique together). A favorite of an unpublished map stays and shows again when it is published again; it goes when the map or the account is deleted, and moves when accounts are merged.
 * **`oauth_providers`:** `provider` (`google`/`discord`), `clientId`, `clientSecret`, `botToken` (Discord Activity), `enabled`.
 * **`passkeys`:** `credentialID`, `credentialPublicKey`, `counter`, `transports`.

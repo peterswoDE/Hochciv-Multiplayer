@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v98';
+const APP_VERSION = 'v100';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -17,9 +17,13 @@ const TERRAIN = {
   G: { key: 'G', name: 'Grasland', yield: [0, 1, 0], land: true, color: '#adba7c' },
   W: { key: 'W', name: 'Wald', yield: [0, 0, 1], land: true, color: '#708a58' },
   B: { key: 'B', name: 'Gebirge', yield: [1, 0, 1], land: true, color: '#aa967e' },
-  F: { key: 'F', name: 'Fluss', yield: [0, 1, 1], land: true, color: '#70a0ba' },
+  /* Seit v99 (Anweisung des Autors: Flüsse und Inseln deutlicher, Flüsse klar anders als Meer):
+     ein Flussfeld ist grünes Flusstal mit einem blauen Wasserlauf darauf (drawMap), bis v98 war
+     es ein blaues Feld wie das Meer, nur dunkler. Eine Insel ist ein Eiland im Wasser: das Feld
+     trägt die Meerfarbe, darauf ein Sandstrand mit Grün – `color` ist die Farbe des Strands. */
+  F: { key: 'F', name: 'Fluss', yield: [0, 1, 1], land: true, color: '#a3c482' },
   M: { key: 'M', name: 'Meer', yield: [0, 0, 1], land: false, color: '#96bac6' },
-  I: { key: 'I', name: 'Insel', yield: [1, 1, 1], land: true, color: '#d0c48a' },
+  I: { key: 'I', name: 'Insel', yield: [1, 1, 1], land: true, color: '#e2d199' },
   // Vulkan: entsteht nur durch das Ereignis "Vulkanausbruch" – unpassierbar, kein Ertrag.
   V: { key: 'V', name: 'Vulkan', yield: [0, 0, 0], land: true, color: '#6b5a4c', block: true },
   /* Kein Feld: liegt außerhalb der Karte. Plättchenkarten sind nicht rechteckig – was
@@ -164,9 +168,10 @@ const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (b
      die Wissenschaftliche Methode 2/3/4/5/10 (bis v96 2/4/6/8/10). Im Marathon zählen beide
      doppelt (MARATHON_DISCOUNT_FACTOR). Der alte Techtree behält die alte Methode
      (OLD_METHOD_DISCOUNT) – sonst ginge der feste Ablauf des Tutorials nicht mehr auf.
-   · Griechenlands Freie Forschung: zweimal je Partie, eine verfügbare Technologie aus jedem
-     Zeitalter (bis v96 einmal je Runde, bis zur Industrialisierung, im Marathon bis ins
-     Mittelalter). Die Singularität nicht – wie bei der Raumfahrt holt nur Oxford sie gratis.
+   · Griechenlands Freie Forschung: seit v99 (Anweisung des Autors) einmal je Runde jede
+     erforschbare Technologie, auch die Singularität, in jeder Spielart (v97–v98 zweimal je
+     Partie aus jedem Zeitalter, ohne die Singularität; bis v96 einmal je Runde bis zur
+     Industrialisierung, im Marathon bis ins Mittelalter). Keine eigene Zahl mehr.
    · Kriegerkultur der Wikinger: +1 Macht je Armee, mit Burgenbau auch je Stadt (bis v96 +2).
    Dazu, ohne eigene Zahl (js/engine.js): Siedlertrecks wachsen zum Preis einer um 1 kleineren
    Stadt (growPrice), Fruchtbarkeit bringt ein bezahltes Wachstum mehr (growLimits).
@@ -174,7 +179,6 @@ const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (b
    zusammen. */
 const GREEK_DISCOUNT = [1, 1, 2, 2, 5];
 const METHOD_DISCOUNT = [2, 3, 4, 5, 10];
-const FREE_TECH_USES = 2;          // Freie Forschung je Partie
 const WARRIOR_POWER = 1;           // Kriegerkultur: Macht je Armee (mit Burgenbau je Stadt)
 
 const TECH_BY_KEY = {};
@@ -272,8 +276,9 @@ const SCOUTING_RATE = 2;     // Kundschafterei: × Grundkosten, in Münzen (bis 
    groß wie die Europakarte (Originalkarte 12 × 18), Technologien je Zeitalter ×2/×3/×4/×5.
    Vergünstigungen (Griechenland, Wissenschaftliche Methode) ziehen danach ihre festen
    Beträge ab, der Kreml schlägt seine 50 auf.
-   Seit v84 (Anweisung des Autors): Singularität 300 (v83: 2,5-fach, also 250), höchstens
-   fünf Gründungen je Zug, Militärsieg erst mit der zweiten eroberten Hauptstadt. */
+   Seit v84 (Anweisung des Autors): Singularität 300 (v83: 2,5-fach, also 250), Militärsieg
+   erst mit der zweiten eroberten Hauptstadt. Die Grenze von fünf Gründungen je Zug (v84–v99)
+   ist seit v100 weg (Anweisung des Autors). */
 /* Spielerzahl (Mehrspieler-Erweiterung): 2 bis 8 Reiche. Es gibt vier Zivilisationen – ab dem fünften Reich
    sitzen sie mehrfach am Tisch („England II", eigene Farbe). Die festen Karten und die
    Standard-Marathonkarte haben vier Startpunkte, mehr geht dort nicht; die Plättchenkarte
@@ -286,11 +291,10 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const MARATHON_ROWS = 24, MARATHON_COLS = 36;
 const MARATHON_TECH_FACTOR = [2, 3, 4, 5];
 const MARATHON_SINGULARITY = 300;
-const MARATHON_MAX_FOUNDS = 5;      // neue Städte je Zug
 const MARATHON_CAPITALS = 2;        // eroberte Hauptstädte für den Militärsieg
 /* Seit v85 (Anweisung des Autors): Griechenlands Günstige Forschung und die Wissenschaftliche
    Methode wirken doppelt. Die Freie Forschung reichte v85–v96 im Marathon nur bis ins
-   Mittelalter; seit v97 gilt sie zweimal je Partie für jedes Zeitalter, auch hier. */
+   Mittelalter; seit v99 gilt sie einmal je Runde für alles Erforschbare, auch hier. */
 const MARATHON_DISCOUNT_FACTOR = 2;
 /* Startausgleich (v85, Anweisung des Autors): im allerersten Zug bekommt der Zweite in der
    Zugfolge Münzen dazu, der Dritte mehr, der Vierte noch mehr – je Platz in der Zugfolge.
@@ -326,9 +330,9 @@ function techsIn(field, age, S) {
    lassen. Dort steht auch ORDER, die Zugreihenfolge, und BARB_CIV. */
 
 
-/* Zwei Karten stehen zur Wahl. Die Originalkarte ist aus dem gedruckten Bogen
-   ausgemessen, die große ist im selben Stil erzeugt: zusammenhängende Landmassen,
-   Gebirgszüge mit Flussläufen, Inseln – nur weiter und stärker durchmischt. */
+/* Die feste Karte: aus dem gedruckten Bogen ausgemessen. Bis v98 stand daneben eine große
+   Karte (15 × 24, im selben Stil erzeugt); sie ist seit v99 entfernt (Anweisung des Autors).
+   Laufende Partien darauf spielen weiter – die Karte steckt im Spielstand. */
 const MAP_ORIGINAL = {
   name: 'Originalkarte (12 × 18)',
   rows: [
@@ -348,30 +352,8 @@ const MAP_ORIGINAL = {
   capitals: { wikinger: [1, 8], russland: [4, 15], england: [5, 3], griechenland: [9, 10] },
 };
 
-const MAP_GROSS = {
-  name: 'Große Karte (15 × 24)',
-  rows: [
-    'MMMMMMMMIMMMMMMMMIMMMMMM',
-    'MGGGMMMMMMGGGGGWMMMMMGGM',
-    'MGGGBMMMGGWGGGGWWMGGGGBM',
-    'MMMBBBGWWFFFFGGGWFFFGGGM',
-    'MMMMWFFFFFWWWGGWGGGGFGMM',
-    'MMMBGBWGWWWWWWGGGBBFGBMM',
-    'MMGGGGGGGWWWWWGWGBBBBWMM',
-    'MGGGGGGGGGWWWGGGGBGBGMMM',
-    'MGGGWGGGWWWWWGGGGBBGFGMM',
-    'MMFFGGGGGWFWWWGGFGGGFFMM',
-    'IMGGFGGGGWFWWGGGGFGGGGMM',
-    'MMBBBGGGWFGWWGWBBFGGGGMM',
-    'IMBBWBFFFFGWBWGWGGFFGBMM',
-    'MBWBBFWWWWWGGMMMMMMMGGMI',
-    'MMMMMMMMMMMMMMMMMMMMMMMM',
-  ],
-  capitals: { wikinger: [2, 11], russland: [3, 20], england: [8, 3], griechenland: [12, 13] },
-};
-
-// Reihenfolge bestimmt die Vorauswahl im Aufbau: die Originalkarte ist Standard.
-const MAPS = [MAP_ORIGINAL, MAP_GROSS];
+// Reihenfolge bestimmt die Vorauswahl im Aufbau (nur bei vier Reichen, v99).
+const MAPS = [MAP_ORIGINAL];
 const DEFAULT_MAP = MAP_ORIGINAL;
 
 /* Kampfauslegung – beide Seiten addieren, wie vom Autor bestätigt:
@@ -517,7 +499,7 @@ const TIPS = [
   'Es ist nicht immer korrekt durch Griechenlands Basisfähigkeit kostenlose Technologien sofort zu erforschen. Durch Philosophie kann ein späteres Forschen auch wertvoll sein.',
   'Griechenlands Rückschau hat einen langsamen Start, aber wird zum Ende hin immer besser.',
   'Der Schlüssel zu Griechenlands Rückschau ist es, frühestmöglich eine Technologie des Mittelalters forschen zu können.',
-  'Griechenlands Freie Forschung gibt es nur zweimal je Partie. Hebe sie für teure Technologien der Moderne auf, statt sie früh für billige auszugeben.',
+  'Griechenlands Freie Forschung gilt jede Runde für jede erforschbare Technologie – auch für die Singularität, also den Forschungssieg. Wer in allen vier Feldern die Moderne erreicht, braucht dafür keine Wissenschaft mehr.',
   'Englands Handelsreich erlaubt hohe Flexibilität.',
   'Mit Englands Seemacht kann das Siedeln am Meer besser sein als Binnenstädte, muss es aber nicht.',
   'Englands Kolonisten haben nur einen Vorteil, solange es noch Platz zum Siedeln auf der Karte gibt. Plane dementsprechend.',

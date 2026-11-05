@@ -20,6 +20,10 @@ const Replay = require('./Replay')(sequelize);
 const ReplayFrame = require('./ReplayFrame')(sequelize);
 const Report = require('./Report')(sequelize);
 const BannedWord = require('./BannedWord')(sequelize);
+const Friendship = require('./Friendship')(sequelize);
+const Season = require('./Season')(sequelize);
+const SeasonResult = require('./SeasonResult')(sequelize);
+const ChallengeResult = require('./ChallengeResult')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
@@ -49,5 +53,9 @@ module.exports = {
     Replay,
     ReplayFrame,
     Report,
-    BannedWord
+    BannedWord,
+    Friendship,
+    Season,
+    SeasonResult,
+    ChallengeResult,
 };

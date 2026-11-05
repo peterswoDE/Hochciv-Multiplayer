@@ -29,6 +29,7 @@ const decompress = promisify(zlib.brotliDecompress);
 /** How the game was won, from S.over (the engine's texts are German on the server). */
 function victoryOf(over) {
     if (!over) return null;
+    if (over.resign) return 'resign';
     if (over.military) return 'military';
     const how = String(over.how || '');
     if (/Forschungssieg/.test(how)) return 'science';
@@ -38,7 +39,7 @@ function victoryOf(over) {
     return 'other';
 }
 
-/** The engine a match was played with ('v93' → HochCiv-v93, anything else → the current one). */
+/** The engine a match was played with ('v98' → HochCiv-v98, anything else → the current one). */
 const engineFor = version => engine.forVersion(version).getEngine();
 
 const isBarbarian = p => p && p.kind === 'barbar';

@@ -37,6 +37,8 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   ok(await page.evaluate(() => !!window.HochcivMobile), 'layer loaded');
 
   await page.click('#m-new');
+  // since v99 the start player is random by default; the steps below need the human on turn
+  await page.evaluate(() => { const st = document.getElementById('setup-start'); st.value = '0'; st.onchange(); });
   await page.evaluate(() => document.getElementById('setup-go').click());
   await page.waitForTimeout(1500);
   const vb = () => page.evaluate(() => document.getElementById('map').getAttribute('viewBox').split(' ').map(Number));

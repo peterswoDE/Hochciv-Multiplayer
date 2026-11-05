@@ -4,7 +4,7 @@
  *
  *   g = {
  *     id, joinCode, hostUserId, status, engine (version the game is played with, see ENG),      // setup → placement | draft → playing → finished | cancelled
- *     config: { mapKey, civMode, humanCount, events, eventMode, wonders, difficulty, ranked,
+ *     config: { mapKey, civMode, humanCount, events, eventMode, wonders, hexTiles, difficulty, ranked,
  *               isPublic, noKi, duel, seed, startPlayer, order, map?, setup?, marathon? },
  *     seats:  [{ slot, civ, ability, kind, userId, name, roman, color, drafted, kiLevel,
  *                started, replaced, penalty, joinedAt }],   // index = slot = newGame() players index
@@ -28,15 +28,19 @@ const engine = require('../engine-adapter');
 const { renameInState } = require('../utils/rename');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
+const Resign = require('../utils/resign');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
-   the game shipped with this server have none and are v83. New games get the current one. */
+   the game shipped with this server have none and count as v83, a label only by now: forVersion
+   runs them on the current engine. New games get the current one. */
 const engineVersionOf = g => (g && g.engine) || engine.LEGACY_VERSION;
 const ENG = g => engine.forVersion(engineVersionOf(g));
 
-const MAP_KEYS = ['0', 'gross', 'plaettchen', 'marathon', 'eigene'];
+const MAP_KEYS = ['0', 'plaettchen', 'marathon', 'eigene'];
 const KI_TAKEOVER_LEVEL = { ranked: 'schwer', normal: 'mittel' };
 const MMR_PENALTY = 15;
+/** Time per turn a host can pick for a Rundenspiel (days). */
+const TURN_DAYS = [1, 3, 7];
 
 const isTile = g => g.config.mapKey === 'plaettchen';
 const isCustom = g => g.config.mapKey === 'eigene';
@@ -111,10 +115,13 @@ function create(host, opts) {
         events: !!raw.events,
         eventMode: raw.eventMode === 'easy' ? 'easy' : 'hard',
         wonders: !!raw.wonders,
+        hexTiles: raw.hexTiles === true && raw.mapKey === 'plaettchen',
         // older clients still send a bot difficulty – kiLevelFor maps it
         difficulty: engine.kiLevelFor(raw.difficulty),
         ranked: !!raw.ranked,
         isPublic: !!raw.isPublic,
+        // time per turn in days (F19); setup keeps 7 days to find players
+        turnDays: TURN_DAYS.includes(raw.turnDays) ? raw.turnDays : 7,
         seed: Math.floor(Math.random() * 2 ** 31),
     };
     // Ranked: KI on the hardest level (as in live lobbies)
@@ -139,7 +146,10 @@ function create(host, opts) {
     const lim = limitsOf(null, config.mapKey, config.customMap);
     const cErr = countError(lim, total);
     if (cErr) return { error: cErr };
-    if (total - ki < 2) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };
+    // the weekly challenge (utils/challenge.js) is played alone; only the server creates it
+    const challenge = opts && typeof opts.challenge === 'string' ? opts.challenge : null;
+    if (total - ki < 2 && !challenge) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };
+    if (challenge) Object.assign(config, { challenge, isPublic: false, ranked: false, seed: Number.isInteger(opts.seed) ? opts.seed : config.seed });
     Object.assign(config, { playerCount: total, humanCount: total - ki, noKi: ki === 0 });
     // Player-bots (bot accounts, utils/bots.js) take human seats like players, never the KI's;
     // the host allows them and may limit them (null = no limit). A bot as host always allows them.
@@ -203,6 +213,12 @@ function create(host, opts) {
     /* Start right away (the host plays turn 1 while the others join) when the seats are
        final already: nations dealt at random, or all four nations of a fixed map. Otherwise –
        and always without KI – the game starts once everybody is there. */
+    // the weekly challenge: the KI takes the other seats right away, all with the base ability –
+    // the same opponents for everybody
+    if (challenge) {
+        fillBots(g);
+        g.seats.filter(s => s.kind === 'ki').forEach(s => { s.ability = 'basis'; });
+    }
     const seatsFinal = config.civMode === 'random' || (!freeCivs(g) && total === 4);
     if (!hasPrephase(g) && !config.noKi && seatsFinal) startGame(g);
     return { g };
@@ -316,6 +332,7 @@ function dropFreeSeats(g) {
 function leave(g, userId) {
     const seat = seatOf(g, userId);
     if (!seat) return 'Du bist nicht in diesem Spiel.';
+    if (g.config.challenge) return 'Die Wochen-Challenge kann man nur aufgeben.';
     if (userId === g.hostUserId) return 'Der Host kann das Spiel nur abbrechen, nicht verlassen.';
     const free = g.status === 'setup' || (g.status === 'playing' && !seat.started);
     if (!free) return 'Nach deinem ersten Zug kannst du das Spiel nicht mehr verlassen.';
@@ -337,6 +354,7 @@ function leave(g, userId) {
 /** Host cancels: allowed until another human has played a turn / before the pre-phase. */
 function cancel(g, userId) {
     if (userId !== g.hostUserId) return 'Nur der Host kann das Spiel abbrechen.';
+    if (g.config.challenge) return 'Die Wochen-Challenge kann man nur aufgeben.';
     const others = g.seats.filter(s => s.userId && s.userId !== userId);
     const ok = g.status === 'setup' || (g.status === 'playing' && others.every(s => !s.started));
     if (!ok) return 'Das Spiel läuft schon – abbrechen geht nicht mehr.';
@@ -380,7 +398,7 @@ function startPrephase(g) {
     ENG(g).assignDoubles(g.seats);
     if (isTile(g)) {
         const seed = g.config.seed;
-        const plan = ENG(g).getEngine().tilePlan(g.seats.map(s => s.civ), seed);
+        const plan = ENG(g).getEngine().tilePlan(g.seats.map(s => s.civ), seed, { hex: !!g.config.hexTiles });
         if (!plan) throw new Error('Für diese Spielerzahl gibt es keine Plättchenkarte.');
         g.config.setup = ENG(g).rollSetup(lobbyOf(g), seed);
         const rnd = ENG(g).getEngine().mapRng(seed + 12345);
@@ -630,6 +648,29 @@ function timeout(g) {
     return { replaced, penalized };
 }
 
+// ── Resign (F16) ──────────────────────────────────────────────────────────────
+
+/**
+ * The player gives up: the KI plays the seat to the end (like the 7-day takeover, which costs
+ * the same in ranked games). Returns { error } or { penalized: userId | null }.
+ */
+function resign(g, userId) {
+    const seat = seatOf(g, userId);
+    if (!seat) return { error: 'Du bist nicht in diesem Spiel.' };
+    if (g.status !== 'playing' || !g.state || g.state.over) return { error: 'Aufgeben geht nur, solange das Spiel läuft.' };
+    const S = g.state, E = ENG(g).getEngine();
+    const i = stateIndex(g, seat.slot);
+    const penalized = replaceSeat(g, seat);
+    seat.resigned = true;
+    Object.assign(S.players[i], { kind: 'ki', kiLevel: seat.kiLevel });
+    Resign.logResign(E, S, seat.name || (civDef(seat.civ) || {}).n || seat.civ);
+    const humans = g.seats.filter(s => s.kind === 'human' && s.userId && !s.replaced).map(s => stateIndex(g, s.slot));
+    const startedWithKi = g.seats.some(s => s.kind !== 'human' && !s.replaced);
+    const end = Resign.endAfterResign(E, S, humans, startedWithKi);
+    if (end) S.over = end;           // drive() finishes the game; otherwise it plays the KI's turn
+    return { penalized };
+}
+
 // ── Account deletion ─────────────────────────────────────────────────────────
 
 const DELETED_NAME = 'Gelöschter Spieler';
@@ -705,7 +746,7 @@ function summary(g, userId) {
     const S = g.state;
     return {
         id: g.id,
-        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v96/, /v93/, /v83/)
+        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v98/)
         joinCode: g.joinCode,
         status: g.status,
         isHost: g.hostUserId === userId,
@@ -713,6 +754,7 @@ function summary(g, userId) {
         seats: publicSeats(g),
         mySlot: mine ? mine.slot : null,
         replaced: !!(mine && mine.replaced),
+        resigned: !!(mine && mine.resigned),
         yourTurn: w.userIds.includes(userId),
         waitingFor: w.label,
         round: S ? S.round : 0,
@@ -736,7 +778,7 @@ function publicSeats(g) {
     return g.seats.map(s => ({
         slot: s.slot, civ: s.civ, kind: s.kind, name: s.name, userId: s.userId,
         ability: s.ability, drafted: s.drafted || null, roman: s.roman, color: s.color,
-        replaced: !!s.replaced, started: !!s.started, botAccount: !!s.botAccount,
+        replaced: !!s.replaced, resigned: !!s.resigned, started: !!s.started, botAccount: !!s.botAccount,
     }));
 }
 
@@ -757,7 +799,7 @@ function view(g, userId) {
             plan, setup: g.config.setup,
             placed: !!(ps && ps.cell != null),
             players: g.seats.map(s => ({ civ: s.civ, kind: s.kind, ability: s.ability, name: s.name, roman: s.roman, color: s.color })),
-            wonders: g.config.wonders,
+            wonders: g.config.wonders, events: g.config.events, startPlayer: g.config.startPlayer,
         };
     }
     if (g.status === 'draft') out.draft = deepCopy(g.pre.draft);
@@ -787,7 +829,7 @@ function view(g, userId) {
 }
 
 module.exports = {
-    create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, DELETED_NAME, IN_PREPHASE,
+    create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, resign, DELETED_NAME, IN_PREPHASE,
     waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
-    MMR_PENALTY,
+    MMR_PENALTY, TURN_DAYS,
 };

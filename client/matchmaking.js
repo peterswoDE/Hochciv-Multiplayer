@@ -33,6 +33,7 @@ const MATCH = {
             this.progress = { accepted: 0, total: f.players.length };
             this.render();
             if (typeof navigator.vibrate === 'function') try { navigator.vibrate(200); } catch (_) { }
+            MP.alert('match', '🔥 ' + TX('Gegner gefunden!'));
         });
         socket.on('match:progress', p => { this.progress = p; this.render(); });
         socket.on('match:cancelled', c => {

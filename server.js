@@ -130,7 +130,7 @@ app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__di
 app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
-// The older versions (/v96/, /v93/, /v83/ – Rundenspiele started on them) get the same no-op service
+// The older version (/v98/ – Rundenspiele started on it) get the same no-op service
 // worker and Activity bridge
 const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
 app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
@@ -187,6 +187,12 @@ sequelize.sync({ alter: true }).then(() => {
     console.log('[DB] Sequelize synced tables.');
     // facts of older matches for the overall statistics (needs the column `facts`)
     require('./utils/facts').startBackfill();
+    // weekly challenge: many attempts per week now (utils/challenge.js)
+    require('./utils/challenge').migrate().catch(err => console.error('[Challenge] Migration failed:', err));
+    // ranked seasons: the current quarter, closing the last one (utils/seasons.js)
+    require('./utils/seasons').start();
+    // the maps that belong to nobody (maps/builtin.js)
+    require('./maps/service').seedBuiltin().catch(err => console.error('[Maps] Seeding the built-in maps failed:', err));
     // the admins' words for the chat filter (utils/profanity.js)
     require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`
@@ -234,6 +240,12 @@ app.use('/api/async', require('./routes/async'));
 app.use('/api/push', require('./routes/push'));
 // Custom maps in the account, published with a code (maps/service.js)
 app.use('/api/maps', require('./routes/maps'));
+// Friends list (utils/friends.js)
+app.use('/api/friends', require('./routes/friends'));
+// Ranked seasons and the leaderboard (utils/seasons.js)
+app.use('/api/seasons', require('./routes/seasons'));
+// Weekly challenge (utils/challenge.js)
+app.use('/api/challenge', require('./routes/challenge'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
 
@@ -260,6 +272,8 @@ registerGame(io);
 registerAsync(io);
 // Ranked matchmaking (sockets/match.js)
 require('./sockets/match')(io);
+// Friends: online status and live invitations (sockets/friends.js)
+require('./sockets/friends')(io);
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

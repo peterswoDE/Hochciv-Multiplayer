@@ -362,6 +362,8 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
 /* Legephase: Hinweis links, Knöpfe rechts */
 .place-tools{align-items:center}
 .place-tools .hint{flex:1;margin:0;font-size:12px}
+/* Legephase (v99): vier Knöpfe – sie nehmen nur ihre eigene Breite, der Hinweis den Rest */
+.place-tools .btn.small{flex:none;padding:9px 16px}
 .ed-tools{display:flex;flex-wrap:wrap;gap:6px;padding:8px 8px calc(8px + var(--safe-b));background:var(--paper);
   border-top:1px solid var(--rule)}
 /* Karteneditor (Mehrspieler-Erweiterung): Kopfzeile mit Name, Rückgängig und Speichern, darunter die

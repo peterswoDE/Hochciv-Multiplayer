@@ -51,7 +51,7 @@ function makeUser() {
 // the three lobbies: host name and settings
 const LOBBIES = {
     a: { mapKey: '0', playerCount: 3, kiCount: 1, difficulty: 'schwer', randomCivs: true, events: true, eventMode: 'hard', wonders: true, turnTime: 120, playerBots: true },
-    b: { mapKey: 'gross', playerCount: 2, kiCount: 0, ranked: true },
+    b: { mapKey: '0', playerCount: 2, kiCount: 0, ranked: true },
     c: { mapKey: 'random', playerCount: 4, kiCount: 2, difficulty: 'leicht', events: true, eventMode: 'easy' },
 };
 
@@ -93,14 +93,14 @@ async function run(browser, [host, viewer], rsIds) {
     const la = list.find(l => l.hostName === lobby.a.name), lb = list.find(l => l.hostName === lobby.b.name), lc = list.find(l => l.hostName === lobby.c.name);
     ok(la && la.empires === 3 && la.kiCount === 1 && la.difficulty === 'schwer' && la.randomCivs && la.events && la.eventMode === 'hard'
         && la.wonders && la.turnTime === 120 && la.playerBots && !la.ranked && la.maxPlayers === 2, 'API: lobby a with all its settings', JSON.stringify(la));
-    ok(lb && lb.empires === 2 && lb.kiCount === 0 && lb.ranked && lb.mapKey === 'gross' && lb.playersCount === 2 && lb.maxPlayers === 2, 'API: lobby b, full', JSON.stringify(lb));
+    ok(lb && lb.empires === 2 && lb.kiCount === 0 && lb.ranked && lb.mapKey === '0' && lb.playersCount === 2 && lb.maxPlayers === 2, 'API: lobby b, full', JSON.stringify(lb));
     ok(lc && lc.mapKey === 'random' && lc.eventMode === 'easy' && lc.kiCount === 2 && !lc.wonders && lc.turnTime === 0, 'API: lobby c', JSON.stringify(lc));
 
     // ── one public Rundenspiel ─────────────────────────────────────────────────────────────
     const hctx = await browser.newContext();
     await hctx.request.post(BASE + '/api/auth/login', { data: { username: host.name, password: PASSWORD } });
     const hpage = await pageOf(hctx, 'rs host');
-    const rs = await rest(hpage, '/api/async', { config: { mapKey: 'gross', civMode: 'random', playerCount: 3, kiCount: 1, wonders: true, difficulty: 'mittel', isPublic: true } });
+    const rs = await rest(hpage, '/api/async', { config: { mapKey: '0', civMode: 'random', playerCount: 3, kiCount: 1, wonders: true, difficulty: 'mittel', isPublic: true } });
     const rsId = rs.id || (rs.game && rs.game.id);
     if (rsId) rsIds.push(rsId);
     ok(!!rsId, 'Rundenspiel created', JSON.stringify(rs).slice(0, 200));
@@ -126,7 +126,7 @@ async function run(browser, [host, viewer], rsIds) {
     ok(/3 Reiche \(1 KI, Schwer\)/.test(rowA) && /Zufallsnationen/.test(rowA) && /Ereignisse: hart/.test(rowA) && /Weltwunder/.test(rowA) && /2 Min\. pro Zug/.test(rowA),
         'row: a live lobby shows its settings', rowA);
     const rowRs = await page.evaluate(n => [...document.querySelectorAll('#mph-open .mpa-row')].find(r => r.textContent.includes(n)).textContent.replace(/\s+/g, ' '), host.name);
-    ok(/Große Karte/.test(rowRs) && /3 Reiche \(1 KI, Mittel\)/.test(rowRs) && /Zufallsnationen/.test(rowRs) && /Weltwunder/.test(rowRs), 'row: an open Rundenspiel too', rowRs);
+    ok(/Originalkarte/.test(rowRs) && /3 Reiche \(1 KI, Mittel\)/.test(rowRs) && /Zufallsnationen/.test(rowRs) && /Weltwunder/.test(rowRs), 'row: an open Rundenspiel too', rowRs);
 
     ok(await page.isHidden('#mph-f-grid'), 'filters folded away at first');
     await page.click('.mph-f-toggle');
@@ -138,7 +138,7 @@ async function run(browser, [host, viewer], rsIds) {
     };
     const cases = [
         ['kind', 'live', 'a,b,c'], ['kind', 'async', 'rs'],
-        ['map', '0', 'a'], ['map', 'gross', 'b,rs'], ['map', 'plaettchen', 'c'],
+        ['map', '0', 'a,b,rs'], ['map', 'plaettchen', 'c'],
         ['empires', '3', 'a,rs'], ['empires', '2', 'b'],
         ['ki', 'none', 'b'], ['ki', 'some', 'a,c,rs'],
         ['level', 'schwer', 'a'], ['level', 'leicht', 'c'], ['level', 'mittel', 'rs'],

@@ -57,7 +57,7 @@ function facts() {
     const engine = require('../../engine-adapter');
     const Facts = require('../../utils/facts');
     const session = {
-        gameConfig: { mapKey: 'gross', playerCount: 3, seed: 11, wonders: true, startPlayer: 1 },
+        gameConfig: { mapKey: '0', playerCount: 3, seed: 11, wonders: true, startPlayer: 1 },
         players: ['griechenland', 'england', 'russland'].map(civ => ({ civ, ability: 'basis', kind: 'ki', kiLevel: 'schwer' })),
     };
     const S = engine.createGame(session);

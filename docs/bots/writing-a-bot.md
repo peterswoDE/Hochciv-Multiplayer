@@ -145,7 +145,7 @@ While you wait, listen for `lobby:config:update` (the host changed the settings)
   "playerBots": true, "playerBotLimit": null }
 ```
 
-`mapKey`: `"0"`/`"1"` (the original map), `"gross"` (the large map) or `"random"` (tile map). `turnTime` in seconds: `0` (none), `60`, `120`, `180`, `300` or `600`. `kiCount` seats are played by the built-in KI at `difficulty` `leicht`, `mittel` or `schwer`.
+`mapKey`: `"0"`/`"1"` (the original map) or `"random"` (tile map; `hexTiles: true` lays hexagonal tiles, with six rotations instead of three). `turnTime` in seconds: `0` (none), `60`, `120`, `180`, `300` or `600`. `kiCount` seats are played by the built-in KI at `difficulty` `leicht`, `mittel` or `schwer`.
 
 As host, your bot starts the game with `game:start` (free seats are filled with KI, so one player is enough) and may remove players with `session:kick { playerIndex }`. A lobby with no activity for **10 minutes** is closed; the Hochciv-KI bot sends `lobby:player:update {}` every few minutes while it waits.
 
@@ -153,7 +153,7 @@ As host, your bot starts the game with `game:start` (free seats are filled with 
 
 Rundenspiele need no socket while you wait, only REST:
 
-* `GET /api/async` → `{ mine, open, invites }`. `mine` are your games; each has `yourTurn`, `status`, `round` and `config`. `open` are public games with free seats (`freeSeats`) whose host allows player-bots when `config.playerBots` is `true`. Games started on an older version of the rules carry it in `engine` (for example `"v96"`, see [Know the rules](#6-know-the-rules)).
+* `GET /api/async` → `{ mine, open, invites }`. `mine` are your games; each has `yourTurn`, `status`, `round` and `config`. `open` are public games with free seats (`freeSeats`) whose host allows player-bots when `config.playerBots` is `true`. Games started on an older version of the rules carry it in `engine` (for example `"v98"`, see [Know the rules](#6-know-the-rules)).
 * `POST /api/async/:id/join { civ, ability }` takes a seat.
 * `POST /api/async { config, civ, ability }` creates a Rundenspiel. A Rundenspiel your bot hosts always lets player-bots in. Example `config`: `{ "mapKey": "plaettchen", "playerCount": 3, "kiCount": 0, "difficulty": "schwer", "civMode": "random", "isPublic": true, "ranked": false, "events": false, "eventMode": "hard", "wonders": false, "playerBots": true }`.
 
@@ -246,7 +246,7 @@ To choose good moves, your bot has to know what is legal and what a move will do
 https://hochciv.de/js/data.js, civs.js, i18n.js, hex.js, tiles.js, engine.js, expansion.js, bots.js, ki.js, marathon.js
 ```
 
-(on staging: `https://staging.hochciv.de/js/…`). Rundenspiele started on an older version keep its rules; their `engine` field tells you which, and that version is at `/<engine>/js/…`, for example `/v96/js/engine.js`. The version is in `APP_VERSION` at the top of `data.js`.
+(on staging: `https://staging.hochciv.de/js/…`). Rundenspiele started on an older version keep its rules; their `engine` field tells you which, and that version is at `/<engine>/js/…`, for example `/v98/js/engine.js`. The version is in `APP_VERSION` at the top of `data.js`.
 
 These are plain browser scripts that share global variables. Loaded in this order into one shared scope (in Node.js: one `vm` context, the way the server's own `engine-adapter.js` does it), they give you the full game: load the server's state, try a move on a copy, and see what happens. For example:
 
@@ -276,7 +276,7 @@ import socketio
 
 URL = os.environ.get("HOCHCIV_URL", "https://staging.hochciv.de")
 TOKEN = os.environ["HOCHCIV_TOKEN"]
-FIXED_MAPS = ("0", "1", "gross")        # no start tile to place
+FIXED_MAPS = ("0", "1")        # no start tile to place
 
 
 def decide(state, me):

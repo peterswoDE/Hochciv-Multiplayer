@@ -79,6 +79,7 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 | POST | `/sessions` | public | Create a lobby: `{ config, host: { name, clientId, civ, ability } }` → `{ sessionId, joinCode, password }`. Refused in maintenance mode. A logged-in bot account hosts as a player-bot. |
 | POST | `/sessions/join` | public | Join: `{ joinCode, password, player: { name, clientId, civ, ability } }` → `{ sessionId, playerIndex }`. A logged-in bot account joins as a player-bot, if the lobby allows them ([Bot accounts](bot-accounts.md)). |
 | POST | `/sessions/watch` | public | Watch as a spectator: `{ joinCode, password, viewer: { name, clientId } }` |
+| POST | `/sessions/preview` | public | Invite link: `{ joinCode, password }` → the lobby as the list of open games shows it (`hostName`, `status`, `playersCount`, `maxPlayers`, settings) plus `players` (names); never the password or session id |
 | GET | `/public-sessions` | public | Public lobbies and running public games, with the lobby's settings (`empires`, `kiCount`, `difficulty`, `randomCivs`, `events`, `eventMode`, `wonders`, `ranked`, `turnTime`, `customMapName`) for the filters of the open games |
 | GET | `/sessions/:id` | public | Lobby info |
 | DELETE | `/sessions/:id` | host (`{ clientId }`) | Cancel the lobby |
@@ -98,6 +99,7 @@ The `clientId` is a secret the browser generates and keeps; the game itself then
 | POST | `/:id/join` | Take a seat |
 | POST | `/:id/leave` | Leave before the start |
 | POST | `/:id/cancel` | Host cancels |
+| POST | `/:id/resign` | Resign while the game runs: the KI plays the seat to the end ([Resign](socket-events.md#resign)) |
 | POST | `/:id/invite` | Invite a player by username |
 | POST | `/:id/decline` | Decline an invitation |
 
@@ -130,6 +132,32 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 | GET | `/api/stats[?seats=humans\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
+
+## Seasons – `/api/seasons`
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/leaderboard?season=<id>&type=human\|bot` | Top 100 of a season (default: the running one) with `tier`, `games`, `wins` of the season; `seasons` (all, newest first), `tiers`, `placementGames`; `me`: one's own row when logged in and not in the top 100 |
+
+`GET /api/profile/:userId` (first page) also returns `season` (`{ id, endsAt, tier, games, wins, placementGames }`), `seasons` (closed seasons of the account), `badges` (`[{ k }]`) and `progress` (`nations`, `wonders`, `wins`, `played`).
+
+## Weekly challenge – `/api/challenge`
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| GET | `/?week=<YYYY-Www>` | public | The week (default: this one; back to the oldest week anyone played, older ones are refused) with its bounds, `previous` / `next`, `weeks` (all playable weeks, newest first), `setup` (map, nation, ability, KI count and level, events, wonders), the top 20 (each player's best attempt finished before the week ended), `finished` (players on the leaderboard) / `playing` (running attempts) and – logged in – `me`: `attempts` (finished), `running` (`{ asyncId, week }` of the running attempt of any week, or null), `ranked` (the leaderboard entry), `best` (a better later attempt, not ranked) |
+| POST | `/start` | login | `{ week? }`: start an attempt at this week or a past one (a Rundenspiel alone against three KI) → `{ asyncId }`. A running attempt (of any week) is resigned first: one runs at a time |
+
+## Friends – `/api/friends` (login)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | `{ friends: [{ id, username, mmr, online, seen, activity }], incoming, outgoing, invites, suggestions, max }`. `activity`: `{ status: lobby | playing, round, hostName }` plus `joinCode` / `password` / `full` of a public session |
+| POST | `/` | `{ username }` or `{ id }`: send a request; accepts at once when the other asked first. Not to oneself, bots, banned accounts or across a block; at most 200 friends and requests |
+| POST | `/:id/accept` | Accept the request of account `:id` |
+| DELETE | `/:id` | Decline, withdraw or end the friendship with account `:id` |
+
+Rate limit: 60 requests a minute per account.
 
 ## Push – `/api/push` (login)
 

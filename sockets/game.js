@@ -11,6 +11,7 @@ const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
+const Resign = require('../utils/resign');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
@@ -210,6 +211,7 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerBots !== undefined) newConfig.playerBots = newConfig.playerBots === true;
                 if (newConfig.playerBotLimit !== undefined) newConfig.playerBotLimit = int(newConfig.playerBotLimit, 1, 8) || null;
                 if (newConfig.isPublic !== undefined) newConfig.isPublic = newConfig.isPublic === true;
+                if (newConfig.hexTiles !== undefined) newConfig.hexTiles = newConfig.hexTiles === true;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -221,6 +223,11 @@ module.exports = function registerHandlers(io) {
             if (updated) {
                 ack({ ok: true });
                 io.to(sessionId).emit('lobby:config:update', updated);
+                // ready check (F17): new settings have to be confirmed again
+                if (session.players.some(p => p.ready)) {
+                    session.players.forEach(p => { p.ready = false; });
+                    io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+                }
             } else {
                 ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
@@ -239,6 +246,16 @@ module.exports = function registerHandlers(io) {
             } else {
                 ack({ error: 'Konnte Einstellungen nicht aktualisieren.' });
             }
+        });
+
+        // ── Ready check (F17): a player confirms the lobby; the host may start anyway ──
+        on(socket, 'lobby:ready', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'lobby') return ack({ error: 'Spiel läuft bereits.' });
+            sessions.recordActivity(sessionId);
+            me.ready = data.ready !== false;
+            ack({ ok: true, ready: me.ready });
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
         });
 
         // ── Start the game (host only) ───────────────────────────────────────
@@ -278,6 +295,7 @@ module.exports = function registerHandlers(io) {
 
             const finalIndex = engine.stateIndexOf(session.state, myIndex(), me);
 
+            if (me.resigned) return ack({ error: 'Du hast aufgegeben.' });
             if (session.state.cur !== finalIndex)
                 return ack({ error: 'Du bist nicht am Zug.' });
 
@@ -388,7 +406,7 @@ module.exports = function registerHandlers(io) {
         on(socket, 'turn:reclaim', (_data, ack) => {
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
             if (session.status !== 'playing' || !session.state) return ack({ error: 'Spiel läuft nicht.' });
-            if (!me.afk) return ack({ ok: true });
+            if (!me.afk || me.resigned) return ack({ ok: true });
             const S = session.state;
             const pi = engine.stateIndexOf(S, myIndex(), me);
             if (pi === -1) return ack({ error: 'Ungültiger Spieler.' });
@@ -401,6 +419,44 @@ module.exports = function registerHandlers(io) {
             ack({ ok: true });
             io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
             broadcastState(io, session);
+        });
+
+        // ── Resign (F16): the KI plays the seat to the end ───────────────────
+        on(socket, 'game:resign', (_data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            const S = session.state;
+            if (session.status !== 'playing' || !S || S.over) return ack({ error: 'Spiel läuft nicht.' });
+            if (me.resigned) return ack({ ok: true });
+            const pi = engine.stateIndexOf(S, myIndex(), me);
+            if (pi === -1) return ack({ error: 'Ungültiger Spieler.' });
+            const level = session.gameConfig.ranked ? AFK_KI_LEVEL.ranked : AFK_KI_LEVEL.normal;
+            me.resigned = true;
+            me.afk = false;
+            me.missedTurns = 0;
+            Object.assign(S.players[pi], { kind: 'ki', kiLevel: level });
+            sessions.recordActivity(sessionId);
+            console.log(`[Resign] Session ${sessionId}: ${me.name} resigned`);
+            engine.attachScenes(S, session);
+            Resign.logResign(engine.getEngine(), S, me.name);
+            const humans = session.players
+                .map((p, i) => p.kind === 'human' && !p.resigned ? engine.stateIndexOf(S, i, p) : -1)
+                .filter(i => i !== -1);
+            const startedWithKi = session.players.some(p => p.kind !== 'human');
+            const end = Resign.endAfterResign(engine.getEngine(), S, humans, startedWithKi);
+            ack({ ok: true });
+            io.to(sessionId).emit('game:resigned', { index: myIndex(), name: me.name });
+            io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
+            if (end) S.over = end;
+            else if (S.cur === pi) {
+                // it was our turn: the KI plays it now, then the game goes on
+                session.turnClock = null;
+                engine.finishTurnForAbsent(S, level, true, () => {
+                    broadcastState(io, session);
+                    checkGameOver(io, session);
+                });
+            }
+            broadcastState(io, session);
+            checkGameOver(io, session);
         });
 
         // ── Disconnect ───────────────────────────────────────────────────────
@@ -597,7 +653,7 @@ function startGame(io, session) {
     try {
         if (isPlaettchen) {
             const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
-            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed);
+            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed, { hex: !!session.gameConfig.hexTiles });
             if (!plan) return 'Für diese Spielerzahl gibt es keine Plättchenkarte.';
 
             // v66+: starting techs and wonder pools are rolled before placement
@@ -732,6 +788,8 @@ function publicPlayers(session) {
         botAccount: !!p.playerBot,      // a bot account plays this human seat (utils/bots.js)
         isBot: p.kind === 'bot' || p.kind === 'ki',     // computer seat (KI fill-in)
         afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
+        resigned: !!p.resigned,         // gave up: the KI plays the seat to the end
+        ready: !!p.ready || !!p.playerBot,      // lobby ready check; player-bots are always ready
     }));
 }
 
@@ -866,7 +924,7 @@ function timeOutTurn(io, session) {
     if (!lp) return;
 
     lp.missedTurns = (lp.missedTurns || 0) + 1;
-    const othersActive = session.players.some(p => p !== lp && p.kind === 'human' && !p.afk);
+    const othersActive = session.players.some(p => p !== lp && p.kind === 'human' && !p.afk && !p.resigned);
     lp.afk = lp.missedTurns >= AFK_AFTER && othersActive;
     const level = session.gameConfig.ranked ? AFK_KI_LEVEL.ranked : AFK_KI_LEVEL.normal;
     console.log(`[Turn timer] Session ${session.id}: time up for ${lp.name} (${lp.missedTurns} in a row${lp.afk ? ', KI keeps the seat' : ''})`);
@@ -912,11 +970,16 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                     console.error('Error fetching score for player', finalIndex, e);
                 }
             }
-            const points = finalPoints(scoreDetails, isWinner);   // + WIN_BONUS for the winner
+            const points = finalPoints(scoreDetails, isWinner);   // × WIN_FACTOR for the winner
 
+            // a player who resigned is out of the rating, like a Rundenspiel seat the KI took over
+            const gaveUp = !!lp.resigned;
             playersData.push({
-                dbUserId: lp.dbUserId,
-                dbUsername: lp.dbUsername,
+                dbUserId: gaveUp ? null : lp.dbUserId,
+                dbUsername: gaveUp ? null : lp.dbUsername,
+                replaced: gaveUp || undefined,
+                replacedUserId: gaveUp ? lp.dbUserId || null : undefined,
+                resigned: gaveUp || undefined,
                 name: lp.name,
                 civ: lp.civ,
                 ability: lp.ability,
@@ -974,6 +1037,15 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
                     }, { where: { id: p.dbUserId } });
                 }
             }
+        }
+
+        // Resigned accounts: a played (lost) game, in ranked games a fixed penalty
+        for (const p of playersData.filter(x => x.resigned && x.replacedUserId)) {
+            if (isRanked) p.penalty = -Resign.MMR_PENALTY;
+            await User.update({
+                gamesPlayed: sequelize.literal('"gamesPlayed" + 1'),
+                ...(isRanked ? { mmr: sequelize.literal(`GREATEST("mmr" - ${Resign.MMR_PENALTY}, 0)`) } : {}),
+            }, { where: { id: p.replacedUserId } });
         }
 
         // Log the Historic Match Record

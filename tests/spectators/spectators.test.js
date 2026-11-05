@@ -79,7 +79,7 @@ async function live(browser, errors) {
     await a.evaluate(() => MP.host());
     await a.waitForSelector('#mp-p-civ-0');
     if (!(await a.isChecked('#mp-set-public'))) throw new Error('a hosted lobby should be public');   // switchable in the lobby
-    await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 1, mapKey: 'gross' }));
+    await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 1, mapKey: '0' }));
     await a.waitForFunction(() => MP.gameConfig.playerCount === 2);
     const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password, sessionId: MP.sessionId }));
 

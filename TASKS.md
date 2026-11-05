@@ -20,12 +20,20 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 10 | F12 | [Chat: word filter, guests emote-only](#f12-chat-word-filter-and-guests-emote-only) | ✔ | ✔ | ✅ |
 | 11 | F13 | [Overall statistics](#f13-overall-statistics) | ✔ | ✔ | ✅ |
 | 12 | F14 | [What the others did, played on the map](#f14-what-the-others-did-played-on-the-map) | ✔ | ✔ (since your last turn) | ✅ |
-| later | F8 | [Friends list](#f8-friends-list) | | | later |
-| later | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | | | later |
+| 13 | F15 | [Invite link](#f15-invite-link) | ✔ | ✔ | ✅ |
+| 14 | F16 | [Resign](#f16-resign) | ✔ | ✔ | ✅ |
+| 15 | F17 | [Lobby ready check](#f17-lobby-ready-check) | ✔ | – | ✅ |
+| 16 | F18 | [Sound and tab alerts](#f18-sound-and-tab-alerts) | ✔ | ✔ | ✅ |
+| 17 | F19 | [Turn deadline per Rundenspiel](#f19-turn-deadline-per-rundenspiel) | – | ✔ | ✅ |
+| 18 | F20 | ["Next game" button](#f20-next-game-button) | – | ✔ | ✅ |
+| 19 | F8 | [Friends list](#f8-friends-list) | ✔ | ✔ | ✅ |
+| 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
+| 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
+| 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
 
-The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
-All planned features are on `development` (staging). Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
+F1–F14 are in production. Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
 ---
 
@@ -334,14 +342,175 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Status:** ✅ on `development`
 
+## F15 Invite link
+
+**Goal:** Bring a friend into a game with one link instead of a code and a password to type.
+
+**Decisions**
+- Live games: `/?join=CODE&pw=PASSWORD`, also for private lobbies. Rundenspiele: `/?join=CODE`.
+- The lobby has *🔗 Einladungslink teilen*: on phones the system's share sheet, elsewhere the clipboard (a prompt if both fail). The Rundenspiel invite dialog shares the same kind of link (before, its link only worked for public games).
+- Whoever opens a live-game link sees whose game it is (host, map, settings, players) and joins with their name, or watches if the game runs already or the lobby is full. A Rundenspiel link opens the game's join dialog (guests log in first).
+- The address is cleaned right away, so code and password don't stay in the browser history or a reload.
+
+**Implementation**
+- `sessions.js`: `sessionSummary()` (shared with `getPublicSessions()`), `previewSession(code, password)` without password and session id. `routes/api.js`: `POST /api/sessions/preview` (rate-limited like joining).
+- `mp.js`: `inviteUrl()`, `shareInvite()`, `openInvite()`, `acceptInvite()`; `join()` and `joinPublic()` share `joinWith()`. Old game versions (`/v96/` …) pass the link on to `/`.
+- Texts in `client/i18n.js`.
+
+**Tests:** `tests/invite/invite.test.js`: the button copies the link, the preview (fields, no password, wrong password), joining a private lobby through the link, a wrong password, a running game offers watching, a guest's Rundenspiel link asks for the login, a logged-in player joins a private Rundenspiel, English.
+
+**Status:** ✅ on `development`
+
+## F16 Resign
+
+**Goal:** Give up a game you can't win instead of leaving the others waiting.
+
+**Decisions**
+- *🏳 Aufgeben* in the game menu of live games and Rundenspiele, with a confirmation (it names the MMR in ranked games). Only while the game runs.
+- The KI plays the seat to the end (*mittel*, ranked *schwer*); the player stays on the page and watches (banner, can be closed). The player list shows *Aufgegeben*, the others get a toast, the game log a line.
+- Rating: like a Rundenspiel seat the KI took over after 7 days – out of the MMR calculation, a played game, in ranked games −15 MMR.
+- Two cases end the game at once: a game that began without KI seats has one human left (that human wins), or nobody human is left (the most points win, so no KI-only game runs on).
+
+**Implementation**
+- `utils/resign.js`: `endAfterResign()` (the two end cases, `S.over.resign`), `logResign()`, `MMR_PENALTY`.
+- Live (`sockets/game.js`): `game:resign` sets `resigned` on the lobby player, makes the seat KI, plays the turn if it was theirs (`finishTurnForAbsent`), sends `game:resigned`. Actions of a resigned player are refused, `turn:reclaim` doesn't give the seat back, the turn timer's AFK rule ignores them. `processGameOverMmr` keeps them out of the rating (`replaced`, `replacedUserId`, `resigned`, `penalty`) and applies the penalty. A rematch clears it (`sessions.js`).
+- Rundenspiele: `async/logic.js resign()` (uses `replaceSeat`, `resigned` on the seat and in the views), `service.resign()` (penalty or a played game), `async:resign`, `POST /api/async/:id/resign`.
+- `utils/facts.js`: victory type `resign` (overall statistics: *Aufgabe*).
+- `mp.js`: `hasResigned()`, `canResign()`, `resign()`, the menu button, the banner, the player-list tag, the Rundenspiel seat label *KI (… hat aufgegeben)*, the two end texts translated (`translateOver`). Texts in `client/i18n.js`.
+
+**Tests:** `tests/resign/resign.test.js`: the end rule, a ranked live duel of two accounts (menu button, the win, match record, 985 MMR and one game for the one who resigned), a live game with KI (the KI plays the turn, actions refused, banner, player list, log; the last human resigns → points), Rundenspiele (a duel ends, a game with KI goes on and the player watches). `rematch`, `score/win-bonus`, `stats/overall`, `timer`, `i18n` pass.
+
+**Status:** ✅ on `development`
+
+## F17 Lobby ready check
+
+**Goal:** The host starts when everyone has picked a nation, not while someone is still choosing.
+
+**Decisions**
+- Every player except the host taps *Ich bin bereit* (and can take it back). The status column shows *✓ Bereit* / *Wählt noch …*; the host doesn't tick.
+- The host's *Spiel starten (n/m bereit)* asks before starting while someone isn't ready; the server doesn't block the start.
+- New lobby settings clear every tick, and whoever was ready is told to confirm again. Player-bots are always ready. Kicking from the lobby existed already.
+
+**Implementation**
+- `sockets/game.js`: `lobby:ready { ready }`, ticks cleared after `lobby:config`, `ready` in `publicPlayers()`. `sessions.js`: the rematch clears it.
+- `mp.js`: `readyCount()`, `readyCell()`, `readyHint()`, `setReady()`, `startClick()` (the button; `startGame()` stays without the question for the Discord Activity and tests). Texts in `client/i18n.js`. The invite bar and the status column wrap on phones.
+
+**Tests:** `tests/ready/ready.test.js`. `i18n`, `mobile`, `bots`, `rematch` pass.
+
+**Status:** ✅ on `development`
+
+## F18 Sound and tab alerts
+
+**Goal:** Notice your turn, a full lobby or a found match while the tab is in the background.
+
+**Decisions**
+- Tones for: your turn begins, a player joins your lobby, everyone is ready (host only), the game starts, a ranked match is found, a chat message while the chat panel is closed or the tab hidden. Not for one's own messages, not when a Rundenspiel is opened in one's turn (only a turn that begins while it is open).
+- While the tab is hidden, its title alternates with a short text (*▶ Du bist dran*, *%s ist beigetreten*, …) until the player is back.
+- One switch per device, on by default: a checkbox in the multiplayer menu and *🔔 Töne: an/aus* in the game menu.
+
+**Implementation**
+- `client/alerts.js` (new, after mp.js via `inject.js`): tones synthesized with the Web Audio API (no sound files), unlocked by the first tap or key (autoplay rules), `notify()`, `blink()`, `soundOn()` / `setSound()` (`hochciv.alerts.sound`), `log` for tests.
+- Calls: `MP.alert()` in `applyState` (turn), `player:joined`, `lobby:player:updated` (all ready), `game:start`; `client/chat.js` `receive()`; `client/matchmaking.js` `match:found`. Texts in `client/i18n.js`.
+
+**Tests:** `tests/alerts/alerts.test.js`. `loading`, `chat`, `i18n`, `match` pass.
+
+**Status:** ✅ on `development`
+
+## F19 Turn deadline per Rundenspiel
+
+**Goal:** Faster Rundenspiele for groups who play daily.
+
+**Decisions**
+- The host picks *Zeit pro Zug* when creating a Rundenspiel: 1, 3 or 7 days (default 7, older games 7).
+- Reminder and takeover scale with it (reminder at 5/7, takeover at the end; 1 day: about 17 hours, then 1 day). Finding players (setup) always has 7 days.
+- The open games show *1 Tag pro Zug* / *3 Tage pro Zug*, and the filter *Zeit pro Zug: Mit Zeitlimit* finds them. The list shows the hours left once less than a day is left. The e-mails name the real time.
+
+**Implementation**
+- `async/logic.js`: `config.turnDays` (`TURN_DAYS`). `async/service.js`: `timeoutOf()`, `reminderOf()`, `duration()`; the sweep looks at games waiting longer than the shortest reminder and checks each one; `deadline` in the list.
+- `mp.js`: the form's select, `lobbyTraits()` / `traitsHtml()`, hours left in `row()`. Texts in `client/i18n.js`.
+- `docker-compose.local.yml` passes `ASYNC_TIMEOUT_MS`, `ASYNC_REMINDER_MS`, `ASYNC_SWEEP_MS` for tests.
+
+**Tests:** `tests/deadline/deadline.test.js` (scaled-down timeouts). `lobbies/lobby-filter`, `summary`, `i18n` pass.
+
+**Status:** ✅ on `development`
+
+## F20 "Next game" button
+
+**Goal:** Play all Rundenspiele that wait for you in one go.
+
+**Decisions**
+- In a Rundenspiel, while it isn't one's turn (or the game is over), *▶ Nächstes Spiel (n)* appears below the waiting note when other games wait for one's turn; it opens the one with the nearest deadline. Hidden during one's own turn.
+- The list is fetched right after one's turn ends and at most every 20 seconds otherwise.
+
+**Implementation**
+- `mp.js`: `refreshNext()` (from `syncTurnBlocker`), `drawNextGame()` (below the AFK/resign banner if one is shown), `openNextGame()` (closes the game and opens the next; on an older game version page via `/?async=`). `ASYNC.close()` hides it. Texts in `client/i18n.js`.
+
+**Tests:** `tests/nextgame/nextgame.test.js`.
+
+**Status:** ✅ on `development`
+
 ---
 
-## Later
+## F8 Friends list
 
-Not started. These features need groundwork that doesn't exist yet.
+**Goal:** Play again with people you like: see who is online and bring them into a game.
 
-### F8 Friends list
-A friends list with online status and direct invitations to lobbies and Rundenspiele. Needs friends functionality (requests, accept, block) first.
+**Decisions**
+- Accounts only (not bots). Requests by name, from a player profile, or from *Zuletzt gespielt mit* (accounts of one's last 20 matches). Two crossing requests accept each other. A chat block (either way) or a ban stops requests. At most 200 friends and open requests.
+- Online = a game page with an open socket (a logged-in page connects right away). The list shows *Online*, *In einer Lobby*, *Spielt · Runde n* or *Offline · vor …*; a friend's public lobby can be joined and a public game watched from there.
+- Live lobbies: *👥 Freunde einladen* lists online friends; the invited friend gets a card (*Ansehen* opens the invite dialog of F15). While playing, only a note – the invitation waits in the list for 15 minutes as long as the lobby waits.
+- Rundenspiele: the existing invitation by name, with friend names to pick in the create form and the invite dialog.
+- Account deletion removes the friendships; a merged Discord Activity account passes them on.
 
-### F10 Seasons, leaderboard and badges
-Seasons with tiers and a soft MMR reset, a public leaderboard, and badges on the profile (wins with each nation, wonders built, …).
+**Implementation**
+- `models/Friendship.js` (`friendships`), `utils/friends.js` (list, request, accept, remove, live invitations, suggestions, delete/merge), `utils/presence.js` (online sockets, last seen), `sessions.js` `activityOf()` / `lobbyByCode()`, `routes/friends.js` (`/api/friends`, rate limit per account), `sockets/friends.js` (`friends:invite`; `friends:changed` / `friends:invited` to the account's sockets). `utils/deleteAccount.js`, `utils/mergeAccounts.js`.
+- `client/friends.js` (after mp.js via `inject.js`): the menu tab with a count of requests and invitations, the lobby panel, the invitation card, `chipsHtml()` for Rundenspiele, `decorateProfile()` for `client/profile.js`. `mp.js`: the third tab, `FRIENDS.start()` after login, `FRIENDS.attach()` on every socket. Texts in `client/i18n.js`.
+
+**Tests:** `tests/friends/friends.test.js`. `loading`, `i18n`, `bots`, `security`, `account/pages`, `maps`, `invite`, `ready` pass.
+
+**Status:** ✅ on `development`
+
+## F10 Seasons, leaderboard and badges
+
+**Goal:** Something to play for over weeks: a season standing, a tier, badges to collect.
+
+**Decisions**
+- A season is a calendar quarter (UTC). The first one began without a reset. At its end the final standings are kept and every MMR moves halfway back to 1000. The MMR stays one number, shared by humans and bots.
+- Tiers by MMR: Bronze, Silber (950), Gold (1100), Platin (1250), Diamant (1400), once an account has 5 ranked games in the season.
+- *🏆 Rangliste* in the main menu and the multiplayer menu: the top 100 of the running or a closed season, players or bots, own row marked (and shown below when not in the top 100).
+- Badges on the profile, computed from the history (also older matches): first win, 10 / 50 wins, 10 / 50 / 100 games, each kind of victory and all four, every nation, 10 wonders, 5 duels, season tiers Gold+, podium, champion. Plus the season's tier, the closed seasons and "wins with n of m nations".
+
+**Implementation**
+- `models/Season.js`, `models/SeasonResult.js`; `utils/seasons.js` (`ensure()` at startup and hourly, `close()`, `leaderboard()`, `profileOf()`); `utils/badges.js`; `routes/seasons.js` (`GET /api/seasons/leaderboard`); `routes/profile.js` adds season and badges. Account deletion and Activity merges handle the results. `GET /api/leaderboard` is unchanged.
+- `client/ranking.js` (new, via `inject.js`), the menu button and the link in the multiplayer menu (`mp.js`); `client/profile.js` shows tier, past seasons and badges (`window.HC_SEASONS`). Texts in `client/i18n.js`.
+
+**Tests:** `tests/seasons/seasons.test.js`. `stats`, `i18n`, `loading`, `score/win-bonus`, `account/pages` pass.
+
+**Status:** ✅ on `development`
+
+## F21 Weekly challenge
+
+**Goal:** A shared goal for everyone each week, also for players who have no opponent at hand.
+
+**Decisions**
+- A week is an ISO week (Monday 00:00 UTC). Its setup comes from a hash of the week's id, the same for everybody and without storage: original or large map, nation and ability, four empires (three KI with the base ability at one of the two hardest levels), events (on/off, easy/hard), wonders, and a fixed seed.
+- Played as a Rundenspiel alone against the KI (own pace, the normal 7 days per turn), as often as a player likes, one attempt at a time: starting another (also of another week) resigns the running one, after asking. It can't be left or cancelled; resigning or a KI takeover counts as a loss. Not ranked; it counts as a game in the history.
+- Leaderboard of the week: each player's best attempt; a victory first, then fewer rounds, then more points, then who finished first. Top 20, one's own result, how many still play.
+- Past weeks (back to the oldest week anyone played; earlier weeks can't be viewed) can be picked and played again, but their leaderboard is closed: only attempts finished before the week's end count; later ones show as "best attempt, not ranked".
+- *📅 Wochen-Challenge* in the multiplayer menu; the attempt is labelled in the Rundenspiele list.
+
+**Implementation**
+- `utils/challenge.js` (`weekOf`, `boundsOf`, `setupOf`, `info`, `start`, `recordResult`, `migrate` drops the old one-attempt unique index), `models/ChallengeResult.js` (`challenge_results`, one row per attempt), `routes/challenge.js` (`/api/challenge`). `async/logic.js`: `opts.challenge` lets one human play and fills the KI seats at once; leaving and cancelling are refused. `async/service.js`: `create(user, body, internal)` – only the server sets the challenge; `processResult` records it. Account deletion and Activity merges handle the rows.
+- `client/challenge.js` (via `inject.js`), the button in the multiplayer menu and the label in `ASYNC.row` (`mp.js`). Texts in `client/i18n.js`.
+
+**Tests:** `tests/challenge/challenge.test.js`. `resign`, `nextgame`, `bots`, `summary`, `i18n` pass.
+
+**Status:** ✅ on `development`
+
+## F22 Team mode
+
+**Goal:** Play together against others, e.g. 2 against 2.
+
+**Planned:** the host splits the empires into teams in the lobby; a team wins together, and teammates have a team chat. The details depend on what the engine allows without changing the game files (alliances, victory check).
+
+**Status:** built (PRs #90, #91), then removed before it reached `main`: it does not fit the game for now. It may come back; the code is in the history of `development` (commits 56152c0 and 7bf2a65).

@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v96', 'v93', 'v83'];
+const OLD_VERSIONS = ['v98'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -28,7 +28,7 @@ const MP = {
     user: null,
     asyncId: null,          // id of the open asynchronous game ("Rundenspiel"), else null
     lastTurnKey: null,
-    WIN_BONUS: 10,          // points for the winner on top of victoryScore – same as utils/score.js
+    WIN_FACTOR: 2,          // the winner's victoryScore is multiplied by this – same as utils/score.js
     TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
     turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
     spectator: false,       // watching without a seat (live game or public Rundenspiel)
@@ -46,7 +46,39 @@ const MP = {
     },
     /** It is our turn and we play it ourselves. */
     isMyTurn: function () {
-        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk();
+        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk() && !this.hasResigned();
+    },
+    /** We gave up (F16): the KI plays our seat to the end, we only watch. */
+    hasResigned: function () {
+        if (this.asyncId) return !!(typeof ASYNC !== 'undefined' && ASYNC.view && ASYNC.view.resigned);
+        const me = (this.players || []).find(p => p.index === this.lobbyIndex);
+        return !!(me && me.resigned);
+    },
+    canResign: function () {
+        if (!this.active || this.spectator || typeof S === 'undefined' || !S || S.over || this.hasResigned()) return false;
+        if (this.asyncId) return !!(ASYNC.view && ASYNC.view.status === 'playing' && ASYNC.view.myIndex >= 0);
+        return this.playerIndex != null && this.playerIndex >= 0;
+    },
+    resign: function () {
+        const ranked = this.asyncId ? !!(ASYNC.view && ASYNC.view.config && ASYNC.view.config.ranked) : !!(this.gameConfig && this.gameConfig.ranked);
+        const msg = TX('Wirklich aufgeben? Die KI spielt dein Reich zu Ende, und das Spiel zählt als Niederlage.')
+            + (ranked ? ' ' + TX('Gewertetes Spiel: −%s MMR.', this.RESIGN_MMR) : '');
+        if (!confirm(msg)) return;
+        if (typeof closeModal === 'function') closeModal();
+        const done = res => {
+            if (res && res.error) return toast(TXS(res.error));
+            this._resignBannerClosed = false;
+            toast(TX('Du hast aufgegeben.'));
+            this.drawAfkBanner();
+        };
+        if (this.asyncId) this.socket.emit('async:resign', { id: this.asyncId }, done);
+        else this.socket.emit('game:resign', {}, done);
+    },
+    RESIGN_MMR: 15,                 // utils/resign.js MMR_PENALTY
+    /** The two end texts of utils/resign.js come from the server in German. */
+    translateOver: function (over) {
+        if (over && over.resign && over.how) over.how = TXS(over.how);
+        return over;
     },
 
     /** Send a game action to the server – live lobby or asynchronous game. */
@@ -59,6 +91,11 @@ const MP = {
         } else {
             this.socket.emit('action', payload, cb);
         }
+    },
+
+    /** Sound and tab alerts (client/alerts.js), if loaded. */
+    alert: function (kind, title) {
+        if (typeof ALERTS !== 'undefined') ALERTS.notify(kind, title);
     },
 
     /** A new authoritative state arrived: redraw, start our turn if it just began. */
@@ -74,6 +111,7 @@ const MP = {
             MP.lastTurn = S.cur;
             humanTurnStart();
             MP.animDeinZug();
+            MP.alert('turn', '▶ ' + TX('Du bist dran'));
         } else {
             MP.lastTurnKey = key;
             MP.lastTurn = S.cur;
@@ -281,7 +319,8 @@ const MP = {
             const bot = lp.isBot || sp.kind === 'bot' || sp.kind === 'ki';
             const name = lp.name || civ.n;
             // an absent player's seat (turn timer) is played by the KI, but stays theirs
-            const status = lp.afk ? `<span class="mp-pl-tag off" title="${TX('Hat dreimal nicht gezogen – die KI spielt den Platz')}">${TX('KI (abwesend)')}</span>`
+            const status = lp.resigned ? `<span class="mp-pl-tag off" title="${TX('Hat aufgegeben – die KI spielt das Reich zu Ende')}">${TX('Aufgegeben')}</span>`
+                : lp.afk ? `<span class="mp-pl-tag off" title="${TX('Hat dreimal nicht gezogen – die KI spielt den Platz')}">${TX('KI (abwesend)')}</span>`
                 : bot ? `<span class="mp-pl-tag">${sp.kind === 'bot' ? TX('Bot') : TX('KI')}</span>`
                 : lp.connected === false ? `<span class="mp-pl-tag off" title="${TX('Nicht verbunden')}">${TX('offline')}</span>` : '';
             return `<div class="mp-pl-row${S.cur === i && !S.over ? ' cur' : ''}">
@@ -300,7 +339,7 @@ const MP = {
         const o = S.over;
         const winners = o.winners || [o.winner];
         // The same points the server stores (utils/score.js): victoryScore for every empire, the
-        // winner gets WIN_BONUS on top. Engines without victoryScore: only the claims are scored.
+        // winner's is multiplied by WIN_FACTOR. Engines without victoryScore: only the claims are scored.
         const score = pi => {
             if (typeof victoryScore === 'function') { try { return victoryScore(S, pi); } catch (e) { /* below */ } }
             return (o.score || []).find(x => x.pi === pi);
@@ -310,12 +349,12 @@ const MP = {
             const civ = typeof civOf === 'function' ? civOf(sp) : { n: sp.civ };
             const sc = score(i), won = winners.includes(i);
             return { i, won, name: lp.name || civ.n, userId: lp.userId, bot: lp.isBot, civ: civ.n,
-                points: sc ? sc.total + (won ? this.WIN_BONUS : 0) : null };
+                points: sc ? sc.total * (won ? this.WIN_FACTOR : 1) : null };
         }).filter(r => S.players[r.i].kind !== 'barbar')
             .sort((a, b) => (b.points || 0) - (a.points || 0));
         const scored = rows.some(r => r.points != null);
         const pts = r => r.points == null ? '–'
-            : r.won ? `${r.points} <small>(${TX('inkl. +%s Sieg', this.WIN_BONUS)})</small>` : r.points;
+            : r.won ? `${r.points} <small>(${TX('×%s für den Sieg', this.WIN_FACTOR)})</small>` : r.points;
         const html = `<div id="mp-go-players"><table class="tbl" style="margin:10px 0">
             <tr><th>${TX('Spieler')}</th><th>${TX('Reich')}</th>${scored ? `<th>${TX('Punkte')}</th>` : ''}</tr>
             ${rows.map(r => `<tr${r.won ? ' style="font-weight:700"' : ''}>
@@ -424,6 +463,7 @@ const MP = {
             this.socket = io(this.serverUrl);
             if (typeof CHAT !== 'undefined') CHAT.attach(this.socket);       // client/chat.js
             if (typeof MATCH !== 'undefined') MATCH.attach(this.socket);     // client/matchmaking.js
+            if (typeof FRIENDS !== 'undefined') FRIENDS.attach(this.socket); // client/friends.js
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
@@ -445,6 +485,7 @@ const MP = {
                 MP.players = data.players;
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;
                 toast(TX('%s ist beigetreten.', data.name));
+                if (MP.renderLobby) MP.alert('join', TX('%s ist beigetreten', data.name));
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
             });
@@ -456,7 +497,10 @@ const MP = {
                 MP.updatePlayerList();
             });
             this.socket.on('lobby:player:updated', players => {
+                const wasReady = MP.allReady();
                 MP.players = players;
+                // the host: everyone ticked "ready" (F17)
+                if (!wasReady && MP.allReady() && MP.lobbyIndex === MP.hostIndex && MP.renderLobby) MP.alert('ready', '✓ ' + TX('Alle sind bereit'));
                 if (MP.renderLobby) MP.renderLobby();
                 MP.updatePlayerList();
                 // turn timer: a seat went to the KI or came back
@@ -481,6 +525,9 @@ const MP = {
                 if (MP.renderLobby) MP.renderLobby();
             });
             this.socket.on('lobby:config:update', (newConfig) => {
+                // ready check: changed settings have to be confirmed again (the server clears it)
+                const me = (MP.players || []).find(p => p.index === MP.lobbyIndex);
+                if (me && me.ready && MP.lobbyIndex !== MP.hostIndex) toast(TX('Der Host hat die Einstellungen geändert – bitte bestätige erneut.'));
                 MP.gameConfig = newConfig;
                 if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
             });
@@ -524,6 +571,12 @@ const MP = {
                 Math.random = () => (data.seed / (Math.pow(2, 31)));
                 try {
                     window.startPlacement(data.cfg);
+                    // the world view shows everybody as they are – as bots they would have no ability
+                    if ($('pl-world')) $('pl-world').onclick = () => {
+                        const disguised = placeState.cfg.players;
+                        placeState.cfg.players = MP.players;
+                        try { placeWorldView(); } finally { placeState.cfg.players = disguised; }
+                    };
                 } finally {
                     Math.random = origRandom;
                 }
@@ -542,6 +595,7 @@ const MP = {
 
             this.socket.on('game:start', data => {
                 if (MP.asyncId) return;
+                MP.alert('start', '▶ ' + TX('Das Spiel beginnt'));
                 MP.clearScenes();
                 S = data.state;
                 MP.playerIndex = data.yourIndex;
@@ -604,8 +658,13 @@ const MP = {
                 if (typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(data);
             });
 
+            this.socket.on('game:resigned', d => {
+                if (!d || (d.index === MP.lobbyIndex && !MP.spectator)) return;
+                toast(TX('%s hat aufgegeben. Die KI spielt das Reich weiter.', d.name));
+            });
+
             this.socket.on('game:over', winData => {
-                S.over = winData;
+                S.over = MP.translateOver(winData);
                 gameOver();
             });
         });
@@ -614,6 +673,12 @@ const MP = {
     syncTurnBlocker: function () {
         MP.drawAfkBanner();
         MP.drawSummaryButton();
+        // Rundenspiele: our turn just ended → which other games wait for us (F20)
+        if (MP.asyncId) {
+            const mine = MP.isMyTurn();
+            MP.refreshNext(MP._wasMyTurn && !mine);
+            MP._wasMyTurn = mine;
+        } else MP.drawNextGame();
         const wait = document.querySelector('.mp-waiting-toast');
         if (wait && MP.spectator) wait.textContent = TX('Du schaust zu');
         if (S && !MP.isMyTurn() && !S.over) {
@@ -621,6 +686,59 @@ const MP = {
         } else {
             document.body.classList.remove('mp-waiting');
         }
+    },
+
+    // ── "Next game" (F20): the other Rundenspiele that wait for us ───────────
+    nextIds: [],
+    _nextAt: 0,
+    /** Asks the server at most every 20 s (force: right after our turn ended). */
+    refreshNext: async function (force) {
+        if (!this.asyncId || !this.user) return this.drawNextGame();
+        if (!force && Date.now() - this._nextAt < 20000) return this.drawNextGame();
+        this._nextAt = Date.now();
+        const here = this.asyncId;
+        try {
+            const mine = (await ASYNC.api('')).mine || [];
+            // the nearest deadline first
+            this.nextIds = mine.filter(g => g.yourTurn && g.id !== here)
+                .sort((a, b) => (a.deadline || Infinity) - (b.deadline || Infinity)).map(g => g.id);
+        } catch (_) { /* offline – keep the last list */ }
+        this.drawNextGame();
+    },
+    drawNextGame: function () {
+        let el = $('mp-next-game');
+        if (!el) {
+            if (!document.body) return;
+            el = document.createElement('button');
+            el.id = 'mp-next-game';
+            el.type = 'button';
+            el.className = 'btn small primary';
+            el.hidden = true;
+            el.onclick = () => MP.openNextGame();
+            document.body.appendChild(el);
+        }
+        const n = this.nextIds.length;
+        const show = !!this.asyncId && n > 0 && typeof S !== 'undefined' && !!S && (S.over || !this.isMyTurn());
+        el.hidden = !show;
+        if (!show) return;
+        el.textContent = '▶ ' + TX('Nächstes Spiel (%s)', n);
+        el.title = n === 1 ? TX('Ein anderes Rundenspiel wartet auf deinen Zug.') : TX('%s andere Rundenspiele warten auf deinen Zug.', n);
+        // below the banners at the top, if one is shown
+        const banner = $('mp-afk-banner');
+        const top = banner && !banner.hidden ? banner.getBoundingClientRect().bottom + 6 : null;
+        el.style.top = top ? top + 'px' : '';
+    },
+    openNextGame: function () {
+        const id = this.nextIds.shift();
+        if (!id) return;
+        this.drawNextGame();
+        // an older game version only opens its own games: the current page sorts it out
+        if (OLD_VERSIONS.includes(APP_VERSION_HERE)) { location.href = '/?async=' + encodeURIComponent(id); return; }
+        if (typeof closeModal === 'function') closeModal();
+        ASYNC.close();
+        this._wasMyTurn = false;
+        this._nextAt = 0;
+        ASYNC.open(id);
     },
 
     // ── What the others did, played on the map (client/scenes.js) ───────────
@@ -777,7 +895,15 @@ const MP = {
     /** Banner while the KI plays our seat, with the button to take it back. */
     drawAfkBanner: function () {
         const el = $('mp-afk-banner');
-        if (el) el.hidden = !(this.active && this.isAfk() && typeof S !== 'undefined' && S && !S.over);
+        if (!el) return;
+        const running = this.active && typeof S !== 'undefined' && !!S && !S.over;
+        const resigned = running && this.hasResigned();
+        el.hidden = !(running && (resigned ? !this._resignBannerClosed : this.isAfk()));
+        const text = $('mp-afk-text'), btn = $('mp-afk-btn'), x = $('mp-afk-x');
+        if (text) text.textContent = resigned ? TX('Du hast aufgegeben – die KI spielt dein Reich zu Ende. Du kannst weiter zuschauen.')
+            : TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.');
+        if (btn) btn.hidden = resigned;
+        if (x) x.hidden = !resigned;
     },
     reclaimSeat: function () {
         this.socket.emit('turn:reclaim', {}, res => {
@@ -870,10 +996,15 @@ const MP = {
               ${newGame('', 'MATCH.start()', '🔥 ' + TX('Gewertetes Spiel suchen'), this.user ? TX('Gegner mit ähnlicher MMR, gewertet.') : TX('Nur mit Anmeldung.'),
                     this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`)}
               ${this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots in der Suche zulassen')}</label>` : ''}
+              ${typeof RANKING !== 'undefined' ? `<a href="#" class="mph-rank-link" onclick="RANKING.open(null); return false">🏆 ${TX('Rangliste und Saison')}</a>` : ''}
             </div>` : ''}
           </div>
-          ${typeof MAPBROWSER !== 'undefined' ? `<button class="btn ghost mph-maps" onclick="MAPBROWSER.open()">🗺 ${TX('Karten entdecken')}<small>${TX('Karten anderer Spieler ansehen, favorisieren und spielen.')}</small></button>` : ''}
-          <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}</div>
+          <div class="mph-more">
+            ${typeof MAPBROWSER !== 'undefined' ? newGame('mph-maps', 'MAPBROWSER.open()', '🗺 ' + TX('Karten entdecken'), TX('Karten anderer Spieler ansehen, favorisieren und spielen.')) : ''}
+            ${typeof CHALLENGE !== 'undefined' ? newGame('mph-challenge', 'CHALLENGE.open()', '📅 ' + TX('Wochen-Challenge'), CHALLENGE.hubText()) : ''}
+          </div>
+          ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
+          <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}${typeof FRIENDS !== 'undefined' ? tabBtn('friends', '👥 ' + TX('Freunde')) : ''}</div>
           <div class="mph-panes">
           <div class="mph-pane" data-pane="running">
             <div id="mph-running"><p class="sub mph-empty">${TX('Lade...')}</p></div>
@@ -891,6 +1022,7 @@ const MP = {
             ${this.filterHtml()}
             <div id="mph-open"><p class="sub mph-empty">${TX('Lade...')}</p></div>
           </div>
+          ${typeof FRIENDS !== 'undefined' ? `<div class="mph-pane" data-pane="friends"><div id="mph-friends"><p class="sub mph-empty">${TX('Lade...')}</p></div></div>` : ''}
           </div>
         </div>`;
                 modal(TX('Multiplayer'), h);
@@ -939,13 +1071,17 @@ const MP = {
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                             ${isMarathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
                         </td>
-                        <td>${p.connected ? TX('Verbunden') : TX('Wartet')}</td>
+                        <td>${this.readyCell(p, isMe, isPlayerHost)}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">${TX('Kick')}</button>` : ''}</td>
                     </tr>
                 `}).join('');
 
                 h = `
           <h3>${TX('Lobby')} <span class="sub" style="float:right">${TX('Code')}: <b>${this.joinCode}</b> · ${TX('Passwort')}: <b>${this.password}</b></span></h3>
+          <div class="mp-invite-bar"><button class="btn small" id="mp-invite-btn" onclick="MP.shareInvite(MP.joinCode, MP.password)">🔗 ${TX('Einladungslink teilen')}</button>
+            ${typeof FRIENDS !== 'undefined' ? FRIENDS.lobbyButton() : ''}
+            <span class="sub">${TX('Wer den Link öffnet, kommt direkt in diese Lobby.')}</span></div>
+          ${typeof FRIENDS !== 'undefined' ? FRIENDS.lobbyPanel() : ''}
           <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
             <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>${TX('Spieler')}</th><th>${TX('Ziv')}</th><th>${TX('Status')}</th><th></th></tr>
             ${trs}
@@ -956,7 +1092,6 @@ const MP = {
               <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
                   <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>${TX('Originalkarte (12 × 18)')}</option>
-                  <option value="gross" ${this.gameConfig.mapKey === 'gross' ? 'selected' : ''}>${TX('Große Karte (15 × 24)')}</option>
                   <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
                   ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>${TX('Marathon (24 × 36)')}</option>` : ''}
                   ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>${TX('Eigene Karte')}</option>` : ''}
@@ -965,6 +1100,10 @@ const MP = {
               ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost)
                     : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP.browseMaps()').replace(/ · $/, '')}</p>` : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
+              ${this.gameConfig.mapKey === 'random' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span>
+                <input type="checkbox" id="mp-set-hex" onchange="MP.updateLobbyConfig()" ${this.gameConfig.hexTiles ? 'checked' : ''}>
+              </label>
+              ${this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Sechseckige Plättchen statt Dreiecke, bei jeder Zahl von Reichen.')}</p>` : ''}` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
@@ -1016,7 +1155,8 @@ const MP = {
               </label>
           </div>
 
-          ${isHost ? `<button class="btn wide primary" onclick="MP.startGame()">${TX('Spiel starten')}</button>` : ''}
+          ${isHost ? `<button class="btn wide primary" id="mp-start-btn" onclick="MP.startClick()">${TX('Spiel starten')}${this.readyCount().of ? ` <small>(${TX('%s/%s bereit', this.readyCount().ready, this.readyCount().of)})</small>` : ''}</button>`
+                : `<p class="sub mp-ready-hint">${this.readyHint()}</p>`}
         `;
             }
             modal(TX('Multiplayer'), h);
@@ -1054,6 +1194,11 @@ const MP = {
         if (rs) ASYNC.data = rs;
         this._hubLast = [live, rs];
         this.hubDraw(live, rs);
+        // friends: every third refresh (the list asks for the recent games too)
+        if (typeof FRIENDS !== 'undefined') {
+            this._hubFriendsN = (this._hubFriendsN || 0) + 1;
+            if (this._hubFriendsN % 3 === 1 || this.hubTab === 'friends') FRIENDS.load(); else FRIENDS.drawHub();
+        }
     },
 
     hubDraw: function (live, rs) {
@@ -1128,7 +1273,7 @@ const MP = {
     FILTER_KEYS: ['kind', 'map', 'empires', 'ki', 'level', 'civs', 'events', 'wonders', 'ranked', 'turn', 'bots'],
 
     filterDefs: function () {
-        const maps = [['0', TX('Originalkarte')], ['gross', TX('Große Karte')], ['plaettchen', TX('Plättchenkarte')]]
+        const maps = [['0', TX('Originalkarte')], ['plaettchen', TX('Plättchenkarte')]]
             .concat(typeof marathonMap === 'function' ? [['marathon', TX('Marathon')]] : [])
             .concat(typeof checkCustomMap === 'function' ? [['eigene', TX('Eigene Karte')]] : []);
         return {
@@ -1219,7 +1364,7 @@ const MP = {
             kind: 'live', map: x.mapKey === 'random' ? 'plaettchen' : String(x.mapKey || '0'),
             customMapName: x.customMapName, empires: x.empires || x.maxPlayers, ki: x.kiCount || 0,
             level: this.kiLevel(x.difficulty), civs: x.randomCivs ? 'random' : 'fixed',
-            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off',
+            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off', hexTiles: !!x.hexTiles,
             ranked: x.ranked ? 'yes' : 'no', turn: x.turnTime ? 'timed' : 'free', turnTime: x.turnTime || 0,
             bots: x.playerBots ? 'yes' : 'no', free: x.playersCount < x.maxPlayers,
             names: [x.hostName],
@@ -1230,9 +1375,10 @@ const MP = {
             kind: 'async', map: c.mapKey === 'random' ? 'plaettchen' : String(c.mapKey || '0'),
             customMapName: c.customMapName, empires, ki: Math.max(0, empires - (c.humanCount || empires)),
             level: this.kiLevel(c.difficulty), civs: c.civMode === 'random' ? 'random' : 'fixed',
-            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off',
-            // Rundenspiele have days per turn, no turn timer
-            ranked: c.ranked ? 'yes' : 'no', turn: 'free', turnTime: 0,
+            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off', hexTiles: !!c.hexTiles,
+            // Rundenspiele have days per turn (F19): fewer than 7 count as "with time limit"
+            ranked: c.ranked ? 'yes' : 'no', turn: c.turnDays && c.turnDays < 7 ? 'timed' : 'free', turnTime: 0,
+            turnDays: c.turnDays && c.turnDays < 7 ? c.turnDays : 0,
             bots: c.playerBots ? 'yes' : 'no', free: !!(x.freeSeats && x.freeSeats.length),
             names: (x.seats || []).map(s => s.name).filter(Boolean),
         };
@@ -1262,7 +1408,9 @@ const MP = {
             t.civs === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')];
         if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
         if (t.wonders === 'on') parts.push(TX('Weltwunder'));
+        if (t.hexTiles) parts.push(TX('Sechsecke'));
         if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
+        if (t.turnDays) parts.push(t.turnDays === 1 ? TX('1 Tag pro Zug') : TX('%s Tage pro Zug', t.turnDays));
         if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
         return `<div class="mpa-traits">${parts.join(' · ')}</div>`;
     },
@@ -1332,6 +1480,7 @@ const MP = {
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
+            hexTiles: $('mp-set-hex') ? $('mp-set-hex').checked : !!this.gameConfig.hexTiles,
             difficulty: diff,
             ranked: isRanked,
             // empires in all and KI seats; "noKi" of older lobbies is replaced by them
@@ -1376,14 +1525,17 @@ const MP = {
         }
     },
 
-    join: async function () {
+    /** Join form of the menu: code, password and name from the inputs. */
+    join: function () {
         const joinCode = $('mp-c').value.trim();
         const password = $('mp-p').value.trim();
-        const name = $('mp-n').value.trim();
-        localStorage.setItem('mp-name', name);
-
         if (!joinCode || !password) return toast(TX('Bitte Code und Passwort eingeben.'));
+        return this.joinWith(joinCode, password, $('mp-n').value.trim());
+    },
 
+    /** Join a live lobby and open it (form, public list, invite link). */
+    joinWith: async function (joinCode, password, name) {
+        localStorage.setItem('mp-name', name);
         try {
             toast(TX('Verbinde...'));
             const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
@@ -1396,7 +1548,7 @@ const MP = {
 
             this.sessionId = data.sessionId;
             this.lobbyIndex = data.playerIndex;
-            this.joinCode = joinCode;
+            this.joinCode = joinCode.toUpperCase();
             this.password = password;
 
             await this.connect();
@@ -1428,6 +1580,72 @@ const MP = {
             console.error(e);
             toast(TX('Server nicht erreichbar: %s', e.message));
         }
+    },
+
+    // ── Invite link: /?join=CODE&pw=PASSWORD (live game) or /?join=CODE (Rundenspiel) ──
+    inviteUrl: function (code, pw) {
+        const u = new URL('/', location.origin);
+        u.searchParams.set('join', code);
+        if (pw) u.searchParams.set('pw', pw);
+        return u.href;
+    },
+
+    /** Phones: the system's share sheet; elsewhere (or if it fails) the clipboard, then a prompt. */
+    shareInvite: async function (code, pw) {
+        const url = this.inviteUrl(code, pw);
+        const text = pw ? TX('Spiel mit mir HochCiv! Lobby %s', code) : TX('Spiel mit mir ein HochCiv-Rundenspiel! Code %s', code);
+        if (navigator.share && window.matchMedia && matchMedia('(pointer: coarse)').matches) {
+            try { await navigator.share({ title: 'HochCiv', text, url }); return; }
+            catch (e) { if (e && e.name === 'AbortError') return; }
+        }
+        try { await navigator.clipboard.writeText(url); toast(TX('Einladungslink kopiert.')); }
+        catch (e) { prompt(TX('Einladungslink:'), url); }
+    },
+
+    /** Page opened with an invite link: show whose game it is, then join or watch. */
+    openInvite: async function (code, pw) {
+        code = String(code || '').trim().toUpperCase().slice(0, 8);
+        if (!code) return;
+        if (!pw) { if (await ASYNC.requireLogin()) ASYNC.joinByCode(code); return; }
+        await this.fetchUser();
+        let info;
+        try {
+            const r = await fetch(`${this.serverUrl}/api/sessions/preview`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ joinCode: code, password: String(pw) }),
+            });
+            info = await r.json();
+            if (!r.ok) {
+                return modal(TX('Einladung'), `<div id="mp-invite"><p>${escHtml(info.error ? TXS(info.error) : TX('Fehler beim Beitritt.'))}</p>
+                    <p class="sub">${TX('Vielleicht ist das Spiel schon vorbei oder der Link unvollständig.')}</p>
+                    <button class="btn wide primary" onclick="MP.showLobby('open')">${TX('Multiplayer')}</button>
+                    <button class="btn wide ghost" onclick="closeModal()">${TX('Schließen')}</button></div>`);
+            }
+        } catch (e) { return toast(TX('Server nicht erreichbar: %s', e.message)); }
+        this._invite = { code, pw: String(pw) };
+        const name = (this.user && this.user.username) || localStorage.getItem('mp-name') || '';
+        const lobby = info.status === 'lobby';
+        const canJoin = lobby && info.playersCount < info.maxPlayers;
+        modal(TX('Einladung'), `<div id="mp-invite">
+            <p>${TX('%s lädt dich zu einem Live-Spiel ein.', `<b>${escHtml(info.hostName)}</b>`)}</p>
+            <p><b>${ASYNC.mapName(info.mapKey || '0', info)}</b></p>
+            ${this.traitsHtml(this.lobbyTraits(info, true))}
+            <p class="sub">${TX('Spieler')}: ${info.players.map(n => escHtml(n)).join(', ')} (${TX('%s/%s Spieler', info.playersCount, info.maxPlayers)})</p>
+            ${canJoin ? `<label class="row"><span>${TX('Dein Name')}</span><input type="text" id="mp-inv-n" value="${escHtml(name)}" maxlength="24" autocomplete="nickname"></label>`
+                : `<p>${lobby ? TX('Die Lobby ist voll.') : TX('Das Spiel läuft schon.')} ${TX('Du kannst zuschauen.')}</p>`}
+            ${canJoin ? `<button class="btn wide primary" onclick="MP.acceptInvite()">${TX('Beitreten')}</button>` : ''}
+            <button class="btn wide ${canJoin ? 'ghost' : 'primary'}" onclick="MP.acceptInvite(true)">${TX('Zuschauen')}</button>
+            <button class="btn wide ghost" onclick="closeModal()">${TX('Abbrechen')}</button></div>`);
+    },
+
+    acceptInvite: async function (watch) {
+        const inv = this._invite;
+        if (!inv) return;
+        const name = ($('mp-inv-n') ? $('mp-inv-n').value : (this.user && this.user.username) || localStorage.getItem('mp-name') || '').trim();
+        if (!watch && !name) return toast(TX('Bitte Namen eingeben.'));
+        if (!this.setMode) await this.showLobby('open');     // the lobby screen lives in showLobby
+        if (watch) return this.watch(inv.code, inv.pw, name);
+        this.joinWith(inv.code, inv.pw, name);
     },
 
     /** Spectator mode: watch a live game (or its lobby) with code and password. */
@@ -1471,58 +1689,12 @@ const MP = {
         else toast(TX('Spiel läuft, lade Zustand...'));
     },
 
-    joinPublic: async function (joinCode, password) {
+    joinPublic: function (joinCode, password) {
         const nameInput = $('mp-n');
         if (!nameInput) return;
         const name = nameInput.value.trim();
         if (!name) return toast(TX('Bitte Namen eingeben.'));
-
-        localStorage.setItem('mp-name', name);
-
-        try {
-            toast(TX('Verbinde...'));
-            const res = await fetch(`${this.serverUrl}/api/sessions/join`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ joinCode, password, player: { name, clientId: this.getClientId() } })
-            });
-            const data = await res.json();
-            if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
-
-            this.sessionId = data.sessionId;
-            this.lobbyIndex = data.playerIndex;
-            this.joinCode = joinCode;
-            this.password = password;
-
-            await this.connect();
-
-            this.socket.emit('session:connect', {
-                sessionId: this.sessionId,
-                clientId: this.getClientId(),
-                password: this.password
-            }, (ack) => {
-                if (ack.error) return toast(TXS(ack.error));
-                if (ack.playerIndex !== undefined) this.lobbyIndex = ack.playerIndex;
-
-                this.active = true;
-                this.spectator = false;
-                this.players = ack.players;
-                this.gameConfig = ack.gameConfig || {};
-                this.hostIndex = ack.hostIndex !== undefined ? ack.hostIndex : 0;
-
-                this.showCred();
-
-                if (ack.status === 'playing' || ack.status === 'draft') {
-                    toast(TX('Spiel läuft, lade Zustand...'));
-                }
-                else {
-                    this.setMode('waiting');
-                }
-            });
-        } catch (e) {
-            console.error(e);
-            toast(TX('Server nicht erreichbar: %s', e.message));
-        }
+        return this.joinWith(joinCode, password, name);
     },
 
     host: async function () {
@@ -1585,6 +1757,37 @@ const MP = {
         }
     },
 
+    // ── Lobby ready check (F17) ──────────────────────────────────────────────────
+    /** The other humans in the lobby and how many of them are ready (the host doesn't tick). */
+    readyCount: function () {
+        const others = (this.players || []).filter(p => p.index !== this.hostIndex);
+        return { ready: others.filter(p => p.ready).length, of: others.length };
+    },
+    allReady: function () {
+        const c = this.readyCount();
+        return c.of > 0 && c.ready === c.of;
+    },
+    readyCell: function (p, isMe, isHost) {
+        if (!p.connected) return TX('Wartet');
+        if (isHost) return TX('Host');
+        if (isMe) return `<button type="button" class="btn small ${p.ready ? 'mp-ready-on' : 'primary'}" id="mp-ready-btn" onclick="MP.setReady(${!p.ready})"
+            title="${escHtml(p.ready ? TX('Nochmal tippen, um es zurückzunehmen.') : TX('Zeigt dem Host, dass du startklar bist.'))}">${p.ready ? '✓ ' + TX('Bereit') : TX('Ich bin bereit')}</button>`;
+        return p.ready ? `<span class="mp-ready-yes">✓ ${TX('Bereit')}</span>` : `<span class="mp-ready-no">${TX('Wählt noch …')}</span>`;
+    },
+    readyHint: function () {
+        const me = (this.players || []).find(p => p.index === this.lobbyIndex);
+        return me && me.ready ? TX('Du bist bereit. Der Host startet das Spiel.') : TX('Wähle deine Nation und tippe auf „Ich bin bereit".');
+    },
+    setReady: function (ready) {
+        this.socket.emit('lobby:ready', { ready }, res => { if (res && res.error) toast(TXS(res.error)); });
+    },
+    /** The host's start button: asks first when someone isn't ready yet. */
+    startClick: function () {
+        const c = this.readyCount();
+        if (c.ready < c.of && !confirm(TX('%s von %s Mitspielern sind noch nicht bereit. Trotzdem starten?', c.of - c.ready, c.of))) return;
+        this.startGame();
+    },
+
     startGame: function () {
         this.socket.emit('game:start', {}, (ack) => {
             if (ack.error) toast(TXS(ack.error));
@@ -1642,6 +1845,10 @@ window.addEventListener('DOMContentLoaded', () => {
             background: #904030; color: white; padding: 6px 14px; border-radius: 4px; z-index: 1000; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .mp-waiting .mp-waiting-toast { display: block; }
+        #mp-next-game { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1001; width: auto; margin: 0;
+            white-space: nowrap; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        #mp-next-game[hidden] { display: none; }
+        html.w-narrow #mp-next-game { top: calc(var(--hud-h,54px) + 40px); }
         @keyframes mpAnimPop {
             0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
             20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
@@ -1768,7 +1975,8 @@ window.addEventListener('DOMContentLoaded', () => {
     afk.id = 'mp-afk-banner';
     afk.hidden = true;
     afk.innerHTML = `<span id="mp-afk-text">${TX('Die KI spielt für dich, weil du dreimal nicht gezogen hast.')}</span>
-        <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>`;
+        <button class="btn small primary" id="mp-afk-btn" onclick="MP.reclaimSeat()">${TX('Ich bin zurück')}</button>
+        <button class="btn small ghost" id="mp-afk-x" hidden title="${TX('Schließen')}" onclick="MP._resignBannerClosed = true; MP.drawAfkBanner()">✕</button>`;
     document.body.appendChild(afk);
 });
 
@@ -2145,7 +2353,7 @@ const ASYNC = {
     },
     seatsHtml: function (seats, mySlot) {
         return `<div class="mpa-seats">${seats.map(s => {
-            const who = s.kind === 'bot' ? TX('Bot') : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
+            const who = s.kind === 'bot' ? TX('Bot') : s.resigned ? TX('KI (%s hat aufgegeben)', this.esc(s.name)) : s.replaced ? TX('KI (für %s)', this.esc(s.name)) : s.kind === 'ki' ? TX('KI')
                 : s.name ? this.esc(s.name) + (s.botAccount ? ' 🤖' : '') : `<i>${TX('frei')}</i>`;
             return `<span class="mpa-seat${s.slot === mySlot ? ' me' : ''}">${s.civ ? this.civLabel(s.civ) : '?'}${s.roman ? ' ' + s.roman : ''}: ${who}</span>`;
         }).join('')}</div>`;
@@ -2201,10 +2409,12 @@ const ASYNC = {
             placement: TX('Startplättchen legen'), draft: TX('Fähigkeiten draften'),
             playing: TX('Runde %s', g.round), finished: TX('Beendet'), cancelled: TX('Abgebrochen'),
         }[g.status] || g.status;
-        const days = g.deadline ? Math.max(0, Math.ceil((g.deadline - Date.now()) / 864e5)) : null;
+        const leftMs = g.deadline ? Math.max(0, g.deadline - Date.now()) : null;
+        const left = leftMs == null ? '' : leftMs >= 864e5 ? TX('noch %s Tag(e)', Math.ceil(leftMs / 864e5)) : TX('noch %s Std.', Math.max(1, Math.ceil(leftMs / 36e5)));
         let info = '';
-        if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (days != null ? ' ' + TX('noch %s Tag(e)', days) : '');
+        if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (left ? ' ' + left : '');
         else if (g.status === 'finished') info = TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
+        else if (g.resigned) info = TX('Aufgegeben');
         else if (g.replaced) info = TX('Von der KI übernommen');
         else if (g.waitingFor) info = TX('Wartet auf %s', this.esc(TXS(g.waitingFor)));
         const member = g.mySlot != null;
@@ -2217,7 +2427,7 @@ const ASYNC = {
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><span class="mph-kind">${TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
+            <div class="mpa-title"><span class="mph-kind">${c.challenge ? '📅 ' + TX('Wochen-Challenge') : TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
               <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
             ${joinable ? MP.traitsHtml(MP.lobbyTraits(g, false)) : ''}
             ${this.seatsHtml(g.seats, g.mySlot)}
@@ -2241,7 +2451,7 @@ const ASYNC = {
     showCreate: function () {
         const f = this.form = this.form || {
             mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
-            events: false, eventMode: 'hard', wonders: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '',
+            events: false, eventMode: 'hard', wonders: false, hexTiles: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
             playerBots: false, playerBotLimit: '',
         };
         const civ = this.civ(f.civ) || CIVS[0];
@@ -2270,7 +2480,7 @@ const ASYNC = {
         modal(TX('Neues Rundenspiel'), `
           <div class="mpa-form" onchange="ASYNC.readForm(true)">
             <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
-              ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}${opt('gross', f.mapKey, TX('Große Karte (15 × 24)'))}
+              ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}
               ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
               ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36, 4 Reiche)')) : ''}
               ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
@@ -2290,12 +2500,16 @@ const ASYNC = {
               ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
             ${random || marathon ? '' : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-ab">
               ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select></label>`}
+            ${f.mapKey === 'plaettchen' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span><input type="checkbox" id="mpa-hex" ${f.hexTiles ? 'checked' : ''}></label>` : ''}
             <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
             ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
               ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
             <label class="row"><span>${TX('Mit Weltwundern')}</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
             <label class="row"${noKi ? ' hidden' : ''}><span>${TX('KI-Stufe')}</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
               ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
+            <label class="row"><span>${TX('Zeit pro Zug')}</span><select id="mpa-days">
+              ${[1, 3, 7].map(d => `<option value="${d}" ${(f.turnDays || 7) === d ? 'selected' : ''}>${d === 1 ? TX('1 Tag') : TX('%s Tage', d)}</option>`).join('')}</select></label>
+            <p class="hint" style="margin:-4px 0 8px">${TX('Wer so lange nicht zieht, wird erinnert und danach von der KI ersetzt.')}</p>
             <label class="row"><span>🔥 ${TX('Gewertet')} <small>(${TX('KI auf schwerster Stufe')})</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
             <label class="row"><span>${TX('Öffentlich auffindbar')}</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
             <label class="row"><span>🤖 ${TX('Spieler-Bots erlauben')}</span><input type="checkbox" id="mpa-bots" ${f.playerBots ? 'checked' : ''}></label>
@@ -2303,6 +2517,7 @@ const ASYNC = {
               ${opt('', f.playerBotLimit, TX('Unbegrenzt'))}${Array.from({ length: Math.max(1, humans - 1) }, (_, i) => i + 1).map(n => opt(n, f.playerBotLimit, n)).join('')}</select></label>
             <p class="sub">${TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.')}</p>` : ''}
             <label class="row"><span>${TX('Einladen')} <small>(${TX('Benutzernamen, mit Komma')})</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
+            ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-invite', true) : ''}
           </div>
           <p class="sub">${hint}</p>
           <button class="btn wide primary" onclick="ASYNC.create()">${TX('Erstellen')}</button>
@@ -2316,8 +2531,9 @@ const ASYNC = {
             mapKey: v('mpa-map'), civMode: v('mpa-mode'),
             playerCount: +v('mpa-total') || f.playerCount, kiCount: v('mpa-ki') != null ? +v('mpa-ki') : f.kiCount,
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
-            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'),
+            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), hexTiles: c('mpa-hex'),
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
+            turnDays: +v('mpa-days') || f.turnDays || 7,
             customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
                 : v('mpa-custom') || f.customName || (typeof myMaps !== 'undefined' && myMaps[0] ? myMaps[0].name : ''),
             invite: v('mpa-invite') || '',
@@ -2381,7 +2597,7 @@ const ASYNC = {
             const r = await this.api('', {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
-                    wonders: f.wonders, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic,
+                    wonders: f.wonders, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },
@@ -2460,8 +2676,10 @@ const ASYNC = {
         const back = MP.asyncId === id ? 'ASYNC.reopenModal()' : 'ASYNC.showList()';
         modal(TX('Mitspieler einladen'), `
             <p>${TX('Code zum Weitergeben:')} <b style="font-family:monospace;font-size:16px">${code}</b></p>
-            <p class="sub">${TX('Oder Link:')} <span style="user-select:all">${this.esc(location.origin + location.pathname + '?async=' + id)}</span></p>
+            <p class="sub">${TX('Oder Link:')} <span id="mpa-inv-link" style="user-select:all">${this.esc(MP.inviteUrl(code))}</span></p>
+            <button class="btn wide" onclick="MP.shareInvite('${this.esc(code)}')">🔗 ${TX('Einladungslink teilen')}</button>
             <label class="row"><span>${TX('Benutzername')}</span><input type="text" id="mpa-inv-name"></label>
+            ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-inv-name') : ''}
             <button class="btn wide primary" onclick="ASYNC.invite('${id}')">${TX('Einladen')}</button>
             <button class="btn wide ghost" onclick="${back}">${TX('Zurück')}</button>`);
     },
@@ -2545,6 +2763,8 @@ const ASYNC = {
         if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
         MP.clearScenes();
         MP.asyncId = null;
+        MP.nextIds = [];
+        MP.drawNextGame();
         MP.active = false;
         MP.spectator = false;
         this.view = null;
@@ -2561,7 +2781,8 @@ const ASYNC = {
         this.view = view;
         MP.lastStats = view.stats || null;            // a finished game: its statistics (client/stats.js)
         MP.lastRecord = view.record || null;          // … and its stored match with the replay (client/replay.js)
-        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced) }));
+        MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced), resigned: !!s.resigned }));
+        if (view.state && view.state.over) MP.translateOver(view.state.over);
         const toastEl = document.querySelector('.mp-waiting-toast');
         if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
 
@@ -2647,13 +2868,14 @@ const ASYNC = {
         closeModal();
         this.placing = true;
         placeState = {
-            cfg: { players: pl.players, wonders: pl.wonders }, plan: pl.plan, rnd: mapRng(1),
+            cfg: { players: pl.players, wonders: pl.wonders, events: pl.events, startPlayer: pl.startPlayer }, plan: pl.plan, rnd: mapRng(1),
             setup: pl.setup, queue: [seat], at: 0, o: 0, cell: null, done: false,
         };
         show('screen-place');
         placeStep();
         // "Fertig" is bound to placeConfirm at boot – route it to the server while placing
         $('pl-ok').onclick = () => (ASYNC.placing && MP.asyncId ? ASYNC.confirmPlacement() : placeConfirm());
+        if ($('pl-world')) $('pl-world').onclick = placeWorldView;
     },
 
     confirmPlacement: function () {
@@ -2688,7 +2910,7 @@ MP.arrangeMenu = function () {
     if (cont && first) first.after(cont);
     const more = document.createElement('div');
     more.id = 'mp-menu-more';
-    ['m-tutorial', 'mp-overall-btn', 'm-editor', 'mp-maps-btn', 'm-rules', 'm-options', 'm-load'].forEach(id => {
+    ['m-tutorial', 'mp-overall-btn', 'mp-ranking-btn', 'm-editor', 'mp-maps-btn', 'm-rules', 'm-options', 'm-load'].forEach(id => {
         const b = $(id);
         if (b) more.appendChild(b);
     });
@@ -2703,6 +2925,7 @@ MP.applyLang = function () {
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
     set('mp-live-btn', TX('Multiplayer'));
     set('mp-overall-btn', TX('Statistiken'));
+    set('mp-ranking-btn', '🏆 ' + TX('Rangliste'));
     set('mp-maps-btn', TX('Karten entdecken'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
@@ -2746,6 +2969,15 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.onclick = () => GAMESTATS.open();
         mNew.parentNode.insertBefore(btn, $('m-continue'));
     }
+    // Menu button "Rangliste": seasons, tiers, the top 100 (client/ranking.js)
+    if (mNew && !$('mp-ranking-btn') && typeof RANKING !== 'undefined') {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.id = 'mp-ranking-btn';
+        btn.textContent = '🏆 ' + TX('Rangliste');
+        btn.onclick = () => RANKING.open(null);
+        mNew.parentNode.insertBefore(btn, $('m-continue'));
+    }
     MP.arrangeMenu();
     MP.applyLang();
     // Tap the code box in the HUD to go back to the list (the game goes on)
@@ -2770,10 +3002,28 @@ window.addEventListener('DOMContentLoaded', () => {
             ? () => { closeModal(); ASYNC.close(); show('screen-menu'); ASYNC.refreshBadge(); }
             : () => { location.href = location.pathname; };
         quit.parentNode.insertBefore(btn, quit);
+        if (MP.canResign()) {
+            const r = document.createElement('button');
+            r.className = 'btn wide ghost';
+            r.id = 'mm-resign';
+            r.textContent = '🏳 ' + TX('Aufgeben');
+            r.onclick = () => MP.resign();
+            quit.parentNode.insertBefore(r, btn.nextSibling);
+        }
+        if (typeof ALERTS !== 'undefined') {
+            const snd = document.createElement('button');
+            snd.className = 'btn wide ghost';
+            snd.id = 'mm-sound';
+            const label = () => { snd.textContent = ALERTS.soundOn() ? '🔔 ' + TX('Töne: an') : '🔕 ' + TX('Töne: aus'); };
+            label();
+            snd.onclick = () => { ALERTS.setSound(!ALERTS.soundOn()); label(); };
+            quit.parentNode.insertBefore(snd, quit);
+        }
         quit.remove();
     }, 0));
     MP.fetchUser().then(() => {
         ASYNC.refreshBadge();
+        if (typeof FRIENDS !== 'undefined') FRIENDS.start();      // online for friends (client/friends.js)
         const params = new URLSearchParams(location.search);
         // Back from Google/Discord: the server redirects here with ?oauth=<result>
         const oauth = params.get('oauth');
@@ -2799,19 +3049,34 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         const id = params.get('async');
         const replay = params.get('replay');
-        if (replay && typeof REPLAY !== 'undefined') {
+        const join = params.get('join');
+        if (join && OLD_VERSIONS.includes(APP_VERSION_HERE)) {
+            location.replace('/' + location.search);   // invites always open the current version
+        } else if (join) {
+            history.replaceState(null, '', location.pathname);
+            MP.openInvite(join, params.get('pw'));
+        } else if (replay && typeof REPLAY !== 'undefined') {
             history.replaceState(null, '', location.pathname);
             REPLAY.open(replay);
         } else if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);
         } else if (OLD_VERSIONS.includes(APP_VERSION_HERE)) {
-            location.replace('/');           // /v96/, /v93/, /v83/ only open Rundenspiele and replays of that version
+            location.replace('/');           // /v98/ only opens Rundenspiele and replays of that version
         }
     });
 
     const style = document.createElement('style');
     style.textContent = `
+        .mph-sound { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); margin:10px 0 0; cursor:pointer; }
+        .mph-sound input { width:auto; margin:0; }
+        .mp-ready-yes { color:#2e6b34; font-weight:600; white-space:nowrap; }
+        .mp-ready-no { opacity:.65; }
+        .btn.mp-ready-on { background:#2e6b34; color:#fff; border-color:#2e6b34; }
+        .mp-ready-hint { text-align:center; margin:8px 0 0; }
+        .mp-invite-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 12px; clear:both; }
+        .mp-invite-bar .btn { flex:0 0 auto; width:auto; margin:0; white-space:nowrap; }
+        .mp-invite-bar .sub { font-size:12px; flex:1 1 180px; }
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
         /* Main menu (MP.arrangeMenu): login bar on top, the secondary buttons in a grid */
         #mp-main-auth-container { position:absolute; top:0; left:0; right:0; z-index:1000; display:flex; justify-content:flex-end; align-items:center; padding:12px 20px; }
@@ -2844,10 +3109,11 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-mode.primary:not([disabled]):hover { filter:brightness(1.1); }
         /* the player-bot switch belongs to the ranked search only (lobbies have their own) */
         .mph-ranked { display:flex; flex-direction:column; gap:6px; }
-        .mph-maps { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; width:100%; margin:-8px 0 16px; padding:9px 14px; text-align:left; font-weight:600; }
-        .mph-maps small { font-size:12px; font-weight:400; opacity:.75; }
+        .mph-more { display:flex; gap:10px; margin:-8px 0 16px; }
+        .mph-more .btn { flex:1 1 0; min-width:0; min-height:0; padding:10px 14px; }
         .mph-ranked .btn { flex:1 1 auto; }
         .mph-bots { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--ink-soft); cursor:pointer; }
+        .mph-rank-link { display:inline-block; font-size:12px; margin-top:4px; color:var(--ink-soft); }
         .mph-bots input[type=checkbox] { width:18px; height:18px; flex:0 0 auto; margin:0; }
         .mph-tabs { display:flex; border-bottom:1px solid var(--rule); margin-bottom:12px; }
         .mph-tab { flex:1; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-1px; padding:10px 6px; font:inherit; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:color .15s, border-color .15s; }
@@ -2880,6 +3146,8 @@ window.addEventListener('DOMContentLoaded', () => {
         @media (max-width:640px) {
             .mph-new { flex-direction:column; gap:8px; }
             .mph-new > .btn, .mph-ranked { flex:0 0 auto; }
+            .mph-more { flex-direction:column; gap:8px; }
+            .mph-more .btn { flex:0 0 auto; }
             .mph-mode { min-height:0; padding:10px 14px; }
             .mph-name input { flex:1 1 auto; }
             .mph-code { flex-wrap:wrap; }

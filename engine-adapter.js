@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v96/, HochCiv-v93/ and HochCiv-v83/ versions deployed before it. Every version gets its own sandbox
+ * HochCiv-v98/ the version deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -29,12 +29,11 @@ const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
    (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
-    v96: path.resolve(__dirname, 'HochCiv-v96', 'js'),
-    v93: path.resolve(__dirname, 'HochCiv-v93', 'js'),
-    v83: path.resolve(__dirname, 'HochCiv-v83', 'js'),
+    v98: path.resolve(__dirname, 'HochCiv-v98', 'js'),
 };
 const OLD_VERSIONS = Object.keys(GAME_DIRS).filter(v => v !== 'current');
-// Rundenspiele from before the version was recorded were started on v83
+// Rundenspiele from before the version was recorded were started on v83. Its folder is gone, so
+// this is only their label: forVersion runs them on the current engine.
 const LEGACY_VERSION = 'v83';
 
 function makeAdapter(engineDir, label) {
@@ -133,7 +132,8 @@ function makeAdapter(engineDir, label) {
             map = cfg.map; // Honor map passed from interactive placement or custom setup
         } else if (cfg.duel && players.length === 2 && typeof E.duelMap === 'function') {
             map = E.duelMap(players[0].civ, players[1].civ, cfg.seed);
-        } else if (cfg.mapKey === 'gross') {
+        } else if (cfg.mapKey === 'gross' && vm.runInContext('typeof MAP_GROSS', sandbox) !== 'undefined') {
+            // up to v98 – since then the map is gone from the game (the map browser has it, maps/builtin.js)
             map = JSON.parse(JSON.stringify(vm.runInContext('MAP_GROSS', sandbox)));
         } else if (cfg.mapKey === 'eigene' || cfg.customMap) {
             // Custom map from the host's map library: checked again – it came from a client.

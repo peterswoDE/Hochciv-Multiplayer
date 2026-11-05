@@ -31,6 +31,10 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 |---|---|
 | `auth.js` | Login guard, the user object sent to the client, input validation, one-time codes, recent-login check |
 | `bots.js` | Bot accounts: who may own bots and how many, tokens, whether a bot may play ([Bot accounts](bot-accounts.md)) |
+| `friends.js`, `presence.js` | Friends list: requests, the list with online status, live invitations; who is online (open sockets) |
+| `resign.js` | Resigning: when it ends the game, the log line, the MMR penalty |
+| `challenge.js` | Weekly challenge: ISO weeks, the week's setup, starting attempts (also of past weeks, start over), recording the results, the leaderboard (closed when the week ends) |
+| `seasons.js`, `badges.js` | Ranked seasons (closing, soft reset, tiers, leaderboard); badges from the match history |
 | `oauth.js`, `discordStrategy.js` | Google/Discord login strategies from the database configuration |
 | `totp.js`, `webauthn.js` | Authenticator codes; passkey relying party from `BASE_URL` |
 | `origin.js` | Which web pages may use a visitor's login ([Security](security.md#origin-check)) |
@@ -48,7 +52,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 
 | Path | Purpose |
 |---|---|
-| `HochCiv/`, `HochCiv-v96/`, `HochCiv-v93/`, `HochCiv-v83/` | The game (current version, and old versions for Rundenspiele started on them) |
+| `HochCiv/`, `HochCiv-v98/` | The game (current version, and the old version for Rundenspiele started on it) |
 | `mp.js` | Multiplayer client injected into the game: hooks the game's actions, lobby, login, Rundenspiele, HUD, spectators, end screen |
 | `client/i18n.js` | English texts of everything the server adds ([Languages](../development/languages.md)) |
 | `client/chat.js` | In-game chat panel |
@@ -56,6 +60,10 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/scenes.js` | Plays what the others did on the map (also the diff code `utils/scenes.js` uses) |
 | `client/profile.js` | Player profiles |
 | `client/matchmaking.js` | Ranked matchmaking UI |
+| `client/alerts.js` | Sound and tab alerts (own turn, lobby, start, match found, chat) |
+| `client/ranking.js` | Leaderboard with seasons and tiers (tier and badge display: `client/profile.js`) |
+| `client/challenge.js` | Weekly challenge: week picker, the week's setup, start / play again / continue / start over, own results, leaderboard |
+| `client/friends.js` | Friends list: the menu tab, lobby invitations, friend names for Rundenspiel invitations, the profile button |
 | `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |
 | `client/account.html`, `account.js` | Account page and admin panel |
@@ -71,7 +79,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | Path | Served from |
 |---|---|
 | `/` | `public/` (current game with the injected scripts) |
-| `/v96/`, `/v93/`, `/v83/` | `public/<version>/` |
+| `/v98/` | `public/<version>/` |
 | `/client/…` | `client/` |
 | `/api/…` | `routes/` |
 | `/socket.io/…` | Socket.IO (also serves its client script) |

@@ -24,7 +24,7 @@ const send = (res, p) => p.then(r => {
 // List: own games, invitations, open public games
 router.get('/', (req, res) => send(res, service.list(req.user)));
 
-// Create { config: { mapKey, civMode, humanCount, events, eventMode, wonders, difficulty, ranked, isPublic }, civ, ability, invite: [usernames] }
+// Create { config: { mapKey, civMode, humanCount, events, eventMode, wonders, hexTiles, difficulty, ranked, isPublic }, civ, ability, invite: [usernames] }
 router.post('/', (req, res) => {
     if (serverState.state.maintenanceMode)
         return res.status(503).json({ error: 'Der Server befindet sich im Wartungsmodus.' });
@@ -40,6 +40,7 @@ router.post('/notify', (req, res) => send(res, service.setNotifyEmail(req.user, 
 router.get('/:id', (req, res) => send(res, service.info(req.user, req.params.id, req.query.code)));
 router.post('/:id/join', (req, res) => send(res, service.join(req.user, req.params.id, req.body || {})));
 router.post('/:id/leave', (req, res) => send(res, service.leave(req.user, req.params.id)));
+router.post('/:id/resign', (req, res) => send(res, service.resign(req.user, req.params.id)));
 router.post('/:id/cancel', (req, res) => send(res, service.cancel(req.user, req.params.id)));
 router.post('/:id/invite', (req, res) => send(res, service.invite(req.user, req.params.id, (req.body || {}).username)));
 router.post('/:id/decline', (req, res) => send(res, service.decline(req.user, req.params.id)));

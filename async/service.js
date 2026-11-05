@@ -26,6 +26,18 @@ const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
 const REMINDER_MS = Number(process.env.ASYNC_REMINDER_MS) || 5 * DAY;
 const SWEEP_MS = Number(process.env.ASYNC_SWEEP_MS) || 10 * 60 * 1000;
+/* The host's time per turn (F19, config.turnDays: 1, 3 or 7) scales both: 7 days are the base,
+   the reminder comes at 5/7 of the time. Finding players (setup) always has the full 7 days. */
+const daysOf = g => g.status === 'setup' ? 7 : (g.config.turnDays || 7);
+const timeoutOf = g => TIMEOUT_MS * daysOf(g) / 7;
+const reminderOf = g => REMINDER_MS * daysOf(g) / 7;
+/** "3 Tage" / "17 Stunden" for the e-mails. */
+function duration(ms) {
+    const days = Math.round(ms / DAY);
+    if (days >= 1) return days === 1 ? '1 Tag' : `${days} Tage`;
+    const hours = Math.max(1, Math.round(ms / 3600000));
+    return hours === 1 ? '1 Stunde' : `${hours} Stunden`;
+}
 const ACTIVE = ['setup', 'placement', 'draft', 'playing'];
 const MAX_ACTIVE_PER_USER = 30;
 const MAX_PENDING_INVITES = 6;
@@ -227,7 +239,7 @@ async function processResult(g) {
             const isWinner = Array.isArray(over.winners) && over.winners.includes(i);
             let scoreDetails = null;
             try { scoreDetails = E.victoryScore(S, i) || null; } catch (_) { }
-            const points = finalPoints(scoreDetails, isWinner);   // + WIN_BONUS for the winner
+            const points = finalPoints(scoreDetails, isWinner);   // × WIN_FACTOR for the winner
             const active = seat.userId && !seat.replaced;
             return {
                 dbUserId: active ? seat.userId : null,
@@ -269,6 +281,10 @@ async function processResult(g) {
             console.error(`[Async] Replay failed for ${g.id}:`, err);
         }
         Facts.storeLater(game.id);                     // overall statistics (utils/facts.js), from the replay
+        if (g.config.challenge) {
+            try { await require('../utils/challenge').recordResult(g, players, game.id); }
+            catch (err) { console.error(`[Challenge] Result of ${g.id} failed:`, err); }
+        }
         g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })),
             gameId: game.id, replay };
     } catch (err) {
@@ -298,10 +314,12 @@ function generateJoinCode() {
     return code;
 }
 
-async function create(user, body) {
+/** `internal`: set by the server only (the weekly challenge, utils/challenge.js), never by a request. */
+async function create(user, body, internal) {
     const active = await AsyncGame.count({ where: { status: ACTIVE, participantIds: { [Op.contains]: [user.id] } } });
     if (active >= MAX_ACTIVE_PER_USER) return { error: `Höchstens ${MAX_ACTIVE_PER_USER} laufende Rundenspiele.` };
-    const { g, error } = L.create(userOf(user), body || {});
+    const opts = Object.assign({}, body || {}, { challenge: internal && internal.challenge || undefined, seed: internal && internal.seed || undefined });
+    const { g, error } = L.create(userOf(user), opts);
     if (error) return { error };
     g.joinCode = generateJoinCode();
     g.waitSince = Date.now();
@@ -401,7 +419,7 @@ async function list(user) {
             yourTurn: (row.waitingIds || []).includes(user.id),
             round: row.round, winners: g.meta.winners || [], result: g.result,
             updatedAt: row.updatedAt,
-            deadline: ACTIVE.includes(g.status) ? g.waitSince + TIMEOUT_MS : null,
+            deadline: ACTIVE.includes(g.status) ? g.waitSince + timeoutOf(g) : null,
         });
         return s;
     };
@@ -523,38 +541,55 @@ function draftPick(user, id, abilityId) {
     });
 }
 
+/** Resign (F16): the KI plays the seat to the end; ranked games cost the takeover penalty. */
+async function resign(user, id) {
+    let penalized = null;
+    const r = await withGame(id, g => {
+        const res = L.resign(g, user.id);
+        if (res.error) return res;
+        penalized = res.penalized;
+        return { ok: true };
+    });
+    if (r && r.error) return r;
+    if (penalized) await applyPenalties([penalized]);
+    else await User.update({ gamesPlayed: sequelize.literal('"gamesPlayed" + 1') }, { where: { id: user.id } });
+    return { ok: true };
+}
+
 // ── Scheduler: reminders after 5 days, takeover after 7 ───────────────────────
 
 async function sweep() {
     try {
         const now = Date.now();
         const rows = await AsyncGame.findAll({
-            where: { status: { [Op.in]: ACTIVE }, waitSince: { [Op.lt]: new Date(now - REMINDER_MS) } },
+            // the shortest reminder of any game (1 day per turn); each game is checked below
+            where: { status: { [Op.in]: ACTIVE }, waitSince: { [Op.lt]: new Date(now - REMINDER_MS / 7) } },
             attributes: ['id'],
         });
         for (const row of rows) {
-            let penalized = [], replaced = [];
+            let penalized = [], replaced = [], takeoverText = '';
             await withGame(row.id, g => {
                 if (!ACTIVE.includes(g.status)) return;
                 const age = Date.now() - g.waitSince;
-                if (age < REMINDER_MS) return;        // the in-memory copy is authoritative
+                if (age < reminderOf(g)) return;      // the in-memory copy is authoritative
                 const w = L.waitingOn(g);
-                if (age >= TIMEOUT_MS) {
+                takeoverText = `Du hast ${duration(timeoutOf(g))} lang nicht gespielt.`;
+                if (age >= timeoutOf(g)) {
                     ({ penalized, replaced } = L.timeout(g));
-                    console.log(`[Async] Game ${g.id}: 7-day timeout (${g.status}), replaced: ${replaced.length}`);
+                    console.log(`[Async] Game ${g.id}: timeout (${g.status}, ${daysOf(g)} days per turn), replaced: ${replaced.length}`);
                 } else if (!g.reminded) {
                     g.reminded = true;
-                    const days = Math.max(1, Math.round((TIMEOUT_MS - age) / DAY));
+                    const left = duration(timeoutOf(g) - age);
                     const to = w.userIds.length ? w.userIds : [g.hostUserId];
                     notify(to, {
                         type: 'reminder', gameId: g.id,
                         subject: 'Erinnerung: dein Rundenspiel wartet',
                         text: w.userIds.length
-                            ? `Dein Rundenspiel wartet seit ${Math.round(age / DAY)} Tagen auf dich. Spielst du nicht innerhalb von ${days} Tag(en), übernimmt die KI deinen Platz` +
+                            ? `Dein Rundenspiel wartet seit ${duration(age)} auf dich. Spielst du nicht innerhalb von ${left}, übernimmt die KI deinen Platz` +
                             (g.config.ranked ? ` und du verlierst ${L.MMR_PENALTY} MMR.` : '.')
                             : g.config.noKi
-                                ? `Dein Rundenspiel wartet auf ${w.label}. In ${days} Tag(en) beginnt es mit den Spielern, die da sind – oder wird abgebrochen, wenn es zu wenige sind.`
-                                : `Dein Rundenspiel wartet auf ${w.label}. In ${days} Tag(en) wird der Platz mit der KI besetzt.`,
+                                ? `Dein Rundenspiel wartet auf ${w.label}. In ${left} beginnt es mit den Spielern, die da sind – oder wird abgebrochen, wenn es zu wenige sind.`
+                                : `Dein Rundenspiel wartet auf ${w.label}. In ${left} wird der Platz mit der KI besetzt.`,
                     });
                 }
             });
@@ -565,7 +600,7 @@ async function sweep() {
                 notify(replaced, {
                     type: 'takeover', gameId: row.id,
                     subject: 'Die KI hat deinen Platz übernommen',
-                    text: 'Du hast 7 Tage lang nicht gespielt. Die KI spielt deinen Platz weiter; das Spiel zählt als Niederlage' +
+                    text: `${takeoverText} Die KI spielt deinen Platz weiter; das Spiel zählt als Niederlage` +
                         (penalized.length ? ` (−${L.MMR_PENALTY} MMR).` : '.'),
                 });
             }
@@ -636,7 +671,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report,
+    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report, resign,
     setNotifyEmail, sweep, room, removeUser,
     processResult,      // for tests/score
 };

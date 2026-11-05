@@ -31,7 +31,7 @@ Leaving is free until your seat has had its first turn (or the pre-phase began).
 
 ## Waiting, reminders and the KI takeover
 
-The server checks every 10 minutes (`ASYNC_SWEEP_MS`) how long each game has been waiting (`waitSince`).
+The server checks every 10 minutes (`ASYNC_SWEEP_MS`) how long each game has been waiting (`waitSince`). The host picks the **time per turn** when creating the game: 1, 3 or 7 days (`config.turnDays`, default 7). The times below are for 7 days; a shorter time per turn scales both (1 day: reminder after about 17 hours, takeover after 1 day). Finding players (setup) always has the full 7 days.
 
 | After | What happens |
 |---|---|
@@ -50,6 +50,14 @@ At the 7-day timeout:
 | playing, a player's turn | The KI takes over the seat for the rest of the game (`replaced`) |
 
 A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. In ranked games the player who was replaced loses **15 MMR** on top of the result ([Points and MMR](ranking.md)). Replaced players still see the game in their history (`replacedUserId`).
+
+## Weekly challenge
+
+The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to its row in `challenge_results` (by `asyncId`). It is never ranked. A player can play a week as often as they like, one attempt at a time; starting another resigns the running one.
+
+## Resigning
+
+While the game runs, a player can resign (*Aufgeben* in the game menu, `POST /api/async/:id/resign`). The KI plays the seat to the end, like after the 7-day timeout (same level, same 15 MMR in ranked games); the player watches the game read-only. A duel without KI ends at once with the other player's win; when nobody human is left, the most points win.
 
 ## Notifications
 

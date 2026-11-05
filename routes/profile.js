@@ -12,6 +12,8 @@ const express = require('express');
 const rateLimitLib = require('express-rate-limit');
 const { sequelize, User, Game } = require('../models');
 const engine = require('../engine-adapter');
+const seasons = require('../utils/seasons');
+const { badgesOf } = require('../utils/badges');
 
 const router = express.Router();
 const PAGE = 30;
@@ -92,7 +94,10 @@ router.get('/:userId', limit, async (req, res) => {
             where: sequelize.literal(`"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: user.id, isWinner: true }]))}::jsonb`),
         });
 
+        // season tier and badges (F10) – only with the first page
+        const extra = offset ? {} : { ...(await seasons.profileOf(user)), ...(await badgesOf(user.id)) };
         res.json({
+            ...extra,
             id: user.id,
             username: user.username,
             mmr: user.mmr,

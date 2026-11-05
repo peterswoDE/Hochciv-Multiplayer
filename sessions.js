@@ -317,7 +317,7 @@ function resetForRematch(sessionId) {
         const choice = p.choice || {};
         Object.assign(p, {
             index: i, civ: choice.civ || p.civ, ability: choice.ability || p.ability,
-            afk: false, missedTurns: 0, drafted: null, roman: null, color: null,
+            afk: false, missedTurns: 0, resigned: false, ready: false, drafted: null, roman: null, color: null,
             chatMute: null,             // the word filter's timeout lasts for one game
         });
         delete p.mappedName;
@@ -338,42 +338,92 @@ function resetForRematch(sessionId) {
 /** Public lobbies to join, and public games that are running (to watch: status ≠ 'lobby'). */
 function getPublicSessions() {
     const list = [];
-    for (const [id, s] of sessions) {
+    for (const [, s] of sessions) {
         // nobody connected: abandoned, removed by the next cleanup – nothing to join or watch
         if (!s.isPublic || s.status === 'finished' || !s.players.some(p => p.connected)) continue;
-        const bots = playerBotPolicy(s);
-        const cfg = s.gameConfig;
-        // empires in all as the lobby shows them (mp.js lobbyCounts); a new lobby has none set yet
-        const empires = Math.min(config.MAX_PLAYERS, Number.isInteger(cfg.playerCount) ? cfg.playerCount
-            : cfg.noKi ? s.players.length : Math.max(4, s.players.length));
-        list.push({
-            id: s.id,
-            joinCode: s.joinCode,
-            password: s.password,
-            status: s.status,
-            hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
-            playersCount: s.players.length,
-            maxPlayers: humanSeats(s),
-            mapKey: s.gameConfig.mapKey || '0',
-            round: s.state ? s.state.round : null,
-            spectators: spectatorCount(s),
-            // player-bots: allowed at all, and how many more may join (null = no limit)
-            playerBots: bots.allowed,
-            playerBotsFree: bots.free === Infinity ? null : Math.max(0, bots.free),
-            // the lobby's settings, for the filters of the list (mp.js lobbyTraits)
-            customMapName: cfg.mapKey === 'eigene' && cfg.customMap ? cfg.customMap.name : null,
-            empires,
-            kiCount: Math.max(0, Math.min(empires - 1, Number.isInteger(cfg.kiCount) ? cfg.kiCount : 0)),
-            difficulty: cfg.difficulty || null,
-            randomCivs: !!cfg.randomCivs,
-            events: !!cfg.events,
-            eventMode: cfg.eventMode === 'easy' ? 'easy' : 'hard',
-            wonders: !!cfg.wonders,
-            ranked: !!cfg.ranked,
-            turnTime: cfg.turnTime || 0,
-        });
+        list.push(sessionSummary(s));
     }
     return list;
+}
+
+/**
+ * Invite link (?join=CODE&pw=…): what the invited player sees before joining. Needs the password,
+ * like joining; works for private lobbies too. Never returns the password.
+ * @returns {object|string} summary or error string
+ */
+function previewSession(joinCode, password) {
+    const sessionId = codeIndex.get(String(joinCode).toUpperCase());
+    if (!sessionId) return 'Ungültiger Beitrittscode.';
+    const s = sessions.get(sessionId);
+    if (!s) return 'Sitzung nicht gefunden.';
+    if (s.password !== password) return 'Falsches Passwort.';
+    const { password: _pw, id: _id, ...summary } = sessionSummary(s);
+    summary.players = s.players.map(p => p.name);
+    return summary;
+}
+
+/** One live session as the list of open games and the invite preview show it. */
+function sessionSummary(s) {
+    const bots = playerBotPolicy(s);
+    const cfg = s.gameConfig;
+    // empires in all as the lobby shows them (mp.js lobbyCounts); a new lobby has none set yet
+    const empires = Math.min(config.MAX_PLAYERS, Number.isInteger(cfg.playerCount) ? cfg.playerCount
+        : cfg.noKi ? s.players.length : Math.max(4, s.players.length));
+    return {
+        id: s.id,
+        joinCode: s.joinCode,
+        password: s.password,
+        status: s.status,
+        hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : 'Host',
+        playersCount: s.players.length,
+        maxPlayers: humanSeats(s),
+        mapKey: s.gameConfig.mapKey || '0',
+        round: s.state ? s.state.round : null,
+        spectators: spectatorCount(s),
+        // player-bots: allowed at all, and how many more may join (null = no limit)
+        playerBots: bots.allowed,
+        playerBotsFree: bots.free === Infinity ? null : Math.max(0, bots.free),
+        // the lobby's settings, for the filters of the list (mp.js lobbyTraits)
+        customMapName: cfg.mapKey === 'eigene' && cfg.customMap ? cfg.customMap.name : null,
+        empires,
+        kiCount: Math.max(0, Math.min(empires - 1, Number.isInteger(cfg.kiCount) ? cfg.kiCount : 0)),
+        difficulty: cfg.difficulty || null,
+        randomCivs: !!cfg.randomCivs,
+        events: !!cfg.events,
+        eventMode: cfg.eventMode === 'easy' ? 'easy' : 'hard',
+        wonders: !!cfg.wonders,
+        hexTiles: !!cfg.hexTiles && (cfg.mapKey === 'random' || cfg.mapKey === 'plaettchen'),
+        ranked: !!cfg.ranked,
+        turnTime: cfg.turnTime || 0,
+    };
+}
+
+/**
+ * Friends list (utils/friends.js): what an account does in a live game right now – null, or
+ * { status: 'lobby' | 'playing', round, hostName } plus code and password of a public session
+ * (those are in the public list anyway).
+ */
+function activityOf(userId) {
+    for (const [, s] of sessions) {
+        if (s.status === 'finished') continue;
+        const p = s.players.find(x => x.dbUserId === userId && x.connected && x.kind === 'human' && !x.resigned);
+        if (!p) continue;
+        const out = {
+            status: s.status === 'lobby' ? 'lobby' : 'playing',
+            round: s.state ? s.state.round : null,
+            hostName: s.players[s.hostIndex] ? s.players[s.hostIndex].name : null,
+        };
+        if (s.isPublic) Object.assign(out, { joinCode: s.joinCode, password: s.password, full: s.players.length >= humanSeats(s) });
+        return out;
+    }
+    return null;
+}
+
+/** A live lobby by code, for invitations from it (utils/friends.js). */
+function lobbyByCode(joinCode) {
+    const id = codeIndex.get(String(joinCode || '').toUpperCase());
+    const s = id ? sessions.get(id) : null;
+    return s || null;
 }
 
 function recordActivity(sessionId) {
@@ -395,6 +445,9 @@ module.exports = {
     removeSession,
     cleanup,
     kickPlayer,
+    previewSession,
+    activityOf,
+    lobbyByCode,
     updateConfig,
     updatePlayer,
     resetForRematch,

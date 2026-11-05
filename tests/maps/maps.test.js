@@ -83,11 +83,22 @@ async function run(browser, [ua, ub, uc]) {
             && !document.querySelector('#mb-grid .mb-ghost'), name);
     };
 
+    // ── The big map: published, belongs to nobody, opens for everybody ──
+    const big = await api(anon, '/code/GRKART');
+    ok(big.map && big.map.name === 'Große Karte' && big.map.rows.length === 15 && big.map.rows[0].length === 24 && big.map.maxPlayers === 4 && big.author === null,
+        'the big map opens by its code, without an author', JSON.stringify(big).slice(0, 200));
+    const listed = await api(anon, '/browse?q=' + encodeURIComponent('Große Karte'));
+    const bigRow = (listed.maps || []).find(m => m.code === 'GRKART');
+    ok(bigRow && bigRow.author === null && !bigRow.own, 'the big map is in the browser, without an author', JSON.stringify(listed).slice(0, 200));
+    const bigPicked = await api(cb, `/browse/${bigRow && bigRow.id}/pick`, 'POST');
+    ok(bigPicked.map && bigPicked.code === 'GRKART', 'the big map can be picked', JSON.stringify(bigPicked).slice(0, 200));
+    ok((await api(cb, `/${bigRow && bigRow.id}`, 'DELETE')).error, 'nobody can delete the big map');
+
     // ── A publishes two maps (the game's own fixed maps, made playable custom maps) ──
     const a = await newPage(ca, 'A');
     const maps = await a.evaluate(tag => [
         checkCustomMap(Object.assign({}, MAPS[0], { name: 'Alpha ' + tag })).map,
-        checkCustomMap(Object.assign({}, MAPS[1], { name: 'Beta ' + tag, marathon: true })).map,
+        checkCustomMap(Object.assign({}, MAPS[0], { name: 'Beta ' + tag, marathon: true })).map,
     ], TAG);
     const ids = [];
     for (const m of maps) {
@@ -152,7 +163,7 @@ async function run(browser, [ua, ub, uc]) {
     await b.click('#mb-d-edit');
     await b.waitForFunction(() => document.getElementById('screen-editor').classList.contains('show'));
     const ed = await b.evaluate(() => ({ name: document.getElementById('ed-name').value, rows: editMap.rows.length, marathon: editMap.marathon, mb: document.getElementById('mb').classList.contains('show') }));
-    ok(ed.name === '' && ed.rows === 15 && ed.marathon && !ed.mb, 'detail: someone else\'s map opens as a template without its name', JSON.stringify(ed));
+    ok(ed.name === '' && ed.rows === 12 && ed.marathon && !ed.mb, 'detail: someone else\'s map opens as a template without its name', JSON.stringify(ed));
     ok(await b.isVisible('#ed-browse'), 'editor: "Karten entdecken" in Datei');
 
     // ── editor: painting by dragging, one step to undo; "Verschieben" moves the map instead ──

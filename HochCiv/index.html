@@ -87,6 +87,11 @@
       <select id="setup-count"></select></label>
     <label class="row" id="setup-random-row"><span>Zufällige Nationen für alle</span>
       <input type="checkbox" id="setup-random"></label>
+    <label class="row" id="setup-hex-row" hidden><span>Experimenteller Plättchenmodus</span>
+      <input type="checkbox" id="setup-hex"></label>
+    <p class="hint" id="setup-hex-hint" hidden>Experimentell: sechseckige Plättchen zu je 19 Feldern,
+      schräg in Reihen gelegt. Zwischen zwei Startplättchen liegt immer ein offenes; das eigene
+      legt jede*r selbst – Lage wählen (sechs Drehungen), Hauptstadt setzen, verdeckt.</p>
     <p class="hint" id="setup-duel-hint" hidden>1 gegen 1: Wirtschaftssieg erst über 3/4 der
       Weltbevölkerung (mit Theologie 7/10, mit Vereinten Nationen 2/3). Auf einer festen Karte
       bleiben zwei Startsterne frei.</p>
@@ -96,8 +101,7 @@
     <p class="hint" id="setup-marathon-hint" hidden>Marathon: vier Reiche auf einer
       Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter
       das Zwei- bis Fünffache, die Singularität 300; Griechenlands Rabatt und die
-      Wissenschaftliche Methode zählen doppelt. Höchstens fünf neue Städte je Zug, und
-      der Militärsieg verlangt zwei
+      Wissenschaftliche Methode zählen doppelt. Der Militärsieg verlangt zwei
       eroberte Hauptstädte. Vor dem ersten Zug sehen alle die
       Karte und die Starttechnologien und draften dann ihre Fähigkeiten: je zwei, in
       Schlangenreihenfolge.</p>
@@ -185,6 +189,7 @@
   <div class="ed-tools place-tools">
     <p class="hint" id="pl-note"></p>
     <button class="btn small" id="pl-tech">Forschung</button>
+    <button class="btn small" id="pl-world">Welt</button>
     <button class="btn small" id="pl-rot">Drehen</button>
     <button class="btn small primary" id="pl-ok">Fertig</button>
   </div>

@@ -84,7 +84,7 @@
     const abilName = (N, civ, k) => pick(N.abil[civ] && N.abil[civ][k]) || k;
     const techRow = (N, k) => N.tech.find(t => t[0] === k);
     const wonderRow = (N, k) => N.wonder.find(w => w[0] === k);
-    const VICTORY = { military: 'Militärsieg', science: 'Forschungssieg', economy: 'Wirtschaftssieg', culture: 'Kultursieg', other: 'Sonstige' };
+    const VICTORY = { military: 'Militärsieg', science: 'Forschungssieg', economy: 'Wirtschaftssieg', culture: 'Kultursieg', resign: 'Aufgabe', other: 'Sonstige' };
 
     // ── pieces ─────────────────────────────────────────────────────────────────────────────
     const bar = (v, max) => v == null ? '–'

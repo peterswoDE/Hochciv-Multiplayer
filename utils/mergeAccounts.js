@@ -9,6 +9,7 @@ const { sequelize, User, Game, AsyncGame, Passkey } = require('../models');
 const sessions = require('../sessions');
 const { destroyOtherSessions } = require('./auth');
 const mapService = require('../maps/service');
+const friends = require('./friends');
 
 const ACTIVE_ASYNC = ['setup', 'placement', 'draft', 'playing'];
 
@@ -52,6 +53,14 @@ async function mergeInto(into, from) {
                 { replacements: { from: from.id, into: into.id }, transaction });
         }
         await AsyncGame.update({ hostUserId: into.id }, { where: { hostUserId: from.id }, transaction });
+        await friends.mergeUser(from.id, into.id, transaction);
+        await require('./challenge').mergeUser(from.id, into, transaction);
+        // season standings: the real account keeps its own where both have one
+        const { SeasonResult } = require('../models');
+        for (const r of await SeasonResult.findAll({ where: { userId: from.id }, transaction })) {
+            if (await SeasonResult.count({ where: { userId: into.id, seasonId: r.seasonId }, transaction })) await r.destroy({ transaction });
+            else await r.update({ userId: into.id, username: into.username }, { transaction });
+        }
 
         // Custom maps (with their codes) move over; equal names get a number
         await mapService.moveOwner(from.id, into.id, transaction);
