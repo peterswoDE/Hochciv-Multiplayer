@@ -1068,7 +1068,11 @@ function uncoverPop(S, pi, kind, einheiten) {
 function baseIncome(S, pi) {
   const wasEv = S.evMuted, p = S.players[pi], wasD = p.doubleIncome;
   S.evMuted = true; p.doubleIncome = null;
-  try { return income(S, pi); } finally { S.evMuted = wasEv; p.doubleIncome = wasD; }
+  try { return income(S, pi); } finally {
+    // was nicht da war, bleibt weg – sonst stünde ein Schlüssel mit undefined im Spielstand
+    if (wasEv === undefined) delete S.evMuted; else S.evMuted = wasEv;
+    if (wasD === undefined) delete p.doubleIncome; else p.doubleIncome = wasD;
+  }
 }
 /* Nahrungseinkommen, wenn die Stadt um delta wachsen würde – auf dem dauerhaften Wert. */
 function foodAfterGrowth(S, pi, city, delta) {
