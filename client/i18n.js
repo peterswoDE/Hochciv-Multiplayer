@@ -527,6 +527,7 @@
         'Stummschaltung aufheben': 'Unmute',
         'Gäste können nur Emojis senden. Melde dich an, um zu schreiben.': 'Guests can only send emojis. Log in to write.',
         'Als Gast kannst du nur Emojis senden. Melde dich an, um zu schreiben.': 'As a guest you can only send emojis. Log in to write.',
+        'In der App kannst du nur Emojis senden.': 'In the app you can only send emojis.',
         'Du kannst gerade keine Texte schreiben.': 'You can\'t write messages right now.',
         'Unangemessene Sprache: nicht gesendet. Du kannst 5 Minuten lang keine Texte schreiben.': 'Inappropriate language: not sent. You can\'t write messages for 5 minutes.',
         'Unangemessene Sprache: nicht gesendet. Du kannst in diesem Spiel keine Texte mehr schreiben.': 'Inappropriate language: not sent. You can\'t write messages for the rest of this game.',

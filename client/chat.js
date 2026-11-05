@@ -10,7 +10,9 @@
  *     muted players' messages and pings are hidden; the lists are shown under the chat;
  *   · guests can only send emotes and pings; after a text with bad language the server's word
  *     filter stops texts for 5 minutes, after a second one for the rest of the game
- *     (utils/reports.js) – the input field says so.
+ *     (utils/reports.js) – the input field says so;
+ *   · in the Android app (user agent "HochcivApp/…") the chat is emoji only: no input field, and
+ *     texts of other players are not shown. Emotes and pings work as everywhere.
  *
  * The server sends the history as 'chat:history' after joining (live: session:connect,
  * Rundenspiel: async:open), new messages as 'chat:msg' (live) / 'async:chat' (Rundenspiel).
@@ -25,6 +27,7 @@ const CHAT = {
     EMOTES: ['👍', '👎', '😂', '😮', '😢', '😡', '🤝', '⚔️', '🙏', '🎉', '🤔', '👋'],     // as utils/chat.js
     LOCAL_KEY: 'hochciv.chat.blocked',  // guests: [{ id, name }] on this device (accounts only)
     guest: false,               // this player has no account: emotes and pings only
+    app: /HochcivApp\//.test(navigator.userAgent),   // the Android app: emotes and pings only
     mute: null,                 // the word filter's timeout { strikes, until, game } (server)
     muteTimer: null,
     blocks: [],                 // the account's list [{ key, id, name }] (logged in)
@@ -104,6 +107,7 @@ const CHAT = {
     },
     matches: (b, m) => !!m.uid && b.id === m.uid,
     isBlocked: function (m) {
+        if (this.app && m.kind === 'text') return true;
         return !this.mine(m) && (this.blocked().some(b => this.matches(b, m)) || this.isGameMuted(m));
     },
 
@@ -137,6 +141,7 @@ const CHAT = {
     },
     /** null if texts may be written, else why not (shown instead of the input field). */
     textBlockedReason: function () {
+        if (this.app) return TX('In der App kannst du nur Emojis senden.');
         if (this.guest) return TX('Als Gast kannst du nur Emojis senden. Melde dich an, um zu schreiben.');
         if (!this.mute) return null;
         if (this.mute.game) return TX('Wegen unangemessener Sprache kannst du in diesem Spiel keine Texte mehr schreiben.');
