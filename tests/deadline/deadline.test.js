@@ -71,6 +71,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         await pa.waitForSelector('#mpa-days');
         const opts = await pa.$$eval('#mpa-days option', o => o.map(x => x.value + ':' + x.textContent).join(','));
         ok(opts === '1:1 Tag,3:3 Tage,7:7 Tage' && await pa.inputValue('#mpa-days') === '7', 'form: 1 / 3 / 7 days, 7 preselected', opts);
+        // nations as in the lobby: a checkbox, and with random nations no choice of your own
+        await pa.check('#mpa-random');
+        await pa.waitForFunction(() => !$('mpa-civ') && !$('mpa-ab') && $('mpa-random').checked);
+        ok(await pa.evaluate(() => ASYNC.form.civMode) === 'random', 'form: random nations checkbox sets civMode');
+        await pa.uncheck('#mpa-random');
+        await pa.waitForSelector('#mpa-civ');
+        ok(await pa.evaluate(() => ASYNC.form.civMode) === 'fixed', 'form: unticked, everybody picks a nation');
         await pa.selectOption('#mpa-days', '1');
         await pa.evaluate(() => { $('mpa-public').checked = true; ASYNC.readForm(); });
         ok(await pa.evaluate(() => ASYNC.form.turnDays) === 1, 'form: the choice is read');
