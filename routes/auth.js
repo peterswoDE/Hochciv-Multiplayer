@@ -18,6 +18,7 @@ const { generateAuthenticationOptions, verifyAuthenticationResponse } = require(
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
 const Bots = require('../utils/bots');
+const terms = require('../utils/terms');
 
 const rateLimitLib = require('express-rate-limit');
 
@@ -430,6 +431,9 @@ router.get('/me', (req, res) => {
         res.status(401).json({ error: 'Not authenticated' });
     }
 });
+
+// The version of the terms of use, for guests' consent on the device (client/consent.js)
+router.get('/terms', (req, res) => res.json({ version: terms.VERSION }));
 
 // Logout endpoint
 router.post('/logout', (req, res) => {

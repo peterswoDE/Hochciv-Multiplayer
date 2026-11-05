@@ -193,6 +193,8 @@ sequelize.sync({ alter: true }).then(() => {
     require('./utils/seasons').start();
     // the maps that belong to nobody (maps/builtin.js)
     require('./maps/service').seedBuiltin().catch(err => console.error('[Maps] Seeding the built-in maps failed:', err));
+    // the chat ends with the game (async/service.js)
+    require('./async/service').purgeEndedChats().catch(err => console.error('[Async] Deleting old chats failed:', err));
     // the admins' words for the chat filter (utils/profanity.js)
     require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
     sequelize.query(`

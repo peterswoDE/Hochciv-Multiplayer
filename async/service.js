@@ -16,6 +16,9 @@ const { calculateMMR } = require('../utils/mmr');
 const { finalPoints } = require('../utils/score');
 const chatLib = require('../utils/chat');
 const reports = require('../utils/reports');
+const terms = require('../utils/terms');
+
+const ENDED = ['finished', 'cancelled'];
 const Stats = require('../utils/stats');
 const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
@@ -107,7 +110,19 @@ async function getEntry(id) {
 }
 
 async function save(g) {
+    // the chat ends with the game; reports keep their own copy (utils/reports.js)
+    if (ENDED.includes(g.status)) Object.assign(g, { chat: [], chatMutes: {} });
     await AsyncGame.update(rowFields(g), { where: { id: g.id } });
+}
+
+/** At the start of the server: the chats of games that ended before they were deleted with the game. */
+async function purgeEndedChats() {
+    const [, meta] = await sequelize.query(
+        `UPDATE async_games SET data = data - 'chat' - 'chatMutes'
+         WHERE status IN (:ended) AND (jsonb_exists(data, 'chat') OR jsonb_exists(data, 'chatMutes'))`,
+        { replacements: { ended: ENDED } });
+    const n = meta && meta.rowCount;
+    if (n) console.log(`[Async] Deleted the chats of ${n} ended games.`);
 }
 
 /**
@@ -472,10 +487,12 @@ async function open(user, id) {
 async function chat(user, id, payload) {
     const e = await getEntry(id);
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
+    if (ENDED.includes(e.g.status)) return { error: 'Das Spiel ist beendet, der Chat ist geschlossen.' };
     const seat = e.g.seats.find(s => s.userId === user.id);
     if (!seat) return { error: 'Nur Mitspieler können schreiben.' };
     const mute = (e.g.chatMutes || {})[user.id] || null;
     const isText = payload.kind !== 'emote' && payload.kind !== 'ping';
+    if (isText && !terms.accepted(user)) return { error: terms.NEEDED };
     if (isText && reports.muteActive(mute)) return { error: 'Du kannst gerade keine Texte schreiben.', mute };
     const r = chatLib.build({ slot: seat.slot, name: user.username, uid: user.id }, payload, `async:${id}:${user.id}`);
     if (r.error) return { error: r.error };
@@ -672,6 +689,6 @@ function evict(id) {
 
 module.exports = {
     init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report, resign,
-    setNotifyEmail, sweep, room, removeUser,
+    setNotifyEmail, sweep, room, removeUser, purgeEndedChats,
     processResult,      // for tests/score
 };

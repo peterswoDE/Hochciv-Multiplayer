@@ -19,6 +19,7 @@ const { Op, UniqueConstraintError } = require('sequelize');
 const { sequelize, CustomMap, MapFavorite, User } = require('../models');
 const engine = require('../engine-adapter');
 const BUILTIN_MAPS = require('./builtin');
+const terms = require('../utils/terms');
 
 const MAX_MAPS = 30;                       // the browser library holds as many (MY_MAPS_MAX)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -86,6 +87,7 @@ async function remove(user, id) {
 
 /** Publish: a new code, or the one the map already has. */
 async function publish(user, id) {
+    if (!terms.accepted(user)) return { error: terms.NEEDED };
     const row = await ownMap(user, id);
     if (!row) return { error: 'Diese Karte gibt es nicht.' };
     if (row.code) return { map: entry(row) };

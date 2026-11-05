@@ -271,6 +271,14 @@ async function rundenspiel(browser, errors) {
         const other = await c.evaluate(id => MP.fetchUser().then(() => MP.connect()).then(() =>
             new Promise(r => MP.socket.emit('async:chat', { id, kind: 'text', text: 'hi' }, r))), gameId);
         ok(other.error === 'Nur Mitspieler können schreiben.', 'Rundenspiel: non-players may not write', other.error);
+
+        // the chat ends with the game
+        const done = await a.evaluate(id => new Promise(r => MP.socket.emit('async:resign', { id }, r)), gameId);
+        ok(!done.error, 'Rundenspiel: A resigns, the game ends', done.error);
+        ok(await until(async () => sql(`SELECT status FROM async_games WHERE id = '${gameId}'`) === 'finished'), 'Rundenspiel: finished');
+        ok(sql(`SELECT coalesce(jsonb_array_length(data->'chat'), 0) FROM async_games WHERE id = '${gameId}'`) === '0', 'Rundenspiel: the chat is deleted at the end');
+        const late = await a.evaluate(id => new Promise(r => MP.socket.emit('async:chat', { id, kind: 'emote', emote: '👍' }, r)), gameId);
+        ok(late.error === 'Das Spiel ist beendet, der Chat ist geschlossen.', 'Rundenspiel: no more messages after the end', late.error);
         for (const ctx of [ca, cb, cc]) await ctx.close();
     } finally {
         if (gameId) sql(`DELETE FROM async_games WHERE id = '${gameId}'`);

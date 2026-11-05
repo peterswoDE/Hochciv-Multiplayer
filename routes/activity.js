@@ -5,7 +5,9 @@
  *
  *   GET  /api/activity/config  – the Discord client ID
  *   POST /api/activity/token   – exchanges the SDK's OAuth code for an access token
- *   POST /api/activity/lobby   – seats the Discord user in the lobby of their activity instance
+ *   POST /api/activity/lobby   – seats the Discord user in the lobby of their activity instance;
+ *                                HTTP 428 until they agreed to the terms of use (utils/terms.js)
+ *   POST /api/activity/terms   – stores that agreement with their account
  *
  * The Activity uses the Discord application configured as OAuth provider in the admin panel
  * (client ID + secret; the optional bot token there checks instance membership).
@@ -25,6 +27,7 @@ const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const { OAuthProvider, User } = require('../models');
 const config = require('../config');
+const terms = require('../utils/terms');
 
 const router = express.Router();
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -248,11 +251,22 @@ router.post('/lobby', limit, wrap(async (req, res) => {
 
     const account = await activityAccount(me.data);
     if (account.isBanned) return res.status(403).json({ error: 'Dein Hochciv-Konto ist gesperrt.' });
+    if (!terms.accepted(account)) return res.status(428).json({ error: terms.NEEDED });
 
     const result = await seat(instanceId, me.data);
     if (typeof result === 'string') return res.status(409).json({ error: result });
     linkAccount(result, account);
     res.json(result);
+}));
+
+router.post('/terms', limit, wrap(async (req, res) => {
+    const auth = req.get('authorization') || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+    if (!token) return res.status(401).json({ error: 'Nicht angemeldet.' });
+    const me = await discordFetch(`${DISCORD_API}/users/@me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!me.ok || !me.data.id) return res.status(401).json({ error: 'Discord-Anmeldung abgelaufen. Bitte die Activity neu starten.' });
+    await terms.accept(await activityAccount(me.data));
+    res.json({ ok: true });
 }));
 
 const logLimit = rateLimitLib({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });

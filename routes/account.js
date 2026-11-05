@@ -7,6 +7,7 @@ const totp = require('../utils/totp');
 const { sendMail } = require('../utils/mailer');
 const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
+const terms = require('../utils/terms');
 const {
     EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, consumeCode, destroyOtherSessions,
@@ -205,6 +206,17 @@ router.get('/history', async (req, res) => {
 
 // Chat: players whose messages this account doesn't see (utils/reports.js)
 router.get('/blocks', (req, res) => res.json({ list: reports.publicBlocks(req.user) }));
+
+// The popup for the terms of use (client/consent.js)
+router.post('/terms', async (req, res) => {
+    try {
+        await terms.accept(req.user);
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('[Account] Terms:', err.message);
+        res.status(500).json({ error: 'Das hat nicht geklappt. Bitte versuche es noch einmal.' });
+    }
+});
 
 router.post('/blocks', async (req, res) => {
     try {
