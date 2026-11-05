@@ -26,6 +26,8 @@ const PROFILE = '<script src="/client/profile.js"></script>';
 const MP = '<script src="js/mp.js"></script>';
 // In-game chat (after mp.js, which it uses)
 const CHAT = '<script src="/client/chat.js"></script>';
+// The popup for the terms of use (after mp.js, whose login and lobby it wraps)
+const CONSENT = '<script src="/client/consent.js"></script>';
 // Post-game statistics (after mp.js)
 const STATS = '<script src="/client/stats.js"></script>';
 // Overall statistics over all matches (menu button "Statistiken", mp.js)
@@ -74,7 +76,7 @@ if (fs.existsSync(htmlPath)) {
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
     if (!html.includes(MAPS_CSS)) html = html.replace('</head>', MAPS_CSS + '\n</head>');
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, I18N, PROFILE, MP, ALERTS, FRIENDS, RANKING, CHALLENGE, SCENES, CHAT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, PROFILE, MP, ALERTS, FRIENDS, RANKING, CHALLENGE, SCENES, CHAT, CONSENT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     html = Assets.versioned(html, fileOf);
     fs.writeFileSync(htmlPath, html, 'utf8');

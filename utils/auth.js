@@ -3,6 +3,7 @@
  * gets back, request-input validation and one-time codes.
  */
 const crypto = require('crypto');
+const terms = require('./terms');
 const { canCreateBots } = require('./bots');
 
 // Usernames are shown in many places (lobbies, admin panel, e-mails) – keep them plain.
@@ -62,6 +63,7 @@ function userJson(user) {
         // Only whether an account is linked – the provider ids stay on the server
         googleLinked: !!user.googleId,
         discordLinked: !!user.discordId,
+        termsAccepted: terms.accepted(user),
     };
 }
 
