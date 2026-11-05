@@ -167,25 +167,20 @@ async function liveGame(browser, errors, users) {
     await until(async () => (await chatRows(a)).some(r => r.startsWith('ChatB')));
     ok((await chatRows(a)).some(r => r.startsWith('ChatB')), 'block: undone');
 
-    // the Android app: emoji only, in both directions
-    const appCtx = await browser.newContext({ userAgent: 'Mozilla/5.0 (Linux; Android 16) HochcivApp/0.1.0' });
-    const appPage = await appCtx.newPage();
-    await appPage.goto(BASE + '/');
-    await appPage.waitForFunction(() => typeof CHAT !== 'undefined');
-    ok(await appPage.evaluate(() => CHAT.app === true), 'app: recognised by the user agent');
-    await appCtx.close();
-    ok(await a.evaluate(() => CHAT.app === false), 'app: a browser is not the app');
-    await b.evaluate(() => { CHAT.app = true; CHAT.render(); });
-    const appRows = await chatRows(b);
-    ok(appRows.includes('ChatA 👍') && !appRows.some(r => r.includes('Hallo')), 'app: emotes are shown, texts are not', appRows.join(' | '));
-    ok(!(await b.isVisible('#mp-chat-input')) && !(await b.isVisible('#mp-chat-send')), 'app: no input field');
-    ok((await b.textContent('#mp-chat-note')) === 'In der App kannst du nur Emojis senden.', 'app: says why');
-    const appUnread = await b.evaluate(() => {
-        CHAT.receive({ id: 'app-text', t: Date.now(), slot: 0, name: 'ChatA', kind: 'text', text: 'Hallo App' });
-        return CHAT.list.some(m => m.id === 'app-text');
+    // phones: room to type, also with the keyboard open (the app shrinks the page, adjustResize)
+    const inView = page => page.evaluate(() => {
+        document.documentElement.classList.remove('turn');      // as the app's bridge.js
+        const r = document.getElementById('mp-chat-input').getBoundingClientRect();
+        const c = document.getElementById('mp-chat').getBoundingClientRect();
+        return { w: Math.round(r.width), inside: c.top >= 0 && c.bottom <= innerHeight && c.right <= innerWidth };
     });
-    ok(!appUnread, 'app: a new text is dropped');
-    await b.evaluate(() => { CHAT.app = false; CHAT.render(); });
+    for (const [name, width, height] of [['portrait', 412, 830], ['portrait, keyboard', 412, 480], ['landscape, keyboard', 830, 190]]) {
+        await b.setViewportSize({ width, height });
+        await sleep(400);
+        const v = await inView(b);
+        ok(v.w >= 150 && v.inside, `phone: the input fits (${name})`, JSON.stringify(v));
+    }
+    await b.setViewportSize({ width: 1280, height: 720 });
 
     // English (the game's language buttons)
     const en = await a.evaluate(() => {

@@ -527,7 +527,6 @@
         'Stummschaltung aufheben': 'Unmute',
         'Gäste können nur Emojis senden. Melde dich an, um zu schreiben.': 'Guests can only send emojis. Log in to write.',
         'Als Gast kannst du nur Emojis senden. Melde dich an, um zu schreiben.': 'As a guest you can only send emojis. Log in to write.',
-        'In der App kannst du nur Emojis senden.': 'In the app you can only send emojis.',
         'Nutzungsbedingungen und Datenschutz': 'Terms of use and privacy',
         'Um online zu spielen, musst du unseren Regeln zustimmen. Beleidigende, diskriminierende, sexuelle oder rechtswidrige Inhalte sind verboten – in Namen, im Chat und auf veröffentlichten Karten. Verstöße können gemeldet werden und zur Sperrung führen.': 'To play online, you have to agree to our rules. Offensive, discriminatory, sexual or illegal content is forbidden: in names, in the chat and on published maps. Violations can be reported and may lead to a ban.',
         'Mit „Zustimmen“ akzeptierst du die Nutzungsbedingungen und bestätigst, dass du mindestens 13 Jahre alt bist. Die Datenschutzerklärung hast du zur Kenntnis genommen.': 'By choosing "Agree" you accept the terms of use and confirm that you are at least 13 years old. You have taken note of the privacy policy.',
