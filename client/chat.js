@@ -451,6 +451,15 @@ const CHAT = {
                 html.turn #mp-chat-list { max-height: 18vw; }
                 html.turn #mp-chat.mp-menu-open #mp-chat-list { min-height: min(200px, calc(100vw - 260px)); }
             }
+            /* phones (the Android app, a browser in landscape): room to type, and with the keyboard
+               open the panel stays on the screen */
+            @media (max-width: 600px) {
+                html:not(.turn) #mp-chat { width: calc(100% - 20px); max-width: none; }
+            }
+            @media (max-height: 300px) {
+                html:not(.turn) #mp-chat { bottom: 4px; max-height: calc(100vh - 8px); }
+                html:not(.turn) #mp-chat-list { flex: 1 1 auto; min-height: 30px; }
+            }
             .mp-chat-msg { display: grid; grid-template-columns: 12px 1fr auto; gap: 0 6px; align-items: start; padding: 2px 0; overflow-wrap: anywhere; }
             .mp-chat-msg .mp-pl-dot { margin-top: 3px; }
             .mp-chat-msg.me b { color: #9d3b2f; }

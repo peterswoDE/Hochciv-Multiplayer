@@ -165,6 +165,15 @@ module.exports = (sequelize) => {
             defaultValue: [],
             allowNull: false,
         },
+        // The terms of use this account agreed to, and when (utils/terms.js)
+        termsVersion: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        termsAcceptedAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
         currentChallenge: {
             type: DataTypes.STRING,
             allowNull: true,

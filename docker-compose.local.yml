@@ -45,6 +45,8 @@ services:
       - ASYNC_SWEEP_MS=${ASYNC_SWEEP_MS:-}
       # Chat word filter tests (tests/filter/filter.test.js): the first writing timeout (default 5 minutes)
       - CHAT_MUTE_MS=${CHAT_MUTE_MS:-300000}
+      # No popup for the terms of use in the browser tests, except tests/terms (TERMS_CHECK=on)
+      - TERMS_CHECK=${TERMS_CHECK:-off}
     env_file:
       - path: secrets.env
         required: false

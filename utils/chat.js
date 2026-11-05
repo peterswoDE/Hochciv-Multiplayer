@@ -1,6 +1,7 @@
 /**
  * In-game chat of live games (sockets/game.js) and Rundenspiele (async/service.js): message
- * checks, the rate limit and the message format. Both keep a short history; pings are not
+ * checks, the rate limit and the message format. Both keep a short history until the game ends
+ * (live: only in memory, until the rematch or the end of the lobby); pings are not
  * stored (they only mark a hex for a few seconds).
  *
  *   message = { id, t, slot, name, uid?, kind: 'text' | 'emote' | 'ping', text?, emote?, r?, c? }

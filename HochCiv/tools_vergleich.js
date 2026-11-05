@@ -195,9 +195,7 @@ const treu = (k, v) => {
    und Einkommen. Auf Kopien, mit festen Seeds – am echten Spielstand ändert das nichts. */
 function probe(E, S, pi, feed) {
   const p = S.players[pi];
-  // ohne `treu`: settleGain und Co. setzen p.doubleIncome kurz und schreiben undefined zurück – der
-  // Schlüssel bleibt, gilt aber als unverändert (in den Hash des Zuges geht er trotzdem ein)
-  const vorher = JSON.stringify(S);
+  const vorher = JSON.stringify(S, treu);
   const K = E.kiContext(S, pi), memo = {};
   E.kiStepMemo(memo, S, pi);
   const cands = E.kiCandidates(S, pi, K, memo, false);
@@ -222,7 +220,7 @@ function probe(E, S, pi, feed) {
     const m = E.kiMethodeZuerst(S, pi, scored, scored[0]);
     feed('methode ' + (m ? m.k : '-'));
   }
-  if (JSON.stringify(S) !== vorher) throw new Error('die Bewertung hat den echten Spielstand verändert');
+  if (JSON.stringify(S, treu) !== vorher) throw new Error('die Bewertung hat den echten Spielstand verändert');
 }
 
 function playGame(E, g, opts) {

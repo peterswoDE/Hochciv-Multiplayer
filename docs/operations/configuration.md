@@ -40,6 +40,7 @@ These have sensible defaults and are normally left alone. The tests in `tests/` 
 | `MATCH_GROUP_WAIT_MS` | `20000` | Matchmaking: how long the longest-waiting player waits before a game of two or three starts. *local* |
 | `MATCH_CONFIRM_MS` | `20000` | Matchmaking: time to accept a found match. |
 | `CHAT_MUTE_MS` | `300000` | First word-filter strike: how long the sender can't write texts. *local* |
+| `TERMS_CHECK` | on | `off` turns the consent to the terms of use off (`docker-compose.local.yml`, for the browser tests). *local* |
 | `ASYNC_REMINDER_MS` | 5 days | Rundenspiele: when the waiting player gets a reminder (for 7 days per turn; shorter times per turn scale it). |
 | `ASYNC_TIMEOUT_MS` | 7 days | Rundenspiele: when the KI takes over a seat, for 7 days per turn; 1 and 3 days per turn scale it (see [Rundenspiele](../reference/rundenspiele.md)). |
 | `ASYNC_SWEEP_MS` | 10 minutes | Rundenspiele: how often the server checks for reminders and timeouts. |

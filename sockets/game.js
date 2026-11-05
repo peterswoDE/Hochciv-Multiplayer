@@ -6,6 +6,7 @@ const { finalPoints } = require('../utils/score');
 const config = require('../config');
 const chat = require('../utils/chat');
 const reports = require('../utils/reports');
+const terms = require('../utils/terms');
 const Stats = require('../utils/stats');
 const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
@@ -352,6 +353,7 @@ module.exports = function registerHandlers(io) {
             // texts: only with an account, and not during a timeout of the word filter
             if (data.kind !== 'emote' && data.kind !== 'ping') {
                 if (!me.dbUserId) return ack({ error: reports.GUEST_TEXT, guest: true });
+                if (!(await terms.acceptedById(me.dbUserId))) return ack({ error: terms.NEEDED });
                 if (reports.muteActive(me.chatMute)) return ack({ error: 'Du kannst gerade keine Texte schreiben.', mute: me.chatMute });
             }
             const r = chat.build({ slot: myIndex(), name: me.name, uid: me.dbUserId }, data, `live:${sessionId}:${me.clientId}`);

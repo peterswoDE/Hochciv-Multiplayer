@@ -152,6 +152,16 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   ok(await page.evaluate(() => document.documentElement.classList.contains('w-side') && !document.documentElement.classList.contains('w-narrow')), 'landscape: side layout');
   ok(await page.evaluate(() => getComputedStyle(document.getElementById('a-more')).display === 'none' && getComputedStyle(document.getElementById('a-log')).display !== 'none'), 'landscape: all 7 actions, no "Mehr"');
 
+  // multiplayer menu: the new games are equally wide, one below the other and side by side
+  await page.evaluate(() => MP.showLobby());
+  await page.waitForSelector('.mph-new');
+  for (const vp of [{ width: 412, height: 915 }, { width: 915, height: 412 }]) {
+    await page.setViewportSize(vp);
+    await page.waitForTimeout(300);
+    const cards = await page.$$eval('.mph-new > *', els => els.map(e => Math.round(e.getBoundingClientRect().width)));
+    ok(cards.length >= 2 && new Set(cards).size === 1, `multiplayer menu: game cards equally wide at ${vp.width}x${vp.height}`, cards.join(' / '));
+  }
+
   // login bar of the main menu, logged in with a long name: nothing sticks out, nothing is covered
   for (const vp of [{ width: 360, height: 780 }, { width: 915, height: 412 }]) {
     await page.setViewportSize(vp);

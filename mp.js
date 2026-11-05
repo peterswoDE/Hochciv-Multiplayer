@@ -606,7 +606,7 @@ const MP = {
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
 
-                window.placeState = null;
+                if (typeof placeState !== 'undefined') placeState = null;
                 if (typeof draftState !== 'undefined') draftState = null;
                 document.body.classList.remove('mp-waiting');
 
@@ -1088,7 +1088,7 @@ const MP = {
           </table>
 
           <h4>${TX('Spieleinstellungen')}</h4>
-          <div style="background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
+          <div class="mp-settings" style="pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
               <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
                   <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>${TX('Originalkarte (12 × 18)')}</option>
@@ -2477,49 +2477,68 @@ const ASYNC = {
         hint = (f.kiCount ? TX('%s Reiche: %s Menschen, %s KI', f.playerCount, humans, f.kiCount) : TX('%s Reiche: %s Menschen, keine KI', f.playerCount, humans))
             + (f.playerCount === 2 ? ' – ' + TX('1 gegen 1 (höhere Siegschwellen)') : '') + '. ' + hint;
         const hardest = KI_LEVELS[KI_LEVELS.length - 1].k;
+        const note = text => `<p class="hint" style="margin:4px 0 8px">${text}</p>`;
         modal(TX('Neues Rundenspiel'), `
           <div class="mpa-form" onchange="ASYNC.readForm(true)">
-            <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
-              ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}
-              ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
-              ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36, 4 Reiche)')) : ''}
-              ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
-            ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Karte wählen')}</span><select id="mpa-custom">
-              ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (${m.marathon ? TX('bis %s Reiche, Marathon', m.maxPlayers || 4) : TX('bis %s Reiche', m.maxPlayers || 4)})</option>`).join('') || `<option value="">${TX('– keine gespeichert –')}</option>`}
-              ${typeof MAPBROWSER !== 'undefined' && MAPBROWSER.favs.length ? `<optgroup label="${this.esc(TX('Favoriten'))}">${MAPBROWSER.favs.map(m =>
-                    `<option value="fav:${this.esc(m.id)}">★ ${this.esc(m.name)}${m.author ? ' – ' + this.esc(m.author) : ''}</option>`).join('')}</optgroup>` : ''}</select></label>
-              <p class="sub">${MP.browseLink('ASYNC.browseMaps()')}<a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
-                <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}</p>` : ''}
-            <label class="row"><span>${TX('Nationen')}</span><select id="mpa-mode">
-              ${opt('fixed', f.civMode, TX('Fest – jeder wählt seine Nation'))}${opt('random', f.civMode, TX('Zufällige Nationen für alle – Zugfolge nach Beitritt'))}</select></label>
-            <label class="row"><span>${TX('Reiche insgesamt')}</span><select id="mpa-total" ${lim.min === lim.max ? 'disabled' : ''}>
-              ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ` (${TX('1 gegen 1')})` : ''))).join('')}</select></label>
-            <label class="row"><span>${TX('davon KI')}</span><select id="mpa-ki">
-              ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ` (${TX('nur Menschen')})` : ''))).join('')}</select></label>
-            ${random ? '' : `<label class="row"><span>${TX('Deine Nation')}</span><select id="mpa-civ">
-              ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select></label>`}
-            ${random || marathon ? '' : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-ab">
-              ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select></label>`}
-            ${f.mapKey === 'plaettchen' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span><input type="checkbox" id="mpa-hex" ${f.hexTiles ? 'checked' : ''}></label>` : ''}
-            <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
-            ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
-              ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
-            <label class="row"><span>${TX('Mit Weltwundern')}</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
-            <label class="row"${noKi ? ' hidden' : ''}><span>${TX('KI-Stufe')}</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
-              ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
-            <label class="row"><span>${TX('Zeit pro Zug')}</span><select id="mpa-days">
-              ${[1, 3, 7].map(d => `<option value="${d}" ${(f.turnDays || 7) === d ? 'selected' : ''}>${d === 1 ? TX('1 Tag') : TX('%s Tage', d)}</option>`).join('')}</select></label>
-            <p class="hint" style="margin:-4px 0 8px">${TX('Wer so lange nicht zieht, wird erinnert und danach von der KI ersetzt.')}</p>
-            <label class="row"><span>🔥 ${TX('Gewertet')} <small>(${TX('KI auf schwerster Stufe')})</small></span><input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}></label>
-            <label class="row"><span>${TX('Öffentlich auffindbar')}</span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
-            <label class="row"><span>🤖 ${TX('Spieler-Bots erlauben')}</span><input type="checkbox" id="mpa-bots" ${f.playerBots ? 'checked' : ''}></label>
-            ${f.playerBots ? `<label class="row"><span>${TX('Höchstens so viele Spieler-Bots')}</span><select id="mpa-botlimit">
-              ${opt('', f.playerBotLimit, TX('Unbegrenzt'))}${Array.from({ length: Math.max(1, humans - 1) }, (_, i) => i + 1).map(n => opt(n, f.playerBotLimit, n)).join('')}</select></label>
-            <p class="sub">${TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.')}</p>` : ''}
+            <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:15px;">
+              <tr style="border-bottom:1px solid #ccc;opacity:0.7"><th>${TX('Spieler')}</th><th>${TX('Ziv')}</th></tr>
+              <tr>
+                <td><b>${this.esc(MP.user ? MP.user.username : '')}</b> (${TX('Host')})</td>
+                <td style="padding: 4px;">
+                  ${random ? `<select disabled><option>${TX('Zufall')}</option></select>` : `<select id="mpa-civ">
+                    ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select>`}
+                  ${random || marathon ? '' : `<br/><select id="mpa-ab" style="margin-top: 4px; font-size: 13px;">
+                    ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select>`}
+                  ${marathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
+                </td>
+              </tr>
+            </table>
             <label class="row"><span>${TX('Einladen')} <small>(${TX('Benutzernamen, mit Komma')})</small></span><input type="text" id="mpa-invite" value="${this.esc(f.invite)}"></label>
             ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-invite', true) : ''}
+
+            <h4>${TX('Spieleinstellungen')}</h4>
+            <div class="mp-settings">
+              <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
+                ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}
+                ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
+                ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36)')) : ''}
+                ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
+              ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Karte wählen')}</span><select id="mpa-custom">
+                ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (${m.marathon ? TX('bis %s Reiche, Marathon', m.maxPlayers || 4) : TX('bis %s Reiche', m.maxPlayers || 4)})</option>`).join('') || `<option value="">${TX('– keine gespeichert –')}</option>`}
+                ${typeof MAPBROWSER !== 'undefined' && MAPBROWSER.favs.length ? `<optgroup label="${this.esc(TX('Favoriten'))}">${MAPBROWSER.favs.map(m =>
+                    `<option value="fav:${this.esc(m.id)}">★ ${this.esc(m.name)}${m.author ? ' – ' + this.esc(m.author) : ''}</option>`).join('')}</optgroup>` : ''}</select></label>
+                ${note(`${MP.browseLink('ASYNC.browseMaps()')}<a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
+                <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}`)}`
+                : typeof MAPBROWSER !== 'undefined' ? note(`${TX('Oder eine Karte anderer Spieler:')} ${MP.browseLink('ASYNC.browseMaps()').replace(/ · $/, '')}`) : ''}
+              ${marathon ? note(TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')) : ''}
+              ${f.mapKey === 'plaettchen' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span><input type="checkbox" id="mpa-hex" ${f.hexTiles ? 'checked' : ''}></label>
+              ${f.hexTiles ? note(TX('Sechseckige Plättchen statt Dreiecke, bei jeder Zahl von Reichen.')) : ''}` : ''}
+              <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
+              ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
+                ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
+              <label class="row"><span>${TX('Mit Weltwundern')}</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
+              <label class="row"><span>${TX('Reiche insgesamt')}</span><select id="mpa-total" ${lim.min === lim.max ? 'disabled' : ''}>
+                ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ` (${TX('1 gegen 1')})` : ''))).join('')}</select></label>
+              <label class="row"><span>${TX('davon KI (feste Plätze)')}</span><select id="mpa-ki">
+                ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ` (${TX('nur Menschen')})` : ''))).join('')}</select></label>
+              ${note(hint)}
+              <label class="row"><span>${TX('Zufällige Nationen für alle')}</span><input type="checkbox" id="mpa-random" ${random ? 'checked' : ''}></label>
+              <label class="row"${noKi ? ' hidden' : ''}><span>${TX('KI-Stufe')}</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
+                ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
+              <label class="row"><span>${TX('Zeit pro Zug')}</span><select id="mpa-days">
+                ${[1, 3, 7].map(d => `<option value="${d}" ${(f.turnDays || 7) === d ? 'selected' : ''}>${d === 1 ? TX('1 Tag') : TX('%s Tage', d)}</option>`).join('')}</select></label>
+              ${note(TX('Wer so lange nicht zieht, wird erinnert und danach von der KI ersetzt.'))}
+              <label class="row"><span>🤖 ${TX('Spieler-Bots erlauben')}</span><input type="checkbox" id="mpa-bots" ${f.playerBots ? 'checked' : ''}></label>
+              ${f.playerBots ? `<label class="row"><span>${TX('Höchstens so viele Spieler-Bots')}</span><select id="mpa-botlimit">
+                ${opt('', f.playerBotLimit, TX('Unbegrenzt'))}${Array.from({ length: Math.max(1, humans - 1) }, (_, i) => i + 1).map(n => opt(n, f.playerBotLimit, n)).join('')}</select></label>
+              ${note(TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.'))}` : ''}
+              <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
+              <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
+                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('KI auf schwerster Stufe')})</small></span>
+                <input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}>
+              </label>
+            </div>
           </div>
-          <p class="sub">${hint}</p>
           <button class="btn wide primary" onclick="ASYNC.create()">${TX('Erstellen')}</button>
           <button class="btn wide ghost" onclick="ASYNC.showList()">${TX('Zurück')}</button>`);
     },
@@ -2528,7 +2547,7 @@ const ASYNC = {
         const f = this.form, v = id => $(id) ? $(id).value : null, c = id => $(id) ? $(id).checked : false;
         const civBefore = f.civ;
         Object.assign(f, {
-            mapKey: v('mpa-map'), civMode: v('mpa-mode'),
+            mapKey: v('mpa-map'), civMode: c('mpa-random') ? 'random' : 'fixed',
             playerCount: +v('mpa-total') || f.playerCount, kiCount: v('mpa-ki') != null ? +v('mpa-ki') : f.kiCount,
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
             events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), hexTiles: c('mpa-hex'),
@@ -3077,6 +3096,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mp-invite-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 12px; clear:both; }
         .mp-invite-bar .btn { flex:0 0 auto; width:auto; margin:0; white-space:nowrap; }
         .mp-invite-bar .sub { font-size:12px; flex:1 1 180px; }
+        .mp-settings { background:#f4ebd8; padding:10px; border-radius:4px; margin-bottom:15px; }
         .mpa-badge { display:inline-block; background:#c0392b; color:#fff; border-radius:10px; padding:0 7px; font-size:12px; font-weight:bold; line-height:18px; }
         /* Main menu (MP.arrangeMenu): login bar on top, the secondary buttons in a grid */
         #mp-main-auth-container { position:absolute; top:0; left:0; right:0; z-index:1000; display:flex; justify-content:flex-end; align-items:center; padding:12px 20px; }
@@ -3101,8 +3121,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph .sub { font-size:13px; color:var(--ink-soft); margin:0 0 8px; line-height:1.45; }
         .mph-name { display:flex; gap:10px; align-items:center; margin-bottom:12px; font-size:13px; font-weight:600; color:var(--ink-soft); }
         .mph-name input { flex:0 1 220px; color:var(--ink); font-weight:500; }
-        .mph-new { display:flex; gap:10px; align-items:flex-start; margin-bottom:18px; }
-        .mph-new > .btn, .mph-ranked { flex:1 1 0; min-width:0; }
+        /* a grid: with flex:1 1 0 the buttons stay wider than .mph-ranked by their padding */
+        .mph-new { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0, 1fr); gap:10px; align-items:start; margin-bottom:18px; }
         .mph-mode { display:flex; flex-direction:column; justify-content:center; gap:3px; min-height:72px; text-align:left; padding:12px 14px; font-weight:600; }
         .mph-mode small { font-size:12px; font-weight:400; line-height:1.35; opacity:.75; }
         .mph-mode:not([disabled]):hover { filter:brightness(1.04); }
@@ -3144,8 +3164,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph a { color:var(--red); }
         /* phones: the new games one below the other, title and line side by side */
         @media (max-width:640px) {
-            .mph-new { flex-direction:column; gap:8px; }
-            .mph-new > .btn, .mph-ranked { flex:0 0 auto; }
+            .mph-new { grid-auto-flow:row; align-items:stretch; gap:8px; }
             .mph-more { flex-direction:column; gap:8px; }
             .mph-more .btn { flex:0 0 auto; }
             .mph-mode { min-height:0; padding:10px 14px; }

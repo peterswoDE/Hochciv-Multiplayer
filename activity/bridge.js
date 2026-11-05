@@ -172,6 +172,20 @@ function watchSocket() {
     });
 }
 
+/** A seat in the lobby. The server gives none (428) until the player agreed to the terms of use. */
+async function lobbySeat() {
+    const request = () => withTimeout(
+        postJson('/api/activity/lobby', { instanceId: (state.sdk && state.sdk.instanceId) || INSTANCE_ID }, state.accessToken), 20000, 'Lobby');
+    try {
+        return await request();
+    } catch (err) {
+        if (err.status !== 428) throw err;
+    }
+    if (!(await CONSENT.ask())) throw new Error('Ohne Zustimmung kannst du nicht online spielen.');
+    await withTimeout(postJson('/api/activity/terms', {}, state.accessToken), 20000, 'Zustimmung');
+    return request();
+}
+
 async function joinGroupLobby() {
     if (!state.accessToken) {
         if (starting) return notify(`Noch nicht verbunden: ${state.status}`);
@@ -182,8 +196,7 @@ async function joinGroupLobby() {
     step('Trete der Lobby bei …');
     try {
         await domReady;
-        const seat = await withTimeout(
-            postJson('/api/activity/lobby', { instanceId: (state.sdk && state.sdk.instanceId) || INSTANCE_ID }, state.accessToken), 20000, 'Lobby');
+        const seat = await lobbySeat();
         report(`Lobby ${seat.joinCode}, Platz ${seat.playerIndex}${seat.created ? ' (neu, Host)' : ''}`);
 
         if (MP.sessionId && MP.sessionId !== seat.sessionId) {

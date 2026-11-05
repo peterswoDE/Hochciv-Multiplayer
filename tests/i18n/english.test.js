@@ -139,8 +139,8 @@ function makeAdmin() {
         await clean(page, 'multiplayer menu with turn-based games', '#ov-body');
         await page.evaluate(() => ASYNC.showCreate());
         await clean(page, 'turn-based game form', '#ov-body');
-        for (const [sel, val] of [['#mpa-map', 'plaettchen'], ['#mpa-map', 'marathon'], ['#mpa-mode', 'random']]) {
-            await page.selectOption(sel, val);
+        for (const [sel, val] of [['#mpa-map', 'plaettchen'], ['#mpa-map', 'marathon'], ['#mpa-random', true]]) {
+            if (val === true) await page.check(sel); else await page.selectOption(sel, val);
             await page.waitForTimeout(400);
             await clean(page, `turn-based form, ${sel.slice(5)} = ${val}`, '#ov-body');
         }
