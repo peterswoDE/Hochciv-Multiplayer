@@ -121,6 +121,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Scripts and styles with the current content hash (?v=…, written by inject.js) are kept for a year
 const staticOpts = { setHeaders: (res, file, stat) => { if (Assets.isCurrent(res.req, file, stat)) res.set('Cache-Control', Assets.YEAR); } };
+app.get('/.well-known/assetlinks.json', (req, res) => res.json(require('./utils/webauthn').assetLinks()));
 app.use('/client', Assets.gzipped(path.join(__dirname, 'client')), express.static(path.join(__dirname, 'client'), staticOpts));
 
 // Explicit routes for legal pages at root
