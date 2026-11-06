@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('mfa-email-section').style.display = methods.email ? 'block' : 'none';
     }
 
-    /** Back from Google/Discord with an account that has 2FA (?mfa=1): ask for the second factor. */
+    /** Back from Google/Discord with a new link or re-confirmation (?mfa=1): ask for the second factor. */
     async function resumeMfa() {
         try {
             const res = await fetch('/api/auth/mfa-pending', { cache: 'no-store' });
@@ -464,7 +464,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Init
-    fetchMe().then(() => {
-        if (!currentUser && new URLSearchParams(window.location.search).get('mfa') === '1') resumeMfa();
-    });
+    if (new URLSearchParams(window.location.search).get('mfa') === '1') {
+        showView(viewAuth);     // also for a logged-in user, so not through fetchMe()
+        resumeMfa();
+    } else {
+        fetchMe();
+    }
 });

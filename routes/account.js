@@ -9,7 +9,7 @@ const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
 const terms = require('../utils/terms');
 const {
-    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, markAuthenticated, requireRecentAuth,
+    EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, secondFactors, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
 
@@ -60,7 +60,15 @@ router.post('/reauth', rateLimit, async (req, res) => {
 
 // Asked before linking Google/Discord: utils/oauth.js refuses a new link without a recent login,
 // and the client can only show the re-confirmation dialog for a request, not after the redirect.
-router.get('/recent-auth', requireRecentAuth, (req, res) => res.json({ ok: true }));
+// With a second factor the link waits for that factor instead.
+router.get('/recent-auth', async (req, res, next) => {
+    try {
+        if (await secondFactors(req.user)) return res.json({ ok: true });
+        requireRecentAuth(req, res, () => res.json({ ok: true }));
+    } catch (err) {
+        next(err);
+    }
+});
 
 // Unlink Google / Discord. The account must keep a way to log in: a password, a passkey or the
 // other provider.

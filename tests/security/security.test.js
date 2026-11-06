@@ -11,8 +11,8 @@
  *   · authenticator code: five wrong codes lock the codes for 15 minutes (the right one too),
  *     a right code resets the count; the pending login ends after 10 minutes; the re-confirmation
  *     on the account page counts the same way;
- *   · second factor after Google/Discord: /?oauth=mfa opens the login dialog at the 2FA form of
- *     the pending login (the server side of the redirect needs a real provider – not tested here);
+ *   · second factor for a new Google/Discord link: /?oauth=mfa opens the login dialog at the 2FA
+ *     form of the pending login (the server side is in tests/auth/google-app-login.test.js);
  *   · ban: the banned player's socket is closed, the live seat loses the account (texts refused
  *     as for a guest), the session is gone.
  *
@@ -126,7 +126,7 @@ async function totp(browser) {
         ok(/abgelaufen/.test(late.error || ''), 'pending login: ends after 10 minutes', late.error);
         await ctx.close();
 
-        // the dialog after Google/Discord: /?oauth=mfa with a pending login
+        // the dialog for a new Google/Discord link: /?oauth=mfa with a pending login
         const c2 = await browser.newContext({ locale: 'de-DE' });
         await c2.request.post(BASE + '/api/auth/login', { data: { username: u.name, password: PASSWORD } });
         const page = await c2.newPage();
@@ -140,6 +140,13 @@ async function totp(browser) {
             await frame.fill('#mfa-totp-code', totpCode(secret));
             await frame.evaluate(() => document.getElementById('form-mfa').requestSubmit());
             ok(await until(async () => page.evaluate(() => MP.user && MP.user.username), 15000) === u.name, 'oauth=mfa: the code logs in, the game page reloads');
+
+            // the same for a logged-in user (linking from the account page, a re-confirmation)
+            await c2.request.post(BASE + '/api/auth/login', { data: { username: u.name, password: PASSWORD } });
+            await page.goto(BASE + '/?oauth=mfa');
+            const again = await until(async () => page.frames().find(f => /\/client\/index\.html\?modal=true&mfa=1/.test(f.url())), 15000);
+            await again.waitForSelector('#form-mfa.active', { timeout: 10000 }).catch(() => null);
+            ok(await again.evaluate(() => document.getElementById('mfa-totp-section').style.display) === 'block', 'oauth=mfa: also opens for a logged-in user');
         }
         await c2.close();
     } finally {
@@ -153,7 +160,14 @@ async function ban(browser) {
     try {
         const ctxFor = async u => {
             const ctx = await browser.newContext({ locale: 'de-DE' });
-            await ctx.request.post(BASE + '/api/auth/login', { data: { username: u.name, password: PASSWORD } });
+            // the auth routes allow 15 requests a minute per IP: wait it out
+            let res = await ctx.request.post(BASE + '/api/auth/login', { data: { username: u.name, password: PASSWORD } });
+            if (res.status() === 429) {
+                console.log('      (rate limit – waiting 61 s)');
+                await new Promise(r => setTimeout(r, 61000));
+                res = await ctx.request.post(BASE + '/api/auth/login', { data: { username: u.name, password: PASSWORD } });
+            }
+            ok(res.ok(), `ban: ${u.name} logs in`, `${res.status()}`);
             return ctx;
         };
         const ca = await ctxFor(admin), cv = await ctxFor(victim);

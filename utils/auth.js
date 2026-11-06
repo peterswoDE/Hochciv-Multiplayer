@@ -3,6 +3,7 @@
  * gets back, request-input validation and one-time codes.
  */
 const crypto = require('crypto');
+const { Passkey } = require('../models');
 const terms = require('./terms');
 const { canCreateBots } = require('./bots');
 
@@ -26,7 +27,18 @@ function noBots(req, res, next) {
     next();
 }
 
-/** Call after a successful login or re-confirmation (password, TOTP, passkey, OAuth). */
+/** The second factors of an account – { totp, passkey, email } – or null if it has none. */
+async function secondFactors(user) {
+    const passkey = (await Passkey.count({ where: { UserId: user.id } })) > 0;
+    const methods = { totp: !!user.totpEnabled, passkey, email: !!user.emailOtpEnabled };
+    return methods.totp || methods.passkey || methods.email ? methods : null;
+}
+
+/**
+ * Call after a successful login or re-confirmation (password, TOTP, passkey). Google/Discord only
+ * count for accounts without a second factor: on the others they log in, but sensitive changes
+ * still ask for the password or the second factor.
+ */
 function markAuthenticated(req) {
     req.session.authAt = Date.now();
 }
@@ -137,7 +149,7 @@ async function destroyOtherSessions(sequelize, userId, keepSid = null) {
 
 module.exports = {
     USERNAME_RE, EMAIL_RE, MIN_PASSWORD_LENGTH,
-    isAuthenticated, noBots, markAuthenticated, recentlyAuthenticated, requireRecentAuth,
+    isAuthenticated, noBots, secondFactors, markAuthenticated, recentlyAuthenticated, requireRecentAuth,
     userJson, str, validPassword,
     generateCode, issueCode, consumeCode, destroyOtherSessions,
 };
