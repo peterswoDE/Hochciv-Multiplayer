@@ -20,6 +20,7 @@
  */
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
+const { generateSecret, generateSync } = require('otplib');
 
 const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
 const CLIENT_ID = 'test-client.apps.googleusercontent.com';
@@ -35,13 +36,17 @@ function client() {
     return async (path, opts = {}) => {
         const headers = Object.assign({}, opts.headers);
         if (cookies.size) headers.cookie = [...cookies].map(([k, v]) => `${k}=${v}`).join('; ');
-        let res = await fetch(BASE + path, Object.assign({}, opts, { headers, redirect: 'manual' }));
+        // a body function is called per try: authenticator codes don't outlast the wait below
+        const send = () => fetch(BASE + path, Object.assign({}, opts, {
+            headers, redirect: 'manual', body: typeof opts.body === 'function' ? opts.body() : opts.body,
+        }));
+        let res = await send();
         // The auth routes allow 15 requests a minute per IP – this test needs more: wait it out.
         if (res.status === 429) {
             const wait = (+res.headers.get('ratelimit-reset') || 60) + 1;
             console.log(`      (rate limit – waiting ${wait} s)`);
             await new Promise(r => setTimeout(r, wait * 1000));
-            res = await fetch(BASE + path, Object.assign({}, opts, { headers, redirect: 'manual' }));
+            res = await send();
         }
         for (const c of res.headers.getSetCookie()) {
             const [kv] = c.split(';');
@@ -155,6 +160,73 @@ const sql = q => execFileSync('docker', ['exec', 'hochciv-db', 'psql', '-U', 'ho
     nonce = await nonceFor(c6);
     r = await post(c6, token(claims(nonce, { sub: first.sub, email: first.email })));
     ok(r.status === 403 && r.body.reason === 'taken', 'linking a Google account that belongs to someone else → taken', `${r.status} ${r.body && r.body.reason}`);
+
+    // ---- second factor: only for a new link, not for logging in with a linked account
+    const secret = generateSecret();
+    const code = () => generateSync({ secret });
+    const uname2 = 'apptest_' + crypto.randomBytes(3).toString('hex');
+    const email2 = `${uname2}@example.com`;
+    await client()('/api/auth/register', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: uname2, email: email2, password: 'Sehr-geheim-123!' }),
+    });
+    const set2fa = on => sql(`UPDATE users SET "isActive" = true, "totpEnabled" = ${on}, "totpSecret" = ${on ? `'${secret}'` : 'NULL'} WHERE username = '${uname2}'`);
+    const googleId = () => sql(`SELECT COALESCE("googleId", '') FROM users WHERE username = '${uname2}'`);
+    const totpLogin = c2 => c2('/api/auth/login/totp', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: () => JSON.stringify({ token: code() }),
+    });
+    set2fa(true);
+    const sub2 = 'g' + crypto.randomBytes(8).toString('hex');
+    const google2 = (c2, sub, mail) => nonceFor(c2).then(n => post(c2, token(claims(n, { sub, email: mail }))));
+
+    const c7 = client();
+    r = await google2(c7, sub2, email2);
+    ok(r.body && r.body.ok === false && r.body.reason === 'mfa', 'new link by e-mail waits for the second factor', JSON.stringify(r.body));
+    ok(googleId() === '', 'and nothing is linked yet', googleId());
+    ok((await c7('/api/auth/me')).status === 401, 'and there is no login yet');
+
+    const c8 = client();
+    r = await google2(c8, sub2, email2);
+    ok(r.body && r.body.reason === 'mfa', 'still asked, without the factor the link never happens');
+    r = await totpLogin(c8);
+    ok(r.status === 200 && r.body.username === uname2, 'the code finishes the login', JSON.stringify(r.body));
+    ok(googleId() === sub2, 'and makes the link', googleId());
+
+    const c9 = client();
+    r = await google2(c9, sub2, email2);
+    const me9 = await c9('/api/auth/me');
+    ok(r.body && r.body.ok === true && me9.body.username === uname2, 'linked account: Google logs in without the second factor', JSON.stringify(r.body));
+    r = await c9('/api/account/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    ok(r.status === 403 && r.body.reauthRequired, 'but that login is not enough for sensitive changes', `${r.status}`);
+    r = await c9('/api/mfa/totp/none', { method: 'DELETE' });
+    ok(r.status === 403 && r.body.reauthRequired, 'not even for removing the second factor', `${r.status}`);
+    r = await c9('/api/account/reauth', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: () => JSON.stringify({ token: code() }),
+    });
+    ok(r.status === 200, 'the second factor confirms it', `${r.status}`);
+
+    const c10 = client();
+    await google2(c10, sub2, email2);
+    r = await c10('/api/account/recent-auth');
+    ok(r.status === 200, 'linking on the account page: no extra re-confirmation before the provider', `${r.status}`);
+    const sub3 = 'g' + crypto.randomBytes(8).toString('hex');
+    r = await google2(c10, sub3, `other.${email2}`);
+    ok(r.body && r.body.reason === 'mfa' && googleId() === sub2, 'a new link while logged in waits for the second factor', JSON.stringify(r.body));
+    r = await c10('/api/auth/mfa-pending');
+    ok(r.status === 200 && r.body.methods.totp, 'the dialog can see what is missing', `${r.status}`);
+    r = await totpLogin(c10);
+    ok(r.status === 200 && googleId() === sub3, 'and the code makes it', googleId());
+
+    const c11 = client();
+    await google2(c11, sub3, `other.${email2}`);
+    r = await google2(c11, sub3, `other.${email2}`);
+    ok(r.body && r.body.reason === 'mfa', 're-confirming with the linked account asks for the second factor too', JSON.stringify(r.body));
+
+    set2fa(false);
+    const c12 = client();
+    r = await google2(c12, sub3, `other.${email2}`);
+    r = await c12('/api/account/recent-auth');
+    ok(r.status === 200, 'no second factor: the Google login counts as recent, as before', `${r.status}`);
 
     console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
     process.exit(failed ? 1 : 0);
