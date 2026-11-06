@@ -26,7 +26,8 @@ function rp(req) {
 
 /** /.well-known/assetlinks.json: lets the app use this site's passkeys. */
 const assetLinks = () => ANDROID_APPS.map(app => ({
-    relation: ['delegate_permission/common.get_login_creds'],
+    // handle_all_urls is what Bitwarden and other password managers ask Google for
+    relation: ['delegate_permission/common.get_login_creds', 'delegate_permission/common.handle_all_urls'],
     target: { namespace: 'android_app', package_name: app.package, sha256_cert_fingerprints: app.sha256 },
 }));
 
