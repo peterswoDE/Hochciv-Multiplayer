@@ -23,7 +23,7 @@ Why: the login cookie is `SameSite=Lax`, which other sites never get – but a p
 
 ## Logins and second factors
 
-* **Second factor everywhere:** an account with 2FA (authenticator app, passkey, e-mail code) is asked for it after the password and after Google/Discord too (`/?oauth=mfa` opens the dialog; the Android app forwards the same reason). The first factor counts for 10 minutes.
+* **Second factor:** an account with 2FA (authenticator app, passkey, e-mail code) is asked for it after the password, and once when a Google/Discord account is linked to it, also through the verified e-mail address (`/?oauth=mfa` opens the dialog; the Android app forwards the same reason). The link is only saved after that. Logging in with a linked Google/Discord account needs no second factor, but such a login doesn't count as a recent one: sensitive changes ask for the password or the second factor. The first factor counts for 10 minutes.
 * **Authenticator codes** are limited per account: after 5 wrong codes in a row, no code is accepted for 15 minutes (login and re-confirmation). E-mail codes are burnt after 5 wrong tries; activation, reset and e-mail-change codes count attempts as well.
 * **Re-confirmation:** sensitive changes (second factors, deleting the account, linking Google/Discord, password/e-mail for accounts without a password) need a password or authenticator confirmation within the last 10 minutes.
 * **E-mail changes** only take effect after the code sent to the new address is entered – an unproven address could otherwise be linked to whoever logs in with it via Google/Discord and receive password resets.

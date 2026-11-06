@@ -944,7 +944,7 @@ const MP = {
         }
     },
 
-    /** The login dialog; `mfa`: only the second factor is missing (after Google/Discord, ?oauth=mfa). */
+    /** The login dialog; `mfa`: only the second factor is missing (a new Google/Discord link, ?oauth=mfa). */
     showAuthModal: function (mfa) {
         if (typeof modal === 'function') {
             modal(TX('Anmelden'), `<iframe src="/client/index.html?modal=true${mfa ? '&mfa=1' : ''}" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>`);
@@ -3047,7 +3047,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // Back from Google/Discord: the server redirects here with ?oauth=<result>
         const oauth = params.get('oauth');
         if (oauth === 'mfa') {
-            // Google/Discord proved the account; its second factor is still missing
+            // A new Google/Discord link or a re-confirmation: the second factor is still missing
             history.replaceState(null, '', location.pathname);
             MP.showAuthModal(true);
         } else if (oauth) {

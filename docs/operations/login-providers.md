@@ -17,9 +17,9 @@ After logging in or linking an account, players return to the game with a short 
 ## How accounts are matched
 
 * A Google/Discord login whose **verified** e-mail belongs to an existing account is linked to that account and logs into it. Otherwise a new account is created (without a verified e-mail it gets a placeholder address).
-* A logged-in player can link Google/Discord on the account page. Linking needs a recent login (the account page asks for the password or an authenticator code first).
+* A logged-in player can link Google/Discord on the account page. Linking needs a recent login (the account page asks for the password or an authenticator code first), or the second factor if the account has one.
 * Unlinking is only allowed if the account keeps a way to log in: a password, a passkey or the other provider.
-* An account with a second factor is asked for it after the Google/Discord login too (`/?oauth=mfa` opens the dialog).
+* An account with a second factor is asked for it once, when a Google/Discord account is linked to it (`/?oauth=mfa` opens the dialog). After that, Google/Discord log in without it.
 * Linking a Discord account that was created by the [Discord Activity](discord-activity.md) merges the Activity account into the real one: game history, Rundenspiele, games played and MMR move over (`utils/mergeAccounts.js`).
 
 ## Android app

@@ -3,7 +3,7 @@ const router = express.Router();
 const passport = require('passport');
 const { OAuthProvider } = require('../models');
 const bcrypt = require('bcryptjs');
-const { sequelize, User, Passkey } = require('../models');
+const { sequelize, User } = require('../models');
 const { sendMail } = require('../utils/mailer');
 const { Op } = require('sequelize');
 const totp = require('../utils/totp');
@@ -12,7 +12,7 @@ const serverState = require('../utils/serverState');
 const { rp } = require('../utils/webauthn');
 const {
     USERNAME_RE, EMAIL_RE, MIN_PASSWORD_LENGTH,
-    markAuthenticated, userJson, str, validPassword, issueCode, consumeCode, destroyOtherSessions,
+    secondFactors, markAuthenticated, userJson, str, validPassword, issueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
 const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 const { OAuth2Client } = require('google-auth-library');
@@ -54,17 +54,26 @@ async function pendingUser(req) {
     return user && !user.isBanned ? user : null;
 }
 
-/** The second factors of an account – { totp, passkey, email } – or null if it has none. */
-async function secondFactors(user) {
-    const passkey = (await Passkey.count({ where: { UserId: user.id } })) > 0;
-    const methods = { totp: !!user.totpEnabled, passkey, email: !!user.emailOtpEnabled };
-    return methods.totp || methods.passkey || methods.email ? methods : null;
-}
-
-/** The first factor is done (password, Google, Discord): wait for the second one. */
-function awaitSecondFactor(req, user) {
+/**
+ * The first factor is done: wait for the second one. `link`: the Google/Discord account to connect
+ * once it is there (utils/oauth.js).
+ */
+function awaitSecondFactor(req, user, link) {
     req.session.mfaPendingUserId = user.id;
     req.session.mfaPendingAt = Date.now();
+    req.session.mfaPendingLink = link || null;
+}
+
+/** The second factor is confirmed: make the waiting link and finish the login. */
+async function finishSecondFactor(req, res, user) {
+    const link = req.session.mfaPendingLink;
+    req.session.mfaPendingUserId = null;
+    req.session.mfaPendingLink = null;
+    if (link) {
+        const error = await oauth.linkProvider(user, link);
+        if (error) console.warn('[OAuth] Link after the second factor failed:', error);
+    }
+    finishLogin(req, res, user);
 }
 
 // Register endpoint
@@ -214,8 +223,7 @@ router.post('/login/email-otp/verify', rateLimit, async (req, res) => {
         user.emailOtpExpiry = null;
         await user.save();
 
-        req.session.mfaPendingUserId = null;
-        finishLogin(req, res, user);
+        await finishSecondFactor(req, res, user);
     } catch (err) {
         res.status(500).json({ error: 'Fehler' });
     }
@@ -231,8 +239,7 @@ router.post('/login/totp', rateLimit, async (req, res) => {
         const wrong = await totp.checkLimited(user, token);
         if (wrong) return res.status(400).json({ error: wrong });
 
-        req.session.mfaPendingUserId = null;
-        finishLogin(req, res, user);
+        await finishSecondFactor(req, res, user);
     } catch (err) {
         res.status(500).json({ error: 'Fehler bei der MFA' });
     }
@@ -305,8 +312,7 @@ router.post('/login/passkey/verify', rateLimit, async (req, res) => {
         if (!(await verifyPasskey(req, passkey, challenge))) {
             return res.status(400).json({ error: 'Verifizierung fehlgeschlagen' });
         }
-        req.session.mfaPendingUserId = null;
-        finishLogin(req, res, user);
+        await finishSecondFactor(req, res, user);
     } catch (err) {
         res.status(500).json({ error: 'Fehler' });
     }
@@ -411,7 +417,7 @@ router.post('/reset-password/confirm', rateLimit, async (req, res) => {
     }
 });
 
-// The second factor still missing after a Google/Discord login (/?oauth=mfa opens the dialog)
+// The second factor a new Google/Discord link waits for (/?oauth=mfa opens the dialog)
 router.get('/mfa-pending', async (req, res) => {
     try {
         const user = await pendingUser(req);
@@ -443,6 +449,16 @@ router.post('/logout', (req, res) => {
         res.json({ ok: true });
     });
 });
+/**
+ * Google/Discord proved the account: true if it must now show the second factor. A linked account
+ * logs in without it; a new link (`info.link`) and a re-confirmation by a logged-in user need it.
+ */
+function needsSecondFactor(req, user, info, methods, linking) {
+    if (!methods || !(linking || (info && info.link))) return false;
+    awaitSecondFactor(req, user, info && info.link);
+    return true;
+}
+
 /** Why a Google/Discord login failed, as the ?oauth=<reason> mp.js shows a message for. */
 function oauthFailureReason(info) {
     const msg = String((info && info.message) || '');
@@ -515,27 +531,28 @@ router.post('/google/idtoken', rateLimit, async (req, res) => {
         };
         if (Bots.isBot(req.user)) return res.status(403).json({ ok: false, reason: 'failed' });
         const linking = req.isAuthenticated();
-        oauth.handleOAuthProfile(req, 'google', 'googleId', profile, (err, user, info) => {
+        oauth.handleOAuthProfile(req, 'google', 'googleId', profile, async (err, user, info) => {
             if (err) {
                 console.error('[OAuth] Google app login error:', err);
                 return res.status(500).json({ ok: false, reason: 'error' });
             }
             if (!user) return res.status(403).json({ ok: false, reason: oauthFailureReason(info) });
-            const login = () => req.login(user, (loginErr) => {
-                if (loginErr) {
-                    console.error('[OAuth] Google app login error:', loginErr);
-                    return res.status(500).json({ ok: false, reason: 'error' });
-                }
-                markAuthenticated(req);
-                res.json({ ok: true, linked: linking });
-            });
-            // Google proves the account, but not the second factor it has set up: the app opens
-            // /?oauth=mfa, where the dialog asks for it (as after the web callback)
-            secondFactors(user).then(methods => {
-                if (!methods || linking) return login();
-                awaitSecondFactor(req, user);
-                res.json({ ok: false, reason: 'mfa' });
-            }).catch(() => res.status(500).json({ ok: false, reason: 'error' }));
+            try {
+                const methods = await secondFactors(user);
+                // the app opens /?oauth=mfa, where the dialog asks for it (as after the web callback)
+                if (needsSecondFactor(req, user, info, methods, linking)) return res.json({ ok: false, reason: 'mfa' });
+                req.login(user, (loginErr) => {
+                    if (loginErr) {
+                        console.error('[OAuth] Google app login error:', loginErr);
+                        return res.status(500).json({ ok: false, reason: 'error' });
+                    }
+                    if (!methods) markAuthenticated(req);
+                    res.json({ ok: true, linked: linking });
+                });
+            } catch (factorErr) {
+                console.error('[OAuth] Google app login error:', factorErr);
+                res.status(500).json({ ok: false, reason: 'error' });
+            }
         });
     } catch (err) {
         console.error('[OAuth] Google app login error:', err);
@@ -576,7 +593,7 @@ for (const provider of ['google', 'discord']) {
             return res.redirect('/?oauth=error');
         }
         const linking = req.isAuthenticated();     // started from the account page
-        passport.authenticate(provider, (err, user, info) => {
+        passport.authenticate(provider, async (err, user, info) => {
             if (err) {
                 console.error(`[OAuth] ${label} Callback Error:`, err);
                 return res.redirect('/?oauth=error');
@@ -585,22 +602,21 @@ for (const provider of ['google', 'discord']) {
                 console.error(`[OAuth] ${label} Auth failed. Info:`, info);
                 return res.redirect(`/?oauth=${oauthFailureReason(info)}`);
             }
-            const login = () => req.login(user, (loginErr) => {
-                if (loginErr) {
-                    console.error(`[OAuth] ${label} Login Error:`, loginErr);
-                    return res.redirect('/?oauth=error');
-                }
-                markAuthenticated(req);     // also how OAuth-only accounts re-confirm (account page)
-                res.redirect(linking ? '/?oauth=linked' : '/?oauth=ok');
-            });
-            // The provider proves the account, but not the second factor it has set up: like
-            // after the password, the login waits for it (/?oauth=mfa opens the dialog). Linking
-            // from the account page doesn't – that user is logged in already.
-            secondFactors(user).then(methods => {
-                if (!methods || linking) return login();
-                awaitSecondFactor(req, user);
-                res.redirect('/?oauth=mfa');
-            }).catch(() => res.redirect('/?oauth=error'));
+            try {
+                const methods = await secondFactors(user);
+                if (needsSecondFactor(req, user, info, methods, linking)) return res.redirect('/?oauth=mfa');
+                req.login(user, (loginErr) => {
+                    if (loginErr) {
+                        console.error(`[OAuth] ${label} Login Error:`, loginErr);
+                        return res.redirect('/?oauth=error');
+                    }
+                    if (!methods) markAuthenticated(req);     // also how OAuth-only accounts re-confirm (account page)
+                    res.redirect(linking ? '/?oauth=linked' : '/?oauth=ok');
+                });
+            } catch (factorErr) {
+                console.error(`[OAuth] ${label} Login Error:`, factorErr);
+                res.redirect('/?oauth=error');
+            }
         })(req, res, next);
     });
 }

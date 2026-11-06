@@ -8,10 +8,11 @@ const DiscordStrategy = require('./discordStrategy').Strategy;
 const { User, OAuthProvider } = require('../models');
 const config = require('../config');
 const { isMergeable, mergeInto } = require('./mergeAccounts');
-const { recentlyAuthenticated } = require('./auth');
+const { recentlyAuthenticated, secondFactors } = require('./auth');
 
 const PROVIDERS = ['google', 'discord'];
 const strategies = new Set();       // providers with a registered strategy
+const TAKEN = 'Dieses Konto ist bereits mit einem anderen Benutzer verknüpft.';
 
 /** The provider's e-mail address, but only if the provider says it is verified. */
 function verifiedEmail(provider, profile) {
@@ -25,44 +26,68 @@ function verifiedEmail(provider, profile) {
     return null;
 }
 
+/**
+ * Connects a provider account to `user`; its automatic Activity account is merged in. On accounts
+ * with a second factor this waits for that factor (routes/auth.js). Returns an error text or null.
+ */
+async function linkProvider(user, { idField, value, avatar }) {
+    const owner = await User.findOne({ where: { [idField]: value } });
+    if (owner && owner.id !== user.id) {
+        if (!(await isMergeable(owner))) return TAKEN;
+        const error = await mergeInto(user, owner);
+        if (error) return error;
+    }
+    if (!user.isActive) {
+        // Nobody has proven this address yet – whoever registered it may not own it.
+        // The provider just did, so drop the unproven password and activate.
+        user.password_hash = null;
+        user.activationCode = null;
+        user.isActive = true;
+    }
+    user[idField] = value;
+    if (avatar && !user.avatarUrl) user.avatarUrl = avatar;
+    await user.save();
+    return null;
+}
+
+/**
+ * Logging in with a linked provider account needs no second factor. A new link does, as it is a
+ * new way in: done(null, user, { link }) has the login wait for the factor, nothing is saved yet.
+ */
 async function handleOAuthProfile(req, provider, idField, profile, done) {
     try {
         const providerIdValue = String(profile.id);
         const email = verifiedEmail(provider, profile);
         const avatar = (profile.photos && profile.photos.length > 0) ? profile.photos[0].value : null;
         const owner = await User.findOne({ where: { [idField]: providerIdValue } });
+        const link = { idField, value: providerIdValue, avatar };
 
         // 0. Linking from the account page: the user is already logged in
         if (req.user) {
             const user = await User.findByPk(req.user.id);
             // Linking a new provider account is a new way to log in – a stolen session cookie must not
             // be enough. Coming back with the account that is already linked is a re-confirmation.
-            if (user[idField] !== providerIdValue && !recentlyAuthenticated(req)) {
+            const isNew = user[idField] !== providerIdValue;
+            const factors = isNew && await secondFactors(user);
+            if (isNew && !factors && !recentlyAuthenticated(req)) {
                 return done(null, false, { message: 'reauth' });
             }
-            if (owner && owner.id !== user.id) {
-                // The automatic account of the Discord Activity is merged into this one
-                if (!(await isMergeable(owner))) {
-                    return done(null, false, { message: 'Dieses Konto ist bereits mit einem anderen Benutzer verknüpft.' });
-                }
-                const error = await mergeInto(user, owner);
-                if (error) return done(null, false, { message: error });
+            // The automatic account of the Discord Activity can be merged into this one, others not
+            if (owner && owner.id !== user.id && !(await isMergeable(owner))) {
+                return done(null, false, { message: TAKEN });
             }
-            user[idField] = providerIdValue;
-            if (avatar && !user.avatarUrl) user.avatarUrl = avatar;
-            await user.save();
-            return done(null, user);
+            if (factors) return done(null, user, { link });
+            const error = await linkProvider(user, link);
+            return error ? done(null, false, { message: error }) : done(null, user);
         }
 
         // 1. Find by provider ID. An automatic Activity account whose verified Discord e-mail
         //    belongs to a real account is merged into that account first.
         if (owner && email && await isMergeable(owner)) {
             const user = await User.findOne({ where: { email } });
-            if (user && user.id !== owner.id && !user.isBanned && !(await mergeInto(user, owner))) {
-                if (avatar && !user.avatarUrl) user.avatarUrl = avatar;
-                if (!user.isActive) Object.assign(user, { password_hash: null, activationCode: null, isActive: true });
-                await user.save();
-                return done(null, user);
+            if (user && user.id !== owner.id && !user.isBanned) {
+                if (await secondFactors(user)) return done(null, user, { link });
+                if (!(await linkProvider(user, link))) return done(null, user);
             }
         }
         if (owner) {
@@ -79,16 +104,8 @@ async function handleOAuthProfile(req, provider, idField, profile, done) {
             const user = await User.findOne({ where: { email } });
             if (user) {
                 if (user.isBanned) return done(null, false, { message: 'banned' });
-                if (!user.isActive) {
-                    // Nobody has proven this address yet – whoever registered it may not own it.
-                    // The provider just did, so drop the unproven password and activate.
-                    user.password_hash = null;
-                    user.activationCode = null;
-                    user.isActive = true;
-                }
-                user[idField] = providerIdValue;
-                if (avatar && !user.avatarUrl) user.avatarUrl = avatar;
-                await user.save();
+                if (await secondFactors(user)) return done(null, user, { link });
+                await linkProvider(user, link);
                 return done(null, user);
             }
         }
@@ -150,4 +167,4 @@ async function refreshOAuthStrategies() {
 
 const isEnabled = provider => strategies.has(provider);
 
-module.exports = { refreshOAuthStrategies, isEnabled, handleOAuthProfile };
+module.exports = { refreshOAuthStrategies, isEnabled, handleOAuthProfile, linkProvider };
