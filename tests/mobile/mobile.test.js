@@ -1,7 +1,8 @@
 /**
  * Interaction tests of the mobile layer (client/mobile) on a phone-sized viewport with touch:
- * zoom and pan, taps vs. drags, the field next to its sheet, "Mehr", tech tree tabs, the view
- * during KI turns, landscape. Run after changes to client/mobile and after every game update
+ * zoom and pan, taps vs. drags, the field next to its sheet, the action bar, tech tree tabs, the
+ * view during KI turns, landscape. Held upright, the game (since v102) turns the page by 90° –
+ * positions on the map are converted with HochcivMobile.frame / toScreen. Run after changes to client/mobile and after every game update
  * (the layer hooks into the game, see the list at the top of mobile.js).
  *
  *   docker compose -f docker-compose.local.yml up -d
@@ -26,8 +27,16 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
 (async () => {
   const browser = await chromium.launch({ executablePath: BROWSER });
   const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, locale: 'de-DE' });
-  // as in the Android app: no self-rotation of the game
-  await ctx.addInitScript(() => { try { localStorage.setItem('hochciv.noturn', 'true'); } catch (e) { } });
+  /* Map helpers in the page: the page frame (turned back when the game turned the page) and the
+     screen point of a field. */
+  await ctx.addInitScript(() => {
+    window.__mapFrame = () => {
+      const svg = document.getElementById('map'), r = HochcivMobile.frame(svg.getBoundingClientRect()), b = svg.viewBox.baseVal;
+      return { r, b, k: r.width / b.width };
+    };
+    window.__inFrame = (row, col) => { const { r, b, k } = __mapFrame(), [mx, my] = hexCenter(row, col, 30); return [r.left + (mx - b.x) * k, r.top + (my - b.y) * k]; };
+    window.__onScreen = (row, col) => HochcivMobile.toScreen(...__inFrame(row, col));
+  });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -46,8 +55,10 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   const host = await page.evaluate(() => { const r = document.getElementById('map').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
 
   const v0 = await vb();
-  ok(v0[2] < 1000, 'game map starts zoomed in on a phone', `view ${Math.round(v0[2])}x${Math.round(v0[3])}`);
-  const hexPx = await page.evaluate(() => Math.sqrt(3) * 30 * document.getElementById('map').getBoundingClientRect().width / document.getElementById('map').viewBox.baseVal.width);
+  const whole = await page.evaluate(() => { const v = HochcivMobile.views.get(document.getElementById('map')); return [v.W, v.H]; });
+  ok(v0[2] < whole[0] * 0.9 || v0[3] < whole[1] * 0.9, 'game map starts zoomed in on a phone', `view ${Math.round(v0[2])}x${Math.round(v0[3])} of ${whole.map(Math.round).join('x')}`);
+  ok(await page.evaluate(() => HochcivMobile.turned()), 'held upright, the game turns the page (v102+)');
+  const hexPx = await page.evaluate(() => Math.sqrt(3) * 30 * __mapFrame().k);
   ok(hexPx >= 43.5, 'hexes are touch-sized', `${hexPx.toFixed(1)} px`);
 
   // drag with touch via CDP (pointer events of type touch)
@@ -82,61 +93,62 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   await page.click('.m-zoom [data-z="home"]');            // whole map
   await page.click('.m-zoom [data-z="home"]');            // back to the capital
   await page.waitForTimeout(200);
-  const capScreen = await page.evaluate(() => {
-    const svg = document.getElementById('map'), c = capitalOf(S, S.cur), [mx, my] = hexCenter(c.r, c.c, 30);
-    const r = svg.getBoundingClientRect(), b = svg.viewBox.baseVal, k = r.width / b.width;
-    return [r.left + (mx - b.x) * k, r.top + (my - b.y) * k];
-  });
+  const capScreen = await page.evaluate(() => { const c = capitalOf(S, S.cur); return __onScreen(c.r, c.c); });
   await page.touchscreen.tap(capScreen[0], capScreen[1]);
   await page.waitForTimeout(400);
   ok(await sheetOpen(), 'a tap on the capital opens its sheet');
   ok(await page.evaluate(() => /Hauptstadt/.test(document.getElementById('sheet-body').textContent)), 'it is the city sheet');
 
-  // a field near the bottom: after its sheet opened, it must be above the sheet
+  // a field under the sheet (bottom or side): after its sheet opened, it must be beside it
   await page.evaluate(() => closeSheet());
-  const low = await page.evaluate(() => {
-    const svg = document.getElementById('map'), r = svg.getBoundingClientRect(), b = svg.viewBox.baseVal, k = r.width / b.width;
-    // the lowest visible field in the middle column of the view
+  await page.touchscreen.tap(capScreen[0], capScreen[1]);
+  await page.waitForTimeout(400);
+  const sheetBox = await page.evaluate(() => HochcivMobile.frame(document.getElementById('sheet').getBoundingClientRect()));
+  await page.evaluate(() => closeSheet());
+  await page.waitForTimeout(300);
+  const low = await page.evaluate(sb => {
+    const { r } = __mapFrame();
+    // the visible field deepest inside the area the sheet covers
     let best = null;
-    svg.querySelectorAll('[data-r]').forEach(el => {
-      const [mx, my] = hexCenter(+el.dataset.r, +el.dataset.c, 30);
-      const x = r.left + (mx - b.x) * k, y = r.top + (my - b.y) * k;
-      if (x > r.left + 60 && x < r.right - 60 && y < r.bottom - 40 && (!best || y > best.y)) best = { x, y, r: +el.dataset.r, c: +el.dataset.c };
+    document.getElementById('map').querySelectorAll('[data-r]').forEach(el => {
+      const [x, y] = __inFrame(+el.dataset.r, +el.dataset.c);
+      if (x < r.left + 30 || x > r.right - 30 || y < r.top + 30 || y > r.bottom - 30) return;
+      if (x < sb.left + 20 || x > sb.right - 20 || y < sb.top + 20 || y > sb.bottom - 20) return;
+      const depth = Math.min(x - sb.left, sb.right - x, y - sb.top, sb.bottom - y);
+      if (!best || depth > best.depth) best = { depth, r: +el.dataset.r, c: +el.dataset.c };
     });
     return best;
-  });
-  await page.touchscreen.tap(low.x, low.y);
-  await page.waitForTimeout(600);
-  const pos = await page.evaluate(([r0, c0]) => {
-    const svg = document.getElementById('map'), r = svg.getBoundingClientRect(), b = svg.viewBox.baseVal, k = r.width / b.width;
-    const [mx, my] = hexCenter(r0, c0, 30);
-    return { y: r.top + (my - b.y) * k, sheetTop: document.getElementById('sheet').getBoundingClientRect().top };
-  }, [low.r, low.c]);
-  ok(pos.y < pos.sheetTop - 10, 'a selected field is moved above its sheet', `field ${Math.round(pos.y)} / sheet ${Math.round(pos.sheetTop)}`);
+  }, sheetBox);
+  if (!low) ok(false, 'a field under the sheet to test with');
+  else {
+    const at = await page.evaluate(([r0, c0]) => __onScreen(r0, c0), [low.r, low.c]);
+    await page.touchscreen.tap(at[0], at[1]);
+    await page.waitForTimeout(600);
+    const pos = await page.evaluate(([r0, c0]) => {
+      const [x, y] = __inFrame(r0, c0), s = HochcivMobile.frame(document.getElementById('sheet').getBoundingClientRect());
+      return { x, y, s, open: document.getElementById('sheet').classList.contains('open'), under: x > s.left - 10 && x < s.right + 10 && y > s.top - 10 && y < s.bottom + 10 };
+    }, [low.r, low.c]);
+    ok(pos.open && !pos.under, 'a selected field is moved out from under its sheet', `field ${Math.round(pos.x)},${Math.round(pos.y)} / sheet ${Math.round(pos.s.left)}-${Math.round(pos.s.right)} x ${Math.round(pos.s.top)}-${Math.round(pos.s.bottom)}`);
+  }
   await page.evaluate(() => closeSheet());
 
-  // "Mehr" menu
-  await page.click('#a-more');
-  ok(await page.evaluate(() => !document.getElementById('m-more-menu').hidden), '"Mehr" opens its menu');
-  const items = await page.evaluate(() => [...document.querySelectorAll('#m-more-menu .btn')].map(b => b.textContent.trim()));
-  ok(items.length === 3, 'menu has Fähigkeiten, Welt, Protokoll', items.join(' / '));
-  await page.click('#m-more-menu .btn:nth-child(2)');
+  // action bar (v102+): five buttons, all shown, no "Mehr"; Welt is the name in the Kopfzeile
+  const bar = await page.evaluate(() => [...document.querySelectorAll('.actionbar > button')].filter(b => getComputedStyle(b).display !== 'none').map(b => b.id));
+  ok(bar.join() === 'a-tech,a-found,a-power,a-abil,a-end', 'action bar: all five actions, no "Mehr"', bar.join(' / '));
+  await page.click('#hud-civ');
   await page.waitForTimeout(300);
-  ok(await page.evaluate(() => document.getElementById('overlay').classList.contains('show') && /Welt|World/.test(document.getElementById('ov-title').textContent)), '"Welt" from the menu opens the world sheet');
-  ok(await page.evaluate(() => document.getElementById('m-more-menu').hidden), 'menu closes after a choice');
+  ok(await page.evaluate(() => document.getElementById('overlay').classList.contains('show') && /Welt|World/.test(document.getElementById('ov-title').textContent)), 'the name in the Kopfzeile opens the world sheet');
   await page.evaluate(() => closeModal());
 
-  // tech tabs
+  // tech tree: the turned phone has the landscape layout – all columns, no tabs (those are for
+  // the narrow layout, which v100/v98 still use in the Android app)
   await page.click('#a-tech');
   await page.waitForTimeout(300);
-  const tabs = await page.evaluate(() => [...document.querySelectorAll('.m-tabs button')].map(b => b.textContent.trim()));
-  ok(tabs.length === 4, 'tech tree has 4 tabs', tabs.join(' / '));
-  const visibleCols = () => page.evaluate(() => [...document.querySelectorAll('.techgrid .techcol')].filter(c => c.offsetParent).map(c => [...c.classList].find(x => x.startsWith('m-f'))));
-  await page.click('.m-tabs button:nth-child(4)');
-  const vis = await visibleCols();
-  ok(vis.length === 4 && vis.every(f => f === 'm-f3'), 'Spezial tab shows only Spezial, all four eras', vis.join(','));
-  const wide = await page.evaluate(() => document.querySelector('.techgrid').scrollWidth <= document.getElementById('ov-body').clientWidth + 1);
-  ok(wide, 'tech tree fits the width');
+  const tech = await page.evaluate(() => ({
+    tabs: [...document.querySelectorAll('.m-tabs')].filter(t => getComputedStyle(t).display !== 'none').length,
+    cols: [...document.querySelectorAll('.techgrid .techcol')].filter(c => c.offsetParent).length,
+  }));
+  ok(tech.tabs === 0 && tech.cols >= 16, 'turned phone: tech tree with all columns, no tabs', JSON.stringify(tech));
   await page.evaluate(() => closeModal());
 
   // the view must not jump to a KI's capital during its turn
@@ -150,7 +162,7 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   await page.setViewportSize({ width: 915, height: 412 });
   await page.waitForTimeout(500);
   ok(await page.evaluate(() => document.documentElement.classList.contains('w-side') && !document.documentElement.classList.contains('w-narrow')), 'landscape: side layout');
-  ok(await page.evaluate(() => getComputedStyle(document.getElementById('a-more')).display === 'none' && getComputedStyle(document.getElementById('a-log')).display !== 'none'), 'landscape: all 7 actions, no "Mehr"');
+  ok(await page.evaluate(() => !document.getElementById('a-more') && [...document.querySelectorAll('.actionbar > button')].every(b => getComputedStyle(b).display !== 'none')), 'landscape: all actions, no "Mehr"');
 
   // multiplayer menu: the new games are equally wide, one below the other and side by side
   await page.evaluate(() => MP.showLobby());
@@ -158,7 +170,7 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   for (const vp of [{ width: 412, height: 915 }, { width: 915, height: 412 }]) {
     await page.setViewportSize(vp);
     await page.waitForTimeout(300);
-    const cards = await page.$$eval('.mph-new > *', els => els.map(e => Math.round(e.getBoundingClientRect().width)));
+    const cards = await page.$$eval('.mph-new > *', els => els.map(e => Math.round(HochcivMobile.frame(e.getBoundingClientRect()).width)));
     ok(cards.length >= 2 && new Set(cards).size === 1, `multiplayer menu: game cards equally wide at ${vp.width}x${vp.height}`, cards.join(' / '));
   }
 
@@ -170,7 +182,7 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
       MP.fetchUser = async function () { this.user = { username: 'Hochzeitsplaner_Wolfram2026', mmr: 1234, gamesPlayed: 187 }; };
       await MP.renderMainMenuAuth();
       const el = document.getElementById('mp-main-auth-container'), r = el.getBoundingClientRect();
-      const w = document.documentElement.clientWidth, eb = document.querySelector('#screen-menu .eyebrow').getBoundingClientRect();
+      const w = document.documentElement.clientWidth, eb = document.querySelector('#screen-menu .title').getBoundingClientRect();
       return {
         overflow: [...el.querySelectorAll('*')].some(e => e.getBoundingClientRect().right > w + 1),
         covers: eb.top < r.bottom - 1 && eb.bottom > r.top,
@@ -180,28 +192,7 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
     ok(!bar.overflow && !bar.covers && bar.buttons, `login bar fits at ${vp.width}x${vp.height}`, JSON.stringify(bar));
   }
 
-  // tutorial: newly highlighted fields come into view even if the map was moved away
-  await page.setViewportSize({ width: 412, height: 915 });
-  await page.goto(URL, { waitUntil: 'networkidle' });
-  await page.click('#m-tutorial');
-  await page.waitForTimeout(400);
-  await page.click('#tut-nein');
-  await page.waitForTimeout(1500);
-  const tutVisible = () => page.evaluate(() => {
-    const svg = document.getElementById('map'), r = svg.getBoundingClientRect(), b = svg.viewBox.baseVal, k = r.width / b.width;
-    return (tutHighlight() || []).every(([row, col]) => {
-      const [mx, my] = hexCenter(row, col, 30), x = r.left + (mx - b.x) * k, y = r.top + (my - b.y) * k;
-      return x > r.left && x < r.right && y > r.top && y < r.bottom;
-    });
-  });
-  ok(await tutVisible(), 'tutorial: highlighted field visible at the start');
-  await page.evaluate(() => {
-    const svg = document.getElementById('map'), v = HochcivMobile.views.get(svg);
-    v.k *= 2; v.cx = v.W; v.cy = v.H; v.auto = false; HochcivMobile.applyView(svg);
-  });
-  await page.click('#tut-next');
-  await page.waitForTimeout(500);
-  ok(await tutVisible(), 'tutorial: new highlights are brought into view');
+  // (the tutorial with its highlighted fields is gone since v102 – mobile.js keeps that part for v100/v98)
 
   ok(errors.length === 0, 'no page errors', errors.join(' | '));
   await browser.close();

@@ -84,7 +84,7 @@ const FG_KEY = 'hochciv.fg';            // auf dem Gerät: { geschafft: [Wege, d
 let FG_AUTO_MS = 900;                   // Weiterschalten nach erreichtem Ziel; Tests: 0
 
 /* ------------------------------------------------------------------ Würfel
-   d6() fragt tutNextDie(ctx); im Ersten Spiel landet das hier. Gewürfelt wird nur die
+   d6() fragt im Ersten Spiel hier nach (fgNextDie). Gewürfelt wird nur die
    Verfügbarkeit (ctx.tech) und – wenn nichts verfügbar wurde – die eine, die es dann gibt
    (ctx.pick: die erste gewünschte, sonst die erste). Die Augen passen zum Ergebnis: 4–6 für
    verfügbar, 1–3 für nicht (mit Philosophie-Bonus entsprechend weniger), je Technologie
@@ -311,7 +311,7 @@ function fgSchwellenVeto(a) {
   else return null;
   const o = fgSchwelle(extra);
   const mine = popOf(S, FG_ICH) + plus, welt = worldPop(S) + plus;
-  if (!(welt > 0 && mine > welt * o.frac)) return null;
+  if (!(welt > 0 && victoryMet(o, mine, welt))) return null;
   return T('Damit hättest du mehr als %s der Weltbevölkerung – das wäre ein Wirtschaftssieg. Diesmal gewinnst du anders.', o.label);
 }
 // Die Prüfung selbst, ohne Nebenwirkung
@@ -383,7 +383,7 @@ const fgInReichweite = (r, c, rng, ohneHaupt) => citiesOf(S, FG_ER)
 const fgRaketenNah = ohneHaupt => (a) => (a.art === 'forschen' || a.art === 'gratis') && a.k === 'raketentechnik' &&
   armiesOf(S, FG_ICH).some(x => fgInReichweite(x.r, x.c, 2, ohneHaupt).length);
 /* Militärweg: Ziel ist die Hauptstadt. Fiele Englands andere Stadt zuerst, hätte Griechenland
-   am Rundenende leicht mehr als 3/4 der Weltbevölkerung – ein Wirtschaftssieg, bevor die
+   am Rundenende leicht die Schwelle des Duells überschritten – ein Wirtschaftssieg, bevor die
    Hauptstadt fällt. Gesperrt ist deshalb jedes Feld, von dem aus eine Armee die andere
    Stadt angriffe (auch mit Raketentechnik). Englands Städte liegen 3 Felder auseinander:
    neben der Hauptstadt bleiben genug Felder frei. */
@@ -503,8 +503,8 @@ const FG_STEPS = [
     id: 'wachsen1', runde: 1, t: 'Wachsen',
     info: () => T('Was am Zugende übrig ist, verfällt – nur ⚔︎ Macht bleibt.'),
     ziel: () => T('Lass deine Hauptstadt wachsen.'),
-    tipp: () => T('Hauptstadt antippen → <b>Bevölkerung wachsen</b>.'),
-    hl: () => [[fgCap().r, fgCap().c]], knopf: () => ['Bevölkerung wachsen'],
+    tipp: () => T('Hauptstadt antippen → <b>Bevölkerungswachstum</b>.'),
+    hl: () => [[fgCap().r, fgCap().c]], knopf: () => ['Bevölkerungswachstum'],
     fertig: () => fgCap().pop >= 2,
     erlaubt: ['wachsen'],
     darf: a => a.alle || (a.city && a.city.cap) ? null : T('Diesmal die Hauptstadt – neue Städte wachsen erst ab der nächsten Runde.'),
@@ -532,7 +532,7 @@ const FG_STEPS = [
     ziel: () => T('Lass beide Städte wachsen.'),
     tipp: () => T('Jede Stadt antippen – oder einmal für alle: <b>Fähigkeiten</b> → <b>Alle Städte wachsen</b>.'),
     hl: () => citiesOf(S, FG_ICH).filter(c => !c.grown).map(c => [c.r, c.c]),
-    leiste: ['#a-abil'], knopf: () => ['Alle Städte wachsen', 'Bevölkerung wachsen'],
+    leiste: ['#a-abil'], knopf: () => ['Alle Städte wachsen', 'Bevölkerungswachstum'],
     fertig: () => citiesOf(S, FG_ICH).every(c => c.grown > 0),
     erlaubt: ['wachsen'],
     gut: () => T('Kleine Städte wachsen billiger: Die neue kostete nur 1 🌾 und 1 🪙.'),
@@ -608,7 +608,7 @@ const FG_STEPS = [
     tipp: () => T('Stadt antippen → <b>Armee bauen</b>: Sie muss die Stadt im selben Zug verlassen. Dann <b>Macht</b> kaufen. Verteidigung = Bevölkerung + deine Macht für jede eigene Armee daneben.'),
     zeige: () => { const c = fgStadt2(), a = fgErArmee(); return [c && [c.r, c.c], a && [a.r, a.c]]; },
     hl: () => { const c = fgStadt2(); return c ? neighbors(c.r, c.c).filter(([r, c2]) => canStop(S, FG_ICH, r, c2)) : []; },
-    leiste: ['#a-power'], knopf: () => ['Armee bauen', 'Armee hier bewegen', '+1 Macht'],
+    leiste: ['#a-power'], knopf: () => ['Armee bauen', 'Armee bewegen', '+1 Macht'],
     fertig: () => !fgErArmee() || fgGehalten(),
     erlaubt: ['armee', 'ziehen', 'macht', 'wachsen'],
     darf: a => {
@@ -678,7 +678,7 @@ const FG_STEPS = [
     tipp: () => T('Dank <b>Taktik</b> aus Runde 1 reichen zwei beliebige Seiten. Baue eine zweite Armee, stell sie daneben und kauf Macht – deine hat sich zu Zugbeginn halbiert.'),
     zeige: () => { const a = fgErArmee(); return a ? [[a.r, a.c]] : []; },
     hl: () => { const a = fgErArmee(); return a ? neighbors(a.r, a.c).filter(([r, c]) => canStop(S, FG_ICH, r, c) && !fgNebenEngland(r, c)) : []; },
-    leiste: ['#a-power'], knopf: () => ['Armee bauen', 'Armee hier bewegen', 'Diese Armee bewegen', '+1 Macht'],
+    leiste: ['#a-power'], knopf: () => ['Armee bauen', 'Armee bewegen', '+1 Macht'],
     fertig: () => !fgErArmee() || fgFlankiert(),
     erlaubt: ['armee', 'ziehen', 'macht'],
     darf: a => {
@@ -783,13 +783,13 @@ const FG_STEPS = [
   {
     id: 'w_theologie', pfad: 'wirtschaft', t: 'Wirtschaftssieg', zug: true,
     info: () => T('Am Ende einer Runde brauchst du <b>mehr als %s</b> der Weltbevölkerung – im Duell. Mit <b>Theologie</b> reichen mehr als %s.',
-      victoryLabels(true).base, victoryLabels(true).theologie),
+      victoryLabels('duell').base, victoryLabels('duell').theologie),
     ziel: () => T('Erforsche Theologie.'),
     tipp: () => T('Theologie liegt im Feld Spezial im Mittelalter. Dieses Zeitalter öffnet sich mit einer Technologie der Antike im selben Feld: <b>Demokratie</b>.'),
     techs: () => ['demokratie', 'theologie'], leiste: ['#a-tech'],
     fertig: () => has(fgP(), 'theologie') || fgSieg(),
     erlaubt: '*', darf: a => fgFriedlich(a),
-    gut: () => T('Jetzt reichen dir mehr als %s. Deinen Anteil zeigt die Kopfzeile.', victoryLabels(true).theologie),
+    gut: () => T('Jetzt reichen dir mehr als %s. Deinen Anteil zeigt die Kopfzeile.', victoryLabels('duell').theologie),
     loesung: () => {
       for (const k of ['demokratie', 'theologie']) {
         if (has(fgP(), k)) continue;
@@ -805,7 +805,7 @@ const FG_STEPS = [
     stand: () => {
       const mine = popOf(S, FG_ICH), w = worldPop(S), o = victoryOption(S, fgP());
       return T('Du: <b>%s von %s</b> (%s %) · nötig: mehr als %s %', mine, w, Math.round(100 * mine / Math.max(1, w)), Math.round(100 * o.frac)) +
-        fgHaken(mine > w * o.frac);
+        fgHaken(victoryMet(o, mine, w));
     },
     tipp: () => T('Lass alle Städte wachsen (<b>Fähigkeiten</b> → <b>Alle Städte wachsen</b>) und gründe neue. Mit <b>Keramik</b> wächst jede Stadt zweimal pro Runde. Wird Nahrung knapp: <b>Landwirtschaft</b>.'),
     leiste: ['#a-abil', '#a-found'], techs: () => ['keramik', 'landwirtschaft'], knopf: () => ['Alle Städte wachsen'],
@@ -923,7 +923,7 @@ function fgNeuGewuerfelt(f, a) {
 // Der gewählte Weg in einem Satz (erster Schritt)
 function fgWegSatz() {
   return fgJe(T('Dein Weg: <b>Militärsieg</b> – erobere Englands Hauptstadt.'),
-    T('Dein Weg: <b>Wirtschaftssieg</b> – am Ende einer Runde mehr als %s der Weltbevölkerung.', victoryLabels(true).base),
+    T('Dein Weg: <b>Wirtschaftssieg</b> – am Ende einer Runde mehr als %s der Weltbevölkerung.', victoryLabels('duell').base),
     T('Dein Weg: <b>Forschungssieg</b> – erforsche die Singularität.'));
 }
 /* Blasse Kachel im Bogen (nur im Ersten Spiel antippbar, techBoardHTML): warum blass?
@@ -1310,7 +1310,7 @@ function fgNavKnopf() {
 function fgWahlHtml(fertig) {
   const wege = [
     ['militaer', '⚔︎ ' + T('Militärsieg'), T('Erobere Englands Hauptstadt – das Spiel endet sofort.')],
-    ['wirtschaft', '🌾 ' + T('Wirtschaftssieg'), T('Hab am Ende einer Runde mehr als %s der Weltbevölkerung.', victoryLabels(true).base)],
+    ['wirtschaft', '🌾 ' + T('Wirtschaftssieg'), T('Hab am Ende einer Runde mehr als %s der Weltbevölkerung.', victoryLabels('duell').base)],
     ['wissenschaft', '🔬 ' + T('Forschungssieg'), T('Erforsche die Singularität.')],
   ];
   return `<div class="fg-wahl">${wege.map(([k, n, e]) =>
@@ -1347,7 +1347,6 @@ function fgRenderWahl() {
   $('tut-body').innerHTML = `<p class="tut-task fg-ziel"><b>${T('Ziel:')}</b> ${T('Wähle deinen Weg zum Sieg.')}</p>` + fgWahlHtml(fgGeschafft());
   fgKnoepfeVerdrahten($('tut-body'));
   $('tut-task').hidden = true;
-  $('tut-prev').hidden = true;
   $('tut-count').textContent = '';
   const nx = $('tut-next');
   nx.textContent = '💡 ' + T('Tipp anzeigen');
@@ -1386,7 +1385,6 @@ function fgRenderPanel() {
   $('tut-body').innerHTML = teile.join('');
   fgKnoepfeVerdrahten($('tut-body'));
   $('tut-task').hidden = true;
-  $('tut-prev').hidden = true;
   $('tut-count').textContent = `${i + 1}/${reihe.length}`;
   $('tut-bar-fill').style.width = Math.round(((i + 1) / reihe.length) * 100) + '%';
   const nx = $('tut-next');

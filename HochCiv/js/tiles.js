@@ -115,7 +115,7 @@ const HEX_MIDDLE = HEX_DXYZ.map((_, n) => n).filter(n => hexRing(n) <= 1);
      grenzen sie an nur ein inneres Feld;
    • jedes innere Feld bringt als Hauptstadt im ersten Zug mindestens 4 Nahrung (Münzen 2:1);
    • Flussfelder hängen meist zusammen und laufen zum Meer – so zeichnet die Karte seit v99
-     Flüsse als Wasserlauf (riverLines in js/ui.js);
+     Flüsse als Wasserlauf (riverLines in js/ui/map.js);
    • die BESTE innere Hauptstadt jedes Plättchens liegt eng beieinander: Wert 1·🔬 + 1,1·🌾 +
      0,8·🪙 (so wägt die KI beim Legen ab) zwischen 8,8 und 9,7. Im Dreiecksvorrat reicht das
      von 6,7 (Küste) bis 12,8 (Ferne Riffe) – dort machen Inseln den Unterschied.

@@ -7,7 +7,7 @@
    „Animationen": Langsam (ab Werk), Schnell (der Takt von v94), Keine.
 
    Dieser Teil kennt keine Oberfläche (test.js lädt ihn): Er nimmt einen Zug auf und macht
-   daraus Szenen. Gezeichnet und abgespielt wird in js/ui.js (playAnim, animMarks).
+   daraus Szenen. Gezeichnet und abgespielt wird in js/ui/turns.js (playAnim, animMarks).
 
    Aufnahme (animAufnahme): Jede Aktion schreibt ins Protokoll, Klasse 'act' – forschen,
    gründen, wachsen, Armee bauen oder ziehen, Macht kaufen, Straßen … Genau dann wird der
@@ -25,7 +25,7 @@
    geändert hat (animDetails): eine gezogene Armee gleitet vom Feld davor aufs neue. Was sich
    nicht zuordnen lässt, zeigt den Satz aus dem Protokoll. */
 
-let ANIM_MS = 900;                     // Takt einer Szene bei „Schnell" (Langsam: × 1,5, ui.js); Tests: 0 = nichts abspielen
+let ANIM_MS = 900;                     // Takt einer Szene bei „Schnell" (Langsam: × 1,5, js/ui/turns.js); Tests: 0 = nichts abspielen
 
 // Der Kartenstand, den eine Szene braucht: was gezeichnet wird und woran man Aktionen erkennt.
 // Seit v96 mit dem Vorrat jedes Reichs (`res` kopiert – bis v95 teilten sich alle Bilder den
@@ -153,7 +153,7 @@ function animText(s, wer) {
     case 'wachsen': return n > 1 ? T('%s lässt %s Städte wachsen', wer, n) : T('%s lässt eine Stadt wachsen', wer);
     case 'opfer': return T('%s opfert Bevölkerung', wer);
     case 'strasse': return s.bahn ? T('%s baut Eisenbahn', wer) : n > 1 ? T('%s baut Straßen', wer) : T('%s baut eine Straße', wer);
-    case 'feld': return T('%s kauft Land', wer);
+    case 'feld': return T('%s beansprucht Land', wer);
     case 'wunder': return T('%s baut %s', wer, s.wunder.map(w => (WONDER_BY_KEY[w.k] || { n: w.k }).n).join(', '));
     case 'forschen': return T('%s erforscht %s', wer, animTechNamen(s));
     case 'kopieren': return T('%s kopiert %s', wer, animTechNamen(s));

@@ -28,6 +28,23 @@
         art=droh: er bleibt drei Züge lang einen Zug vor der Stadt stehen, hält seine Macht
         und greift nie an – was kostet die bloße Drohung?
 
+   node tools_ki.js freie [n] [arten=v100,eine,moderne,aufheben,ki] [stufe=schwer] [sechsecke]
+        v101: Griechenlands Freie Forschung (zweimal je Partie, höchstens einmal je Runde).
+        Vier KI, eine davon Griechenland mit Freier Forschung, ihr Platz wandert; jede Partie
+        einmal je Art, mit denselben Startwerten (gepaart gegen die letzte Art). Wie Griechenland
+        wählt: v100 – Regel von v100 (einmal je Runde, ohne Grenze je Partie), die KI erwägt
+        jede Runde alles, kiValue entscheidet; alles – Regel von v101, die KI wie in v100;
+        eine – die erste wie „alles", die letzte nur für die Singularität; moderne – nur Moderne
+        und Singularität (wie v97); aufheben – dazu die letzte nur für die Singularität; ki –
+        kiFreeTechChoices, wie die KI im Spiel wählt (seit v101 dasselbe wie „alles"). Bei eine,
+        moderne und aufheben gegen Ende alles (nicht mehr Runden übrig als Freie Forschungen
+        offen). Dazu: Nutzungen je Partie, ihre Zeitalter, ihre Runde. Die Zahlen in ANNAHMEN.md
+        (v101) stammen aus `freie 400 arten=v100,alles,eine` und `freie 400 arten=moderne,aufheben,eine`
+   node tools_ki.js wirtschaft [n] [stufe=schwer] [sechsecke]
+        v101: Siegschwellen zu viert 4/7 · 1/2 · 2/5 statt 2/3 · 3/5 · 1/2. Vier KI, jede
+        Partie zweimal mit denselben Startwerten (gepaart), einmal mit den Schwellen von v100 –
+        Siegarten, Endrunde, Startspieler, Wirtschaftssiege
+
    n ist die Zahl der Partien (bei „stufen" die Zahl der Paare). Die Partien sind aus ihren
    Startwerten reproduzierbar: gleiche Befehlszeile, gleiche Zahlen.
    alterbaum (v82): die Partien laufen im alten Techtree (bis v81 Standard, heute nur noch
@@ -367,6 +384,97 @@ if (modus === 'duell') {
     ` · Wissenschaft in Forschung: v96 ${forschung.neu}, bis v95 ${forschung.alt}` +
     ` · Technologien nach Runde 4: v96 ${mittel(techs4.neu).toFixed(2)}, bis v95 ${mittel(techs4.alt).toFixed(2)}` +
     ` (Unterschied ${(mittel(techs4.neu) - mittel(techs4.alt)).toFixed(2)} ± ${se(techs4.neu, techs4.alt).toFixed(2)})`);
+} else if (modus === 'freie') {
+  /* v101 (Anweisung des Autors): Freie Forschung zweimal je Partie, höchstens einmal je Runde. Die
+     Arten unterscheiden sich nur am griechischen Platz (p.freieArt, von den Kopien der KI
+     mitkopiert); die übrigen Plätze spielen in allen Arten gleich. */
+  const stufe = opt('stufe', 'schwer');
+  const ARTEN = opt('arten', 'v100,eine,moderne,aufheben,ki').split(',');
+  const links = freeTechsLeft, waehlt = kiFreeTechChoices, nutzt = useFreeTech;
+  freeTechsLeft = function (p) { return p.freieArt === 'v100' ? Infinity : links.apply(this, arguments); };
+  kiFreeTechChoices = function (S, pi, K) {
+    const a = S.players[pi].freieArt;
+    if (a === 'ki' || !a) return waehlt.apply(this, arguments);
+    const opts = freeTechOptions(S, pi), rest = freeTechsLeft(S.players[pi]);
+    if (a === 'v100' || a === 'alles' || !opts.length || K.R <= rest) return opts;
+    const sing = opts.filter(t => t.k === 'singularitaet'), teuer = opts.filter(t => t.k === 'singularitaet' || t.age >= 3);
+    if (a === 'eine') return rest <= 1 ? sing : opts;
+    if (a === 'moderne') return teuer;
+    if (a === 'aufheben') return rest <= 1 ? sing : teuer;
+    throw new Error('unbekannte Art: ' + a);
+  };
+  // Nutzungen auf dem echten Spielstand (nicht auf den Wegwerfkopien der KI)
+  let nutz = [];
+  useFreeTech = function (X, pi, tk) {
+    const r = nutzt.apply(this, arguments);
+    if (!r && !X.kiSim) nutz.push({ age: tk === 'singularitaet' ? 4 : TECH_BY_KEY[tk].age, round: X.round });
+    return r;
+  };
+  const andere = CIVK.filter(c => c !== 'griechenland');
+  const siege = {};                          // je Art: je Partie der Siegesanteil Griechenlands
+  for (const wahl of ARTEN) {
+    const l = [], st = { n: 0, ages: [0, 0, 0, 0, 0], runden: [], arten: {} };
+    siege[wahl] = [];
+    for (let g = 0; g < N; g++) {
+      const gs = g % 4, players = [];
+      for (let i = 0; i < 4; i++) players.push(i === gs
+        ? { civ: 'griechenland', kind: 'ki', kiLevel: stufe, ability: 'gratistech' }
+        : kiSitz(andere[(g + i) % 3], stufe, g, i));
+      nutz = [];
+      const lauf = partie(players, 15000 + g, (g >> 2) % 4,
+        S => S.players.forEach(p => { if (p.civ === 'griechenland') p.freieArt = wahl; }));
+      l.push(lauf);
+      st.n += nutz.length;
+      nutz.forEach(u => { st.ages[u.age]++; st.runden.push(u.round); });
+      const S = lauf.S, gi = S.players.findIndex(p => p.civ === 'griechenland');
+      const ws = S.over ? (S.over.winners || [S.over.winner]) : [];
+      siege[wahl].push(ws.includes(gi) ? 1 / ws.length : 0);
+      if (ws.includes(gi)) st.arten[art(S)] = (st.arten[art(S)] || 0) + 1;
+    }
+    bericht(`Freie Forschung „${wahl}", vier KI (${stufe}), Griechenland wandert`, l,
+      (S, i) => S.players[i].civ === 'griechenland' ? 'Griechenland' : 'andere');
+    st.runden.sort((a, b) => a - b);
+    const summe = siege[wahl].reduce((a, b) => a + b, 0);
+    console.log(`   Griechenland gewinnt ${(100 * summe / N).toFixed(1)} % (${+summe.toFixed(1)} von ${N}; ` +
+      `${Object.entries(st.arten).map(([k, v]) => `${k} ${v}`).join(', ') || '–'}) · Freie Forschungen je Partie ` +
+      `${(st.n / N).toFixed(2)} · Zeitalter Antike/Mittelalter/Industrialisierung/Moderne/Singularität ${st.ages.join('/')}` +
+      (st.runden.length ? ` · Runde Median ${st.runden[st.runden.length >> 1]}` : ''));
+  }
+  // gepaart gegen die letzte Art (dieselben Startwerte): Unterschied der Siegquote, grob ± 1,96 SE
+  const ref = ARTEN[ARTEN.length - 1];
+  for (const wahl of ARTEN.slice(0, -1)) {
+    const d = siege[wahl].map((x, g) => x - siege[ref][g]);
+    const m = d.reduce((a, b) => a + b, 0) / N;
+    const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, N - 1));
+    console.log(`   ${wahl} gegen ${ref}: ${m >= 0 ? '+' : ''}${(100 * m).toFixed(1)} Punkte (± ${(196 * sd / Math.sqrt(N)).toFixed(1)})`);
+  }
+} else if (modus === 'wirtschaft') {
+  /* v101 (Anweisung des Autors): zu viert gewinnt wirtschaftlich, wer mehr als 4/7 der
+     Weltbevölkerung hat (Theologie 1/2, Vereinte Nationen 2/5); bis v100 galten zu viert die
+     Schwellen, die heute nur noch zu dritt gelten (2/3 · 3/5 · 1/2). */
+  const stufe = opt('stufe', 'schwer'), neu = VICTORY_THRESHOLDS.vier, laeufe = {};
+  for (const fassung of ['v100', 'v101']) {
+    VICTORY_THRESHOLDS.vier = fassung === 'v100' ? VICTORY_THRESHOLDS.drei : neu;
+    const l = laeufe[fassung] = [];
+    for (let g = 0; g < N; g++) {
+      const players = [];
+      for (let i = 0; i < 4; i++) players.push(kiSitz(CIVK[(g + i) % 4], stufe, g * 7, i));
+      l.push(partie(players, 17000 + g * 13, g % 4));
+    }
+    bericht(`Siegschwellen ${fassung} (zu viert ${VICTORY_THRESHOLDS.vier.base.join('/')}), KI gegen KI (${stufe})`, l,
+      (S, i) => 'Platz ' + S.players[i].slot);
+    const w = l.filter(({ S }) => art(S) === 'Wirtschaftssieg').map(({ S }) => S.round).sort((a, b) => a - b);
+    console.log(`   Wirtschaftssiege ${w.length}` + (w.length ? ` in Runde ${w.join(', ')}` : ''));
+  }
+  VICTORY_THRESHOLDS.vier = neu;
+  // gepaart: wie viele Partien anders ausgehen, und wie
+  const wechsel = {};
+  laeufe.v100.forEach(({ S: A }, g) => {
+    const B = laeufe.v101[g].S, k = `${art(A)} → ${art(B)}`;
+    if (art(A) !== art(B) || A.round !== B.round) wechsel[k] = (wechsel[k] || 0) + 1;
+  });
+  console.log('   anders ausgegangen (Siegart oder Runde, v100 → v101): ' +
+    (Object.entries(wechsel).map(([k, v]) => `${k} ${v}`).join(' · ') || 'keine'));
 } else {
   console.log('Unbekannter Modus. Siehe Kopf der Datei.');
   process.exit(1);

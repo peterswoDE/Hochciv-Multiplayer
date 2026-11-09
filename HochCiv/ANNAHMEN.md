@@ -376,11 +376,13 @@ mindestens 3 Felder Abstand zu jeder Stadt):
   **Zwei Dinge sind dabei bewusst NICHT mitgeändert worden:**
   · Die zweite Hälfte der Klausel — „**neben** gegnerischen Territorien darf nicht gegründet
     werden" — ist weiter nicht umgesetzt. Verlangt war die Unpassierbarkeit, und das
-    Nachbarschaftsverbot würde die Ausbreitung noch deutlich stärker einengen.
+    Nachbarschaftsverbot würde die Ausbreitung noch deutlich stärker einengen. *(Seit v104 umgesetzt
+    – nicht auf und nicht neben einem fremden Feld; siehe dort.)*
   · Gesperrt ist der **Weg**, nicht das Zielfeld. Auf einem einzelnen fremden Feld, das man
     von außen erreicht, darf weiter gegründet werden (`pathSteps` prüft das Zielfeld nie,
     und `canFound` hat dafür keine eigene Regel). Praktisch nur bei gekauften Feldern
     möglich: das Umland fremder Städte liegt ohnehin näher als drei Felder an einer Stadt.
+    *(Seit v104 gesperrt, siehe dort.)*
 - **Nicht direkt neben einer gegnerischen Armee.** Gilt für Menschen (`canFound`) und Bots
   (`settleable`) gleichermaßen; eigene Armeen stören nicht, zwei Felder Abstand genügt.
 - **Ausweichen des Bot-Siedlers** (Fehlerbehebung 17.8.): Zeigt die gewürfelte Richtung ins
@@ -6106,3 +6108,552 @@ für Gründungen weg.
   jede Stadt nur den Weg kostete. In der Marathonpartie von `test.js` (vier KI Schwer, Draft)
   gründete die KI ohne Grenze höchstens 5 Städte in einem Zug; der längste KI-Zug dauerte
   2,3 s (Grenze im Test 10 s). Eine Partie, keine Messung.
+
+## Freie Forschung zweimal je Partie · Wirtschaftssieg zu viert 4/7 (v101)
+
+Zwei Anweisungen des Autors (5.11., auf Englisch, hier übersetzt):
+
+1. „Griechenlands ‚Freie Forschung' soll anders funktionieren: höchstens zweimal je Partie und
+   höchstens einmal je Runde."
+2. „Den Wirtschaftssieg zu viert neu skalieren: ohne Technologie mehr als 4/7 der
+   Weltbevölkerung, mit Theologie mehr als 1/2, mit Vereinten Nationen mehr als 2/5."
+
+### Freie Forschung: zweimal je Partie, höchstens einmal je Runde
+
+* **Regel:** `freeTechOptions` bietet wie seit v99 an, was `researchable` liefert – jedes
+  Zeitalter und die Singularität, sobald sie erforschbar ist –, aber nur, solange von
+  `FREE_TECH_USES` (2) noch eine offen ist (`freeTechsLeft`) und in dieser Runde noch keine
+  genutzt wurde (`p.freeTechUsed === S.round` sperrt). `useFreeTech` vermerkt beides: die Runde
+  und die Zahl (`p.freeTechsUsed`). Ein Dunkles Zeitalter sperrt sie wie bisher und verbraucht
+  nichts; was sonst gratis kommt (Bibliothek, Oxford, Raumfahrt, Rückschau, Internet), zählt nicht
+  mit.
+* **Auslegungen** (zum Ändern angeboten): (a) Die **Singularität bleibt wählbar** – sie kam in v99
+  auf Anweisung des Autors dazu, und die neue Anweisung ändert nur, wie oft. Eine der beiden
+  Freien Forschungen kann also der Forschungssieg sein. Wer das nicht will: in `freeTechOptions`
+  `techPool` statt `researchable` (wie v97–v98). (b) Gezählt werden Nutzungen, nicht Runden.
+  (c) Wie bisher gilt sie in jeder Spielart, auch im Marathon.
+* **Spielstände:** `migrateState` löscht den Zähler nicht mehr (v99/v100 löschten ihn beim Laden).
+  Ein Stand von v97/v98 trägt ihn und behält ihn – er bedeutet dasselbe. v99/v100 (und bis v96)
+  vermerkten nur die Runde der letzten Nutzung: Wer die Freie Forschung dort schon genutzt hat,
+  bekommt **eine als verbraucht** angerechnet, mehr weiß der Spielstand nicht; wer sie nie genutzt
+  hat, hat beide. Auslegung: Die Zahl aus dem Protokoll zu lesen wäre genauer, aber das Protokoll
+  hält nur die letzten 600 Zeilen, als fertige Sätze in der Sprache von damals.
+* **Blatt „Fähigkeiten":** über den Knöpfen „Noch 2 von 2 kostenlosen Forschungen in dieser
+  Partie."; nach der ersten „Noch 1 von 2 …" und „Diese Runde schon genutzt."; nach beiden „Die
+  kostenlosen Forschungen dieser Partie sind verbraucht." (englisch „%s of %s free researches left
+  in this game." und „The free researches of this game are used up."). Die Zahl an der Leiste zählt
+  sie wie bisher, solange etwas zur Wahl steht.
+* **Texte:** `data/civs.json` „2× pro Partie, höchstens 1× pro Runde: eine erforschbare Technologie
+  beliebigen Zeitalters umsonst erforschen, auch die Singularität", englisch „Twice per game, at
+  most once per round: research one researchable technology of any age for free, the Singularity
+  included". Der Spieltipp (Index 3) sagte „gilt jede Runde"; jetzt: „Griechenlands Freie Forschung
+  gibt es nur zweimal je Partie und höchstens einmal je Runde. Früh genutzt bringt sie Tempo; wer eine
+  aufhebt, kann mit ihr die Singularität umsonst erforschen, sobald in allen vier Feldern die
+  Moderne erreicht ist – den Forschungssieg." (englisch an derselben Stelle). Bewusst ohne Rat,
+  was besser ist – das hängt an der Partie (siehe die Messung unten).
+* **KI:** Sie erwägt die Freie Forschung, sobald sie geht, für alles, was zur Wahl steht –
+  `kiFreeTechChoices` gibt wie in v99/v100 `freeTechOptions` zurück, `kiValue` entscheidet. Sie hebt
+  also nichts auf, obwohl das bei zwei Nutzungen naheläge (v97–v98 hob sie sie für die Moderne auf).
+  Grund ist die Messung (`tools_ki.js freie`, neu): vier KI Schwer auf der Dreiecks-Plättchenkarte,
+  ein Platz Griechenland mit Freier Forschung (der Platz wandert, die anderen drei Reiche und
+  Fähigkeiten wechseln), je Art 400 Partien mit denselben Startwerten – gepaart. Griechenland gewann:
+
+  | Regel | wie die KI wählt | Siege | Freie Forschungen je Partie | wofür |
+  |---|---|---|---|---|
+  | v100 (einmal je Runde) | alles, jede Runde | **30,3 %** | 4,75 | alle Zeitalter, 30 × Singularität |
+  | v101 | alles, sobald es geht (so spielt sie jetzt) | **20,5 %** | 2,00 | Antike und Mittelalter, Runde 1–2 |
+  | v101 | nur Moderne und Singularität | 12,8 % | 1,23 | Moderne |
+  | v101 | dazu die letzte nur für die Singularität | 15,0 % | 0,90 | Moderne, 56 × Singularität |
+  | v101 | die erste sofort, die letzte nur für die Singularität | 13,3 % | 1,17 | Antike, 50 × Singularität |
+
+  Die drei Arten mit Aufheben riefen gegen Ende alles ab (nicht mehr Runden übrig als Freie
+  Forschungen offen). Gepaart gegen „die erste sofort …": v100 +17,0 Punkte (± 4,3), „alles"
+  +7,2 (± 4,0), „nur Moderne" −0,5 (± 3,9), „die letzte für die Singularität" +1,8 (± 4,1). Die
+  Partien enden im Median in Runde 5; zwei frühe Technologien bringen da mehr als eine späte teure,
+  und bis zur Moderne in jedem Feld kam Griechenland nur in gut jeder achten Partie (so oft holte es
+  sich die Singularität umsonst, wenn es eine aufhob). Gleiche Chance wäre 25 %: **Mit der neuen
+  Regel liegt Griechenland mit Freier Forschung darunter**, knapp 10 Punkte unter v100. Was das
+  nicht sagt: wie Menschen sie nutzen, und wie es im Duell, zu dritt, auf den Sechsecken, der
+  Originalkarte oder im Marathon aussieht – nicht gemessen.
+* **Marathon:** Der Draftwert der KI (`KI_DRAFT_BASE`) ist **geschätzt 5** (v99: 12, geschätzt für
+  „jede Runde"): Die KI nutzt beide früh, wie zu viert gemessen; das ist der Fassung von v97–v98
+  (zweimal je Partie, geschätzt 4,5) näher als der jeder Runde. Im Marathon nicht gemessen.
+
+### Wirtschaftssieg zu viert: 4/7 · 1/2 · 2/5
+
+* **Regel:** `VICTORY_THRESHOLDS` (`js/data.js`) hält je Spielart Zähler und Nenner der drei
+  Schwellen: `duell` 3/4 · 7/10 · 2/3, `vier` **4/7 · 1/2 · 2/5** (bis v100 wie zu dritt), `drei`
+  2/3 · 3/5 · 1/2. Es gilt weiter die niedrigste, die ein Reich hat, und überall „mehr als".
+  `victoryMode(S)` sagt die Spielart: Duellmodus (`S.duel`) → `duell`; vier Reiche der Aufstellung
+  → `vier`; sonst `drei`. Gezählt wird mit `empireCount` (ohne Barbaren, Ausgeschiedene zählen
+  mit). Ohne Spielstand – der Regelbogen aus dem Hauptmenü vor der ersten Partie – gilt `vier`, die
+  Vorgabe des Aufbaus.
+* **Auslegungen** (zum Ändern angeboten): (a) „Zu viert" heißt vier Reiche, gleich ob Mensch, KI
+  oder Bot – also auch der **Marathon** (immer vier Reiche) und das **Tutorial** (Russland gegen drei
+  Bots). Wer den Marathon ausnehmen will: in `victoryMode` vor der Zählung `if (S.marathon) return
+  'drei'`. (b) **Zu dritt bleibt alles wie bisher** (2/3, 3/5, 1/2) – genannt war nur das Spiel zu
+  viert. (c) Wer zu viert beginnt, behält die Schwellen zu viert, auch wenn ein Reich ausscheidet.
+  (d) Barbaren sind kein Reich; ihre Bevölkerung zählt wie bisher zur Weltbevölkerung. (e) Zwei
+  Reiche ohne den Duellmodus gibt es im Aufbau nicht (nur in Tests und Werkzeugen) – sie zählen wie
+  drei.
+* **Wie weit das die Schwelle senkt:** Haben die drei anderen je 1 Bevölkerung, reichen jetzt 5 (5 von
+  8; bis v100 erst 7 von 10), mit Theologie 4 von 7 (statt 5 von 8), mit Vereinten Nationen 3 von 6
+  (statt 4 von 7). Bei 15 Weltbevölkerung reichen 9 statt 11. Bei gleich großen Reichen hat jedes
+  ein Viertel; 4/7 sind knapp 2,3 Viertel (2/3 waren 2,7).
+* **Ganzzahlig verglichen** (beim Umbau gefunden): `victoryMet(o, mine, w)` rechnet
+  `mine · Nenner > w · Zähler`. Bis v100 wurde mit dem Bruch gerechnet; zu viert und zu dritt ging
+  das immer richtig aus (nachgerechnet bis 400 Weltbevölkerung, auch für 4/7 und 2/5), im Duell mit
+  Theologie aber nicht – 63 von 90, 119 von 170 … (genau 7/10) galten als „mehr als 7/10".
+  Behoben, auch im Ersten Spiel (Stand im Ziel und die Schiene gegen den Wirtschaftssieg auf
+  anderen Wegen).
+* **Eine Quelle:** Bis v100 standen die Brüche (`VICTORY_FRAC`, `THEOLOGY_FRAC`, `UN_FRAC`,
+  `DUEL_…_FRAC`) und die Beschriftungen (`VICTORY_LABEL`, `DUEL_VICTORY_LABEL`) getrennt; jetzt
+  kommen beide aus denselben zwei Zahlen. `victoryLabels(x)` nimmt eine Spielart oder einen
+  Spielstand (bis v100: `true` fürs Duell); `victoryOption` gibt zusätzlich `num` und `den` zurück.
+* **Legephase** (beim Umbau gefunden): Der Bogen hinter „Forschung" rechnet auf einer
+  Wegwerf-Partie mit einem einzigen Reich – im Duell zeigte er deshalb bis v100 die Theologie mit
+  3/5 statt 7/10. Die Wegwerf-Partie trägt jetzt die Spielart der Partie, die gelegt wird
+  (`V.victoryMode = victoryMode(st.cfg)`).
+* **Texte:** Theologie „>1/2 der Bevölkerung zum Sieg", Vereinte Nationen „>2/5 …" in `TECHS` und
+  `DATA_EN` – der Text ohne Spielstand, also die Werte zu viert; im Spiel rechnet `techEffect` wie
+  bisher die Werte der Partie aus. Der Regelbogen nennt die Schwellen der Partie. Das **Tutorial**
+  spielt zu viert: „mehr als 4/7 der Weltbevölkerung, hast du gewonnen – so zu viert wie hier; zu
+  dritt braucht es mehr als 2/3, im Duell mehr als 3/4" (bis v100 „mehr als zwei Drittel"), kurz
+  „(so zu viert wie hier; zu dritt 2/3, im Duell 3/4)" – die Zahlen kommen aus
+  `VICTORY_THRESHOLDS`, englisch ebenso. Der Test „keine Feldkoordinaten in den Texten" lässt
+  Brüche nach „mehr als", „zu dritt" und „im Duell" durch (sie sehen aus wie Koordinaten). Der
+  Hinweis zum Duell im Aufbau („dafür Wirtschaftssieg erst über 3/4") stimmt weiter. Die Partien
+  zu dritt bekommen keinen eigenen Hinweis – der Bogen zeigt ihre Werte.
+* **KI:** Sie rechnet über `victoryOption` (`kiVictory`: Anteil an der Schwelle, steil zum Ende hin)
+  und strebt den Wirtschaftssieg zu viert damit früher an; geändert ist an ihr nichts.
+* **Gemessen** (`tools_ki.js wirtschaft`, neu): vier KI Schwer, Fähigkeiten wechselnd, je 400 Partien
+  mit denselben Startwerten, einmal mit den Schwellen von v100 (zu viert 2/3 · 3/5 · 1/2) – gepaart.
+
+  | Karte | Schwellen | Militär | Forschung | Wirtschaft | Endrunde (Median) | Startspieler gewinnt |
+  |---|---|---|---|---|---|---|
+  | Dreiecke | v100 | 337 | 60 | **3** | 5 | 36,3 % |
+  | Dreiecke | v101 | 311 | 54 | **35** | 5 | 35,5 % |
+  | Sechsecke | v100 | 290 | 103 | **7** | 6 | 29,5 % |
+  | Sechsecke | v101 | 273 | 82 | **45** | 5 | 32,8 % |
+
+  Auf den Dreiecken endet jetzt etwa jede elfte Partie mit einem Wirtschaftssieg (bis v100 etwa
+  jede 130.), auf den Sechsecken jede neunte (bis v100 jede 57.); sie fallen in Runde 4–7, meist 5
+  und 6. Auf den Dreiecken gingen 118 der 400 Partien anders aus (Siegart oder Runde), 32 davon
+  wurden zum Wirtschaftssieg (20 statt eines Militär-, 12 statt eines Forschungssiegs); auf den
+  Sechsecken 120, davon 39 zum Wirtschaftssieg (21 statt eines Militär-, 18 statt eines
+  Forschungssiegs), und dort enden die Partien im Median eine Runde früher. Wie oft der Startspieler
+  gewinnt, ändert sich nicht mehr, als der Zufall erklärt (−0,8 und +3,3 Punkte, bei je 400
+  Partien). Was das nicht sagt: wie Menschen auf die niedrigere Schwelle spielen (und dagegen), und
+  wie es auf der Originalkarte und im Marathon aussieht – nicht gemessen.
+
+### Abgesichert (v101)
+
+`test.js`: Freie Forschung – zwei je Partie, höchstens eine je Runde (eine zweite im selben Zug geht nicht
+und zählt nicht), danach auch Runden später keine dritte; eine Technologie aus einem Wunder zählt nicht
+mit; ein Dunkles Zeitalter verbraucht nichts; Spielstände von v97/v98 (Zähler 2: verbraucht, Zähler 1:
+eine offen), v99/v100 (in dieser Runde genutzt: gesperrt und eine angerechnet, dann noch eine; in einer
+früheren Runde genutzt: eine offen; nie genutzt: beide), `migrateState` zweimal ändert nichts; die Zahl
+an „Fähigkeiten" bis zur zweiten; die Texte deutsch und englisch an `FREE_TECH_USES` gebunden; KI
+– sie erwägt alles, was zur Wahl steht, im selben Zug keine zweite, nach zweien keine mehr, mit der
+letzten die Singularität samt Sieganmeldung; eine ganze Partie KI gegen KI: höchstens zwei, je Runde eine.
+Siegschwellen – je Spielart (zu viert 4/7 · 1/2 · 2/5, zu dritt 2/3 · 3/5 · 1/2, Duell
+3/4 · 7/10 · 2/3, zwei Reiche ohne Duellmodus wie drei); Grenzfälle zu viert (4 von 7 und 8 von 14 nicht, 5
+von 8 schon; Theologie 3 von 6 nicht, 4 von 7 schon; UN 2 von 5 und 4 von 10 nicht, 3 von 6 schon), zu
+dritt (4 von 6 nicht, 5 von 7 schon), im Duell mit Theologie 63 von 90 nicht, 64 schon (der Bruch allein
+hätte sich verrechnet), `victoryMet` mit „mehr als" und „mindestens"; Marathon zählt zu viert; Bogen
+und Rechnung aus einer Quelle je Spielart, Texte ohne Spielstand und `TECHS`/`DATA_EN` zu viert, zu
+dritt 3/5 und 1/2; Barbaren machen aus drei Reichen keine vier, Ausgeschiedene zählen, ein Aufbau zählt
+wie ein Spielstand, `S.victoryMode` übersteuert; der Siegtext des Tutorials (lang und kurz, deutsch und
+englisch) nennt 4/7, 2/3 und 3/4 und nicht mehr „zwei Drittel". `smoke.js`: Regelbogen im Marathon
+(„mehr als 4/7 der Weltbevölkerung (UN 2/5, Theologie 1/2", der neue Fähigkeitstext, deutsch und
+englisch, kein alter Text), im normalen Spiel der neue Fähigkeitstext; Blatt „Fähigkeiten" – „Noch 2 von
+2", nach der ersten „Noch 1 von 2" und „Diese Runde schon genutzt.", die Zahl an der Leiste fällt, in
+der nächsten Runde die zweite, danach „verbraucht" und keine Zahl mehr, englisch übersetzt; der Bogen
+der Legephase zeigt im Duell 7/10 und 2/3, zu viert (Sechsecke) 1/2 und 2/5.
+Gegenproben (je eine Stelle absichtlich falsch, 14 Stück, `test.js` bzw. `smoke.js` schlägt bei jeder an):
+Freie Forschung ohne Grenze je Partie, ohne Grenze je Runde, Nutzung nicht gezählt; `migrateState`
+löscht den Zähler wie v99/v100, `migrateState` ohne Anrechnung für v99/v100; zu viert die Schwellen von
+v100, zu dritt auch 4/7; Barbaren zählen als Reich, Ausgeschiedene zählen nicht, Marathon nicht zu
+viert; Vergleich mit dem Bruch wie bis v100; Tutorial mit dem alten Text; Legephase ohne die Spielart
+(smoke); Blatt „Fähigkeiten" ohne den Rest (smoke).
+In Chromium (Einzeldatei, iPad quer): das Blatt „Fähigkeiten" mit „Noch 2 von 2 …" und nach einer
+Nutzung „Noch 1 von 2 …" und „Diese Runde schon genutzt.", der Regelbogen einer Partie zu viert mit
+„mehr als 4/7 der Weltbevölkerung (UN 2/5, Theologie 1/2; …" – ohne Seitenfehler.
+
+## Vereinfacht: Oberfläche, Tutorial, Einstellungen, eine Stelle für Zahlen (v102)
+
+Anweisungen des Autors (6.11.): zuerst ein Grundsatz – „so vollkommen wie die Website von Linear
+oder Apple Notes: einfacher Zweck, einfacher Aufbau, einfache Gestaltung, einfache Umsetzung.
+Untertitel, Hinweistexte und Nebenbeschriftungen streichen. Braucht ein Bildschirm sie, um
+verständlich zu sein, das Layout ändern. Jede Entscheidung soll Bedienung, Entwicklung und
+Arbeit mit Agenten zugleich verbessern, ohne etwas kaputtzumachen." Daraus ein Vorschlag in
+vierzehn Punkten; umzusetzen waren 1, 2, 4, 5 („aber den Tipp am Spielende behalten"),
+6 („das alte Tutorial streichen"), 7, 8, 9, 11, 13 und 14. Nicht umgesetzt: git und npm-Befehle
+(3), die Geschichte aus Kommentaren und Dokumenten nehmen (10), ein gemeinsames Blatt
+„Einkommen" (12). Dazu zwei Regeln: Wirtschaftssieg zu zweit „4/5 (ohne Technologie), 75 %
+(Theologie), 2/3 (Vereinte Nationen)" und Philosophie mit dem Text „+1/6 chance for tech
+availability".
+
+### Regeln
+
+* **Duell:** `VICTORY_THRESHOLDS.duell` ist jetzt `[4, 5]`, Theologie `[3, 4]`, Vereinte Nationen
+  `[2, 3]` (75 % als 3/4 geschrieben, damit Rechnung und Anzeige ganzzahlig bleiben). Gilt auch für
+  das Erste Spiel (1 gegen 1): sein Wirtschaftsweg siegt mit der Musterlösung jetzt in Runde 7
+  statt 6 – Englands Drehbuch reicht so weit (der Forschungsweg siegt schon seit v97 in Runde 7),
+  die Texte lesen die Schwellen aus `victoryLabels('duell')`. Kein Text musste geändert werden.
+* **Philosophie:** „+1/6 Chance auf Techverfügbarkeit", englisch „+1/6 chance for tech
+  availability". Die Regel selbst bleibt: +1 auf den Würfel der Verfügbarkeit, also bei 4–6 eine
+  Seite mehr.
+* **Eine Stelle für die Brüche (Punkt 9):** Rechnung und Anzeige lasen schon seit v101 aus der
+  Tabelle; jetzt auch die Tests (ein einziger Schnappschuss, alles andere – Grenzfälle je
+  Spielart und Technologie, Texte im Bogen, Legephase, Regelbogen im Marathon – aus
+  `VICTORY_THRESHOLDS`) und die Dokumente, die den heutigen Stand beschreiben (README,
+  UEBERGABE). Geschichtliche Abschnitte wie dieser nennen die Zahlen weiter, die damals galten.
+  Die Spielarten stehen in den Regeln (`spielartenHtml`) mit Zahlen aus den Tabellen
+  (`VICTORY_THRESHOLDS`, `MARATHON_TECH_FACTOR`, `MARATHON_SINGULARITY`,
+  `MARATHON_DISCOUNT_FACTOR`, `MARATHON_CAPITALS`).
+
+### Oberfläche – wie ausgelegt
+
+* **Leiste (1):** Forschen, Stadt gründen, Macht, Fähigkeiten, Zug beenden. Die Welt öffnet der
+  Reichsname in der Kopfzeile (mit ▾) und – weil sie die Bevölkerung vergleicht – auch das
+  Bevölkerungskästchen; gesperrt, solange die Leiste gesperrt ist (Bot-Blatt, Nachspiel). Das
+  Protokoll steht im Spielmenü ☰.
+* **Kopfzeile (2):** ohne „Wissen/Nahrung/Münzen/Macht" (schmale Geräte blendeten sie schon
+  aus) und ohne Fähigkeit neben dem Namen. Die Zeile „Runde 3 · Bevölkerung 1/4 (25 %)" wird zum
+  ersten Kästchen: eigene / Weltbevölkerung, darunter ein Balken in der Reichsfarbe bis zu einem
+  Strich an der Schwelle, die für dieses Reich gerade gilt (`victoryOption`: die niedrigste aus
+  ohne / Theologie / Vereinte Nationen). Die Prozentzahl entfällt – der Balken zeigt das
+  Verhältnis, der Strich das Ziel. Während ein KI- oder Bot-Zug nachgespielt wird, zeigt das
+  Kästchen wie der übrige Vorrat den Stand der Szene.
+* **Zugbeginn (13):** kein Hinweis „Griechenland ist am Zug" mehr; er wiederholte die Kopfzeile
+  und lag 2,2 s über dem Titel eines Blatts, das zu Zugbeginn aufgeht. Das Ereignis der Runde
+  stand schon neben der Runde. Sitzen mindestens zwei Menschen am Gerät, pulsiert beim Wechsel
+  einmal das Zeichen des Reichs (Ausgelegt: „mehrere Menschen" = Plätze mit `kind: 'human'`, die
+  noch im Spiel sind; die KI zählt nicht). Der Hinweis „Nahrungsdefizit …" zu Zugbeginn bleibt –
+  er meldet einen Zustand, keinen Wechsel.
+* **Blätter (5):** *Macht* – Titel mit dem Stand, darunter die Käufe; was nicht bezahlbar ist, ist
+  gesperrt (bis v101 löste der Knopf eine Fehlermeldung aus, darunter stand „Nicht genug
+  Münzen."). Kurs, Halbierung zu Zugbeginn und die Legende der Ringe stehen in den Regeln (neuer
+  Abschnitt „Machtringe auf der Karte"); den Kurs nennt jeder Knopf. Der Zusatz „alles ausgeben"
+  am dritten Kauf entfällt. *Fähigkeiten* – ohne „Deine Fähigkeit", der Stand der Freien
+  Forschung als zwei Punkte auf der Karte der Fähigkeit (gefüllt = offen; „verbraucht" sind zwei
+  leere), kein „gratis" an kostenlosen Knöpfen (sie sind als kostenlos hervorgehoben). Ausgelegt:
+  Sätze, die einen Zustand erklären, der sonst rätselhaft wäre – „Diese Runde schon genutzt.",
+  „Dunkles Zeitalter …", die Zeilen zu Rückschau, Wunder-Technologie und Kopieren –, bleiben.
+  *Spielende* – das Ergebnis ist der Titel („Griechenland gewinnt"), darunter wie gewonnen
+  wurde und **der Tipp (Anweisung)**; der Satz unter „Nochmal spielen" entfällt, die Stufe der
+  nächsten Partie steht im Knopf („Nochmal spielen · Schwer"; nach einer Niederlage dieselbe, an
+  der höchsten Stufe diese). Die Punktetafel bei mehreren Ansprüchen bleibt.
+* **Tutorial (6):** entfernt samt `js/tutorial.js`, Menüknopf, Haken in der Oberfläche
+  (`ui.tut`, `tutAllow`, `tutGateSheet`, `tutBotTech` in den Bots), 105 Übersetzungen, den
+  Texttafel-Stilen und seinen Tests (rund 95 Assertions, 16 Smoke-Schritte). Der Würfel des
+  Ersten Spiels lief über `tutNextDie`; `d6` fragt jetzt `fgNextDie` direkt, nur mit `ui.fg`. Das
+  Panel unter bzw. neben der Karte gehört allein dem Ersten Spiel (der Zurück-Knopf war dort
+  immer verborgen und ist weg). Der **alte Techtree** bleibt: Spielstände von vor v82 laufen
+  weiter mit ihm.
+* **Aufbau (7):** je Platz eine Zeile – Reich (bzw. die Wahl des Reichs, wo sie frei ist),
+  Mensch/KI/Bot, Fähigkeit. „Platz 1 …" entfällt: die Reihenfolge der Zeilen ist die Zugfolge
+  (steht in den Regeln). „Alternative 2: …" entfällt: die Auswahl der Fähigkeit zeigt jede mit
+  ihrer Wirkung, die gewählte markiert; der Wert bleibt im versteckten Select (`[data-abil]`),
+  damit Rezept, „Nochmal spielen" und Tests unverändert lesen. Bots: Auswahl gesperrt, „—".
+  Darunter Karte, KI, Bots, Beginnt, Ereignisse (+ Ereignisstärke), Weltwunder und
+  Sechseck-Plättchen als Kärtchen; „Spiel beginnen" ist immer zu sehen. Die sechs Hinweise
+  (Duell, Plättchenkarte, Sechsecke, Marathon, Doppelte, KI) stehen jetzt als „Spielarten" in den
+  Regeln. Kurze Beschriftungen: „KI", „Bots", „Beginnt".
+* **Einstellungen (8):** der Bildschirm entfällt. Ereignisse und Weltwunder waren schon je Partie
+  zu wählen – jetzt immer im Aufbau, ab Werk aus. Animationen ins Spielmenü ☰ (Langsam, Schnell,
+  Keine; gemerkt wie bisher, `hochciv.prefs`). Fest auf den bisherigen Vorgaben: Kosten zeigen
+  immer, was tatsächlich abgeht (der Schalter „Kosten ohne Umtausch" ist weg), und im Hochformat
+  dreht sich das Spiel immer quer (der Schalter „Hochkant drehen" ist weg). Gespeicherte Wahlen
+  `hochciv.opts` und `hochciv.noturn` löscht `boot`; ein altes `listPrice` in `hochciv.prefs` wird
+  nicht mehr gelesen.
+* **Menü (11):** Titel, „Erstes Spiel" (rot) und „Neues Spiel"; ist ein Spiel gespeichert, steht
+  „Spiel fortsetzen" oben und trägt das Rot. Darunter eine ruhige Zeile: Regeln, Karte
+  bearbeiten, Spielstand laden. Ohne Zeile über dem Titel und ohne Satz darunter; die Version
+  ohne den Namen davor.
+
+### Umsetzung
+
+* **ui.js je Bildschirm (14):** `js/ui/base.js`, `map.js`, `game.js`, `sheets.js`, `turns.js`,
+  `end.js`, `world.js`, `setup.js`, `place.js`, `draft.js`, `editor.js`, `boot.js` – in der alten
+  Reihenfolge geschnitten, Inhalt zeilengleich (geprüft). Alle Skripte teilen einen globalen
+  Gültigkeitsbereich; Code, der beim Laden läuft, gibt es nur am Ende (`boot()`), deshalb ändert
+  der Schnitt nichts. **Die Skriptliste steht nur noch in `index.html`:** `build_single.py`,
+  `sw.js` (holt bei der Installation `index.html`), `tools_version.js`, `test.js` und `smoke.js`
+  lesen die `<script>`-Tags. Bis v101 stand sie fünfmal.
+* **Tests (4):** grün je eine Zeile, rot die FAIL-Zeilen, `--verbose` für alles; `tools_docs.js`
+  liest die Zahlen aus der grünen Zeile. `smoke.js` würfelt mit festem Startwert (`SMOKE_SEED`).
+  Dabei gefunden: der Schritt „Animationen Keine/Schnell/Langsam" war rot, wenn ein Bot in den
+  nachgespielten Zügen gewann – das zählt jetzt als Ende des Nachspiels.
+
+### Abgesichert (v102)
+
+`test.js`: der Schnappschuss der Siegschwellen; je Spielart und Technologie die niedrigste Schwelle
+(Beschriftung, Bruch, Zähler, Nenner); je Spielart und Technologie genau auf der Schwelle keine
+Anmeldung, eine Bevölkerung mehr schon; `victoryMet` an der Grenze; Duell gewinnt in Runde 1 mit einer
+mehr als genau; Bogen-Texte je Spielart aus der Tabelle; Erstes Spiel, Wirtschaftsweg in Runde 7;
+`d6` ohne Erstes Spiel würfelt echt. `smoke.js`: fünf Knöpfe, Welt über Name und Bevölkerung,
+Protokoll im ☰; fünf Kästchen ohne Beschriftung, Bevölkerung, Balken und Strich (auch nach
+Theologie), Runde ohne Bevölkerung; kein Hinweis „… ist am Zug", der Satz der Szenen verschwindet;
+Macht ohne Erklärtext, Legende in den Regeln; Punkte der Freien Forschung (2, 1, 0, englisch „0 of 2
+left"); kein „gratis"; Spielende mit Ergebnis als Titel und Stufe im Knopf; Aufbau ohne Hinweise,
+Ereignisse und Weltwunder ab Werk aus, Auswahl der Fähigkeit mit Wirkung; Marathon in den Regeln;
+Animationen im ☰ samt Übernahme alter Wahlen und Englisch; Menü mit und ohne Spielstand; Drehung im
+Spiel immer, ohne Schalter. `check_single.js` in der Einzeldatei (24 Skripte). In Chromium (iPad
+quer): Menü, Aufbau (vier Reiche, Duell, Auswahl der Fähigkeit), Spiel, Macht, Fähigkeiten, Spielmenü,
+Welt, Regeln (Spielarten), Spielende – ohne Seitenfehler.
+
+## Armee bewegen · Bevölkerungswachstum · Armeekosten · Ertragstexte als Summe · große Bildschirme · Kolonialismus kostenlos (v103)
+
+Anweisungen des Autors (7.11.), unter dem Grundsatz von v102 („einfacher Zweck, einfacher Aufbau,
+einfache Gestaltung, einfache Umsetzung … Jede Entscheidung soll Bedienung, Entwicklung und Arbeit
+mit Agenten zugleich verbessern, ohne etwas kaputtzumachen"):
+„Zwei verschiedene deutsche Beschriftungen fürs Bewegen von Armeen – beide sollen ‚Armee bewegen'
+heißen"; „für Demokratie/Nationalismus einen Wortlaut finden, der klarer macht, dass sie die
+Armeekosten senken"; „Bevölkerung wachsen soll ‚Bevölkerungswachstum' heißen"; „Symbole sind auf
+größeren Bildschirmen (etwa 1080p-Desktop) sehr klein – eine Lösung finden"; „die Ertragstechnologien
+desselben Feldes (Mathematik, Elektrizität, KI) so beschriften, dass klar ist, dass sie nicht stapeln,
+sondern nur die höchste zählt – vielleicht einfach ‚xyz bringt 2 abc'"; „Kolonialismus: ‚dreimal je
+Zug ein herrenloses Feld beanspruchen' statt einer bezahlten Fähigkeit". Vor dem Bauen gefragt: Behält
+ein beanspruchtes Feld die beiden anderen Seiten des Kolonialismus (Gründen ohne Weg, zählt zur
+Hauptstadt)? Antwort: **beide bleiben**.
+
+### Regeln
+
+* **Kolonialismus:** dreimal je Runde (`COLONY_CLAIMS`) ein herrenloses Feld beanspruchen, kostenlos
+  (bis v102: kaufen für 3 Münzen, bis v71 für 5). Beansprucht werden darf, was bis v102 gekauft werden
+  durfte – jedes Feld der Karte, das niemandem gehört und keine Stadt trägt, auch Meer und weit weg.
+  Was in einer Runde nicht genutzt wird, verfällt. Wie bisher: das Feld ist eigenes Gebiet, dort darf
+  auch ohne Siedlerweg gegründet werden (v84), und es zählt zur Hauptstadt (v96, mit Bürokratie
+  doppelt). Text: „3× pro Runde: ein herrenloses Feld beanspruchen; dort auch ohne Weg gründen",
+  englisch „3× per round: claim an unowned tile; …". Ausgelegt: „je Zug" als „je Runde" – jedes Reich
+  zieht einmal je Runde, und so heißen auch Atomwaffen, Internet und die Freie Forschung.
+* Sonst ändert sich keine Regel. Demokratie (4) und Nationalismus (2) bleiben, wie sie waren – nur der
+  Text ist neu; ebenso die Ertragstechnologien (v88).
+
+### Oberfläche – wie ausgelegt
+
+* **Armee bewegen:** ein Knopf für die Armee in der Stadt und auf freiem Feld (bis v102 „Armee hier
+  bewegen" bzw. „Diese Armee bewegen", englisch jetzt „Move army"). Die Unterzeile „erreichbare Felder
+  werden markiert" sagte, was der Knopf tut – sie fällt nach dem Grundsatz; was gilt, bleibt („muss die
+  Stadt noch verlassen", „Kontrollzone – hält bis zum nächsten Zug").
+* **Bevölkerungswachstum:** nur die deutsche Beschriftung (englisch weiter „Grow population").
+  „Kostenlos wachsen" daneben und „Alle Städte wachsen" bleiben.
+* **Demokratie / Nationalismus:** „Armeekosten 4 statt 5 × Anzahl" bzw. „2 statt 5" (englisch „Army
+  cost 4 instead of 5 × count"). Das „statt 5" sagt beides: dass es billiger wird und dass die zwei nicht
+  stapeln – mit beiden gilt 2.
+* **Ertragstechnologien:** Der Text nennt, was ein Feld (bzw. jede Bevölkerung) damit insgesamt bringt,
+  samt Grundertrag – Mathematik „Wald bringt 1 Wissenschaft", Elektrizität „… 2", Künstliche
+  Intelligenz „… 3"; Landwirtschaft „Grasland bringt 2 Nahrung" (Grasland hat 1), Chemie „Gebirge bringt
+  2 Wissenschaft", Mühlentechnik „Fluss bringt 2 Münzen", Containerlogistik „Meer bringt 2 Nahrung, 2
+  Münzen", Schrift „Bevölkerung bringt je 2 Wissenschaft". Bis v102 stand die Summe der Kette als „+n"
+  da („Wald: +2 Wissenschaft"), was nach Zuschlag auf Mathematik aussah. Eine absolute Zahl kann nicht
+  stapeln. Das trägt, weil je Ziel und Ertragsart genau eine Kette zuständig ist – Ketten verschiedener
+  Felder betreffen verschiedene Erträge (auf Grasland Papier die Wissenschaft, Landwirtschaft die
+  Nahrung). Der Satz im Regelbogen: „Ertragstechnologien nennen, was ein Feld bzw. jede Bevölkerung damit
+  insgesamt bringt. Für dasselbe Gelände und denselben Ertrag zählt nur die beste: …". Wunder (Großer
+  Leuchtturm +1), Taiga (mindestens 1 Nahrung), Bürokratie und Ereignisse wirken wie bisher darüber.
+* **Große Bildschirme:** die ganze Oberfläche wächst mit dem Fenster – ein Faktor als CSS-`zoom` auf
+  `<html>`, keine zweite Gestaltung. Bis 1366 × 720 bleibt er 1: jedes iPad quer (das größte hat 1366 ×
+  1024) und jedes Telefon, gedreht immer. Darüber `min(Breite/1366, Höhe/720)`: ein maximiertes Fenster
+  auf 1080p (1920 × 960) ×1,33, Vollbild ×1,41, 1440p (2560 × 1300) ×1,81, 4K bei 100 % ×2,78. Die Karte
+  füllt ihre Fläche wie bisher; sie gibt nur ab, was Kopf- und Aktionsleiste an Höhe gewinnen.
+  Verworfen: nur die Symbole größer (Schrift und Blätter blieben so klein wie die Symbole daneben),
+  alles auf `rem` umstellen (hunderte Längen, dazu die in den Vorlagen der Skripte), ein Maßstab ab dem
+  iPad Air (1180 × 820 – dann wüchse das 13-Zoll-iPad um 16 %).
+* **Feld beanspruchen:** rechts statt eines Preises die Ansprüche dieser Runde als Punkte (gefüllt =
+  offen, wie bei der Freien Forschung); verbraucht ist der Knopf gesperrt, alle Punkte leer – ohne Satz.
+  Keine Unterzeile mehr (bis v102 „Kolonialismus"); auf fremdem oder eigenem Gebiet weiter „nur
+  herrenlose Felder". Offene Ansprüche zählen nicht in der Zahl an „Fähigkeiten": sie brauchen ein Feld
+  auf der Karte, das Blatt „Fähigkeiten" könnte sie nicht einlösen.
+
+### Umsetzung
+
+* `claimTile(S, pi, r, c)` und `claimsLeft(S, pi)` in `js/engine.js` statt `buyTile`; gezählt in
+  `p.claimRound`/`p.claimCount` (die Runde der Ansprüche und wie viele). Spielstände von vor v103 haben
+  keinen Zähler – alle offen. Die Felder stehen weiter in `S.bought`: der Name stammt aus der Zeit des
+  Kaufens; ihn zu ändern hätte Spielstände umgeschrieben, ohne dass sich etwas verbessert.
+* KI (`js/ki.js`): Kandidaten, solange `claimsLeft` > 0 – die drei Felder mit dem besten Ertrag;
+  `kiColonySpots` nimmt jedes Feld mit Ertrag (bis v102 erst ab 2 – für 3 Münzen lohnte 1 nicht). Ihr
+  Forschungswert für Kolonialismus bleibt 4 (nicht gemessen, offener Punkt 63).
+* `uiScale(w, h, gedreht)` (`js/ui/base.js`, `UI_BASE_W`/`UI_BASE_H`), `syncLayout` setzt `--ui`, die
+  Layoutklassen (`w-wide`, `w-side`, `w-narrow`) rechnen mit Fenster ÷ `--ui` – auf allen Größen dasselbe
+  Ergebnis wie vorher. `setBarHeight` misst `offsetHeight`: gezoomt liefert `getBoundingClientRect`
+  Bildschirmpixel (in Chromium gemessen: 87 statt 58 bei ×1,5), und `--bar-h` wird im gezoomten CSS noch
+  einmal vergrößert – das Blatt säße zu hoch. Gedreht liefert es die gedrehte Höhe – das war v87. Mit
+  `offsetHeight` entfallen beide Sonderfälle. In Chromium wachsen auch `vh`/`vw` mit dem Zoom (100vh =
+  1620 px bei ×1,5 auf 1080 px): deshalb gilt gedreht 1, und das Konfetti fällt um die eigene Höhe in
+  Pixeln statt um 105vh.
+* `pips(rest, alle)` liegt jetzt in `base.js` (Blatt „Fähigkeiten" und Feldblatt).
+
+### Abgesichert (v103)
+
+`test.js`: Armeekosten-Texte deutsch und englisch aus `armyCost` (5/4/2, mit beiden 2); jeder Ertragstext
+aus Grundertrag und Kette, je Ziel und Ertragsart genau eine Kette, Text und `tileYield` gleich;
+Kolonialismus: eigenes Umland abgelehnt (zählt nicht), drei herrenlose Felder ohne Münzen, gehören dem
+Reich, dasselbe Feld kein zweites Mal, ein viertes in derselben Runde nicht, nächste Runde wieder drei,
+ohne Technologie keine, alter Spielstand alle, Protokoll, X-Feld verbraucht keinen Anspruch, beide
+Techtrees, Kachel und Regelbogen beider Sprachen, Bürokratie-Text „beanspruchte Felder"; die KI
+beansprucht in einem Zug drei Felder ohne Münzen. Die Messung „mit Reserve mehr Wissenschaft in die
+Forschung" (v79) mit Startwert 304 statt 303: mit 303 erforscht England in Runde 5 Kolonialismus und
+beansprucht seither; der Verlauf danach kommt ohne die Reserve aus (338 gegen 338, v102: 331 gegen 317).
+Mit 304 ist kein Kolonialismus im Spiel – sechsmal, 149 gegen 98, in v102 wie v103. `smoke.js`: Punkte am
+Knopf 3/3, 2/3, 1/3, 0/3 gesperrt, keine Unterzeile, Münzen unverändert, drei Felder beim Reich;
+Kolonialismus-Kachel; Ertragstexte im Bogen und Regelbogen (deutsch und englisch); `--bar-h`/`--hud-h`
+gedreht, quer und bei ×1,41 die Layouthöhe; `uiScale` für iPads (1180 × 820, 1194 × 834, 1366 × 1024),
+1024 × 768, 1080p, 1440p, 4K und gedreht; die Layoutklassen bei 1920 × 960. In Chromium: Spiel,
+Stadtblatt, Feldblatt mit Punkten, Technologiebogen bei 1180 × 820 (unverändert), 1920 × 960 (×1,33),
+1920 × 1080 (×1,41), 2560 × 1440 (×1,87) und hochkant gedreht (820 × 1180, ×1) – ohne Seitenfehler.
+
+## Nicht an fremden Ansprüchen gründen (v104)
+
+Gemeldet vom Autor (7.11.): „Man kann neben einem Feld gründen, das ein Gegner beansprucht hat. Das
+soll nicht gehen (wie neben einer gegnerischen Armee). Neben einem eigenen ist es natürlich in
+Ordnung – dann wird es eben ein gewöhnliches Feld der neuen Stadt."
+
+Nachgestellt (Startwert 5, zwei Reiche): Griechenland beansprucht 0/4, England gründet auf 0/5 – erlaubt;
+danach steht 0/4 in `controlledTiles` beider Reiche, beide bekommen seinen Ertrag. Auf 0/4 selbst ließ
+sich ebenso gründen: gesperrt war seit v63 nur der Weg, nie das Zielfeld (der offene Punkt 3 der
+Übergabe, „Wer das auch sperren will, sagt es").
+
+### Regeln
+
+* **Nicht auf und nicht direkt neben einem fremden beanspruchten Feld** wird gegründet – für Menschen
+  und KI (`foundSiteError`, `kiSiteOk`) wie für Bots (`settleable`). Meldung: „Nicht auf oder direkt
+  neben gegnerischem Gebiet." Ausgelegt: „auf" gehört dazu – wie bei Armeen (auf und neben), und sonst
+  verlöre der andere sein Feld ganz an die Stadt. Ansprüche ausgeschiedener Reiche sperren nicht (wie
+  `foreignTerritory`). Fremdes **Stadtumland** braucht keine eigene Prüfung: ein Platz liegt mindestens
+  drei Felder von jeder Stadt, ihr Umland also mindestens zwei. Damit ist die zweite Hälfte der
+  Territoriumsklausel des Regelhefts („neben gegnerischen Territorien darf nicht gegründet werden") so
+  umgesetzt, wie der Autor sie meint: der Platz, nicht das Umland der neuen Stadt – das hätte einen
+  Mindestabstand von 4 bedeutet.
+* **Eigene Ansprüche auf oder neben der neuen Stadt werden ihre Felder:** sie verlassen `S.bought`. Sie
+  zählen damit nicht mehr zur Hauptstadt (mit Bürokratie einfach statt doppelt) und gehen mit der
+  Stadt, wird sie erobert. Der Ertrag beim Siedeln (`settleGain`, Gründungsblatt und KI) rechnet das
+  mit.
+* **Alte Spielstände:** `migrateState` macht beim Laden jeden Anspruch auf oder neben einer Stadt zu
+  einem Feld der Stadt – einen eigenen (bis v103 blieb er beansprucht) wie einen fremden aus dem Fehler:
+  dann verliert ihn, wer ihn beansprucht hatte; die Stadt steht schon, und so gehört kein Feld mehr
+  zwei Reichen.
+
+### Abgesichert (v104)
+
+`test.js`: fremder Anspruch – England gründet weder darauf noch daneben (dieselbe Meldung, auch über
+`foundCity`), zwei Felder weiter schon; Bots und KI sehen dieselbe Regel; Griechenland selbst darf
+daneben. Eigener Anspruch – mit Bürokratie vorher doppelt, nach dem Gründen daneben ein gewöhnliches Feld
+der Stadt (nicht mehr in `S.bought`, einfacher Ertrag), `settleGain` gleich der Änderung des Einkommens.
+Alter Spielstand – das Feld, das beiden gehörte, ist danach Feld der Stadt, ein ferner Anspruch bleibt,
+ein zweites Laden ändert nichts. Der bis v103 offene Fall „auf einem fremden Einzelfeld" erwartet jetzt die
+Meldung. `smoke.js`: im Gründungsmodus ist ein Platz neben einem fremden Anspruch abgeblendet, das
+Gründungsblatt sperrt „Hier gründen" und nennt den Grund.
+
+## Kosten getauscht · Kopieren je Weg einmal je Runde (v105)
+
+Anweisungen des Autors (7.11.): „Reihenfolge und Kosten dieser Technologien ändern: Theologie auf 8
+und Bürokratie auf 10 tauschen; Militärgericht auf 11, Nationalismus auf 13; Stahl auf 7, Burgenbau auf
+8; Kunstdünger auf 11, Dampfmaschine auf 13, Eisenbahn auf 14." – „Spionage und Kundschafterei sollen
+eine Fähigkeit einmal je Zug werden (wie das Internet), aber zu ihrem jeweiligen Münzfaktor." Vor dem
+Bauen gefragt: Wer beide bezahlten Wege hat – zwei Kopien je Runde oder eine zum besten Preis? Antwort:
+**zwei, je eine**.
+
+### Regeln
+
+* **Kosten:** Theologie 8, Bürokratie 10 (vorher 10, 8) · Militärgericht 11, Nationalismus 13 (13, 11) ·
+  Stahl 7, Burgenbau 8 (8, 7) · Kunstdünger 11, Dampfmaschine 13, Eisenbahn 14 (14, 11, 13). Jede bleibt
+  in ihrem Zeitalter (Mittelalter 6–10, Industrialisierung 11–15); Zeitalterrabatte, Obsoleszenz und
+  die Chance jeder Technologie im Verfügbarkeitswurf bleiben also gleich – es ändern sich Preis und
+  Platz in der Leiter (und damit, welcher Würfel auf welche fällt). Im Marathon mal den Faktor des
+  Zeitalters, wie alles.
+* **Der alte Techtree behält die alten Kosten** (`OLD_TECH_COSTS`, seit v102 nur noch Spielstände von
+  vor v82), wie seit v84 die drei militärischen der Antike. **Laufende Partien** im Standard bekommen
+  die neuen Kosten – sie stehen nicht im Spielstand.
+* **Kopieren:** drei Wege, jeder **einmal je Runde** und unabhängig: Internet gratis, Spionage zum
+  Einfachen, Kundschafterei zum Doppelten der Grundkosten in Münzen (der Partie, ohne Vergünstigung).
+  Wer alle drei hat, kopiert bis zu drei Technologien je Runde. Bis v104 kopierten Spionage und
+  Kundschafterei beliebig oft, und wer beide hatte, zahlte nur den Preis der Spionage. „Je Zug" als „je
+  Runde", wie beim Kolonialismus (v103) – jedes Reich zieht einmal je Runde. Was ungenutzt bleibt,
+  verfällt. Texte: „1 Tech/Runde kopieren (1× Kosten in Münzen)" bzw. „(2× …)", wie das Internet „1
+  Tech/Runde kopieren".
+
+### Oberfläche – wie ausgelegt
+
+* **Fähigkeiten → Technologien kopieren:** eine Zeile je Technologie (Name, Wirkung, wer sie hat), rechts
+  je offenem Weg sein Preis als Knopf – „gratis" (hervorgehoben), z. B. „4🪙", „8🪙". Ein genutzter Weg
+  verschwindet aus allen Zeilen; sind alle genutzt, steht dort nur „Diese Runde schon kopiert." Welcher
+  Knopf welcher Weg ist, sagt der Preis (der Name steht als `title`, Name und Preis als `aria-label`); kein Satz mit den
+  Wirkungstexten mehr (bis v104 „Spionage: … · Internet: …" und „· 1× gratis per Internet" im Kopf).
+  Verworfen: je Technologie und Weg ein ganzzeiliger Knopf (bis zu drei Zeilen je Technologie); ein
+  Knopf, der den billigsten offenen Weg nimmt – dann bestimmte die Reihenfolge der Tipps, wo die
+  Gratiskopie landet, und wer erst die billige Technologie tippte, zahlte für die teure.
+* **„gratis" am Knopf:** seit v102 tragen kostenlose ganzzeilige Knöpfe das Wort nicht mehr (die
+  Hervorhebung sagt es). Hier ist der Knopf selbst der Preis; ohne Text bliebe er leer.
+
+### Umsetzung
+
+* `COPY_WAYS` (Weg, Faktor) und `copyWaysOpen(S, pi)` in `js/engine.js`; `copyableTechs` liefert je
+  Technologie `ways: [{ k, coins }]`, `copyTech(S, pi, k, way)` (ohne `way`: der billigste offene) setzt
+  `p.copied[way] = S.round`. `copyRate`, `internetAvailable`, `p.internetUsed` und die Modi
+  `'free'`/`'paid'` sind weg; `migrateState` übernimmt `p.internetUsed` als `p.copied.internet`.
+  Neue Meldungen „Diese Runde schon per Spionage kopiert." (je Weg) und „Diese Runde schon kopiert.";
+  „Nicht kopierbar." ist jetzt übersetzt. Protokoll: „Astronomie kopiert (Kundschafterei, 4 Münzen)."
+* KI: je offenem Weg ein Kandidat mit eigenem Schlüssel (`copyinternet:`, `copyspionage:`,
+  `copykundschafterei:` – die Muster für Forschung, Bündel und Methode nehmen `copy[a-z]+`). Wert beim
+  Forschen von Spionage und Kundschafterei: `2 + 0,2 · H · min(3, kopierbar)`, nach dem Muster des
+  Internets (`3 + 0,3 · H · …`; bis v104 `2 + 0,5 · min(8, kopierbar)` – für beliebig viele Kopien).
+  Geschätzt, nicht gemessen.
+
+### Abgesichert (v105)
+
+`test.js`: die neun neuen Kosten, keine wechselt das Zeitalter, die vier betroffenen Leitern, die alten
+Werte in `OLD_TECH_COSTS`, Burgenbau mit der Methode 5 (alter Techtree 3); Kopieren – nur Internet,
+nur Spionage (zweite Kopie abgelehnt, nächste Runde wieder), nur Kundschafterei, alle drei in einer
+Runde (Kundschafterei zuerst, danach steht sie nirgends mehr; 5 Münzen; das Protokoll nennt den Weg),
+zu wenig Münzen (der Weg bleibt offen), alter Spielstand, `freeActions` nur mit Gratiskopie, beide
+bezahlten Preise nebeneinander, die Preise im alten Techtree und im Marathon; die KI kopiert ohne Wissenschaft
+über mehrere Wege, über jeden einmal. `smoke.js`: die Zeile mit „gratis" (englisch „free") und
+`title`, drei Wege mit 3 Münzen („gratis · 2🪙 · 4🪙" gesperrt), nach der Kundschafterei und dem
+Internet die übrigen Preise, nach drei Kopien nur noch „Diese Runde schon kopiert."
+
+## Aktualisierung ganz oder gar nicht (v106)
+
+Gemeldet vom Autor (8.11.): „There's a bug in v105 that I can't open the abilities tab." Nachgefragt:
+in der App auf dem Home-Bildschirm, in jeder Partie ab Zug 1 – im Browser geht es.
+
+### Ursache (nachgestellt)
+
+Im Code von v105 ließ sich das Blatt in keinem Spielstand zum Scheitern bringen (Chromium: neue
+Partien, Spielstände von v102, alle Kopierwege, beide Sprachen, Erstes Spiel). Nachgestellt mit einem
+Server wie GitHub Pages und dem echten Service Worker: Ist `sw.js` schon neu, während der Upload noch
+läuft, füllt der Einbau den neuen Cache mit dem, was gerade auf dem Server liegt – hier neue
+`js/engine.js`, alte `js/ui/sheets.js`. Das alte Blatt ruft `copyRate`, das es seit v105 nicht mehr
+gibt: „Fähigkeiten" geht nicht auf. So bleibt es auch nach dem Upload, denn gefüllt wird nur einmal je
+`VERSION`. Ein zweiter Weg zum selben Ergebnis: Der HTTP-Cache des Browsers (GitHub Pages erlaubt zehn
+Minuten) reicht beim Einbau alte Dateien weiter. Welcher Weg es auf dem iPad war, lässt sich von hier
+nicht sagen; beide sind jetzt zu.
+
+### Verhalten – wie ausgelegt
+
+* **Ganz oder gar nicht:** Jede Datei kommt frisch vom Server, und ihr Inhalt muss `BUILD_HASH`
+  ergeben (dieselbe Rechnung wie `tools_version.js`). Sonst bricht der Einbau ab: Die alte Fassung
+  bleibt, beim nächsten Start versucht der Browser es wieder.
+* **Übernehmen:** wie bisher sofort; ist das Menü offen, lädt die Seite neu, mitten im Spiel nicht –
+  dann beim nächsten Start. Verworfen: immer neu laden (risse eine Partie aus dem Zug); nie (die neue
+  Fassung käme wie bis v105 erst mit dem zweiten Start).
+* Ohne WebCrypto (nur über unverschlüsseltes http außerhalb von localhost) wird nicht geprüft.
+
+### Umsetzung
+
+`sw.js`: `frisch` (`cache: 'reload'`), `buildHash` (SHA-1 über Name und Inhalt, nach Namen sortiert,
+ohne `./`, Icons und Manifest – wie `tools_version.js` und `test.js`), der Einbau als eine
+async-Funktion. `js/ui/boot.js`: `swStart()`. `build_single.py` ersetzt dessen Aufruf und bricht ab,
+wenn er fehlt. README: Hochladen mit `node tools_version.js`, ein halber Upload schadet nicht mehr.
+
+### Abgesichert (v106)
+
+`test.js` (erstmals mit asynchronem Schluss, `SPAETER`): sw.js in eigener Umgebung mit nachgebautem
+`fetch` und `caches` – mit den Dateien dieser Fassung kommen alle 30 frisch (`cache: 'reload'`) in den
+Cache, weicht eine ab, keine. Von Hand mit Chromium und einem Server wie GitHub Pages: v105 halb
+hochgeladen → „copyRate is not defined", auch nachdem der Rest da ist; v106 hochgeladen → geht; eine
+Fassung halb hochgeladen → abgelehnt, die alte läuft weiter; vollständig → übernommen und im Menü
+von selbst neu geladen; während einer Partie übernommen → kein Neuladen, beim nächsten Start da.

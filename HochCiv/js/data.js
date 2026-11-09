@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v100';
+const APP_VERSION = 'v106';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -50,54 +50,57 @@ const CITY_YIELD = [1, -1, 1];
    Anweisung des Autors): Mathematik 1, Astronomie 2, Philosophie 3, Schrift 4 ·
    Bewässerung 1, Landwirtschaft 5 · Chemie 11, Biologie 12, Wissenschaftliche Methode 15.
    Seit v84 (Anweisung des Autors) außerdem Stadtmauern 2, Eisenverarbeitung 4,
-   Belagerungsmaschinen 5 (vorher 5, 2, 4).
-   Die alten Werte gibt es nur noch im Tutorial (OLD_TECH_COSTS). Die Reihenfolge dieser
+   Belagerungsmaschinen 5 (vorher 5, 2, 4). Seit v105 (Anweisung des Autors) getauscht bzw.
+   gedreht, jeweils im selben Zeitalter: Theologie 8 und Bürokratie 10 (vorher 10, 8),
+   Militärgericht 11 und Nationalismus 13 (13, 11), Stahl 7 und Burgenbau 8 (8, 7), Kunstdünger
+   11, Dampfmaschine 13, Eisenbahn 14 (14, 11, 13).
+   Die alten Werte behält der alte Techtree (OLD_TECH_COSTS). Die Reihenfolge dieser
    Liste ist bewusst die alte geblieben – die Leiter im Bogen kommt aus techsIn (nach
    Kosten sortiert), und wo Code die Liste der Reihe nach durchgeht, bleibt so alles,
-   wie es war (auch im Tutorial). */
+   wie es war. */
 const TECHS = [
   // Forschung
-  { k: 'schrift', n: 'Schrift', f: 0, c: 4, e: 'Je Bevölkerung: +1 Wissenschaft' },
-  { k: 'mathematik', n: 'Mathematik', f: 0, c: 1, e: 'Wald: +1 Wissenschaft' },
-  { k: 'astronomie', n: 'Astronomie', f: 0, c: 2, e: 'Meer: +1 Wissenschaft' },
-  { k: 'philosophie', n: 'Philosophie', f: 0, c: 3, e: '+1 beim Auswürfeln von Techverfügbarkeit' },
-  { k: 'papier', n: 'Papier', f: 0, c: 6, e: 'Grasland: +1 Wissenschaft' },
+  { k: 'schrift', n: 'Schrift', f: 0, c: 4, e: 'Bevölkerung bringt je 2 Wissenschaft' },
+  { k: 'mathematik', n: 'Mathematik', f: 0, c: 1, e: 'Wald bringt 1 Wissenschaft' },
+  { k: 'astronomie', n: 'Astronomie', f: 0, c: 2, e: 'Meer bringt 1 Wissenschaft' },
+  { k: 'philosophie', n: 'Philosophie', f: 0, c: 3, e: '+1/6 Chance auf Techverfügbarkeit' },
+  { k: 'papier', n: 'Papier', f: 0, c: 6, e: 'Grasland bringt 1 Wissenschaft' },
   { k: 'alchemie', n: 'Alchemie', f: 0, c: 8, e: '1:1 Wissenschaft → Münzen' },
-  { k: 'buchdruck', n: 'Buchdruck', f: 0, c: 9, e: 'Fluss: +1 Wissenschaft' },
-  { k: 'universitaet', n: 'Universitätswesen', f: 0, c: 10, e: 'Je Bevölkerung: +2 Wissenschaft' },
+  { k: 'buchdruck', n: 'Buchdruck', f: 0, c: 9, e: 'Fluss bringt 1 Wissenschaft' },
+  { k: 'universitaet', n: 'Universitätswesen', f: 0, c: 10, e: 'Bevölkerung bringt je 3 Wissenschaft' },
   { k: 'wiss_methode', n: 'Wissenschaftliche Methode', f: 0, c: 15, e: 'Techkosten −2/−3/−4/−5/−10 (je Zeitalter)' },
-  { k: 'chemie', n: 'Chemie', f: 0, c: 11, e: 'Gebirge: +1 Wissenschaft' },
-  { k: 'elektrizitaet', n: 'Elektrizität', f: 0, c: 13, e: 'Wald: +2 Wissenschaft' },
-  { k: 'biologie', n: 'Biologie', f: 0, c: 12, e: 'Grasland: +2 Wissenschaft' },
+  { k: 'chemie', n: 'Chemie', f: 0, c: 11, e: 'Gebirge bringt 2 Wissenschaft' },
+  { k: 'elektrizitaet', n: 'Elektrizität', f: 0, c: 13, e: 'Wald bringt 2 Wissenschaft' },
+  { k: 'biologie', n: 'Biologie', f: 0, c: 12, e: 'Grasland bringt 2 Wissenschaft' },
   { k: 'computertechnik', n: 'Computertechnik', f: 0, c: 17, e: '1:1 Münzen → Wissenschaft' },
   { k: 'gentechnik', n: 'Gentechnik', f: 0, c: 18, e: 'Je vier Wissenschaft eine Nahrung; füttert auch 1:1' },
   { k: 'raumfahrt', n: 'Raumfahrt', f: 0, c: 19, wo: true, e: 'Bei jedem Wunderbau eine Technologie gratis' },
-  { k: 'ki', n: 'Künstliche Intelligenz', f: 0, c: 20, e: 'Wald: +3 Wissenschaft' },
+  { k: 'ki', n: 'Künstliche Intelligenz', f: 0, c: 20, e: 'Wald bringt 3 Wissenschaft' },
   // Produktion
-  { k: 'landwirtschaft', n: 'Landwirtschaft', f: 1, c: 5, e: 'Grasland: +1 Nahrung' },
-  { k: 'fischerei', n: 'Fischerei', f: 1, c: 2, e: 'Meer: +1 Nahrung' },
+  { k: 'landwirtschaft', n: 'Landwirtschaft', f: 1, c: 5, e: 'Grasland bringt 2 Nahrung' },
+  { k: 'fischerei', n: 'Fischerei', f: 1, c: 2, e: 'Meer bringt 1 Nahrung' },
   { k: 'rad', n: 'Rad', f: 1, c: 3, e: 'Straßen' },
   { k: 'keramik', n: 'Keramik', f: 1, c: 4, e: '1× zusätzliches Wachstum pro Stadt' },
-  { k: 'bewaesserung', n: 'Bewässerung', f: 1, c: 1, e: 'Gebirge: +1 Nahrung' },
-  { k: 'segeln', n: 'Segeln', f: 1, c: 7, e: 'Meer: +2 Nahrung' },
-  { k: 'muehlentechnik', n: 'Mühlentechnik', f: 1, c: 8, e: 'Fluss: +1 Münze' },
+  { k: 'bewaesserung', n: 'Bewässerung', f: 1, c: 1, e: 'Gebirge bringt 1 Nahrung' },
+  { k: 'segeln', n: 'Segeln', f: 1, c: 7, e: 'Meer bringt 2 Nahrung' },
+  { k: 'muehlentechnik', n: 'Mühlentechnik', f: 1, c: 8, e: 'Fluss bringt 2 Münzen' },
   { k: 'baukraene', n: 'Baukräne', f: 1, c: 9, wo: true, e: 'Weltwunder kosten 2/4/6/8/… weniger' },
   { k: 'gilden', n: 'Gilden', f: 1, c: 10, e: '1:1 Münzen → Nahrung' },
-  { k: 'dampfmaschine', n: 'Dampfmaschine', f: 1, c: 11, e: 'Keine Münzkosten für Bevölkerungswachstum; 1× zusätzliches Wachstum pro Stadt' },
-  { k: 'eisenbahn', n: 'Eisenbahn', f: 1, c: 13, e: 'Eisenbahn' },
-  { k: 'kunstduenger', n: 'Kunstdünger', f: 1, c: 14, e: 'Wald: +1 Nahrung' },
-  { k: 'fliessband', n: 'Fließband', f: 1, c: 15, e: 'Je Bevölkerung: +1 Münze' },
+  { k: 'dampfmaschine', n: 'Dampfmaschine', f: 1, c: 13, e: 'Keine Münzkosten für Bevölkerungswachstum; 1× zusätzliches Wachstum pro Stadt' },
+  { k: 'eisenbahn', n: 'Eisenbahn', f: 1, c: 14, e: 'Eisenbahn' },
+  { k: 'kunstduenger', n: 'Kunstdünger', f: 1, c: 11, e: 'Wald bringt 1 Nahrung' },
+  { k: 'fliessband', n: 'Fließband', f: 1, c: 15, e: 'Bevölkerung bringt je 2 Münzen' },
   { k: 'verbundwerkstoffe', n: 'Verbundwerkstoffe', f: 1, c: 16, e: '1× zusätzliches, kostenloses Wachstum pro Stadt' },
-  { k: 'gruene_revolution', n: 'Grüne Revolution', f: 1, c: 17, e: 'Grasland: +1 Nahrung, +1 Münze' },
-  { k: 'containerlogistik', n: 'Containerlogistik', f: 1, c: 18, e: 'Meer: +2 Nahrung, +1 Münze' },
-  { k: 'robotik', n: 'Robotik', f: 1, c: 19, e: 'Je Bevölkerung: +2 Münzen' },
+  { k: 'gruene_revolution', n: 'Grüne Revolution', f: 1, c: 17, e: 'Grasland bringt 2 Nahrung, 1 Münze' },
+  { k: 'containerlogistik', n: 'Containerlogistik', f: 1, c: 18, e: 'Meer bringt 2 Nahrung, 2 Münzen' },
+  { k: 'robotik', n: 'Robotik', f: 1, c: 19, e: 'Bevölkerung bringt je 3 Münzen' },
   // Militär
   { k: 'taktik', n: 'Taktik', f: 2, c: 1, e: 'Flankieren von zwei beliebigen Positionen' },
   { k: 'eisenverarbeitung', n: 'Eisenverarbeitung', f: 2, c: 4, e: '4 Münzen = 1 Macht' },
   { k: 'belagerung', n: 'Belagerungsmaschinen', f: 2, c: 5, e: '+3 Angriff gegen Städte' },
   { k: 'stadtmauern', n: 'Stadtmauern', f: 2, c: 2, e: 'Städte haben +5 Verteidigung' },
-  { k: 'burgenbau', n: 'Burgenbau', f: 2, c: 7, e: 'Städte enthalten unbewegliche Armee' },
-  { k: 'stahl', n: 'Stahl', f: 2, c: 8, e: 'Machtverlust = 1/3' },
+  { k: 'burgenbau', n: 'Burgenbau', f: 2, c: 8, e: 'Städte enthalten unbewegliche Armee' },
+  { k: 'stahl', n: 'Stahl', f: 2, c: 7, e: 'Machtverlust = 1/3' },
   { k: 'militaerlogistik', n: 'Militärlogistik', f: 2, c: 6, wo: true, e: '+1 Bewegungsweite je eigenem Weltwunder' },
   { k: 'schiesspulver', n: 'Schießpulver', f: 2, c: 10, e: 'Kontrollzone' },
   { k: 'gewehre', n: 'Gewehre', f: 2, c: 11, e: '3 Münzen = 1 Macht' },
@@ -110,22 +113,22 @@ const TECHS = [
   { k: 'atomwaffen', n: 'Atomwaffen', f: 2, c: 20, e: '1x pro Runde ein Feld mit Umland wählen, alle Armeen zerstören' },
   // Spezial
   { k: 'navigation', n: 'Navigation', f: 3, c: 1, e: 'Bewegung über Meer' },
-  { k: 'demokratie', n: 'Demokratie', f: 3, c: 3, e: 'Armeekosten = 4 × Anzahl' },
+  { k: 'demokratie', n: 'Demokratie', f: 3, c: 3, e: 'Armeekosten 4 statt 5 × Anzahl' },
   { k: 'wallfahrt', n: 'Wallfahrt', f: 3, c: 4, wo: true, e: 'Je eigenem Weltwunder +3 auf alle Erträge' },
   { k: 'sklaverei', n: 'Sklaverei', f: 3, c: 5, e: 'Stadtbevölkerung opfern → 7 Münzen · wird in der Moderne obsolet' },
   { k: 'rittertum', n: 'Rittertum', f: 3, c: 6, e: '1 Bevölkerungsverlust beim Erobern' },
-  { k: 'kundschafterei', n: 'Kundschafterei', f: 3, c: 7, e: 'Tech kopieren (2× Kosten in Münzen)' },
-  { k: 'buerokratie', n: 'Bürokratie', f: 3, c: 8, e: 'Hauptstadt produziert doppelt',
-    voll: 'Hauptstadt produziert doppelt, dazu Handelsrouten, Ökologie, Gentechnik und gekaufte Felder' },
+  { k: 'kundschafterei', n: 'Kundschafterei', f: 3, c: 7, e: '1 Tech/Runde kopieren (2× Kosten in Münzen)' },
+  { k: 'buerokratie', n: 'Bürokratie', f: 3, c: 10, e: 'Hauptstadt produziert doppelt',
+    voll: 'Hauptstadt produziert doppelt, dazu Handelsrouten, Ökologie, Gentechnik und beanspruchte Felder' },
   { k: 'kartografie', n: 'Kartografie', f: 3, c: 9, e: 'Keine Distanzkosten beim Gründen' },
-  { k: 'theologie', n: 'Theologie', f: 3, c: 10, e: '>3/5 der Bevölkerung zum Sieg' },
-  { k: 'nationalismus', n: 'Nationalismus', f: 3, c: 11, e: 'Armeekosten = 2 × Anzahl' },
-  { k: 'spionage', n: 'Spionage', f: 3, c: 12, e: 'Tech kopieren (1× Kosten in Münzen)' },
-  { k: 'militaergericht', n: 'Militärgericht', f: 3, c: 13, e: 'Kein Bevölkerungsverlust beim Erobern' },
-  { k: 'kolonialismus', n: 'Kolonialismus', f: 3, c: 14, e: 'Für 3 Münzen Feld kaufen; dort auch ohne Weg gründen',
-    voll: 'Für 3 Münzen Feld kaufen; dort auch ohne Weg gründen. Gekaufte Felder zählen zur Hauptstadt (mit Bürokratie doppelt)' },
+  { k: 'theologie', n: 'Theologie', f: 3, c: 8, e: '>1/2 der Bevölkerung zum Sieg' },
+  { k: 'nationalismus', n: 'Nationalismus', f: 3, c: 13, e: 'Armeekosten 2 statt 5 × Anzahl' },
+  { k: 'spionage', n: 'Spionage', f: 3, c: 12, e: '1 Tech/Runde kopieren (1× Kosten in Münzen)' },
+  { k: 'militaergericht', n: 'Militärgericht', f: 3, c: 11, e: 'Kein Bevölkerungsverlust beim Erobern' },
+  { k: 'kolonialismus', n: 'Kolonialismus', f: 3, c: 14, e: '3× pro Runde: ein herrenloses Feld beanspruchen; dort auch ohne Weg gründen',
+    voll: '3× pro Runde: ein herrenloses Feld beanspruchen; dort auch ohne Weg gründen. Beanspruchte Felder zählen zur Hauptstadt (mit Bürokratie doppelt)' },
   { k: 'massenmedien', n: 'Massenmedien', f: 3, c: 16, e: 'Eine Münze ernährt drei Bevölkerung' },
-  { k: 'un', n: 'Vereinte Nationen', f: 3, c: 17, e: '>1/2 der Bevölkerung zum Sieg' },
+  { k: 'un', n: 'Vereinte Nationen', f: 3, c: 17, e: '>2/5 der Bevölkerung zum Sieg' },
   { k: 'oekologie', n: 'Ökologie', f: 3, c: 18, e: '+1 auf alle Erträge je 2 Bevölkerung im ganzen Reich (abrunden)' },
   { k: 'internet', n: 'Internet', f: 3, c: 19, e: '1 Tech/Runde kopieren' },
 ];
@@ -156,9 +159,7 @@ const FEED_COIN_RATE = 3;
 /* Gentechnik: so viel Wissenschaft aus dem Rundeneinkommen ergibt zu Zugbeginn eine
    Nahrung, abgerundet (v64: 2, v66: 4). Kommt zum Füttern 1:1 hinzu, ersetzt es nicht. */
 const GENE_SCI_PER_FOOD = 4;
-const VICTORY_FRAC = 2 / 3;        // Standard-Siegschwelle
-const THEOLOGY_FRAC = 3 / 5;       // mit Theologie
-const UN_FRAC = 1 / 2;             // mit Vereinte Nationen
+// Siegschwellen des Wirtschaftssiegs: VICTORY_THRESHOLDS weiter unten (seit v101 je Spielart)
 const BOT_RESEARCH_TWICE = true;
 const SLAVERY_OBSOLETE_IN_MODERN = true;
 const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (bis v83: 10)
@@ -168,10 +169,11 @@ const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (b
      die Wissenschaftliche Methode 2/3/4/5/10 (bis v96 2/4/6/8/10). Im Marathon zählen beide
      doppelt (MARATHON_DISCOUNT_FACTOR). Der alte Techtree behält die alte Methode
      (OLD_METHOD_DISCOUNT) – sonst ginge der feste Ablauf des Tutorials nicht mehr auf.
-   · Griechenlands Freie Forschung: seit v99 (Anweisung des Autors) einmal je Runde jede
-     erforschbare Technologie, auch die Singularität, in jeder Spielart (v97–v98 zweimal je
-     Partie aus jedem Zeitalter, ohne die Singularität; bis v96 einmal je Runde bis zur
-     Industrialisierung, im Marathon bis ins Mittelalter). Keine eigene Zahl mehr.
+   · Griechenlands Freie Forschung: seit v101 (Anweisung des Autors) höchstens FREE_TECH_USES-mal
+     je Partie und höchstens einmal je Runde jede erforschbare Technologie, auch die Singularität,
+     in jeder Spielart (v99–v100 einmal je Runde ohne Grenze je Partie; v97–v98 zweimal je Partie
+     aus jedem Zeitalter, ohne die Singularität; bis v96 einmal je Runde bis zur
+     Industrialisierung, im Marathon bis ins Mittelalter).
    · Kriegerkultur der Wikinger: +1 Macht je Armee, mit Burgenbau auch je Stadt (bis v96 +2).
    Dazu, ohne eigene Zahl (js/engine.js): Siedlertrecks wachsen zum Preis einer um 1 kleineren
    Stadt (growPrice), Fruchtbarkeit bringt ein bezahltes Wachstum mehr (growLimits).
@@ -179,6 +181,7 @@ const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (b
    zusammen. */
 const GREEK_DISCOUNT = [1, 1, 2, 2, 5];
 const METHOD_DISCOUNT = [2, 3, 4, 5, 10];
+const FREE_TECH_USES = 2;          // Freie Forschung: Nutzungen je Partie (v101; v97–v98 auch 2)
 const WARRIOR_POWER = 1;           // Kriegerkultur: Macht je Armee (mit Burgenbau je Stadt)
 
 const TECH_BY_KEY = {};
@@ -195,10 +198,14 @@ TECHS.forEach(t => { TECH_BY_KEY[t.k] = t; });
    YIELD_CHAINS[Ziel] = je Feld eine Kette, nach den Grundkosten sortiert, jedes Glied mit
    der Summe bis zu sich; yieldBonus (engine.js) nimmt das höchste erforschte Glied.
    Sortiert wird nach t.c: im alten Techtree (Tutorial) und im Marathon ist die Reihenfolge
-   innerhalb jeder Kette dieselbe – ein Test hält das fest. Die Techtexte (TECHS und DATA_EN)
-   nennen die Summe, die das Glied setzt; ein Test rechnet sie nach. Seit v89 ohne den Zusatz
-   „(inkl. …)" (Anweisung des Autors) – die Regel erklärt der Regelbogen unter der
-   Geländetabelle. */
+   innerhalb jeder Kette dieselbe – ein Test hält das fest.
+   Die Techtexte (TECHS und DATA_EN) nennen seit v103 (Anweisung des Autors), was das Feld bzw.
+   jede Bevölkerung mit dem Glied INSGESAMT bringt – Grundertrag plus Summe: „Wald bringt 2
+   Wissenschaft", „Grasland bringt 2 Nahrung" (bis v102 „Wald: +2 Wissenschaft", „Grasland: +1
+   Nahrung" – das las sich, als stapelten Mathematik und Elektrizität). Das trägt, weil je Ziel
+   und Ertragsart genau eine Kette zuständig ist; „es gilt die beste" ist damit die ganze Regel.
+   Beides rechnet ein Test nach. Seit v89 ohne den Zusatz „(inkl. …)" – die Regel steht im
+   Regelbogen unter der Geländetabelle. */
 const YIELD_TECHS = {
   schrift: { on: 'pop', y: [1, 0, 0] },
   universitaet: { on: 'pop', y: [1, 0, 0] },
@@ -248,12 +255,13 @@ const SINGULARITY = {
   k: 'singularitaet', n: 'Singularität', c: SINGULARITY_BASE,
   e: 'Erfordert mind. 1 Technologie der Moderne in jedem Feld. Du gewinnst das Spiel.',
 };
-/* Der alte Techtree (bis v81 der Standard) – seit v82 nur noch im Tutorial (Anweisung des
-   Autors: „bis ich ein besseres Tutorialspiel liefere"). Er unterscheidet sich vom
-   heutigen nur in den Grundkosten dieser zwölf Technologien (die drei militärischen seit
-   v84: das Tutorial behält seine Kosten und damit seinen festen Ablauf) und seit v97 im
-   Rabatt der Wissenschaftlichen Methode (OLD_METHOD_DISCOUNT, aus demselben Grund); die
-   übrigen Wirkungen, Feld und Zeitalter sind gleich. Eine Partie trägt ihn als S.oldTree. Bis v81 hieß der Schalter andersherum
+/* Der alte Techtree (bis v81 der Standard): v82–v101 im Tutorial (Anweisung des Autors: „bis
+   ich ein besseres Tutorialspiel liefere"), seit v102 (Tutorial entfernt) nur noch in
+   Spielständen von vor v82. Er unterscheidet sich vom heutigen nur in den Grundkosten dieser
+   einundzwanzig Technologien – ändert sich der Standard, behält er die alten Werte (die drei
+   militärischen seit v84, neun weitere seit v105) – und seit v97 im Rabatt der
+   Wissenschaftlichen Methode (OLD_METHOD_DISCOUNT); die übrigen Wirkungen, Feld und Zeitalter
+   sind gleich. Eine Partie trägt ihn als S.oldTree. Bis v81 hieß der Schalter andersherum
    S.altTree (der heutige Standard war zuschaltbar) – migrateState übersetzt alte
    Spielstände, eine laufende Partie behält ihren Techtree. Ein Test hält fest, dass keiner
    dieser Werte die Zeitaltergrenze überschreitet (t.age kommt aus c). */
@@ -262,15 +270,19 @@ const OLD_TECH_COSTS = {
   wiss_methode: 11, chemie: 12, biologie: 15,                   // Forschung, Industrialisierung
   landwirtschaft: 1, bewaesserung: 5,                           // Produktion, Antike
   eisenverarbeitung: 2, belagerung: 4, stadtmauern: 5,          // Militär, Antike (bis v83 Standard)
+  // bis v104 Standard (seit v105 getauscht bzw. gedreht)
+  theologie: 10, buerokratie: 8, militaergericht: 13, nationalismus: 11, stahl: 8, burgenbau: 7,
+  kunstduenger: 14, dampfmaschine: 11, eisenbahn: 13,
 };
-/* Seit v97 dazu die Wissenschaftliche Methode von damals (bis v96 überall): Das Tutorial rechnet
-   mit ihr – Burgenbau (Mittelalter) kostet dort 3 statt 4, und am Ende des Zuges bleibt genau die
-   1 Wissenschaft fürs Rad. Gilt im alten Techtree, also auch in Partien von vor v82. */
+/* Seit v97 dazu die Wissenschaftliche Methode von damals (bis v96 überall) – eingeführt fürs
+   Tutorial (bis v101), das mit ihr rechnete; heute für Spielstände von vor v82. */
 const OLD_METHOD_DISCOUNT = [2, 4, 6, 8, 10];
-/* Kolonialismus und Kundschafterei (v72, Anweisung des Autors; gilt in beiden Techtrees –
-   sie unterscheiden sich nur in den Forschungskosten). Die Techtexte in TECHS und DATA_EN
-   nennen dieselben Zahlen; ein Test hält beides zusammen. */
-const COLONY_COST = 3;       // Kolonialismus: Münzen je Feld (bis v71: 5)
+/* Kolonialismus (v103, Anweisung des Autors): kostenlos, COLONY_CLAIMS herrenlose Felder je Runde
+   beanspruchen – bis v102 kaufen für 3 Münzen je Feld (v72), bis v71 für 5. Kundschafterei (v72):
+   2× der Grundkosten in Münzen, bis v71 3× – seit v105 einmal je Runde (COPY_WAYS, engine.js).
+   Beides gilt in beiden Techtrees. Die Techtexte in
+   TECHS und DATA_EN nennen dieselben Zahlen; ein Test hält beides zusammen. */
+const COLONY_CLAIMS = 3;     // Kolonialismus: Felder je Runde
 const SCOUTING_RATE = 2;     // Kundschafterei: × Grundkosten, in Münzen (bis v71: 3)
 /* Marathon (v83, Anweisung des Autors; Karte und Draft in js/marathon.js): Karte viermal so
    groß wie die Europakarte (Originalkarte 12 × 18), Technologien je Zeitalter ×2/×3/×4/×5.
@@ -294,7 +306,8 @@ const MARATHON_SINGULARITY = 300;
 const MARATHON_CAPITALS = 2;        // eroberte Hauptstädte für den Militärsieg
 /* Seit v85 (Anweisung des Autors): Griechenlands Günstige Forschung und die Wissenschaftliche
    Methode wirken doppelt. Die Freie Forschung reichte v85–v96 im Marathon nur bis ins
-   Mittelalter; seit v99 gilt sie einmal je Runde für alles Erforschbare, auch hier. */
+   Mittelalter; seit v99 gilt sie für alles Erforschbare, auch hier – seit v101 zweimal je
+   Partie, höchstens einmal je Runde, wie überall. */
 const MARATHON_DISCOUNT_FACTOR = 2;
 /* Startausgleich (v85, Anweisung des Autors): im allerersten Zug bekommt der Zweite in der
    Zugfolge Münzen dazu, der Dritte mehr, der Vierte noch mehr – je Platz in der Zugfolge.
@@ -471,15 +484,21 @@ function mapRng(seed) {
   return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
 }
 
-/* Siegschwellen im Duell: 3/4 statt 2/3, mit Theologie 7/10, mit Vereinten Nationen 2/3 */
-const DUEL_VICTORY_FRAC = 3 / 4;
-const DUEL_THEOLOGY_FRAC = 7 / 10;
-const DUEL_UN_FRAC = 2 / 3;
-/* Beschriftungen der Siegschwellen – eine Quelle für Regelrechnung und Anzeige, damit
-   der Technologiebogen im Duell nicht die Werte des normalen Spiels zeigt. */
-const VICTORY_LABEL = { base: '2/3', theologie: '3/5', un: '1/2' };
-const DUEL_VICTORY_LABEL = { base: '3/4', theologie: '7/10', un: '2/3' };
-const victoryLabels = duel => duel ? DUEL_VICTORY_LABEL : VICTORY_LABEL;
+/* Siegschwellen des Wirtschaftssiegs je Spielart, als [Zähler, Nenner]: mehr als so viel der
+   Weltbevölkerung, mit Theologie oder Vereinten Nationen weniger – es gilt die niedrigste, die
+   ein Reich hat (victoryOption). Welche Spielart eine Partie hat, sagt victoryMode (js/engine.js).
+   · duell – der Modus „1 gegen 1"
+   · vier – vier Reiche, auch Marathon
+   · drei – drei Reiche (und was sonst weder Duell noch vier Reiche ist)
+   Die einzige Stelle dieser Zahlen (v102): Rechnung und Anzeige (Kopfzeile, Technologiebogen,
+   Regeln, Protokoll, Erstes Spiel) lesen sie von hier, verglichen wird ganzzahlig (victoryMet).
+   Texte und Dokumente nennen keine eigenen Brüche; test.js hält die Tabelle in genau einem
+   Schnappschuss fest. Eine Regeländerung ist also: diese Zeile plus der Schnappschuss. */
+const VICTORY_THRESHOLDS = {
+  duell: { base: [4, 5], theologie: [3, 4], un: [2, 3] },
+  vier: { base: [4, 7], theologie: [1, 2], un: [2, 5] },
+  drei: { base: [2, 3], theologie: [3, 5], un: [1, 2] },
+};
 
 /* ---------------------------------------------------------------- Spieltipps
    Kurze Ratschläge zum Spielen, wörtlich aus der Tippsammlung des Autors. Sie stehen
@@ -499,7 +518,7 @@ const TIPS = [
   'Es ist nicht immer korrekt durch Griechenlands Basisfähigkeit kostenlose Technologien sofort zu erforschen. Durch Philosophie kann ein späteres Forschen auch wertvoll sein.',
   'Griechenlands Rückschau hat einen langsamen Start, aber wird zum Ende hin immer besser.',
   'Der Schlüssel zu Griechenlands Rückschau ist es, frühestmöglich eine Technologie des Mittelalters forschen zu können.',
-  'Griechenlands Freie Forschung gilt jede Runde für jede erforschbare Technologie – auch für die Singularität, also den Forschungssieg. Wer in allen vier Feldern die Moderne erreicht, braucht dafür keine Wissenschaft mehr.',
+  'Griechenlands Freie Forschung gibt es nur zweimal je Partie und höchstens einmal je Runde. Früh genutzt bringt sie Tempo; wer eine aufhebt, kann mit ihr die Singularität umsonst erforschen, sobald in allen vier Feldern die Moderne erreicht ist – den Forschungssieg.',
   'Englands Handelsreich erlaubt hohe Flexibilität.',
   'Mit Englands Seemacht kann das Siedeln am Meer besser sein als Binnenstädte, muss es aber nicht.',
   'Englands Kolonisten haben nur einen Vorteil, solange es noch Platz zum Siedeln auf der Karte gibt. Plane dementsprechend.',

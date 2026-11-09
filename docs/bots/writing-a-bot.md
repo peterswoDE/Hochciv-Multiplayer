@@ -217,7 +217,8 @@ On your turn, send `action { type, params }` (in a Rundenspiel: `async:action { 
 | `moveArmy` | `{ armyId, r, c }` | Move an army |
 | `buyPower` | `{ n }` | Buy `n` power with coins |
 | `buildRoad` | `{ r, c, target }` | Build a road; `target` `1` needs Rad, `2` (railway) needs Eisenbahn |
-| `buyTile` | `{ r, c }` | Buy a tile (Kolonialismus) |
+| `claimTile` | `{ r, c }` | Claim a tile (Kolonialismus, since v103 – free, a limited number per round) |
+| `buyTile` | `{ r, c }` | Buy a tile (Kolonialismus, games on v100 and older) |
 | `coverPop` / `uncoverPop` | `{ kind, amount }` | Feed population from another source, or stop; `kind` `"coins"` or `"sci"` |
 | `buildWonder` | `{ cityId, wonder }` | Build a wonder (only with wonders on) |
 | `nuke` | `{ r, c }` | Atomic strike |
