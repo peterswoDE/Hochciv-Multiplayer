@@ -15,7 +15,8 @@ function settleable(S, pi, r, c) {
   if (!t || !TERRAIN[t].land || TERRAIN[t].block) return false;   // kein Meer, kein Vulkan
   if (armyAt(S, r, c)) return false;
   if (enemyArmyAdjacent(S, pi, r, c)) return false;               // nicht neben fremden Armeen
-  return !S.cities.some(x => hexDistance(x.r, x.c, r, c) < 3);
+  if (S.cities.some(x => hexDistance(x.r, x.c, r, c) < 3)) return false;
+  return !foreignClaimNear(S, pi, r, c);                          // nicht an fremden Ansprüchen (v104)
 }
 // Bots bewegen sich nach genau denselben Regeln wie Menschen: überall canPass (engine.js).
 
@@ -479,9 +480,6 @@ function botResearch(S, pi, avoidFields = []) {
     idx = 0;
   }
   let tech = idx ? list[idx - 1] : list.find(t => !p.techs[t.k]);
-  // Im Tutorial darf ein Feld vorgegeben sein. Gewürfelt wird trotzdem ganz normal –
-  // nur das Ergebnis wird getauscht, damit die feste Würfelfolge unberührt bleibt.
-  if (typeof tutBotTech === 'function') tech = tutBotTech(S, pi, field) || tech;
   p.techs[tech.k] = true;
   log(S, 'act', T('%s erforscht %s.', civOf(p).n, tech.n));
   return field;   // Bots bestimmen ihr Zeitalter aus den erforschten Techs, kein avail nötig

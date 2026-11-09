@@ -642,7 +642,9 @@ function kiTechBonus(S, pi, k, K, y) {
     case 'atomwaffen': return 3;
     case 'militaerlogistik': return 1;
     case 'rittertum': case 'militaergericht': return 1;
-    case 'kundschafterei': case 'spionage': return 2 + 0.5 * Math.min(8, kiCopyCount(S, pi));
+    // seit v105 je eine Kopie je Runde (bis v104 beliebig viele: 2 + 0,5 je kopierbarer, bis 8) –
+    // geschätzt wie das Internet, nur bezahlt; nicht gemessen
+    case 'kundschafterei': case 'spionage': return 2 + 0.2 * H * Math.min(3, kiCopyCount(S, pi));
     case 'internet': return 3 + 0.3 * H * Math.min(3, kiCopyCount(S, pi));
     case 'massenmedien': case 'gentechnik': return 0.3 * H * Math.min(popOf(S, pi), 20) / 2 + 3;
     case 'wallfahrt': case 'baukraene': case 'raumfahrt': return S.wo ? 3 : 0;
@@ -945,12 +947,11 @@ function kiCandidates(S, pi, K, memo, billig) {
     add(() => T('Rückschau: %s', t.n), X => useBackPick(X, pi, t.k), 'back:' + t.k);
   for (const t of freePickOptions(S, pi))
     add(() => T('gratis: %s', t.n), X => useFreePick(X, pi, t.k), 'pick:' + t.k);
-  // --- Kopieren
-  for (const o of copyableTechs(S, pi)) {
-    if (o.freeOk) add(() => T('kopiert %s', o.tech.n), X => copyTech(X, pi, o.tech.k, 'free'), 'copyf:' + o.tech.k);
-    if (o.paidCoins != null && available(S, pi, 'coins') >= o.paidCoins)
-      add(() => T('kopiert %s', o.tech.n), X => copyTech(X, pi, o.tech.k, 'paid'), 'copyp:' + o.tech.k);
-  }
+  // --- Kopieren (v105): je offenem Weg ein Kandidat – jeder Weg einmal je Runde
+  for (const o of copyableTechs(S, pi))
+    for (const w of o.ways)
+      if (available(S, pi, 'coins') >= w.coins)
+        add(() => T('kopiert %s', o.tech.n), X => copyTech(X, pi, o.tech.k, w.k), 'copy' + w.k + ':' + o.tech.k);
   // --- Wachstum
   for (const city of citiesOf(S, pi)) {
     const id = city.id;
@@ -977,10 +978,10 @@ function kiCandidates(S, pi, K, memo, billig) {
       const id = city.id;
       add(() => T('opfert Bevölkerung'), X => sacrifice(X, pi, kiCity(X, id)), 'slave:' + id);
     }
-  // --- Kolonialismus: herrenlose Felder mit gutem Ertrag
-  if (has(p, 'kolonialismus') && available(S, pi, 'coins') >= COLONY_COST)
-    for (const t of kiColonySpots(S, pi).slice(0, 3))
-      add(() => T('kauft Feld %s/%s', t[0], t[1]), X => buyTile(X, pi, t[0], t[1]), 'col:' + t[0] + ',' + t[1]);
+  // --- Kolonialismus (v103): kostenlos, COLONY_CLAIMS je Runde – die Felder mit dem besten Ertrag
+  if (claimsLeft(S, pi) > 0)
+    for (const t of kiColonySpots(S, pi).slice(0, COLONY_CLAIMS))
+      add(() => T('beansprucht Feld %s/%s', t[0], t[1]), X => claimTile(X, pi, t[0], t[1]), 'col:' + t[0] + ',' + t[1]);
   // --- Weltwunder
   if (S.wo && !billig) for (const w of availableWonders(S)) {
     const city = kiWonderCity(S, pi, w.k);
@@ -993,10 +994,17 @@ function kiCandidates(S, pi, K, memo, billig) {
   if (!billig) for (const m of kiMilitaryCandidates(S, pi, K, memo)) out.push(m);
   return out;
 }
-/* Freie Forschung: seit v99 wieder einmal je Runde (wie bis v96), jetzt alles Erforschbare samt
-   Singularität. Was nicht genutzt wird, verfällt mit der Runde – also erwägt die KI jede Runde
-   jede Möglichkeit, und kiValue entscheidet wie bei bezahlter Forschung; die Singularität ist
-   dort der Sieg. v97–v98 (zweimal je Partie) hob sie sie für die Moderne auf. */
+/* Freie Forschung: seit v101 (Anweisung des Autors) zweimal je Partie, höchstens einmal je Runde,
+   alles Erforschbare samt Singularität. Die KI erwägt sie, sobald sie geht, für alles, was zur
+   Wahl steht – kiValue entscheidet wie bei bezahlter Forschung, die Singularität ist dort der
+   Sieg. Sie hebt also nichts auf: Gemessen (tools_ki.js freie, je 400 Partien zu viert, gepaart)
+   gewann Griechenland so 20,5 % – mit Aufheben für die Moderne 12,8 %, dazu die letzte für die
+   Singularität 15,0 %, die erste sofort und die letzte für die Singularität 13,3 % (Abschnitt v101
+   in ANNAHMEN.md). Zwei frühe Technologien bringen in Partien, die im Median in Runde 5 enden, mehr
+   als eine späte teure; bis zur Moderne in jedem Feld kommt Griechenland selten. v99–v100 (einmal je
+   Runde) erwog sie genauso jede Runde alles; v97–v98 (zweimal je Partie) hob sie sie für die
+   Moderne auf. Funktionsdeklaration: tools_ki.js (Modus „freie") vergleicht damit die anderen
+   Arten zu wählen. */
 function kiFreeTechChoices(S, pi, K) {
   return freeTechOptions(S, pi);
 }
@@ -1075,14 +1083,16 @@ function kiSitesAll(S, pi, K) {
   return out;
 }
 // Kommt das Feld als Siedelplatz in Frage? Land ohne Vulkan, keine gegnerische Armee darauf
-// oder daneben, mindestens 3 Felder von jeder Stadt – ohne Weg und Kosten.
+// oder daneben, mindestens 3 Felder von jeder Stadt, kein fremder Anspruch darauf oder daneben
+// (v104) – ohne Weg und Kosten.
 function kiSiteOk(S, pi, r, c) {
   const t = terrainAt(S, r, c);
   if (!t || isOff(t) || !TERRAIN[t].land || TERRAIN[t].block) return false;
   if (enemyArmyAdjacent(S, pi, r, c)) return false;
   const a = armyAt(S, r, c);
   if (a && a.owner !== pi) return false;
-  return !S.cities.some(ct => hexDistance(ct.r, ct.c, r, c) < 3);
+  if (S.cities.some(ct => hexDistance(ct.r, ct.c, r, c) < 3)) return false;
+  return !foreignClaimNear(S, pi, r, c);
 }
 // Siedelplätze ändern sich mit Städten, Armeen, Techs und Straßen – nicht mit den Ressourcen
 const kiSiteKey = (S, pi) => S.cities.length + '|' +
@@ -1253,7 +1263,8 @@ function kiColonySpots(S, pi) {
     if (!t || isOff(t) || TERRAIN[t].block || cityAt(S, r, c) || owned.has(key(r, c))) continue;
     const y = tileYield(S, pi, t);
     const v = f * (y[0] + y[1] + y[2]);
-    if (v >= 2) out.push([r, c, v]);
+    // Seit v103 kostenlos: jedes Feld mit Ertrag lohnt (bis v102 für 3 Münzen erst ab 2)
+    if (v > 0) out.push([r, c, v]);
   }
   return out.sort((a, b) => b[2] - a[2]);
 }
@@ -1712,7 +1723,7 @@ function kiSpent(before, after, sciFactor) {
    alles außer Forschung und Kopieren dreifach (KI_W.sciReserve) – erst wird geforscht, was
    sich lohnt, der Rest darf danach in Münzen. Im Ernstfall (eine eigene Stadt belagert) gilt
    das nicht. */
-const KI_RESEARCH_TAG = /^(tech|free|back|pick|copyf|copyp):/;
+const KI_RESEARCH_TAG = /^(tech|free|back|pick|copy[a-z]+):/;
 /* Wählt Schritt für Schritt die beste Aktion (Nutzen je eingesetzter Ressource, mit einem
    Sockel, damit fast kostenlose Aktionen nicht unendlich gut aussehen) und führt sie auf
    dem echten Spielstand aus. Nach jeder Aktion wird neu bewertet: die Würfel nach einer
@@ -1725,7 +1736,7 @@ const KI_RESEARCH_TAG = /^(tech|free|back|pick|copyf|copyp):/;
      bleiben nur noch die billigen Kandidaten; das hält auch Züge mit Luftwaffe und
      zwanzig Armeen im Rahmen. Gezählt wird, nicht gestoppt – das Ergebnis hängt also nicht
      davon ab, wie schnell das Gerät ist. */
-const KI_BATCH = /^(grow|gfree|tech|free|back|pick|copyf|copyp|road|col):/;
+const KI_BATCH = /^(grow|gfree|tech|free|back|pick|copy[a-z]+|road|col):/;
 // Wird `x` im selben Schritt wie `pick` gebündelt ausgeführt? (eine Regel für kiPlan und kiMethodeZuerst)
 const kiImBuendel = (x, pick) => x !== pick && KI_BATCH.test(pick.c.tag) && KI_BATCH.test(x.c.tag) && x.ratio >= pick.ratio * 0.6;
 /* Wissenschaftliche Methode zuerst (v96, Anweisung des Autors: „sie hatte da eine schlechte
@@ -1741,7 +1752,7 @@ const kiImBuendel = (x, pick) => x !== pick && KI_BATCH.test(pick.c.tag) && KI_B
    mit dem besten Verhältnis, den der Planer gefunden hat (bezahlt, Freie Forschung, Rückschau,
    gratis, Kopie). Danach plant er neu, mit den neuen Preisen (kiPlan). Zurück kommt dieser
    Kandidat oder null. Wer weniger sieht (Stufe Leicht, `see`), übersieht auch sie öfter. */
-const KI_METHODE = /^(tech|free|back|pick|copyf|copyp):wiss_methode$/;
+const KI_METHODE = /^(tech|free|back|pick|copy[a-z]+):wiss_methode$/;
 // Ließe sich die Methode erforschen? (verfügbar und noch nicht erforscht)
 function kiMethodeOffen(S, pi) { return !!S.players[pi].avail.wiss_methode && !S.players[pi].techs.wiss_methode; }
 function kiMethodeZuerst(S, pi, scored, pick) {

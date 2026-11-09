@@ -1,5 +1,9 @@
-/* prüft die Einzeldatei in jsdom: lädt, startet ein Spiel mit beiden Erweiterungen */
+/* prüft die Einzeldatei in jsdom: lädt, startet ein Spiel mit beiden Erweiterungen.
+   Ausgabe (v102): grün eine Zeile („single  ok"), sonst die Fehler; alles mit --verbose. */
 const fs=require('fs'), {JSDOM}=require('jsdom');
+const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
+const say = console.log, notes = [];
+console.log = (...a) => { const z = a.join(' '); notes.push(z); if (VERBOSE || /FEHLER/.test(z)) say(z); };
 const html=fs.readFileSync('hochzeivilization-einzeldatei.html','utf8');
 const errs=[];
 const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,
@@ -10,14 +14,10 @@ const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,
     w.onerror=e=>errs.push(e);
   }});
 const w=dom.window, $=id=>w.document.getElementById(id);
-// Erweiterungen sind ab Werk aus und haben dann keine Zeile im Aufbau – erst über die
-// Einstellungen zuschalten, dann wie zuvor ankreuzen.
-w.eval("show('screen-options'); optionsScreen();");
-$('opt-events').checked=true; $('opt-events').onchange();
-$('opt-wonders').checked=true; $('opt-wonders').onchange();
+// Ereignisse und Weltwunder stehen seit v102 immer im Aufbau (ab Werk aus) – ankreuzen
 w.eval("show('screen-setup'); setupScreen();");
-if ($('setup-events-row').hidden || $('setup-wonders-row').hidden)
-  { console.log('FEHLER: Modulzeilen fehlen im Aufbau'); process.exit(1); }
+if ($('setup-events-row').hidden || $('setup-wonders-row').hidden || $('screen-options'))
+  { console.log('FEHLER: Ereignis- und Wunderzeile fehlen im Aufbau (oder es gibt noch Einstellungen)'); process.exit(1); }
 $('setup-events').checked=true; $('setup-events').onchange();
 $('setup-wonders').checked=true;
 $('setup-go').onclick();
@@ -62,7 +62,7 @@ if (F && F[0] < 1) { console.log('FEHLER: das Blatt „Fähigkeiten" nennt keine
 // Erstes Spiel (v92, v93): der rote Knopf ganz oben zeigt erst die Seite mit den drei Wegen,
 // ein Weg startet die geführte Partie mit Ziel im Panel
 w.eval("closeModal(); closeSheet(); show('screen-menu')");
-const oben = w.document.querySelector('.menu-actions .btn');
+const oben = [...w.document.querySelectorAll('.menu-actions .btn')].find(b => !b.hidden);
 $('m-first').onclick();
 const seite = w.document.querySelectorAll('#ov-body .fg-seite [data-pfad]').length;
 const wahl = w.document.querySelector('#ov-body [data-pfad="wissenschaft"]');
@@ -73,10 +73,12 @@ console.log('Erstes Spiel:', oben.id, oben.classList.contains('primary') ? 'rot 
 if (oben.id !== 'm-first' || seite !== 3 || !E.fg || E.pfad !== 'wissenschaft' || !E.panel || !E.ziel)
   { console.log('FEHLER: Erstes Spiel startet nicht wie vorgesehen'); process.exit(1); }
 // Züge von KI und Bots nachspielen (v94, v95): js/anim.js steckt in der Datei, die Auswahl
-// „Animationen" steht in den Einstellungen und steht ab Werk auf „Langsam"
-const A = w.eval(`({ wahl: $('opt-anim') && $('opt-anim').nodeName === 'SELECT' ? [...$('opt-anim').options].map(o => o.value).join('/') : null,
-  stufe: prefs.anim, anim: typeof animSzenen === 'function' && typeof playAnim === 'function' })`);
+// „Animationen" steht seit v102 im Spielmenü (☰) und steht ab Werk auf „Langsam"
+const A = w.eval(`(() => { closeModal(); fgBeenden && ui.fg && fgBeenden(); $('g-menu').onclick();
+  const r = { wahl: $('mm-anim') ? [...$('mm-anim').querySelectorAll('[data-anim]')].map(b => b.dataset.anim).join('/') : null,
+    stufe: prefs.anim, anim: typeof animSzenen === 'function' && typeof playAnim === 'function' };
+  closeModal(); return r; })()`);
 console.log('Nachspielen (v95):', A.anim ? 'js/anim.js da' : 'js/anim.js FEHLT', '|', A.wahl ? 'Auswahl ' + A.wahl : 'KEINE Auswahl', '|', 'ab Werk ' + A.stufe);
 if (A.wahl !== 'langsam/schnell/aus' || A.stufe !== 'langsam' || !A.anim) { console.log('FEHLER: Nachspielen der KI- und Bot-Züge fehlt'); process.exit(1); }
-console.log('Fehler:', errs.length ? errs : 'keine');
-process.exit(errs.length?1:0);
+if (errs.length) { say('FEHLER:', errs); process.exit(1); }
+say('single  ok · ' + notes.length + ' Prüfungen in jsdom');

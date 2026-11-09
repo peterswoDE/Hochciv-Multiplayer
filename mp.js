@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v98'];
+const OLD_VERSIONS = ['v100', 'v98'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -2160,7 +2160,8 @@ const ACTIONS = {
     moveArmy: (state, army, r, c) => ({ type: 'moveArmy', params: { armyId: army.id, r, c } }),
     buyPower: (state, pi, n) => ({ type: 'buyPower', params: { n } }),
     buildRoad: (state, pi, r, c, target) => ({ type: 'buildRoad', params: { r, c, target } }),
-    buyTile: (state, pi, r, c) => ({ type: 'buyTile', params: { r, c } }),
+    buyTile: (state, pi, r, c) => ({ type: 'buyTile', params: { r, c } }),          // Kolonialismus up to v100
+    claimTile: (state, pi, r, c) => ({ type: 'claimTile', params: { r, c } }),      // Kolonialismus since v103
     coverPop: (state, pi, kind, amount) => ({ type: 'coverPop', params: { kind, amount } }),
     uncoverPop: (state, pi, kind, amount) => ({ type: 'uncoverPop', params: { kind, amount } }),
     buildWonder: (state, pi, city, wonder) => ({ type: 'buildWonder', params: { cityId: city.id, wonder } }),
@@ -2934,6 +2935,10 @@ MP.arrangeMenu = function () {
         if (b) more.appendChild(b);
     });
     actions.after(more);
+    // v102+ has its own row of small links (Regeln · Karte bearbeiten · Spielstand laden) –
+    // they are in the grid now, so the empty row goes
+    const links = document.querySelector('#screen-menu .menu-links');
+    if (links && !links.children.length) links.hidden = true;
     // one red button on the page: Erstes Spiel (the game's own choice)
     const live = $('mp-live-btn');
     if (live) live.classList.remove('primary');
@@ -3162,17 +3167,19 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph .mpa-notify { border-top-color:var(--rule); }
         .mph .row { font-size:14px; }
         .mph a { color:var(--red); }
-        /* phones: the new games one below the other, title and line side by side */
+        /* phones: the new games one below the other, title and line side by side. Not on a page the
+           game turned (html.turn, phone held upright in a game): the query measures the screen,
+           the turned page is as wide as the screen is tall. */
         @media (max-width:640px) {
-            .mph-new { grid-auto-flow:row; align-items:stretch; gap:8px; }
-            .mph-more { flex-direction:column; gap:8px; }
-            .mph-more .btn { flex:0 0 auto; }
-            .mph-mode { min-height:0; padding:10px 14px; }
-            .mph-name input { flex:1 1 auto; }
-            .mph-code { flex-wrap:wrap; }
-            .mph-code input { flex:1 1 40%; }
-            .mph-code .btn { flex:1 1 auto; }
-            .mph-panes { min-height:180px; }
+            html:not(.turn) .mph-new { grid-auto-flow:row; align-items:stretch; gap:8px; }
+            html:not(.turn) .mph-more { flex-direction:column; gap:8px; }
+            html:not(.turn) .mph-more .btn { flex:0 0 auto; }
+            html:not(.turn) .mph-mode { min-height:0; padding:10px 14px; }
+            html:not(.turn) .mph-name input { flex:1 1 auto; }
+            html:not(.turn) .mph-code { flex-wrap:wrap; }
+            html:not(.turn) .mph-code input { flex:1 1 40%; }
+            html:not(.turn) .mph-code .btn { flex:1 1 auto; }
+            html:not(.turn) .mph-panes { min-height:180px; }
         }
         @media (prefers-reduced-motion:reduce) { .mph, .mph-pane { animation:none !important; } }
         .mph-kind { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; background:#e4dbbe; color:#6f6551; vertical-align:1px; }
@@ -3201,7 +3208,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph-f-check input { width:18px; height:18px; margin:0; flex:0 0 auto; }
         .mph-f-foot { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; gap:8px; }
         .mph .mph-f-foot .sub { margin:0; }
-        @media (max-width:640px) { .mph-f-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); padding:10px; } }
+        @media (max-width:640px) { html:not(.turn) .mph-f-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); padding:10px; } }
         .mpa-seats { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; margin:4px 0; }
         .mpa-seat.me { font-weight:bold; }
         .mp-bot-badge { display:inline-block; font-size:11px; padding:1px 5px; border-radius:4px; background:#3b5f7d; color:#fff; vertical-align:1px; }

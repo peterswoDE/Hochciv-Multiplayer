@@ -13,12 +13,10 @@ function nextRand(S) {
 }
 /* `ctx` (v92): wofür gewürfelt wird, als Daten – { pi, tech } bei der Verfügbarkeit einer
    Technologie, { pi, pick } beim Auswürfeln, wenn nichts verfügbar wurde. Nur das Erste Spiel
-   liest es (tutNextDie): dort fallen die Würfe so, wie die geführte Partie es braucht. Das
+   liest es (fgNextDie): dort fallen die Würfe so, wie die geführte Partie es braucht. Das
    Protokoll zeigt sie wie jeden anderen Wurf. */
 function d6(S, why, ctx) {
-  // Im Tutorial kommen die Würfe aus einer festen Folge (tutNextDie), damit die Partie –
-  // inklusive aller Bot-Entscheidungen – bei jedem Durchlauf identisch abläuft.
-  let v = (typeof tutNextDie === 'function') ? tutNextDie(ctx) : null;
+  let v = (typeof ui !== 'undefined' && ui && ui.fg && typeof fgNextDie === 'function') ? fgNextDie(ctx) : null;
   if (!v) v = 1 + Math.floor(nextRand(S) * 6);
   log(S, 'roll', '🎲 ' + v + (why ? ' — ' + why : ''));
   return v;
@@ -327,7 +325,7 @@ function newGame(cfg) {
     // Erweiterungen: Ereignisse und Weltwunder werden im Aufbau zugeschaltet
     ev: cfg.events ? { mode: cfg.eventMode === 'easy' ? 'easy' : 'hard' } : null,
     wo: !!cfg.wonders,
-    // Alter Techtree (bis v81 der Standard, seit v82 nur im Tutorial): OLD_TECH_COSTS / techBase.
+    // Alter Techtree (bis v81 der Standard, heute nur in Spielständen von vor v82): OLD_TECH_COSTS / techBase.
     // Steht immer im Spielstand – auch false –, daran erkennt migrateState neue Spielstände.
     oldTree: !!cfg.oldTree,
     // Marathon (v83): große Zufallskarte, teurere Technologien, gedraftete Fähigkeiten
@@ -393,7 +391,7 @@ function newGame(cfg) {
 /* ------------------------------------------------------------ Technologien */
 function techCost(S, pi, tech) {
   const p = S.players[pi];
-  let c = techBase(S, tech);          // Grundkosten dieser Partie (im Tutorial der alte Techtree)
+  let c = techBase(S, tech);          // Grundkosten dieser Partie (alter Techtree, Marathon)
   const age = tech.k === 'singularitaet' ? 4 : tech.age;
   if (tech.k === 'singularitaet' && kremlBuilt(S)) c += KREML_SURCHARGE;
   const f = discountFactor(S);                                         // Marathon: doppelt (v85)
@@ -402,7 +400,7 @@ function techCost(S, pi, tech) {
   return Math.max(0, c);
 }
 const discountFactor = S => S && S.marathon ? MARATHON_DISCOUNT_FACTOR : 1;
-// Rabatt der Wissenschaftlichen Methode je Zeitalter – im alten Techtree (Tutorial) der bis v96
+// Rabatt der Wissenschaftlichen Methode je Zeitalter – im alten Techtree der bis v96
 const methodDiscount = S => S && S.oldTree ? OLD_METHOD_DISCOUNT : METHOD_DISCOUNT;
 // Griechenland hat keinen Würfelbonus mehr – nur Philosophie gibt +1.
 function availBonus(p) { return has(p, 'philosophie') ? 1 : 0; }
@@ -444,11 +442,28 @@ function migrateState(S) {
   if (S.oldTree === undefined) S.oldTree = !S.altTree;
   delete S.altTree;
   delete S.roundPop; delete S.roundPops;   // Stand zu Rundenbeginn (v83/v84), seit v85 ungenutzt
-  // Freie Forschung: v97–v98 gezählt (p.freeTechsUsed), seit v99 wieder wie bis v96 die Runde
-  // der letzten Nutzung (p.freeTechUsed) – der Zähler bedeutet nichts mehr
-  for (const p of S.players || []) delete p.freeTechsUsed;
+  /* Freie Forschung (v101): zweimal je Partie, höchstens einmal je Runde – gezählt in
+     p.freeTechsUsed, die Runde der letzten Nutzung in p.freeTechUsed. Ein Stand von v97/v98 trägt
+     den Zähler schon, er bedeutet wieder dasselbe (v99/v100 löschten ihn beim Laden). v99/v100 und
+     bis v96 zählten nicht, sie vermerkten nur die Runde: Wer die Freie Forschung dort schon genutzt
+     hat, hat mindestens eine verbraucht – wie viele genau, weiß der Spielstand nicht. */
+  for (const p of S.players || [])
+    if (p.freeTechsUsed === undefined && typeof p.freeTechUsed === 'number') p.freeTechsUsed = 1;
   // Gründungen je Zug (v84–v99, für die Grenze im Marathon) – seit v100 ohne Grenze, ungenutzt
   for (const p of S.players || []) { delete p.foundRound; delete p.foundCount; }
+  // Kopieren (v105): je Weg die Runde der letzten Kopie – bis v104 nur das Internet
+  for (const p of S.players || []) if (p.internetUsed !== undefined) {
+    (p.copied = p.copied || {}).internet = p.internetUsed;
+    delete p.internetUsed;
+  }
+  /* Beanspruchte Felder auf oder neben einer Stadt (v104): bis v103 durfte man neben fremde
+     gründen – das Feld gehörte dann zwei Reichen –, und ein eigenes daneben blieb beansprucht.
+     Beides wird hier, was es seit v104 beim Gründen wird: ein Feld der Stadt. */
+  if (S.bought && S.cities) {
+    const anStadt = new Set();
+    for (const ct of S.cities) siteKeys(ct.r, ct.c).forEach(k => anStadt.add(k));
+    for (const i of Object.keys(S.bought)) S.bought[i] = (S.bought[i] || []).filter(k => !anStadt.has(k));
+  }
   return S;
 }
 function rollSetup(cfg) {
@@ -515,18 +530,24 @@ function grantTech(S, pi, tk, quelle, opts) {
   applyTech(S, pi, tech, quelle, opts);
   return null;
 }
-/* Griechenland "Freie Forschung": seit v99 (Anweisung des Autors) einmal je Runde eine
-   erforschbare Technologie umsonst – aus jedem Zeitalter, auch die Singularität (sobald sie
-   erforschbar ist: je Feld eine Technologie der Moderne; dann ist es der Forschungssieg, gewonnen
-   wie jeder am Rundenende), in jeder Spielart, auch im Marathon. Angeboten wird genau, was der
-   Bogen erforschbar nennt (researchable).
-   v97–v98: zweimal je Partie aus jedem Zeitalter, ohne die Singularität. Bis v96: einmal je
-   Runde bis zur Industrialisierung (im Marathon v85–v96 bis ins Mittelalter).
-   Ein Dunkles Zeitalter sperrt sie wie jede Forschung. p.freeTechUsed = Runde der letzten
-   Nutzung. */
+/* Griechenland "Freie Forschung": seit v101 (Anweisung des Autors) höchstens zweimal je Partie
+   und höchstens einmal je Runde eine erforschbare Technologie umsonst – aus jedem Zeitalter, auch
+   die Singularität (sobald sie erforschbar ist: je Feld eine Technologie der Moderne; dann ist es
+   der Forschungssieg, gewonnen wie jeder am Rundenende), in jeder Spielart, auch im Marathon.
+   Angeboten wird genau, was der Bogen erforschbar nennt (researchable).
+   v99–v100: einmal je Runde, ohne Grenze je Partie. v97–v98: zweimal je Partie aus jedem
+   Zeitalter, ohne die Singularität, auch zweimal im selben Zug. Bis v96: einmal je Runde bis zur
+   Industrialisierung (im Marathon v85–v96 bis ins Mittelalter).
+   Ein Dunkles Zeitalter sperrt sie wie jede Forschung. Vermerkt werden die Runde der letzten
+   Nutzung (p.freeTechUsed) und die Zahl der Nutzungen (p.freeTechsUsed, FREE_TECH_USES).
+   freeTechsLeft ist eine Funktionsdeklaration: tools_ki.js (Modus „freie") hebt die Grenze je
+   Partie für einen Vergleich mit v100 auf. */
+function freeTechsLeft(p) {
+  return Math.max(0, FREE_TECH_USES - (p.freeTechsUsed || 0));
+}
 function freeTechOptions(S, pi) {
   const p = S.players[pi];
-  if (!isAbil(p, 'gratistech') || p.freeTechUsed === S.round) return [];
+  if (!isAbil(p, 'gratistech') || p.freeTechUsed === S.round || freeTechsLeft(p) <= 0) return [];
   if (evActive(S, pi, 'dunkles_zeitalter')) return [];
   return researchable(S, pi);
 }
@@ -536,6 +557,7 @@ function useFreeTech(S, pi, tk) {
   const err = grantTech(S, pi, tk, 'Freie Forschung');
   if (err) return err;
   p.freeTechUsed = S.round;
+  p.freeTechsUsed = (p.freeTechsUsed || 0) + 1;
   return null;
 }
 /* Griechenland "Rückschau": beliebige Tech eines früheren Zeitalters, auch nicht freigeschaltet. */
@@ -838,9 +860,12 @@ function income(S, pi) {
 function settleGain(S, pi, r, c, before) {
   before = before || income(S, pi);
   const fake = { id: -999, owner: pi, r, c, pop: 1, cap: false, grown: 0, born: -1 };
+  // wie foundCity (v104): eigene beanspruchte Felder daneben werden Felder der Stadt
+  const merk = S.bought[pi];
+  if (merk) S.bought[pi] = claimsApart(S, pi, r, c);
   S.cities.push(fake);
   let after;
-  try { after = income(S, pi); } finally { S.cities.pop(); }
+  try { after = income(S, pi); } finally { S.cities.pop(); if (merk) S.bought[pi] = merk; }
   return { sci: after.sci - before.sci, food: after.food - before.food, coins: after.coins - before.coins };
 }
 
@@ -1594,6 +1619,22 @@ function foundDistance(S, pi, r, c) {
   return d;
 }
 const isColony = (S, pi, r, c) => (S.bought[pi] || []).includes(key(r, c));
+/* Beanspruchte Felder und Städte (v104, Anweisung des Autors): kein beanspruchtes Feld liegt auf
+   oder neben einer Stadt. Ein fremdes sperrt das Gründen dort – wie eine gegnerische Armee
+   daneben (bis v103 ging es, und das Feld gehörte danach zwei Reichen). Ein eigenes wird beim
+   Gründen ein gewöhnliches Feld der neuen Stadt: es verlässt S.bought, zählt also nicht mehr zur
+   Hauptstadt (Bürokratie) und geht mit der Stadt, wird sie erobert.
+   Stadtumland braucht diese Prüfung nicht: der Mindestabstand von 3 hält es zwei Felder fern. */
+const siteKeys = (r, c) => new Set([key(r, c)].concat(neighbors(r, c).map(([nr, nc]) => key(nr, nc))));
+function foreignClaimNear(S, pi, r, c) {
+  const nah = siteKeys(r, c);
+  return S.players.some((p, i) => i !== pi && !p.dead && (S.bought[i] || []).some(k => nah.has(k)));
+}
+// Die eigenen beanspruchten Felder, die eine Stadt auf r/c NICHT berührt
+function claimsApart(S, pi, r, c) {
+  const nah = siteKeys(r, c);
+  return (S.bought[pi] || []).filter(k => !nah.has(k));
+}
 /* Wegtabelle für den Gründungsmodus (v75). Die Oberfläche fragt dort JEDES Feld der
    Karte ab – je Feld zwei bis vier Wegsuchen von der Hauptstadt, auf der großen Karte gut
    50 ms je Zeichnen. Innerhalb von withFoundTable rechnet eine einzige Breitensuche je
@@ -1711,6 +1752,7 @@ function foundSiteError(S, pi, r, c) {
     return T('Kein Weg dorthin – Gelände oder gegnerische Armeen sperren ihn.');
   }
   for (const city of S.cities) if (hexDistance(city.r, city.c, r, c) < 3) return T('Mindestens 3 Felder Abstand zu allen Städten.');
+  if (foreignClaimNear(S, pi, r, c)) return T('Nicht auf oder direkt neben gegnerischem Gebiet.');   // v104
   return null;
 }
 function foundCity(S, pi, r, c) {
@@ -1720,6 +1762,7 @@ function foundCity(S, pi, r, c) {
   const pop = isAbil(S.players[pi], 'siedler') ? 2 : 1;   // Russland: Städte mit 2 Bevölkerung
   const city = { id: S.nextId++, owner: pi, r, c, pop, cap: false, grown: 0, born: S.round };
   S.cities.push(city);
+  if (S.bought[pi]) S.bought[pi] = claimsApart(S, pi, r, c);   // eigene Ansprüche werden Felder der Stadt (v104)
   log(S, 'act', T('%s: Stadt gegründet auf %s/%s (%s Nahrung, Bevölkerung %s).', civOf(S.players[pi]).n, r, c, cost, pop));
   claimOrphanWonders(S, pi, city);      // Wunder, die ohne Stadt auf dem Feld stehen
   return null;
@@ -1872,43 +1915,55 @@ function sacrificeAll(S, pi) {
   }
   return out;
 }
-function buyTile(S, pi, r, c) {             // Kolonialismus
+/* Kolonialismus (v103, Anweisung des Autors): COLONY_CLAIMS-mal je Runde ein herrenloses Feld
+   beanspruchen, kostenlos – bis v102 kaufen für 3 Münzen. Sonst wie bisher (Rückfrage beim
+   Autor: beides bleibt): das Feld gehört zum Reich (controlledTiles), dort darf auch ohne
+   Siedlerweg gegründet werden (Kolonien, v84), und es zählt zur Hauptstadt (v96).
+   Gespeichert wird weiter in S.bought – der Name stammt aus der Zeit des Kaufens; so passen alte
+   Spielstände ohne Umbau. Gezählt wird je Runde (p.claimRound, p.claimCount): jedes Reich zieht
+   einmal je Runde, „je Zug" und „je Runde" sind dasselbe. Was nicht genutzt wird, verfällt. */
+function claimsLeft(S, pi) {
+  const p = S.players[pi];
+  if (!has(p, 'kolonialismus')) return 0;
+  return COLONY_CLAIMS - (p.claimRound === S.round ? p.claimCount || 0 : 0);
+}
+function claimTile(S, pi, r, c) {
   const p = S.players[pi];
   if (!has(p, 'kolonialismus')) return T('Kolonialismus nicht erforscht.');
-  // X ist kein Feld – gekauft würde es über S.bought doch wieder zum Gebiet (v73)
+  // X ist kein Feld – beansprucht würde es über S.bought doch wieder zum Gebiet (v73)
   const t = terrainAt(S, r, c);
   if (!t || isOff(t)) return T('Kein Feld.');
   if (cityAt(S, r, c)) return T('Dort steht eine Stadt.');
   if (S.players.some((_, i) => controlledTiles(S, i).has(key(r, c))))
-    return T('Nur herrenlose Felder können gekauft werden.');
-  const preis = COLONY_COST;
-  if (!pay(S, pi, 'coins', preis)) return T('Zu wenig Münzen.');
+    return T('Nur herrenlose Felder können beansprucht werden.');
+  if (claimsLeft(S, pi) <= 0) return T('Diese Runde schon %s Felder beansprucht.', COLONY_CLAIMS);
+  if (p.claimRound !== S.round) { p.claimRound = S.round; p.claimCount = 0; }
+  p.claimCount++;
   (S.bought[pi] = S.bought[pi] || []).push(key(r, c));
-  log(S, 'act', T('%s: Feld %s/%s gekauft (%s Münzen).', civOf(p).n, r, c, preis));
+  log(S, 'act', T('%s: Feld %s/%s beansprucht.', civOf(p).n, r, c));
   return null;
 }
-/* Kopierbare Technologien anderer Reiche. Drei getrennte Wege:
-   - Spionage: bezahlt, 1× Wissenschaftskosten in Münzen, kein Rundenlimit
-   - Kundschafterei: bezahlt, 2× Kosten in Münzen (SCOUTING_RATE, bis v71 3×), kein
-     Rundenlimit
-   - Internet: 1× pro Runde kostenlos
-   Vergünstigungen (Wiss. Methode etc.) gelten beim Kopieren nicht. Hat ein Reich beide
-   bezahlten Wege, gilt der günstigere – Spionage. */
-function copyRate(p) {
-  if (has(p, 'spionage')) return 1;
-  if (has(p, 'kundschafterei')) return SCOUTING_RATE;
-  return null;
-}
-function internetAvailable(S, pi) {
-  const p = S.players[pi];
-  return has(p, 'internet') && (p.internetUsed !== S.round);
+/* Technologien anderer Reiche kopieren (v105, Anweisung des Autors): drei Wege, jeder EINMAL JE
+   RUNDE und unabhängig von den anderen – Internet kostenlos, Spionage zum Einfachen, Kundschafterei
+   zum Doppelten der Grundkosten in Münzen (SCOUTING_RATE). Wer alle drei hat, kopiert bis zu drei
+   Technologien je Runde. Bis v104 kopierten Spionage und Kundschafterei beliebig oft, und wer beide
+   hatte, kopierte nur zum Preis der Spionage (Rückfrage beim Autor: jetzt je eine Kopie).
+   Vergünstigungen (Wiss. Methode, Griechenland) gelten beim Kopieren nicht. Gezählt in
+   p.copied[Weg] = Runde der letzten Kopie (bis v104 nur p.internetUsed, migrateState). */
+const COPY_WAYS = [
+  { k: 'internet', rate: 0 },
+  { k: 'spionage', rate: 1 },
+  { k: 'kundschafterei', rate: SCOUTING_RATE },
+];
+// Die Wege, die diesem Reich diese Runde noch offenstehen – der billigste zuerst
+function copyWaysOpen(S, pi) {
+  const p = S.players[pi], done = p.copied || {};
+  return COPY_WAYS.filter(w => has(p, w.k) && done[w.k] !== S.round);
 }
 function copyableTechs(S, pi) {
   const p = S.players[pi], out = [];
-  const rate = copyRate(p);                 // ohne Vergünstigung: Basiskosten der Tech
-  const paidPossible = rate != null;
-  const freePossible = internetAvailable(S, pi);
-  if (!paidPossible && !freePossible) return out;
+  const wege = copyWaysOpen(S, pi);
+  if (!wege.length) return out;
   const seen = new Set();
   S.players.forEach((o, i) => {
     if (i === pi) return;
@@ -1917,35 +1972,25 @@ function copyableTechs(S, pi) {
       seen.add(k);
       const t = TECH_BY_KEY[k];
       if (!t) return;
-      // Beide Wege sind unabhängig: bezahlt (Spionage/Kundschafterei) UND/ODER
-      // die eine Gratiskopie pro Runde (Internet).
-      out.push({
-        tech: t,
-        paidCoins: paidPossible ? rate * techBase(S, t) : null,   // null = kein bezahlter Weg
-        freeOk: freePossible,                          // true = Gratiskopie möglich
-      });
+      // je offenem Weg der Preis in Münzen (Grundkosten dieser Partie, ohne Vergünstigung)
+      out.push({ tech: t, ways: wege.map(w => ({ k: w.k, coins: w.rate * techBase(S, t) })) });
     });
   });
   return out;
 }
-function copyTech(S, pi, tk, mode) {
+// `way`: 'internet' | 'spionage' | 'kundschafterei'; ohne Angabe der billigste offene
+function copyTech(S, pi, tk, way) {
   const p = S.players[pi];
+  if (way && has(p, way) && (p.copied || {})[way] === S.round) return T('Diese Runde schon per %s kopiert.', TECH_BY_KEY[way].n);
+  if (!way && COPY_WAYS.some(w => has(p, w.k)) && !copyWaysOpen(S, pi).length) return T('Diese Runde schon kopiert.');
   const opt = copyableTechs(S, pi).find(o => o.tech.k === tk);
-  if (!opt) return 'Nicht kopierbar.';
-  // Modus wählen: 'free' oder 'paid'. Ohne Angabe: bezahlt bevorzugen, damit die
-  // Gratiskopie für später frei bleibt.
-  const useMode = mode || (opt.paidCoins != null ? 'paid' : 'free');
-  if (useMode === 'free') {
-    if (!opt.freeOk || !internetAvailable(S, pi)) return T('Diese Runde schon per Internet kopiert.');
-    p.internetUsed = S.round;
-    p.techs[tk] = true;
-    log(S, 'act', T('%s: %s kopiert (Internet, gratis).', civOf(p).n, opt.tech.n), 'kopieren');
-  } else {
-    if (opt.paidCoins == null) return T('Kein bezahlter Kopierweg erforscht.');
-    if (opt.paidCoins && !pay(S, pi, 'coins', opt.paidCoins)) return T('Zu wenig Münzen (%s nötig).', opt.paidCoins);
-    p.techs[tk] = true;
-    log(S, 'act', T('%s: %s kopiert (%s Münzen).', civOf(p).n, opt.tech.n, opt.paidCoins), 'kopieren');
-  }
+  const w = opt && (way ? opt.ways.find(x => x.k === way) : opt.ways[0]);
+  if (!w) return T('Nicht kopierbar.');
+  if (w.coins && !pay(S, pi, 'coins', w.coins)) return T('Zu wenig Münzen (%s nötig).', w.coins);
+  (p.copied = p.copied || {})[w.k] = S.round;
+  p.techs[tk] = true;
+  log(S, 'act', w.coins ? T('%s: %s kopiert (%s, %s Münzen).', civOf(p).n, opt.tech.n, TECH_BY_KEY[w.k].n, w.coins)
+    : T('%s: %s kopiert (Internet, gratis).', civOf(p).n, opt.tech.n), 'kopieren');
   const same = techPool(S).filter(t => t.f === opt.tech.f && t.age === opt.tech.age && p.techs[t.k]);
   if (same.length === 1) rollAvailability(S, pi, opt.tech.f, opt.tech.age + 1);
   return null;
@@ -1965,7 +2010,7 @@ function freeActions(S, pi) {
   if (freePickOptions(S, pi).length) out.push('wunder');
   if (citiesOf(S, pi).some(c => freeGrowthAvailable(S, pi, c) && !growBlockReason(S, pi, c)))
     out.push('wachstum');
-  if (internetAvailable(S, pi) && copyableTechs(S, pi).some(o => o.freeOk)) out.push('internet');
+  if (copyableTechs(S, pi).some(o => o.ways.some(w => !w.coins))) out.push('internet');
   return out;
 }
 function nuke(S, pi, r, c) {                // Atomwaffen
@@ -2198,28 +2243,51 @@ function captureCity(S, pi, city) {
 }
 
 /* ------------------------------------------------------------ Sieg & Zugende */
-/* Alle verfügbaren Siegschwellen. UN und Theologie senken die Standardschwelle von ⅔;
+/* Spielart für die Siegschwellen (VICTORY_THRESHOLDS, js/data.js): 'duell' – der Modus
+   „1 gegen 1" (S.duel) –, 'vier' – vier Reiche, auch Marathon und Tutorial –, sonst 'drei'.
+   Seit v101 (Anweisung des Autors) hat das Spiel zu viert eigene Schwellen; bis v100 galten zu
+   dritt und zu viert dieselben. Gezählt werden die Reiche der Aufstellung (empireCount: ohne
+   Barbaren, ausgeschiedene zählen mit) – wer zu viert beginnt, behält die Schwellen zu viert.
+   Ohne Spielstand (Regelbogen aus dem Hauptmenü) gilt die Vorgabe des Aufbaus: vier Reiche.
+   `S.victoryMode` übersteuert die Zählung – nur für die Wegwerf-Partie der Legephase
+   (placeTechView): sie hat ein einziges Reich, ihr Bogen soll aber die Schwellen der Partie
+   zeigen, die gerade gelegt wird. Ein Aufbau (cfg mit players und duel) zählt wie ein Spielstand. */
+function victoryMode(S) {
+  if (!S) return 'vier';
+  if (S.victoryMode) return S.victoryMode;
+  if (S.duel) return 'duell';
+  return Array.isArray(S.players) && empireCount(S) < 4 ? 'drei' : 'vier';
+}
+// Beschriftungen der drei Schwellen („Zähler/Nenner"): für eine Spielart oder einen Spielstand
+function victoryLabels(x) {
+  const t = VICTORY_THRESHOLDS[typeof x === 'string' ? x : victoryMode(x)];
+  return { base: t.base.join('/'), theologie: t.theologie.join('/'), un: t.un.join('/') };
+}
+/* Alle verfügbaren Siegschwellen der Spielart. UN und Theologie senken die Grundschwelle;
    es gilt immer die niedrigste. Alle Schwellen sind „mehr als" – seit v77 auch der
    Standard (Anweisung des Autors: 4 von 6 sind nicht mehr als 2/3). Bis v74 galt dort
-   „mindestens", und im Spiel zu dritt reichten so 4 von 6 schon in Runde 1. */
+   „mindestens", und im Spiel zu dritt reichten so 4 von 6 schon in Runde 1.
+   Zurück kommt die Schwelle mit Zähler und Nenner (num, den), dem Bruch (frac – für
+   Anteile und Prozente) und ihrer Beschriftung (label). */
 function victoryOption(S, p) {
-  const duel = !!(S && S.duel);
-  // Im Duell liegen alle Schwellen höher: >3/4 statt >2/3, Theologie 7/10, UN 2/3
-  const L = victoryLabels(duel);
-  const opts = duel
-    ? [{ frac: DUEL_VICTORY_FRAC, strict: true, label: L.base }]
-    : [{ frac: VICTORY_FRAC, strict: true, label: L.base }];
-  if (has(p, 'un'))
-    opts.push({ frac: duel ? DUEL_UN_FRAC : UN_FRAC, strict: true, label: L.un });
-  if (has(p, 'theologie'))
-    opts.push({ frac: duel ? DUEL_THEOLOGY_FRAC : THEOLOGY_FRAC, strict: true, label: L.theologie });
+  const t = VICTORY_THRESHOLDS[victoryMode(S)];
+  const opt = k => ({ num: t[k][0], den: t[k][1], frac: t[k][0] / t[k][1], strict: true, label: t[k].join('/') });
+  const opts = [opt('base')];
+  if (has(p, 'un')) opts.push(opt('un'));
+  if (has(p, 'theologie')) opts.push(opt('theologie'));
   return opts.sort((a, b) => a.frac - b.frac)[0];
 }
+/* Reicht die Bevölkerung `mine` von `w` für die Schwelle o (victoryOption)? Ganzzahlig
+   verglichen (v101): mit dem Bruch rechnete die Gleitkommazahl an manchen Grenzen falsch –
+   im Duell mit Theologie galten 63 von 90 als „mehr als 7/10". */
+function victoryMet(o, mine, w) {
+  return o.strict ? mine * o.den > w * o.num : mine * o.den >= w * o.num;
+}
 /* Wirkungstext einer Technologie. Theologie und Vereinte Nationen senken die
-   Siegschwelle, und im Duell auf andere Werte als im normalen Spiel – der Bogen zeigte
-   dort bisher die Zahlen des Vierspielerspiels. */
+   Siegschwelle – je Spielart auf andere Werte (victoryMode); der Bogen zeigte im Duell
+   früher die Zahlen des Vierspielerspiels. */
 function techEffect(t, S) {
-  const L = victoryLabels(!!(S && S.duel));
+  const L = victoryLabels(S);
   if (t.k === 'theologie') return T('>%s der Bevölkerung zum Sieg', L.theologie);
   if (t.k === 'un') return T('>%s der Bevölkerung zum Sieg', L.un);
   // Marathon (v85): die Wissenschaftliche Methode wirkt doppelt
@@ -2244,8 +2312,7 @@ function checkVictory(S, pi) {
   // gerufen am Rundenende (checkEconomyRoundEnd, v85) – mit dem Stand von dort
   const p = S.players[pi], w = worldPop(S), mine = popOf(S, pi);
   const o = victoryOption(S, p);
-  const enough = o.strict ? mine > w * o.frac : mine >= w * o.frac;
-  if (w > 0 && enough && S.cities.length > 1)
+  if (w > 0 && victoryMet(o, mine, w) && S.cities.length > 1)
     claimVictory(S, pi, T('Wirtschaftssieg (%s von %s Weltbevölkerung, Schwelle %s)', mine, w, o.label), { rundenende: true });
   return S.over;
 }

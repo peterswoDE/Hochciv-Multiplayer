@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v98/ the version deployed before it. Every version gets its own sandbox
+ * HochCiv-v100/ and HochCiv-v98/ the versions deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -19,7 +19,7 @@ const Scenes = require('./utils/scenes');
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
-// Same order as the <script> tags in Hochciv's index.html (minus the DOM-only tutorial.js/ui.js).
+// Same order as the <script> tags in Hochciv's index.html (minus the DOM-only firstgame.js and js/ui/*.js).
 // ki.js (KI players, kiPlaceSeat) and marathon.js (v83) are pure rule code and must be loaded too.
 // anim.js (v94) records actions as scenes – without a DOM; the server uses it for utils/scenes.js.
 const FILES = ['data.js', 'civs.js', 'i18n.js', 'hex.js', 'tiles.js', 'engine.js', 'expansion.js', 'bots.js', 'ki.js', 'marathon.js', 'anim.js'];
@@ -29,6 +29,7 @@ const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
    (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
+    v100: path.resolve(__dirname, 'HochCiv-v100', 'js'),
     v98: path.resolve(__dirname, 'HochCiv-v98', 'js'),
 };
 const OLD_VERSIONS = Object.keys(GAME_DIRS).filter(v => v !== 'current');
@@ -387,7 +388,13 @@ function makeAdapter(engineDir, label) {
                 case 'buildRoad':
                     return E.buildRoad(state, pi, params.r, params.c, params.target);
 
+                // Kolonialismus: claimTile since v103 (free claims), buyTile up to v100
+                case 'claimTile':
+                    if (typeof E.claimTile !== 'function') return `Unbekannte Aktion: ${action}`;
+                    return E.claimTile(state, pi, params.r, params.c);
+
                 case 'buyTile':
+                    if (typeof E.buyTile !== 'function') return `Unbekannte Aktion: ${action}`;
                     return E.buyTile(state, pi, params.r, params.c);
 
                 case 'coverPop':

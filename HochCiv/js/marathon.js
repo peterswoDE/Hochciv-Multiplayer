@@ -10,7 +10,7 @@
 
    Diese Datei: Kartengenerator, Hauptstädte, Draft-Vorrat und -Reihenfolge, die Wahl der
    KI. Die Regeln selbst (Kosten, mehrere Fähigkeiten) stehen in data.js und engine.js, die
-   Oberfläche des Drafts in ui.js. */
+   Oberfläche des Drafts in js/ui/draft.js. */
 
 /* ------------------------------------------------------------------ Karte
    Höhenfeld aus geglättetem Rauschen (drei Oktaven, am Rand abfallend) → die tiefsten 30 %
@@ -276,10 +276,15 @@ function draftPick(D, pi, id) {
    Kolonisten hatten bis 58 Städte); jetzt steigen die Stadtkosten weiter mit jeder Stadt, nur
    halb so schnell, und das doppelte Wachstum bleibt. GESCHÄTZT 7: etwas über dem Mittel, weil
    sich mehr Städte im langen Marathon aufsummieren. Nicht gemessen; die Freie Forschung (12)
-   steht damit vorn. */
+   steht damit vorn.
+   Seit v101 (Anweisung des Autors) gilt die Freie Forschung nur noch zweimal je Partie, höchstens
+   einmal je Runde, weiter samt Singularität. GESCHÄTZT 5: Die KI nutzt beide früh (gemessen besser
+   als Aufheben, ANNAHMEN.md v101) – das liegt näher an der zweimaligen Fassung von v97–v98 (4,5)
+   als an der jeder Runde (12). Zu viert auf den Dreiecken fiel Griechenland mit ihr gegenüber v100
+   von 30,3 % auf 20,5 % (tools_ki.js freie); den Marathon misst das Werkzeug nicht. */
 const KI_DRAFT_BASE = {
   'england:gruenden': 7, 'england:basis': 5.5, 'england:kuestenstaedte': 2,
-  'griechenland:gratistech': 12, 'griechenland:basis': 4, 'griechenland:rueckschau': 7,
+  'griechenland:gratistech': 5, 'griechenland:basis': 4, 'griechenland:rueckschau': 7,
   'wikinger:armeemacht': 2.5, 'wikinger:basis': 4, 'wikinger:kampfertrag': 5,
   'russland:siedler': 5.5, 'russland:wachstum': 7, 'russland:basis': 0,
 };

@@ -13,8 +13,8 @@ The game in `HochCiv/` is upstream [timooom-hash/Hochciv](https://github.com/tim
    git switch -c multiplayer-on-v<new> multiplayer-on-v<old>
    git merge origin/main          # or rebase the extension commits onto origin/main
    ```
-   A single merge resolves all conflicts at once; a rebase resolves them per extension commit. Typical conflicts are in `js/ui.js`, `smoke.js`, `js/i18n.js`, `sw.js` and the notes (`ANNAHMEN.md`, `UEBERGABE.md`): usually both sides are kept.
-3. **Version and cache list.** Keep upstream's version number. `sw.js` must list every file the game loads (new upstream files *and* the extension's favicons). Then run `node tools_version.js v<new>`, which writes `VERSION` and `BUILD_HASH` in `sw.js` and `APP_VERSION` in `js/data.js`.
+   A single merge resolves all conflicts at once; a rebase resolves them per extension commit. Typical conflicts are in `js/ui/*.js` (until v101 a single `js/ui.js`), `smoke.js`, `js/i18n.js`, `sw.js` and the notes (`ANNAHMEN.md`, `UEBERGABE.md`): usually both sides are kept.
+3. **Version and cache list.** Keep upstream's version number. `STATIC` in `sw.js` must also list the extension's favicons (`./favicon.ico`, `./icons/favicon-32.png`); the scripts it takes from `index.html` since v102. The install test in `test.js` counts them. Then run `node tools_version.js v<new>`, which writes `VERSION` and `BUILD_HASH` in `sw.js` and `APP_VERSION` in `js/data.js`.
 4. **Game tests** in the game repository: `node test.js` and `node smoke.js` (and `node check_single.js` for the single-file build). `smoke.js` and `check_single.js` need `jsdom`, which the game repository does not install – install it somewhere outside and point `NODE_PATH` at its `node_modules`. `test.js` also fails when a translation key is no longer used anywhere.
 5. **Copy into the server** on a branch from `origin/development`:
    ```bash
@@ -22,7 +22,7 @@ The game in `HochCiv/` is upstream [timooom-hash/Hochciv](https://github.com/tim
    (cd ../Hochciv && git archive multiplayer-on-v<new>) | tar -x -C HochCiv
    ```
    `git status` should then show only the game files that changed upstream.
-6. **Check the server side.** If upstream added a rule file that the server needs, add it to `FILES` in `engine-adapter.js` (DOM-only files such as `tutorial.js`, `ui.js`, `firstgame.js` are not loaded there). Run `node scripts/build-public.js`.
+6. **Check the server side.** If upstream added a rule file that the server needs, add it to `FILES` in `engine-adapter.js` (DOM-only files such as `firstgame.js` and `js/ui/*.js` are not loaded there). If upstream renames an action function (v103: `buyTile` → `claimTile`), add it to `ACTIONS` in `mp.js` and to the action switch in `engine-adapter.js`, keeping the old one for the kept versions. Run `node scripts/build-public.js`.
 7. **Server tests** against the local Docker setup ([Testing](testing.md)): at least `tests/mobile`, `tests/layout`, `tests/i18n`, plus the game-flow tests (`match`, `replay`, `rematch`, `summary`, `spectators`, `admin/running-games`). The mobile layer relies on ids, classes and functions of the game, so `tests/mobile/mobile.test.js` must pass after **every** game update.
 8. Commit, PR into `development`, test on staging ([Branches and release flow](release-flow.md)).
 
@@ -50,6 +50,7 @@ Running Rundenspiele are not affected by a new version only if their version is 
 | v96 | #51 | v93, v88, v83 (v87 dropped – no running games) |
 | v98 | #59 | v96, v93, v83 (v88 dropped – no running games) |
 | v100 | #95 | v98 (v96, v93, v83 dropped – no running games) |
+| v106 | #114 | v100, v98 |
 
 ## Removed maps
 
