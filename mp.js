@@ -1805,7 +1805,7 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.id = 'mp-live-btn';
         btn.textContent = TX('Multiplayer');
         btn.onclick = () => MP.showLobby();
-        mNew.parentNode.insertBefore(btn, $('m-continue'));
+        mNew.after(btn);                           // the last of the big ways into a game
 
         // Auth Container for Main Menu
         const authDiv = document.createElement('div');
@@ -2926,20 +2926,24 @@ MP.drawLegalFooter = function () {
 MP.arrangeMenu = function () {
     const actions = document.querySelector('#screen-menu .menu-actions');
     if (!actions || $('mp-menu-more')) return;
+    // Up to v101 "Spiel fortsetzen" came after "Neues Spiel" – it goes up next to "Erstes Spiel".
+    // Since v102 the game puts it on top itself (and makes it the red button when there is a save).
     const cont = $('m-continue'), first = $('m-first');
-    if (cont && first) first.after(cont);
+    if (cont && first && (first.compareDocumentPosition(cont) & Node.DOCUMENT_POSITION_FOLLOWING)) first.after(cont);
     const more = document.createElement('div');
     more.id = 'mp-menu-more';
     ['m-tutorial', 'mp-overall-btn', 'mp-ranking-btn', 'm-editor', 'mp-maps-btn', 'm-rules', 'm-options', 'm-load'].forEach(id => {
         const b = $(id);
-        if (b) more.appendChild(b);
+        if (!b) return;
+        b.classList.add('btn');                // since v102 Regeln, Editor and Laden are plain links
+        more.appendChild(b);
     });
     actions.after(more);
     // v102+ has its own row of small links (Regeln · Karte bearbeiten · Spielstand laden) –
     // they are in the grid now, so the empty row goes
     const links = document.querySelector('#screen-menu .menu-links');
     if (links && !links.children.length) links.hidden = true;
-    // one red button on the page: Erstes Spiel (the game's own choice)
+    // one red button on the page: the game's own choice (Erstes Spiel, or Spiel fortsetzen since v102)
     const live = $('mp-live-btn');
     if (live) live.classList.remove('primary');
 };
