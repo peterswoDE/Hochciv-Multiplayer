@@ -53,7 +53,7 @@ A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. I
 
 ## Weekly challenge
 
-The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to its row in `challenge_results` (by `asyncId`). It is never ranked. A player can play a week as often as they like, one attempt at a time; starting another resigns the running one.
+The weekly challenge (`utils/challenge.js`) is a Rundenspiel the server creates for one player with `config.challenge` = the week: the week's map, nation, ability and settings, three KI seats (base ability, the week's level) and a fixed seed. The seed is also the game's fixed dice (`config.fixedDice`, the engine's `cfg.fixedDice` since v106): which techs become available and the event of every round depend only on the week, not on how the game is played, so every attempt has the same tech tree and events. Battles and other dice still follow the play. It can't be left or cancelled, only resigned; there are no free seats. When it ends, its result goes to its row in `challenge_results` (by `asyncId`). It is never ranked. A player can play a week as often as they like, one attempt at a time; starting another resigns the running one.
 
 ## Resigning
 

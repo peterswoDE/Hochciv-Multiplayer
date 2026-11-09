@@ -29,6 +29,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--parchment);color
   /* Gedreht zeigen die Systemeinfassungen in die falsche Richtung – lieber keine. */
   html.turn{--safe-t:0px;--safe-b:0px;--fall:105vw}   /* gedreht ist „unten" die kurze Seite */
 }
+/* Große Bildschirme (v103): die ganze Oberfläche wächst mit dem Fenster. Den Faktor setzt
+   syncLayout (base.js): 1 bis 1366 × 720 – also auf jedem iPad –, darüber nach der knapperen
+   Seite. Ein Faktor statt einer zweiten Gestaltung; Längen in vh/vw wachsen mit (siehe Konfetti). */
+html{zoom:var(--ui,1)}
 button,select,input{font:inherit;color:inherit}
 /* Das hidden-Attribut muss auch bei Zeilen wirken. Der Browser setzt dafür nur
    `[hidden]{display:none}` in seinem eigenen Stilbogen – und der verliegt gegen JEDE
@@ -45,13 +49,15 @@ button,select,input{font:inherit;color:inherit}
 .menu-version{margin:26px 0 0;font-size:11px;color:var(--ink-soft);opacity:.7;
   font-family:var(--mono);letter-spacing:.05em}
 .menu-wrap{margin:auto;padding:24px;max-width:520px;text-align:center}
-.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--ink-soft);margin:0 0 10px}
 .title{font-family:var(--serif);font-size:clamp(38px,9vw,64px);line-height:1;margin:0;
   letter-spacing:-.02em;font-weight:600}
-.title::after{content:"";display:block;width:64px;height:3px;background:var(--red);margin:18px auto 0}
-.lede{color:var(--ink-soft);margin:18px 0 30px;font-size:15px}
+.title::after{content:"";display:block;width:64px;height:3px;background:var(--red);margin:18px auto 40px}
 .menu-actions{display:grid;gap:10px}
+/* Was man selten braucht (v102): eine ruhige Zeile unter den zwei Knöpfen */
+.menu-links{display:flex;justify-content:center;flex-wrap:wrap;margin:20px 0 6px}
+.menu-links button{background:none;border:0;padding:8px 4px;font:inherit;font-size:14px;color:var(--ink-soft);cursor:pointer}
+.menu-links button+button::before{content:"·";padding:0 10px;opacity:.6}
+.menu-links button:active{color:var(--ink)}
 
 /* ------------------------------------------------------------------ Bausteine */
 .btn{border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:13px 16px;
@@ -79,11 +85,32 @@ button,select,input{font:inherit;color:inherit}
   border-bottom:1px solid var(--rule)}
 select{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:8px}
 
-/* ------------------------------------------------------------------ Aufbau */
-.slot{background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:12px;
-  margin-bottom:10px;box-shadow:var(--shadow)}
-.slot h3{margin:0 0 2px;font-family:var(--serif);font-size:17px;font-weight:600}
-.slot p{margin:0 0 10px;font-size:12px;color:var(--ink-soft);line-height:1.4}
+/* ------------------------------------------------------------------ Aufbau
+   Seit v102 auf einem Bildschirm: eine Zeile je Platz (Reich · Mensch/KI/Bot · Fähigkeit),
+   darunter die Wahl der Partie als Kärtchen, „Spiel beginnen" immer unten sichtbar. */
+#setup-list{background:var(--paper);border:1px solid var(--rule);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden;margin:0 0 12px}
+.slot{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.5fr) minmax(0,1.2fr);
+  align-items:center;gap:14px;padding:10px 14px;border-bottom:1px solid var(--rule)}
+.slot:last-child{border-bottom:0}
+.slot-civ{display:flex;align-items:center;gap:8px;min-width:0}
+.slot h3{margin:0;font-family:var(--serif);font-size:17px;font-weight:600;white-space:nowrap}
+.slot-civ select{flex:1;min-width:0;font-size:14px}
+.abil-pick{justify-self:end;max-width:100%;padding:8px 30px 8px 12px;border:1px solid var(--rule);border-radius:8px;
+  background:var(--paper) no-repeat right 10px center/10px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236f6551' stroke-width='1.5'/%3E%3C/svg%3E");
+  font:inherit;font-size:13px;color:inherit;text-align:left;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abil-pick[disabled]{opacity:.5;cursor:default;background-image:none;padding-right:12px}
+.setup-opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.setup-opts .row{background:var(--paper);border:1px solid var(--rule);border-radius:12px;
+  padding:8px 10px 8px 14px;min-height:54px;font-size:15px}
+.setup-opts select{max-width:65%}
+#screen-setup .pad{flex:1 1 auto}
+.setup-go{flex:none;padding:10px 16px calc(10px + var(--safe-b,0px));background:var(--paper);border-top:1px solid var(--rule)}
+.setup-go .btn.wide{margin-top:0}
+html.w-narrow .slot{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 10px}
+html.w-narrow .slot-civ{grid-column:1 / -1}
+html.w-narrow .setup-opts{grid-template-columns:minmax(0,1fr)}
 .seg{display:flex;gap:6px}
 .seg button{flex:1;padding:8px;border:1px solid var(--rule);background:transparent;border-radius:8px;
   font-size:13px;cursor:pointer}
@@ -92,31 +119,44 @@ select{background:var(--paper);border:1px solid var(--rule);border-radius:8px;pa
 /* ------------------------------------------------------------------ Spiel */
 .hud{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--paper);
   border-bottom:1px solid var(--rule);flex:0 0 auto}
-.hud-civ{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
-.hud-civ>div{min-width:0}
+.hud-civ{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;
+  background:none;border:0;padding:4px 6px 4px 0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.hud-who{display:block;min-width:0}
+/* Der Reichsname öffnet die Welt (v102) – das ▾ sagt es */
+#hud-name::after{content:" ▾";font-family:var(--sans);font-size:11px;color:var(--ink-soft)}
 .hud-civ strong{font-family:var(--serif);font-size:16px;display:block;line-height:1.15;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hud-civ small{font-size:11px;color:var(--ink-soft);display:block;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .civ-chip{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink);display:grid;
   place-items:center;font-size:13px;flex:0 0 auto;background:var(--paper-2)}
-/* Vier Werte, klar getrennt: jeder Wert steht in einem eigenen Kästchen mit Symbol,
-   großer Zahl und Beschriftung. Auf sehr schmalen Geräten fällt die Beschriftung weg. */
+/* Fünf Werte (v102), je ein Kästchen mit Symbol und Zahl – ohne Beschriftung, das Symbol
+   sagt es. Vorn die Bevölkerung: eigene / Welt, darunter ein Balken bis zur Siegschwelle. */
 .hud-res{display:flex;gap:6px;flex:0 0 auto}
-.hud-res .res{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:0;min-width:62px;padding:3px 8px 2px;background:var(--paper-2);
-  border:1px solid var(--rule);border-radius:9px;line-height:1.05;font-family:var(--mono)}
-.hud-res .res i{font-style:normal;font-size:13px;opacity:.85}
+.hud-res .res{display:flex;flex-direction:row;align-items:center;justify-content:center;
+  gap:6px;min-width:0;height:42px;padding:0 11px;background:var(--paper-2);
+  border:1px solid var(--rule);border-radius:9px;line-height:1;font-family:var(--mono);color:inherit;font-size:inherit}
+.hud-res .res i{font-style:normal;font-size:15px}
 .hud-res .res b{font-size:21px;font-weight:700;letter-spacing:-.01em}
-.hud-res .res u{text-decoration:none;font-size:9px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--ink-soft);font-family:var(--sans)}
+.hud-res .res b small{font-size:13px;font-weight:600;color:var(--ink-soft)}
 .res.pow b{color:var(--red)}
-.res.food{cursor:pointer}
-.res.food:active{background:var(--paper)}
+.res.food,.res.pop{cursor:pointer}
+.res.food:active,.res.pop:active{background:var(--paper)}
+.res.pop{padding-bottom:5px}
+.res.pop .pm{position:absolute;left:10px;right:10px;bottom:5px;height:3px;border-radius:2px;background:var(--rule)}
+.res.pop .pf{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--ink)}
+.res.pop .pk{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:var(--ink)}
 html.w-narrow .hud-res{gap:4px}
-html.w-narrow .hud-res .res{min-width:0;padding:3px 6px 2px}
-html.w-narrow .hud-res .res u{display:none}
-html.w-narrow .hud-res .res b{font-size:18px}
+html.w-narrow .hud-res .res{padding:0 7px;gap:4px;height:38px}
+html.w-narrow .hud-res .res i{font-size:13px}
+html.w-narrow .hud-res .res b{font-size:17px}
+html.w-narrow .hud-res .res b small{font-size:11px}
+/* Wechsel zwischen Menschen am selben Gerät (v102): das Zeichen pulsiert einmal */
+.civ-chip.pulse{animation:civ-pulse 1.3s ease-out 1}
+@keyframes civ-pulse{
+  0%{box-shadow:0 0 0 0 var(--civ,var(--ink));transform:scale(1)}
+  25%{transform:scale(1.22)}
+  100%{box-shadow:0 0 0 16px transparent;transform:scale(1)}}
 /* Laufender Vorrat beim Nachspielen von KI- und Bot-Zügen (v96): was eine Szene ausgibt oder
    bekommt, erscheint als Marke unter dem Kästchen – „−10" rot, „+7" grün – und vergeht mit der
    Szene (animVorrat). Unter dem Kästchen, nicht darüber: oben ist der Bildschirmrand. */
@@ -208,7 +248,19 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
 .sheet h3+.abil-h{margin-top:8px}
 .abil-card{background:var(--paper-2);border:1px solid var(--rule);border-radius:9px;
   padding:7px 10px;margin:0 0 7px}
-.abil-card b{font-family:var(--serif);font-size:14px}
+.abil-card b{font-family:var(--serif);font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* Stand einer Fähigkeit als Punkte (v102): gefüllt = noch offen */
+.pips{display:inline-flex;gap:5px;flex:none}
+.pips i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--red)}
+.pips i.on{background:var(--red)}
+/* Macht (v102): der Stand rechts neben dem Titel */
+.sheet-head{display:flex;align-items:baseline;gap:12px;padding-right:44px}
+.sheet-now{margin-left:auto;font-family:var(--mono);font-size:17px}
+/* gewählte Möglichkeit in einer Auswahl (Fähigkeit im Aufbau) */
+.opt.on{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--ink)}
+/* Spielmenü: die eine Vorliebe als Zeile */
+.mm-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:18px;min-height:46px}
+.mm-row .seg{flex:0 1 330px}
 .abil-card small{display:block;color:var(--ink-soft);font-size:11px;line-height:1.35;margin-top:1px}
 .sheet .abil-note{margin:0 2px 7px;line-height:1.4}
 .opt.free{background:#fbf3e6;border-color:var(--red-soft);box-shadow:inset 3px 0 0 var(--red)}
@@ -541,10 +593,6 @@ html.w-side body.tut #tut-panel{flex:0 0 clamp(280px,32%,430px);max-height:none;
 html.w-side body.tut .sheet{left:auto;right:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
-/* Aufbau: Fähigkeitswahl je Zivilisation */
-.slot .row{padding:6px 0;border-top:1px solid var(--rule);font-size:12px}
-.slot select{padding:6px;font-size:12px;max-width:62%}
-.slot .abil{margin:6px 0 0;font-size:11px;color:var(--ink-soft);line-height:1.35}
 input[type=checkbox]{width:22px;height:22px;accent-color:var(--red)}
 /* Ereignis- und Wunderhinweise */
 .evbox{background:#f2e5cf;border:1px solid var(--rule);border-radius:10px;padding:9px 11px;margin:0 0 10px}
@@ -585,27 +633,8 @@ html.w-side .tut-scroll{min-height:0}
   border:1px solid var(--rule);border-left:3px solid var(--red);border-radius:0 8px 8px 0;padding:8px 10px}
 .tut-task b{color:var(--red)}
 /* Kleine Rechentabelle im Tutorial: Posten links, Wert rechts, Summe abgesetzt. */
-.tut-calc{background:var(--paper-2);border:1px solid var(--rule);border-radius:9px;
-  padding:6px 10px;margin:8px 0}
-.tut-calc>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
-  font-size:13px;line-height:1.8}
-.tut-calc>div>b{font-family:var(--mono);white-space:nowrap}
-.tut-calc>div.sum{border-top:1px solid var(--rule);margin-top:3px;padding-top:4px;
-  font-weight:600}
 /* Aufzählung im Tutorial (die möglichen Aktionen). Enger als eine Standardliste, damit
    sechs Punkte auf dem Telefon nicht das halbe Panel füllen. */
-.tut-list{margin:6px 0 8px;padding-left:20px;font-size:13px;line-height:1.55}
-.tut-list li{margin:1px 0}
-.tut-key{background:#f2e5cf;border:1px solid var(--rule);border-radius:9px;padding:9px 11px;
-  margin:10px 0 2px;font-size:13px;line-height:1.45}
-.tut-key>b:first-child{font-family:var(--serif);display:block;font-size:12px;letter-spacing:.04em;
-  text-transform:uppercase;color:var(--red);margin-bottom:3px}
-.tut-tab{width:100%;border-collapse:collapse;font-size:13px;margin:0 0 10px}
-.tut-tab th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);
-  font-weight:600;padding:0 4px 3px}
-.tut-tab td{border-top:1px solid var(--rule);padding:4px;text-align:center}
-.tut-tab td:first-child{text-align:left}
-.tut-tab tr.sum td{border-top:2px solid var(--ink-soft);font-weight:600}
 .tut-nav{display:flex;align-items:center;gap:8px;padding:0 12px 10px}
 .tut-nav .btn.small{flex:none;padding:8px 12px}
 .tut-nav .btn.primary{flex:1}
@@ -665,12 +694,6 @@ body.fg .tut-nav .btn.small{flex:1}
 .lang-btn.on{opacity:1;filter:none;border-color:var(--ink);background:var(--paper)}
 .lang-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
-/* Fähigkeit neben dem Reichsnamen in der Kopfzeile: kleiner, ruhiger, eigene Zeile,
-   wenn der Platz knapp wird. */
-.hud-civ strong{white-space:normal}
-.hud-abil{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--ink-soft);
-  margin-left:6px;white-space:nowrap}
-.hud-abil::before{content:'· '}
 /* „Die Reiche" im Weltblatt: wer spielt was, mit Fähigkeit und Wirkung */
 .civ-list{display:flex;flex-direction:column;gap:4px;margin:2px 0 12px}
 .civ-row{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:8px;

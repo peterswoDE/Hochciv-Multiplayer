@@ -1,7 +1,9 @@
 /**
  * Weekly challenge (F21). Every ISO week (Monday 00:00 UTC) has one setup for everybody – map,
  * nation, ability, KI level, events, wonders – derived from the week's id, so it needs no
- * storage and no admin. An attempt is a Rundenspiel alone against three KI (async/service.js,
+ * storage and no admin. The week's seed is also the game's fixed dice (config.fixedDice): which
+ * techs become available and the event of every round are the same in every attempt, however it
+ * is played – only battles and the like still depend on the play. An attempt is a Rundenspiel alone against three KI (async/service.js,
  * `config.challenge` = the week), played on the server like every other.
  *
  * Attempts: as many as a player likes, but one running at a time – starting one (of any week)

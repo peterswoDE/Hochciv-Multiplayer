@@ -149,7 +149,10 @@ function create(host, opts) {
     // the weekly challenge (utils/challenge.js) is played alone; only the server creates it
     const challenge = opts && typeof opts.challenge === 'string' ? opts.challenge : null;
     if (total - ki < 2 && !challenge) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };
+    // fixedDice: tech availability and events fall the same in every attempt of the week, however
+    // it is played (the engine's fixed dice; engines before it ignore the field)
     if (challenge) Object.assign(config, { challenge, isPublic: false, ranked: false, seed: Number.isInteger(opts.seed) ? opts.seed : config.seed });
+    if (challenge) config.fixedDice = config.seed;
     Object.assign(config, { playerCount: total, humanCount: total - ki, noKi: ki === 0 });
     // Player-bots (bot accounts, utils/bots.js) take human seats like players, never the KI's;
     // the host allows them and may limit them (null = no limit). A bot as host always allows them.
@@ -746,7 +749,7 @@ function summary(g, userId) {
     const S = g.state;
     return {
         id: g.id,
-        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v98/)
+        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v100/, /v98/)
         joinCode: g.joinCode,
         status: g.status,
         isHost: g.hostUserId === userId,

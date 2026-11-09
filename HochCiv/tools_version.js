@@ -22,9 +22,12 @@ const swPfad = path.join(wurzel, 'sw.js');
 /* Hash über alle Dateien, die der Service Worker zwischenspeichert – ohne sw.js selbst
    (die ändert sich ja gerade) und ohne die Icons (Binärdateien, ändern sich nie). */
 function dateien(sw) {
-  const m = sw.match(/const FILES = \[([\s\S]*?)\];/);
-  if (!m) throw new Error('FILES in sw.js nicht gefunden');
-  return [...m[1].matchAll(/'\.\/([^']+)'/g)].map(x => x[1])
+  const m = sw.match(/const STATIC = \[([\s\S]*?)\];/);
+  if (!m) throw new Error('STATIC in sw.js nicht gefunden');
+  // die Skripte stehen nur in index.html (v102) – dieselbe Liste, die der Service Worker liest
+  const html = fs.readFileSync(path.join(wurzel, 'index.html'), 'utf8');
+  const skripte = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(x => x[1]);
+  return [...m[1].matchAll(/'\.\/([^']+)'/g)].map(x => x[1]).concat(skripte)
     .filter(f => f && !/^icons\//.test(f) && f !== 'manifest.webmanifest');
 }
 function hashOf(sw) {
@@ -52,7 +55,7 @@ sw = sw.replace(/const VERSION = 'hochciv-v\d+'/, `const VERSION = 'hochciv-${ne
 const hash = hashOf(sw);
 sw = /const BUILD_HASH = '[^']*'/.test(sw)
   ? sw.replace(/const BUILD_HASH = '[^']*'/, `const BUILD_HASH = '${hash}'`)
-  : sw.replace(/const FILES = \[/, `const BUILD_HASH = '${hash}';   // von tools_version.js\nconst FILES = [`);
+  : sw.replace(/const STATIC = \[/, `const BUILD_HASH = '${hash}';   // von tools_version.js\nconst STATIC = [`);
 fs.writeFileSync(swPfad, sw);
 
 /* Die Kopfzeile der Übergabe nennt die Version – sonst steht dort bald eine alte. */

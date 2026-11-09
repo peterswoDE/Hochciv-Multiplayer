@@ -53,12 +53,15 @@ doc = doc.replace(/Ordner `hochzeivilization\/` \(\d+ Dateien\)/,
 
 // 3) Assertions und Smoke-Schritte – nur mit Testläufen zu bekommen
 if (!schnell) {
+  // Grün schreiben beide Läufe genau eine Zeile: „test   2065 passed", „smoke  185 passed" (v102)
   const zaehle = (cmd, muster) => {
     const out = execSync(`cd ${wurzel} && ${cmd}`, { encoding: 'utf8', maxBuffer: 1 << 28 });
-    return (out.match(muster) || []).length;
+    const m = out.match(muster);
+    if (!m) throw new Error(`${cmd}: keine Zeile „… passed" – rot? ${out.slice(-400)}`);
+    return +m[1];
   };
-  const asserts = zaehle('node test.js', /^ {2}ok {2}/gm);
-  const schritte = zaehle('node smoke.js', /^ {2}ok {2}/gm);
+  const asserts = zaehle('node test.js', /^test\s+(\d+) passed$/m);
+  const schritte = zaehle('node smoke.js', /^smoke\s+(\d+) passed$/m);
   doc = doc.replace(/\*\*\d+ Assertions\*\*/g, `**${asserts} Assertions**`)
     .replace(/— \d+ Assertions/g, `— ${asserts} Assertions`)
     .replace(/\*\*(\d+) Schritte\*\*/g, (g, n) => n === '29' ? g : `**${schritte} Schritte**`)

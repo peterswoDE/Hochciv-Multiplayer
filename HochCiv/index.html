@@ -19,58 +19,19 @@
 <!-- ------------------------------------------------------------------ Menü -->
 <section id="screen-menu" class="screen show">
   <div class="menu-wrap">
-    <p class="eyebrow">für 1–4 Spieler*innen</p>
     <h1 class="title">Hochzeivilization</h1>
-    <p class="lede">Ne Runde Civ? Auf dem Tablet, ohne Bleistift und Radiergummi.</p>
     <div class="menu-actions">
+      <button class="btn" id="m-continue" hidden>Spiel fortsetzen</button>
       <button class="btn primary" id="m-first">Erstes Spiel</button>
       <button class="btn" id="m-new">Neues Spiel</button>
-      <button class="btn" id="m-continue" hidden>Spiel fortsetzen</button>
-      <button class="btn" id="m-tutorial">Tutorial</button>
-      <button class="btn" id="m-editor">Karte bearbeiten</button>
-      <button class="btn ghost" id="m-options">Einstellungen</button>
-      <button class="btn ghost" id="m-rules">Regeln &amp; Technologien</button>
-      <button class="btn ghost" id="m-load">Spielstand laden</button>
     </div>
+    <nav class="menu-links">
+      <button id="m-rules">Regeln</button>
+      <button id="m-editor">Karte bearbeiten</button>
+      <button id="m-load">Spielstand laden</button>
+    </nav>
     <div class="lang-row" id="m-lang"></div>
     <p class="menu-version" id="m-version"></p>
-  </div>
-</section>
-
-<!-- ------------------------------------------------------------ Einstellungen -->
-<section id="screen-options" class="screen">
-  <header class="bar">
-    <button class="icon-btn" data-back>‹</button>
-    <h2>Einstellungen</h2>
-  </header>
-  <div class="pad">
-    <p class="hint">Erweiterungsmodule sind ab Werk aus: der Aufbau zeigt dann nur, was
-      jedes Spiel braucht. Eingeschaltet erscheint das Modul im Aufbau als eigene Zeile
-      und bleibt dort je Partie an- und abwählbar.</p>
-    <label class="row"><span>Modul: Ereignisse</span>
-      <input type="checkbox" id="opt-events"></label>
-    <p class="hint">Zu Rundenbeginn wird ein Ereignis gewürfelt – Pest, Dürre,
-      Barbareninvasion und weitere. Trifft nur Menschen, nie Bots.</p>
-    <label class="row"><span>Modul: Weltwunder</span>
-      <input type="checkbox" id="opt-wonders"></label>
-    <p class="hint">Städte können Weltwunder bauen, vier zusätzliche Technologien kommen
-      in den Bogen. Ein Weltwunder der Stufe 3 gewinnt das Spiel.</p>
-    <label class="row"><span>Kosten ohne Umtausch anzeigen</span>
-      <input type="checkbox" id="opt-listprice"></label>
-    <p class="hint">Ab Werk steht an jedem Knopf, was du tatsächlich zahlst: fehlt Nahrung
-      oder Wissenschaft, zahlen Münzen den Rest – Gründen für 10 Nahrung mit 8 im Vorrat
-      zeigt 8 🌾 4 🪙. Angehakt steht dort wie früher nur der Preis selbst.</p>
-    <label class="row"><span>Animationen</span>
-      <select id="opt-anim">
-        <option value="langsam">Langsam</option>
-        <option value="schnell">Schnell</option>
-        <option value="aus">Keine</option>
-      </select></label>
-    <p class="hint">Die Karte zeigt, was KI und Bots tun – eine Aktion nach der anderen –, und
-      nach deinem Zug geht es von selbst weiter, bis du wieder dran bist; alles steht auch im
-      Protokoll. „Schnell" spielt dasselbe in kürzerem Takt. Bei „Keine" kommt wie früher nach
-      jedem ihrer Züge ein Blatt, weiter geht es mit „Weiter". Kämpfe werden immer auf der Karte
-      nachgespielt.</p>
   </div>
 </section>
 
@@ -81,62 +42,45 @@
     <h2>Aufbau</h2>
   </header>
   <div class="pad">
-    <label class="row" id="setup-map-row"><span>Karte</span>
-      <select id="setup-map"></select></label>
-    <label class="row" id="setup-count-row"><span>Reiche</span>
-      <select id="setup-count"></select></label>
-    <label class="row" id="setup-random-row"><span>Zufällige Nationen für alle</span>
-      <input type="checkbox" id="setup-random"></label>
-    <label class="row" id="setup-hex-row" hidden><span>Experimenteller Plättchenmodus</span>
-      <input type="checkbox" id="setup-hex"></label>
-    <p class="hint" id="setup-hex-hint" hidden>Experimentell: sechseckige Plättchen zu je 19 Feldern,
-      schräg in Reihen gelegt. Zwischen zwei Startplättchen liegt immer ein offenes; das eigene
-      legt jede*r selbst – Lage wählen (sechs Drehungen), Hauptstadt setzen, verdeckt.</p>
-    <p class="hint" id="setup-duel-hint" hidden>1 gegen 1: Wirtschaftssieg erst über 3/4 der
-      Weltbevölkerung (mit Theologie 7/10, mit Vereinten Nationen 2/3). Auf einer festen Karte
-      bleiben zwei Startsterne frei.</p>
-    <p class="hint" id="setup-custom-hint" hidden></p>
-    <p class="hint" id="setup-tile-hint" hidden>Plättchenkarte: die offenen Dreiecke liegen
-      gleich, das eigene legt jede*r selbst – Lage wählen, Hauptstadt setzen, verdeckt.</p>
-    <p class="hint" id="setup-marathon-hint" hidden>Marathon: vier Reiche auf einer
-      Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter
-      das Zwei- bis Fünffache, die Singularität 300; Griechenlands Rabatt und die
-      Wissenschaftliche Methode zählen doppelt. Der Militärsieg verlangt zwei
-      eroberte Hauptstädte. Vor dem ersten Zug sehen alle die
-      Karte und die Starttechnologien und draften dann ihre Fähigkeiten: je zwei, in
-      Schlangenreihenfolge.</p>
-    <p class="hint" id="setup-double-hint" hidden>Hier darf jeder Platz frei wählen, auch
-      zweimal dieselbe Zivilisation (mit gleicher oder anderer Fähigkeit). Doppelte
-      bekommen Ziffern und eine eigene Farbe. Auf den festen Karten sitzt jede
-      Zivilisation genau einmal.</p>
+    <div class="setup-opts">
+      <label class="row" id="setup-map-row"><span>Karte</span>
+        <select id="setup-map"></select></label>
+      <label class="row" id="setup-count-row"><span>Reiche</span>
+        <select id="setup-count"></select></label>
+      <label class="row" id="setup-random-row"><span>Zufällige Nationen</span>
+        <input type="checkbox" id="setup-random"></label>
+    </div>
     <div id="setup-list"></div>
-    <label class="row" id="setup-events-row" hidden><span>Mit Ereignissen</span>
-      <input type="checkbox" id="setup-events"></label>
-    <label class="row" id="setup-evmode-row" hidden><span>Ereignisstärke</span>
-      <select id="setup-evmode"></select></label>
-    <label class="row" id="setup-wonders-row" hidden><span>Mit Weltwundern</span>
-      <input type="checkbox" id="setup-wonders"></label>
-    <label class="row" id="setup-kilevel-row"><span>KI-Stufe (alle KI)</span>
-      <select id="setup-kilevel"></select></label>
-    <p class="hint" id="setup-ki-hint">Die KI spielt nach denselben Regeln wie ein Mensch:
-      sie bezahlt alles, hat ihre Zivilisationsfähigkeit, und Ereignisse treffen sie.</p>
-    <label class="row"><span>Startspieler*in</span>
-      <select id="setup-start"></select></label>
-    <button class="btn primary wide" id="setup-go">Spiel beginnen</button>
+    <div class="setup-opts">
+      <label class="row" id="setup-kilevel-row"><span>KI</span>
+        <select id="setup-kilevel"></select></label>
+      <label class="row" id="setup-start-row"><span>Beginnt</span>
+        <select id="setup-start"></select></label>
+      <label class="row" id="setup-events-row"><span>Ereignisse</span>
+        <input type="checkbox" id="setup-events"></label>
+      <label class="row" id="setup-evmode-row" hidden><span>Ereignisstärke</span>
+        <select id="setup-evmode"></select></label>
+      <label class="row" id="setup-wonders-row"><span>Weltwunder</span>
+        <input type="checkbox" id="setup-wonders"></label>
+      <label class="row" id="setup-hex-row" hidden><span>Sechseck-Plättchen</span>
+        <input type="checkbox" id="setup-hex"></label>
+    </div>
   </div>
+  <div class="setup-go"><button class="btn primary wide" id="setup-go">Spiel beginnen</button></div>
 </section>
 
 <!-- ------------------------------------------------------------------ Spiel -->
 <section id="screen-game" class="screen">
   <header class="hud">
     <button class="icon-btn" id="g-menu">☰</button>
-    <div class="hud-civ"><span id="hud-sym" class="civ-chip"></span>
-      <div><strong id="hud-name">—</strong><small id="hud-round">Runde 1</small></div></div>
+    <button class="hud-civ" id="hud-civ" title="Welt"><span id="hud-sym" class="civ-chip"></span>
+      <span class="hud-who"><strong id="hud-name">—</strong><small id="hud-round">Runde 1</small></span></button>
     <div class="hud-res">
-      <span class="res sci" title="Wissenschaft"><i>🔬</i><b id="hud-sci">0</b><u>Wissen</u></span>
-      <button class="res food" id="hud-feed" title="Nahrung"><i>🌾</i><b id="hud-food">0</b><u>Nahrung</u></button>
-      <span class="res coin" title="Münzen"><i>🪙</i><b id="hud-coins">0</b><u>Münzen</u></span>
-      <span class="res pow" title="Macht"><i>⚔︎</i><b id="hud-power">0</b><u>Macht</u></span>
+      <button class="res pop" id="hud-pop" title="Bevölkerung"><i>👥</i><b id="hud-popn">0</b><span class="pm"><span class="pf" id="hud-popf"></span><span class="pk" id="hud-popk"></span></span></button>
+      <span class="res sci" title="Wissenschaft"><i>🔬</i><b id="hud-sci">0</b></span>
+      <button class="res food" id="hud-feed" title="Nahrung"><i>🌾</i><b id="hud-food">0</b></button>
+      <span class="res coin" title="Münzen"><i>🪙</i><b id="hud-coins">0</b></span>
+      <span class="res pow" title="Macht"><i>⚔︎</i><b id="hud-power">0</b></span>
     </div>
   </header>
 
@@ -147,7 +91,7 @@
       <div class="tut-bar"><div class="tut-bar-fill" id="tut-bar-fill"></div></div>
       <div class="tut-head">
         <span class="tut-sub"></span>
-        <button class="btn small ghost" id="tut-quit">Tutorial beenden</button>
+        <button class="btn small ghost" id="tut-quit">Beenden</button>
       </div>
       <div class="tut-scroll">
         <h3 class="tut-h" id="tut-title"></h3>
@@ -155,7 +99,6 @@
       </div>
       <p class="tut-task" id="tut-task" hidden></p>
       <div class="tut-nav">
-        <button class="btn small" id="tut-prev">‹</button>
         <span class="tut-count" id="tut-count"></span>
         <button class="btn small primary" id="tut-next">Weiter ›</button>
       </div>
@@ -173,8 +116,6 @@
     <button class="btn small" id="a-found">Stadt gründen</button>
     <button class="btn small" id="a-power">Macht</button>
     <button class="btn small" id="a-abil">Fähigkeiten<span class="bar-count" id="a-abil-n" hidden></span></button>
-    <button class="btn small" id="a-info">Welt</button>
-    <button class="btn small" id="a-log">Protokoll</button>
     <button class="btn small primary" id="a-end">Zug beenden</button>
   </nav>
 </section>
@@ -275,8 +216,18 @@
 <script src="js/ki.js"></script>
 <script src="js/marathon.js"></script>
 <script src="js/anim.js"></script>
-<script src="js/tutorial.js"></script>
 <script src="js/firstgame.js"></script>
-<script src="js/ui.js"></script>
+<script src="js/ui/base.js"></script>
+<script src="js/ui/map.js"></script>
+<script src="js/ui/game.js"></script>
+<script src="js/ui/sheets.js"></script>
+<script src="js/ui/turns.js"></script>
+<script src="js/ui/end.js"></script>
+<script src="js/ui/world.js"></script>
+<script src="js/ui/setup.js"></script>
+<script src="js/ui/place.js"></script>
+<script src="js/ui/draft.js"></script>
+<script src="js/ui/editor.js"></script>
+<script src="js/ui/boot.js"></script>
 </body>
 </html>

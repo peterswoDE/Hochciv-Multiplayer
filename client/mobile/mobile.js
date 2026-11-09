@@ -10,14 +10,16 @@
  *     – tech tree with one tab per column (Forschung / Produktion / Militär / Spezial)
  *  3. A field selected under a sheet is moved into view next to it.
  *  4. Short screens: the editor starts with its settings folded.
- *  5. Tutorial: fields it highlights are brought into view.
+ *  5. Tutorial (up to v101): fields it highlights are brought into view.
+ *  Works on the page the game turns by 90° on a phone held upright (html.turn, always since v102).
  *
  * Hooks into the game – check these when the game is updated:
  *   drawMap(svg, map, opts)   wrapped: re-applies the zoom after every redraw
  *   openTile(r, c)            wrapped: keeps the selected field (ui.sel) visible next to its sheet
  *   editorScreen()            wrapped: folds the settings on short screens
  *   edOwnsDrag()              asked on the editor map: a finger paints (true) or moves the map
- *   used: HEX, hexCenter, capitalOf, tutHighlight, ui.sel, ui.tut, S, MP, LANG, #a-abil/#a-info/#a-log/#a-end,
+ *   used: HEX, hexCenter, capitalOf, tutHighlight, ui.sel, ui.tut, S, MP, LANG, #a-abil/#a-info/#a-log/#a-end
+ *         (#a-info/#a-log only up to v100 – without them the bar is left alone),
  *         #a-abil-n, #ov-body, .techgrid > .techcol (4 per era, h4 = field name in era 1)
  */
 (function () {
@@ -36,7 +38,18 @@
   const MAX_HEX_PX = 130;
   const views = new Map();            // svg -> view {W, H, k, cx, cy, key, auto}
 
-  function hostRect(svg) { return svg.getBoundingClientRect(); }
+  /* The game turns the page by 90° on a phone held upright (html.turn in portrait, style.css –
+     always since v102). Rects and pointer positions on the screen are then turned against the
+     page; everything here works in the page's own frame, so they are converted:
+     screen (x, y) = (innerWidth − page y, page x)  ⇔  page (x, y) = (screen y, innerWidth − screen x). */
+  const turned = () => document.documentElement.classList.contains('turn') && window.innerHeight > window.innerWidth;
+  function frame(r) {
+    if (!turned()) return r;
+    const W = window.innerWidth;
+    return { left: r.top, top: W - r.right, right: r.bottom, bottom: W - r.left, width: r.height, height: r.width };
+  }
+  const pt = e => turned() ? { x: e.clientY, y: window.innerWidth - e.clientX } : { x: e.clientX, y: e.clientY };
+  function hostRect(svg) { return frame(svg.getBoundingClientRect()); }
   function kFit(v, r) { return Math.min(r.width / v.W, r.height / v.H); }
   function kMax(v, r) { return Math.max(kFit(v, r), MAX_HEX_PX / HEX_W); }
   function kDefault(v, r) {
@@ -153,7 +166,7 @@
     return [v.cx + (clientX - r.left - r.width / 2) / v.k, v.cy + (clientY - r.top - r.height / 2) / v.k];
   }
 
-  /** Zoom to k, keeping the map point under (clientX, clientY) in place. */
+  /** Zoom to k, keeping the map point under (x, y) in place – page coordinates (pt, frame). */
   function zoomAt(svg, v, k, clientX, clientY) {
     const r = hostRect(svg);
     const [mx, my] = toMap(svg, v, clientX, clientY);
@@ -173,7 +186,8 @@
 
     const onMove = e => {
       if (!pts.has(e.pointerId)) return;
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const p = pt(e);
+      pts.set(e.pointerId, p);
       const v = views.get(svg);
       if (!v || !g) return;
       const list = [...pts.values()];
@@ -187,7 +201,7 @@
         v.auto = false; g.moved = true;
         applyView(svg);
       } else if (list.length === 1 && !g.paint) {
-        const dx = e.clientX - g.x, dy = e.clientY - g.y;
+        const dx = p.x - g.x, dy = p.y - g.y;
         if (!g.moved && Math.hypot(dx, dy) < 8) return;
         g.moved = true; v.auto = false;
         v.cx = g.cx - dx / v.k; v.cy = g.cy - dy / v.k;
@@ -214,11 +228,12 @@
       const v = views.get(svg);
       if (!v) return;
       suppressClick = false;
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const p = pt(e);
+      pts.set(e.pointerId, p);
       if (pts.size === 1) {
         // the map editor paints with one finger (edOwnsDrag in ui.js) – then only two fingers move the map
         const paint = svg.id === 'ed-map' && typeof window.edOwnsDrag === 'function' && window.edOwnsDrag();
-        g = { x: e.clientX, y: e.clientY, cx: v.cx, cy: v.cy, moved: false, paint };
+        g = { x: p.x, y: p.y, cx: v.cx, cy: v.cy, moved: false, paint };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         window.addEventListener('pointercancel', onUp);
@@ -239,7 +254,8 @@
       const v = views.get(svg);
       if (!v) return;
       e.preventDefault();
-      zoomAt(svg, v, v.k * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+      const p = pt(e);
+      zoomAt(svg, v, v.k * Math.exp(-e.deltaY * 0.0015), p.x, p.y);
     }, { passive: false });
     if (window.ResizeObserver) new ResizeObserver(() => applyView(svg)).observe(svg);
     addControls(svg);
@@ -288,7 +304,7 @@
     const svg = $id('map'), sh = $id('sheet'), v = views.get(svg);
     if (!svg || !v || !sh || !sh.classList.contains('open')) return;
     if (typeof ui === 'undefined' || !ui || !ui.sel) return;
-    const r = hostRect(svg), s = sh.getBoundingClientRect();
+    const r = hostRect(svg), s = frame(sh.getBoundingClientRect());
     if (!r.width || !s.height) return;
     const [mx, my] = hexCenter(ui.sel[0], ui.sel[1], HEX);
     const x = r.left + r.width / 2 + (mx - v.cx) * v.k, y = r.top + r.height / 2 + (my - v.cy) * v.k;
@@ -315,13 +331,16 @@
     };
   }
 
-  /* ------------------------------------------------------------------ 2a. action bar "4 + Mehr" */
+  /* ------------------------------------------------------------------ 2a. action bar "4 + Mehr"
+     Only up to v100, whose bar has seven buttons. Since v102 the bar has five (Welt is the
+     name in the Kopfzeile, Protokoll is in the menu ☰) and stays as the game lays it out. */
 
   const MORE = ['a-abil', 'a-info', 'a-log'];
 
   function setupMore() {
     const end = $id('a-end');
-    if (!end || $id('a-more')) return;
+    if (!end || $id('a-more') || !$id('a-info') || !$id('a-log')) return;
+    document.documentElement.classList.add('m-bar-more');
     const more = document.createElement('button');
     more.id = 'a-more';
     more.type = 'button';
@@ -441,7 +460,9 @@
     ['map', 'pl-map', 'dr-map', 'ed-map'].forEach(id => { const svg = $id(id); if (svg && svg.firstChild) afterDraw(svg); });
   }
 
-  window.HochcivMobile = { views, applyView, revealSelection, narrow };
+  // page frame → screen (the inverse of pt), for tests
+  const toScreen = (x, y) => turned() ? [window.innerWidth - y, x] : [x, y];
+  window.HochcivMobile = { views, applyView, revealSelection, narrow, turned, frame, toScreen };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

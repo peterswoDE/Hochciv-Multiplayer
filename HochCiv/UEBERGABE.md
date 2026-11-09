@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 4.11., `sw.js` v100)
+# Hochzeivilization — Projekt-Übergabe (Stand 9.11., `sw.js` v106)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v100)
+## Letzte Sitzungen auf einen Blick (v61 → v106)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -55,6 +55,34 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v98 | Anweisung des Autors: **Startausgleich 2/4/6** Münzen für den Zweiten, Dritten und Vierten (bis v97 1/2/3), **zu zweit der Zweite 4** (bis v97 1; `START_BONUS_DUEL`, „zu zweit" = zwei Reiche ohne Barbaren), zu dritt 2 und 4. Der Satz im Regelbogen kommt aus den Zahlen (`startBonusText`) | Regel |
 | v99 | Zehn Anweisungen des Autors: **große Karte entfernt**; Startspieler ab Werk **„Zufällig"**; **Freie Forschung einmal je Runde**, jede erforschbare Technologie **samt Singularität**, in jeder Spielart (`freeTechOptions` = `researchable`, `p.freeTechUsed` = Runde); **drei Reiche nur auf der Plättchenkarte** (dort und im Duell sind damit Doppelte erlaubt, `setupPick`); **experimenteller Plättchenmodus** für vier Reiche: 10 von 20 **Sechsecken** zu 19 Feldern, schräg 3/4/3, Start an den Enden der Dreierreihen, sechs Lagen (`HEX_POOL`, `TILE_SHAPES.hex4`); **Flüsse** als Wasserlauf auf grünem Flusstal, **Inseln** mit Wasserrand (`riverLines`); **Welt in Zugfolge** und als Knopf in der **Legephase**; nach dem Legen **kein Schritt „Spiel beginnen"** mehr; Erstes Spiel: **Basiskosten 1/3/6/10** im Schritt „Eine zweite Stadt" | Regel + Modus + Oberfläche |
 | v100 | Zwei Anweisungen des Autors: Englands **Kolonisten halbieren die Gründungskosten, aufgerundet** – Stadtkosten plus Weg, mit Kartografie nur die Stadtkosten (`foundCostOf`, für Regel und KI; bis v99 keine Stadtkosten und mit Kartografie die günstigere der beiden – diese Sonderregel ist weg; das doppelte Wachstum bleibt); **Marathon ohne Grenze von fünf Gründungen je Zug** (`MARATHON_MAX_FOUNDS`, `foundedThisTurn`, `p.foundRound`/`p.foundCount` weg, `migrateState` räumt den Zähler aus alten Ständen) | Regel |
+| v101 | Zwei Anweisungen des Autors: Griechenlands **Freie Forschung höchstens zweimal je Partie und höchstens einmal je Runde**, weiter alles Erforschbare samt Singularität (`FREE_TECH_USES`, `freeTechsLeft`, `p.freeTechsUsed` neben `p.freeTechUsed`; die KI nutzt sie, sobald sie geht – gemessen besser als Aufheben: Griechenland 20,5 % statt 30,3 % mit v100, gleiche Chance 25 %); **Wirtschaftssieg zu viert über 4/7, mit Theologie 1/2, mit Vereinten Nationen 2/5** (zu dritt weiter 2/3 · 3/5 · 1/2, im Duell 3/4 · 7/10 · 2/3; `VICTORY_THRESHOLDS`, `victoryMode`, auch Marathon und Tutorial). Beim Umbau: ganzzahliger Vergleich (`victoryMet` – im Duell galten 63 von 90 als „mehr als 7/10"), der Bogen der Legephase zeigt die Schwellen der Partie (im Duell vorher 3/5 statt 7/10). Messmodi `tools_ki.js freie` und `wirtschaft` | Regel + KI |
+| v102 | **Vereinfacht** (Anweisung des Autors, nach einem Vorschlag in vierzehn Punkten, davon elf umgesetzt): Leiste mit fünf Knöpfen (**Welt** über den Reichsnamen ▾ und die Bevölkerung, **Protokoll** im Spielmenü ☰); Kopfzeile ohne Beschriftungen, vorn die **Bevölkerung** mit Balken und Strich an der Siegschwelle (`victoryOption`); kein Hinweis „… ist am Zug" (sitzen mehrere Menschen am Gerät, pulsiert das Zeichen, `pulseCiv`); Blätter zeigen die Entscheidung (Macht: Stand und gesperrte Käufe; Fähigkeiten: Punkte statt Sätzen, kein „gratis"; Spielende: Ergebnis als Titel, **der Tipp bleibt**, die nächste Stufe im Knopf); **altes Tutorial entfernt** (`js/tutorial.js`, 105 Übersetzungen, seine Tests); **Aufbau auf einem Bildschirm** (eine Zeile je Platz, Fähigkeitswahl mit Wirkung, Kärtchen, „Spiel beginnen" fest unten, keine Hinweise – die Spielarten stehen in den Regeln); **keine Einstellungen** mehr (Ereignisse und Weltwunder im Aufbau, Animationen im ☰, Kosten immer tatsächlich, Hochkant immer); Menü mit zwei Knöpfen und einer Zeile Verweise; **eine Stelle für die Siegschwellen** (Tests rechnen aus `VICTORY_THRESHOLDS`, ein einziger Schnappschuss, die Dokumente nennen keine Brüche mehr); **ui.js je Bildschirm geteilt** (`js/ui/*.js`), die Skriptliste steht nur noch in `index.html`; **Tests grün in einer Zeile**, `smoke.js` mit festem Zufall. Regeln: Wirtschaftssieg im **Duell** neu (Werte: `VICTORY_THRESHOLDS.duell`), **Philosophie** heißt jetzt „+1/6 Chance auf Techverfügbarkeit" | Oberfläche + Regel + Aufräumen |
+| v103 | Sechs Anweisungen des Autors, unter dem Grundsatz von v102: **„Armee bewegen"** für beide Knöpfe (in der Stadt und auf freiem Feld; ohne den Hinweis „erreichbare Felder werden markiert"); **„Bevölkerungswachstum"** statt „Bevölkerung wachsen"; **Demokratie/Nationalismus** „Armeekosten 4 bzw. 2 statt 5 × Anzahl"; **Ertragstechnologien nennen, was das Feld insgesamt bringt** („Wald bringt 2 Wissenschaft", „Grasland bringt 2 Nahrung" – bis v102 „+n", was nach Stapeln aussah); **große Bildschirme**: die ganze Oberfläche wächst ab 1366 × 720 mit dem Fenster (`--ui`, CSS-zoom; iPads bleiben bei 1); **Kolonialismus: 3× pro Runde ein herrenloses Feld kostenlos beanspruchen** (`claimTile`, `claimsLeft`, `COLONY_CLAIMS`; Kolonie ohne Weg und Hauptstadt-Zählung bleiben – Rückfrage beim Autor) | Oberfläche + Regel + KI |
+| v104 | Gemeldet vom Autor: man konnte **neben (und auf) einem fremden beanspruchten Feld gründen** – das Feld gehörte danach beiden Reichen. Jetzt gesperrt wie neben einer gegnerischen Armee (`foreignClaimNear`, auch Bots und KI); **ein eigenes Feld daneben wird ein gewöhnliches Feld der neuen Stadt** (verlässt `S.bought`, `claimsApart`; `settleGain` rechnet es mit; alte Spielstände beim Laden ebenso). Damit ist der offene Punkt 3 (Nachbarschaftsverbot der Territoriumsklausel) erledigt | Fehler + Regel |
+| v105 | **Neun Kosten** getauscht bzw. gedreht (Theologie 8/Bürokratie 10, Militärgericht 11/Nationalismus 13, Stahl 7/Burgenbau 8, Kunstdünger 11/Dampfmaschine 13/Eisenbahn 14; jede im selben Zeitalter; der alte Techtree behält die alten über `OLD_TECH_COSTS`). **Kopieren:** Internet, Spionage und Kundschafterei je eine Kopie je Runde, unabhängig (`COPY_WAYS`, `copyWaysOpen`, `copyTech(…, way)`, `p.copied`) – Rückfrage beim Autor: wer beide bezahlten hat, kopiert zweimal. Im Blatt eine Zeile je Technologie mit den Preisen als Knöpfen | Regel + Oberfläche + KI |
+| v106 | Gemeldet vom Autor: In der App auf dem Home-Bildschirm ging **„Fähigkeiten" in keiner Partie auf**, im Browser schon. Ursache, nachgestellt: Ihr Offline-Cache hielt neue Dateien neben alten (`copyRate is not defined`) – `sw.js` war schon neu, während der Upload lief, und gefüllt wird ein Cache nur einmal je `VERSION`. **Der Service Worker übernimmt eine Fassung jetzt ganz oder gar nicht:** jede Datei frisch (`cache: 'reload'`), Inhalt gegen `BUILD_HASH` geprüft, sonst bleibt die alte. Ist das Menü offen, lädt die App eine übernommene Fassung gleich neu (`swStart`) | Fehler + Auslieferung |
+
+Neu in v106: der erste Punkt unter „Was das Spiel heute kann", die Bug-Historie und `ANNAHMEN.md`
+(Abschnitt „Aktualisierung ganz oder gar nicht (v106)"), Punkt 66.
+
+Neu in v105: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Kosten getauscht · Kopieren je Weg einmal je Runde (v105)"), Punkt 65.
+
+Neu in v104: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Nicht an fremden Ansprüchen gründen (v104)"), die Fragilität zu `S.bought` ergänzt, der
+offene Punkt 3 erledigt, Punkt 64.
+
+Neu in v103: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Armee bewegen · Bevölkerungswachstum · Armeekosten · Ertragstexte als Summe · große
+Bildschirme · Kolonialismus kostenlos (v103)"), drei Fragilitäten neu, die offenen Punkte 62 und 63.
+
+Neu in v102: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Vereinfacht: Oberfläche, Tutorial, Einstellungen, eine Stelle für Zahlen (v102)").
+
+Neu in v101: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Freie Forschung zweimal je Partie · Wirtschaftssieg zu viert 4/7 (v101)"), die
+Fragilitäten zu den Siegschwellen, den Spielerzahlen und der Freien Forschung neu gefasst, `tools_ki.js`
+mit den Modi `freie` und `wirtschaft`, die offenen Punkte 60 und 61.
 
 Neu in v100: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Kolonisten halbieren, Marathon ohne Gründungsgrenze (v100)"), Fragilität „Gründungen je
@@ -156,8 +184,7 @@ passt, Rechenzeit auf dem iPad nicht gemessen), 17 (Abwehr gegen Menschen nur ge
 Skript gemessen) und 18 (Straßen im Bündel des Planers). Seit v80 Punkt 19 (Auslöser des
 gesperrten Bildschirms unbekannt).
 
-Offen und beim Autor: siehe „Offene Punkte" unten – vor allem Punkt 3 (Nachbarschaftsverbot
-der Territoriumsklausel) und Punkt 7 (verteidigt die Burg auch Feldarmeen?), seit v69 außerdem Punkt 9
+Offen und beim Autor: siehe „Offene Punkte" unten – vor allem Punkt 7 (verteidigt die Burg auch Feldarmeen?), seit v69 außerdem Punkt 9
 (Siedelvorschau bei Siedlertrecks), seit v72 Punkt 10 (Spieltipp zur Kundschafterei), seit v73
 Punkt 11 („eine Reihe näher": Ecken bei 4 Reichen, schnelle Duelle bei Abstand 2) und
 Punkt 12 (dominiert über alle Lagen oder nur je Lage?), seit v75 Punkt 13 (Bot-Partner
@@ -173,7 +200,13 @@ seit v92 Punkt 46 und 47 (Erstes Spiel), seit v94 Punkt 48 (Auslegungen zu v94),
 Stärke der neuen Forschungsreihenfolge nur knapp messbar), seit v97 Punkt 52 (Auslegungen zu v97:
 Siedlertrecks bei 1 Bevölkerung, Freie Forschung ohne Singularität, Kriegerkultur auch je Burgstadt),
 53 (Balance und Draftwerte der fünf Fähigkeiten nicht gemessen) und 54 (ein einmaliger Smoke-Fehler,
-Schritt unbekannt), seit v98 Punkt 55 (Auslegungen zum Startausgleich zu zweit).
+Schritt unbekannt), seit v98 Punkt 55 (Auslegungen zum Startausgleich zu zweit), seit v101 Punkt 60
+(Auslegungen zu v101: Singularität weiter wählbar, Marathon und Tutorial zählen als vier Reiche, zu
+dritt unverändert, alte Spielstände) und 61 (was die Messung zu v101 sagt und was nicht), seit v103
+Punkt 62 (Auslegungen zu v103) und 63 (Kolonialismus kostenlos: Balance und KI-Forschungswert nicht
+gemessen), seit v104 Punkt 64 (Auslegungen zu v104), seit v105 Punkt 65 (Kopieren und Kosten: Auslegungen,
+nicht gemessen), seit v106 Punkt 66 (Auslieferung: Auslegungen). Punkt 3 (Nachbarschaftsverbot der
+Territoriumsklausel) hat der Autor in v104 entschieden.
 
 ## Wo alles liegt
 
@@ -189,7 +222,7 @@ Schritt unbekannt), seit v98 Punkt 55 (Auslegungen zum Startausgleich zu zweit).
   Danach `npm install jsdom --no-fund --no-audit` — für `smoke.js` und `check_single.js` nötig.
   Am besten im **Elternordner** (`cd /home/claude`): Node findet es dort über die
   Verzeichnissuche, und `node_modules` kann gar nicht erst ins Paket rutschen (so in v69).
-- **Deliverables in `/mnt/user-data/outputs/`:** Ordner `hochzeivilization/` (36 Dateien),
+- **Deliverables in `/mnt/user-data/outputs/`:** Ordner `hochzeivilization/` (46 Dateien),
   `hochzeivilization.zip`, und `hochzeivilization-einzeldatei.html` — Letzteres ist, was der
   Autor tatsächlich aufs iPad lädt.
 - **Wichtig beim Paketieren:** `node_modules` und `package*.json` ausschließen
@@ -201,28 +234,38 @@ Schritt unbekannt), seit v98 Punkt 55 (Auslegungen zum Startausgleich zu zweit).
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1640 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1387 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 533 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, nur Tutorial), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/data.js` | 552 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 157 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
 | `js/tiles.js` | 444 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4), Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2255 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/engine.js` | 2322 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
-| `js/bots.js` | 489 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
-| `js/ki.js` | 1935 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
+| `js/bots.js` | 487 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
+| `js/ki.js` | 1946 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
-| `js/marathon.js` | 323 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
-| `js/ui.js` | 3205 | SVG-Karte, Antippen, Aktionsblätter, Technologiebogen, Nahrungsfenster, Aufbau (inkl. 1-gegen-1, Sitzart Mensch / KI / Bot), Editor, Kurzregeln , Legephase (`screen-place`) · Kartenansichten: Gründungsmodus samt Erträgen, Machtringe (v75, ein Stück je Punkt seit v76) · Blatt „Fähigkeiten" (`abilSheet`, v87) |
-| `js/tutorial.js` | 692 | Geführtes Übungsspiel: **29 Schritte** (19 mit Aufgabe), feste Würfelfolge, Schienen, feste Texte |
-| `js/firstgame.js` | 1461 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 8010 | **2020 Assertions**, `node test.js` |
-| `smoke.js` | 4996 | **185 Schritte** durch die echte UI via jsdom, `node smoke.js` |
-| `build_single.py` / `check_single.js` | 21 / 83 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
-| `tools_version.js` | 69 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
-| `tools_docs.js` | 72 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
+| `js/marathon.js` | 328 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
+| `js/ui/base.js` | 181 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
+| `js/ui/map.js` | 555 | SVG-Karte (`drawMap`), Geländezeichen, Erträge im Gründungsmodus, Machtringe, Flüsse, Kampfbilder, `attachTaps` |
+| `js/ui/game.js` | 425 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
+| `js/ui/sheets.js` | 317 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
+| `js/ui/turns.js` | 378 | Zugende, KI- und Bot-Züge, Kampf- und Zug-Nachspiel (Szenen, Satz, laufender Vorrat), Bot-Blatt |
+| `js/ui/end.js` | 175 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
+| `js/ui/world.js` | 223 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
+| `js/ui/setup.js` | 335 | die eine Vorliebe (`prefs.anim`, `setAnim`); Aufbau: Spielart, Plätze (eine Zeile, Fähigkeitswahl mit Wirkung), Karte, Startspieler, Rezept, Doppelte |
+| `js/ui/place.js` | 238 | Legephase der Plättchenkarte |
+| `js/ui/draft.js` | 89 | Marathon: Fähigkeiten draften |
+| `js/ui/editor.js` | 34 | Karteneditor |
+| `js/ui/boot.js` | 297 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
+| `js/firstgame.js` | 1459 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
+| `test.js` | 7986 | **2008 Assertions**, `node test.js` |
+| `smoke.js` | 4654 | **169 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
+| `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
+| `tools_docs.js` | 75 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
 | `tools_civs.js` | 82 | `data/civs.json` → `js/civs.js` |
-| `tools_ki.js` | 374 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase) |
+| `tools_ki.js` | 482 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase); seit v101 die Modi `freie` (Freie Forschung: Regel von v100 und vier Arten zu wählen, gepaart) und `wirtschaft` (Siegschwellen zu viert v100 gegen v101, gepaart) |
 | `tools_startplaettchen_dump.js` / `tools_startplaettchen_pdf.py` | 34 / 176 | Druckbogen `Startplaettchen.pdf` aus `js/tiles.js` (A4 quer, 3 Seiten, Spieloptik, verzahnt mit 4 mm Luft, ohne Umriss) |
 | `ANNAHMEN.md` | — | **Alle Regelauslegungen und Entscheidungen.** Bei Regelfragen zuerst hier nachsehen. |
 
@@ -245,6 +288,159 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v106 auf einen Blick.** Fehler gemeldet vom Autor: „Fähigkeiten" ging in der App auf dem
+  Home-Bildschirm nicht auf, in jeder Partie; im Browser schon. Im Code von v105 nicht zu finden
+  (Chromium: neue Partien, alte Spielstände, alle Kopierwege, beide Sprachen, Erstes Spiel). Nachgestellt
+  mit einem Server wie GitHub Pages und dem echten Service Worker: Lief der Upload noch, als die App
+  das neue `sw.js` sah, kam ein Gemisch in den Cache – neue `js/engine.js`, alte `js/ui/sheets.js`,
+  deren Blatt `copyRate` ruft. Neu gefüllt wird erst bei der nächsten `VERSION`, also blieb es kaputt.
+  · **`sw.js`:** Der Einbau holt jede Datei mit `cache: 'reload'` (nie aus dem HTTP-Cache des
+    Browsers, GitHub Pages: zehn Minuten) und legt sie nur ab, wenn `buildHash` – SHA-1 über Name und
+    Inhalt, wie `tools_version.js` – `BUILD_HASH` ergibt. Sonst wirft er: Die alte Fassung bleibt, beim
+    nächsten Start versucht der Browser es wieder. Ohne WebCrypto (http außerhalb von localhost)
+    ungeprüft.
+  · **`js/ui/boot.js`:** `swStart()` – übernimmt ein neuer Service Worker (`controllerchange`),
+    während das Menü offen ist, lädt die Seite neu; beim allerersten Einbau und mitten im Spiel nicht.
+    `build_single.py` ersetzt den Aufruf `if ('serviceWorker' in navigator) swStart();` und bricht ab,
+    wenn er fehlt (bis v105 ersetzte es stumm oder gar nicht).
+  · **Tests:** `test.js` läuft seit v106 mit asynchronem Schluss (`SPAETER`): sw.js in eigener Umgebung
+    mit nachgebautem `fetch`/`caches` – alle 30 Dateien frisch im Cache, mit einer abweichenden
+    nichts. Von Hand (Chromium, lokaler Server mit `Cache-Control` wie GitHub Pages,
+    `registration.update()`): v105 halb hochgeladen → kaputt, auch nach dem Rest; v106 → geht; eine
+    Fassung halb hochgeladen → abgelehnt, die alte läuft; komplett → übernommen und im Menü neu
+    geladen; während einer Partie → kein Neuladen.
+- **v105 auf einen Blick.** Zwei Anweisungen des Autors.
+  · **Kosten:** `TECHS` Theologie 8, Bürokratie 10, Militärgericht 11, Nationalismus 13, Stahl 7,
+    Burgenbau 8, Kunstdünger 11, Dampfmaschine 13, Eisenbahn 14 (getauscht bzw. gedreht, keine wechselt
+    das Zeitalter). `OLD_TECH_COSTS` trägt die alten Werte der neun: Spielstände von vor v82 (alter
+    Techtree) rechnen weiter damit, wie seit v84 bei den drei militärischen der Antike. Laufende
+    Partien im Standard bekommen die neuen Kosten – sie stehen nicht im Spielstand.
+  · **Kopieren:** `COPY_WAYS` in `js/engine.js` – Internet (0×), Spionage (1×), Kundschafterei
+    (`SCOUTING_RATE` 2×) –, jeder Weg einmal je Runde und unabhängig: `copyWaysOpen(S, pi)`,
+    `copyableTechs` liefert je Technologie `ways: [{ k, coins }]` (billigster zuerst),
+    `copyTech(S, pi, k, way)` (ohne `way` der billigste offene). Gezählt in `p.copied[Weg]` = Runde;
+    `migrateState` übernimmt `p.internetUsed`. Bis v104: Spionage und Kundschafterei beliebig oft, mit
+    beiden nur Spionage. Texte „1 Tech/Runde kopieren (1×/2× Kosten in Münzen)". Blatt „Fähigkeiten":
+    eine Zeile je Technologie (`.copy-row`), rechts je offenem Weg der Preis als Knopf (`.way`, gratis
+    hervorgehoben, Name des Wegs als `title`), ein genutzter Weg verschwindet aus allen Zeilen, alle
+    genutzt: „Diese Runde schon kopiert." KI: je Weg ein Kandidat (`copy<weg>:<tech>`), Wert von
+    Spionage/Kundschafterei nach dem Muster des Internets geschätzt (`2 + 0,2 · H · min(3,
+    kopierbar)`, das Internet `3 + 0,3 · H · …`).
+  · **Tests:** `test.js` die neun Kosten, Zeitalter, vier Leitern, die alten Werte im alten Techtree; Kopieren je Weg
+    (nur Internet, nur Spionage, nur Kundschafterei, alle drei in einer Runde, zu wenig Münzen, alter
+    Spielstand, `freeActions`), Preise beider Wege nebeneinander, KI über mehrere Wege. `smoke.js`: Zeile
+    und Preisknöpfe (3 Münzen: gratis · 2 · 4 gesperrt), drei Kopien in einer Runde, danach der Satz.
+- **v104 auf einen Blick.** Fehler gemeldet vom Autor: neben einem fremden beanspruchten Feld ließ
+  sich gründen (und darauf auch, weil nur der Weg gesperrt war, nie das Zielfeld) – das Feld gehörte
+  danach beiden Reichen, beide bekamen seinen Ertrag. Jetzt in `foundSiteError` nach dem Mindestabstand:
+  „Nicht auf oder direkt neben gegnerischem Gebiet." (`foreignClaimNear(S, pi, r, c)`: ein beanspruchtes
+  Feld eines anderen lebenden Reichs auf dem Platz oder einem der sechs Nachbarn; Stadtumland braucht
+  die Prüfung nicht, der Mindestabstand hält es zwei Felder fern). Dieselbe Regel in `settleable`
+  (Bots) und `kiSiteOk` (KI). Eigene Ansprüche auf oder neben einer neuen Stadt werden ihre Felder:
+  `foundCity` nimmt sie aus `S.bought` (`claimsApart`), `settleGain` rechnet das mit (mit Bürokratie
+  zählen sie danach einfach), `migrateState` macht dasselbe beim Laden für alle Ansprüche auf oder neben
+  einer Stadt – auch für den fremden aus dem Fehler. Tests: `test.js` fremder Anspruch (auf, daneben,
+  zwei weiter, Bots, KI), eigener (Bürokratie doppelt → einfach, `settleGain` gleich der Änderung),
+  alter Spielstand (das doppelt beherrschte Feld, ein zweites Laden ändert nichts), der bis v103 offene
+  Fall „auf einem fremden Einzelfeld"; `smoke.js` Gründungsmodus: Platz neben einem fremden Anspruch
+  abgeblendet, das Blatt nennt den Grund.
+- **v103 auf einen Blick.** Sechs Anweisungen des Autors, umgesetzt nach dem Grundsatz von v102.
+  · **Knöpfe:** `Armee bewegen` (`data-label`, `FG_AKTION`, `knopf`-Listen im Ersten Spiel) für die
+    Armee in der Stadt und auf freiem Feld; unter dem Knopf nur, was gilt („muss die Stadt noch
+    verlassen", „Kontrollzone – …"). `Bevölkerungswachstum` statt „Bevölkerung wachsen" (englisch
+    weiter „Grow population").
+  · **Texte:** Demokratie „Armeekosten 4 statt 5 × Anzahl", Nationalismus „… 2 statt 5 …" (ein Test
+    liest die Zahlen aus `armyCost`). Ertragstechnologien nennen, was Feld bzw. Bevölkerung damit
+    insgesamt bringt – Grundertrag plus Kette („Wald bringt 1/2/3 Wissenschaft", „Gebirge bringt 2
+    Wissenschaft", „Bevölkerung bringt je 2 Wissenschaft"; englisch „Forest yields 2 science",
+    „Mountains yield …", „Population yields 2 science each"); der Satz im Regelbogen: „es gilt die
+    beste". `test.js` erzeugt jeden Text aus `YIELD_CHAINS` + `TERRAIN`/`CITY_YIELD` und hält fest,
+    dass je Ziel und Ertragsart genau eine Kette zuständig ist.
+  · **Große Bildschirme:** `uiScale(w, h, gedreht)` in `js/ui/base.js` – 1 bis `UI_BASE_W` × `UI_BASE_H`
+    (1366 × 720), darüber `min(w/1366, h/720)`, auf zwei Stellen; gedreht 1. `syncLayout` setzt `--ui`,
+    `css/style.css` wendet es an (`html{zoom:var(--ui,1)}`), die Layoutklassen rechnen mit Fenster ÷
+    `--ui`. `setBarHeight` misst seitdem `offsetHeight` (kennt weder Drehung noch Zoom; bis v102
+    `getBoundingClientRect`, gedreht mit vertauschten Seiten). Das Konfetti fällt um die eigene Höhe in
+    Pixeln (`--fall`), nicht um 105vh – vh wächst mit dem Zoom.
+  · **Kolonialismus:** `claimTile(S, pi, r, c)` statt `buyTile`, `claimsLeft(S, pi)`, `COLONY_CLAIMS` 3
+    statt `COLONY_COST`; gezählt in `p.claimRound`/`p.claimCount` (je Runde, alte Stände: alle offen).
+    Gespeichert weiter in `S.bought` (Name aus der Zeit des Kaufens, Spielstände unverändert). Knopf
+    „Feld beanspruchen" mit Punkten (`pips`, jetzt in `base.js`, auch für die Freie Forschung).
+    Kolonie ohne Siedlerweg und Hauptstadt-Zählung (Bürokratie doppelt) bleiben. KI: Kandidaten,
+    solange Ansprüche offen sind, jedes Feld mit Ertrag (`kiColonySpots` `v > 0`, bis v102 `≥ 2`);
+    ihr Forschungswert für Kolonialismus ist unverändert 4 (offener Punkt 63).
+  · **Tests:** `test.js` neu bzw. umgestellt: Armeekosten-Texte, Ertragstexte als Summe, Kolonialismus
+    (drei je Runde, nichts bezahlt, vierter abgelehnt, nächste Runde wieder drei, alte Stände, X-Felder,
+    beide Techtrees, KI beansprucht drei ohne Münzen). Die Messung „mit Reserve mehr Wissenschaft in die
+    Forschung" läuft mit Startwert 304 statt 303 (mit 303 erforscht England Kolonialismus, der Verlauf
+    kommt danach ohne Reserve aus). `smoke.js`: Punkte am Knopf 3/3 → 0/3, Münzen unverändert;
+    `--bar-h` gedreht, quer und vergrößert; `uiScale` für iPads und Desktopgrößen.
+- **v102 auf einen Blick.** Oberfläche nach dem Grundsatz des Autors: einfacher Zweck, einfacher
+  Aufbau, einfache Gestaltung, einfache Umsetzung – keine Untertitel, Hinweistexte und
+  Nebenbeschriftungen; braucht ein Bildschirm sie, wird das Layout geändert.
+  · **Leiste** fünf Knöpfe (`a-info`/`a-log` sind weg): Welt über `#hud-civ` (der Reichsname, ▾ per
+    CSS) und `#hud-pop`, Protokoll über ☰ (`mm-log`).
+  · **Kopfzeile** (`hudStand`): `#hud-round` nur „Runde N · Ereignis · letzte Runde (…)"; fünf Kästchen
+    ohne `<u>`-Beschriftung, vorn `#hud-pop` mit `#hud-popn` (eigene/Welt), Balken `#hud-popf` in der
+    Reichsfarbe und Strich `#hud-popk` bei `victoryOption(S, p).frac`; beim Nachspielen die Werte der
+    Szene (`animKopf`). Die Fähigkeit steht nicht mehr neben dem Namen (`.hud-abil` ist weg).
+  · **Zugbeginn** (`humanTurnStart`): kein `toast` „… ist am Zug"; mit zwei oder mehr Menschen am
+    Gerät `pulseCiv()` (Klasse `.pulse` am Zeichen, Farbe aus `--civ`). Der Satz der Szenen
+    verschwindet mit `endAnim` wie bisher.
+  · **Blätter:** Macht – Titel mit Stand (`.sheet-now`), Käufe über dem Vorrat `disabled`, kein
+    Text (Kurs am Knopf, Halbierung und Ringlegende in den Regeln); Fähigkeiten – keine Überschrift
+    „Deine Fähigkeit", die Freie Forschung zeigt `.pips` (gefüllt = offen), kostenlose Knöpfe ohne
+    „gratis"; Spielende – `modal(titel, …)` mit „X gewinnt", der Tipp bleibt (Anweisung), kein
+    Satz unter „Nochmal spielen", dafür „Nochmal spielen · Stufe".
+  · **Tutorial entfernt:** `js/tutorial.js`, `tutNextDie` (d6 fragt jetzt `fgNextDie` direkt, nur mit
+    `ui.fg`), `tutBotTech`, alle `ui.tut`-Haken, Menüknopf, 105 Übersetzungen, CSS der Texttafeln,
+    rund 95 Assertions und 16 Smoke-Schritte. Das Panel (`#tut-panel`) gehört jetzt allein dem
+    Ersten Spiel; der Zurück-Knopf ist weg. Der alte Techtree bleibt – für Spielstände von vor v82.
+  · **Aufbau:** je Platz eine Zeile `.slot` (Reich bzw. `[data-civpick]` · Mensch/KI/Bot · Knopf
+    `[data-abilpick]`, dahinter das versteckte `[data-abil]`-Select als Wert); der Knopf öffnet eine
+    Auswahl mit Name und Wirkung (`modal`). Darunter `.setup-opts` (Karte, KI, Bots, Beginnt,
+    Ereignisse, Ereignisstärke, Weltwunder, Sechseck-Plättchen) als Kärtchen, „Spiel beginnen" in
+    `.setup-go` fest unten. Die sechs Hinweise sind weg; die Spielarten erklärt `spielartenHtml()`
+    in den Regeln, alle Zahlen aus den Tabellen.
+  · **Keine Einstellungen:** `#screen-options`, `MODULES`/`modules`/`optionsScreen`/`applyModules`,
+    `prefs.listPrice`, `turnWanted`/`setTurn` sind weg; `boot` löscht `hochciv.opts` und
+    `hochciv.noturn`. Bleibt `prefs.anim` mit `setAnim`, gewählt im ☰ (`#mm-anim`).
+  · **Menü:** Titel, `.menu-actions` (`m-continue` oben und rot, sobald gespeichert – `menuButtons()`;
+    sonst `m-first` rot, dann `m-new`), `.menu-links` (Regeln, Karte bearbeiten, Spielstand laden),
+    Flaggen, `APP_VERSION` ohne den Namen davor.
+  · **Eine Skriptliste:** die `<script>`-Tags in `index.html`. `build_single.py` ersetzt sie der Reihe
+    nach, `sw.js` holt bei der Installation `index.html` und speichert `STATIC` plus diese Skripte,
+    `tools_version.js` hasht dieselbe Menge, `test.js` lädt sie ohne `js/ui/`, `smoke.js` alle.
+  · **Tests:** grün eine Zeile (`test   N passed`, `smoke  N passed`, `single  ok`), rot die
+    FAIL-Zeilen, `--verbose` für alles; `tools_docs.js` liest die Zahl aus dieser Zeile. `smoke.js`
+    setzt `Math.random` des Fensters auf einen festen Startwert (`SMOKE_SEED`), seitdem ist ein
+    roter Schritt immer rot (gefunden: der Animations-Schritt war rot, wenn ein Bot in Runde 3
+    gewann – jetzt zählt dort ein Sieg als Ende des Nachspiels).
+  · **Regeln:** Duell-Schwellen neu (Wirtschaftsweg des Ersten Spiels siegt jetzt in Runde 7);
+    Philosophie „+1/6 Chance auf Techverfügbarkeit" (`TECHS`, `DATA_EN`).
+- **v101 auf einen Blick.** Freie Forschung: `FREE_TECH_USES` 2 (`js/data.js`), `freeTechsLeft(p)`,
+  `freeTechOptions` sperrt mit `p.freeTechUsed === S.round` oder ohne Rest, `useFreeTech` setzt
+  `p.freeTechUsed` und zählt `p.freeTechsUsed`; `migrateState` löscht den Zähler nicht mehr und
+  rechnet einem Stand von v99/v100 mit Rundenvermerk eine als verbraucht an; `abilSheet` nennt den
+  Rest (zwei Sätze in `UI_EN`); KI: `kiFreeTechChoices` gibt weiter alles zurück, was zur Wahl steht
+  (Aufheben für die Moderne oder die Singularität gemessen und verworfen, `tools_ki.js freie`);
+  `KI_DRAFT_BASE` Freie Forschung 12 → 5 (geschätzt). Texte: `data/civs.json` (→ `node
+  tools_civs.js`), `DATA_EN.abil`, Spieltipp 3 in beiden Sprachen. Siegschwellen: `VICTORY_THRESHOLDS`
+  (`js/data.js`, je Spielart Zähler und Nenner) statt
+  `VICTORY_FRAC`/`THEOLOGY_FRAC`/`UN_FRAC`/`DUEL_…` und `VICTORY_LABEL`/`DUEL_VICTORY_LABEL`; in
+  `js/engine.js` `victoryMode(S)` ('duell' / 'vier' / 'drei', `S.victoryMode` übersteuert),
+  `victoryLabels(x)` (Spielart oder Spielstand; bis v100 in data.js mit `true` fürs Duell),
+  `victoryOption` mit `num`/`den`, `victoryMet` (ganzzahlig, in `checkVictory` und im Ersten Spiel).
+  Texte: `TECHS`/`DATA_EN` Theologie „>1/2", UN „>2/5"; Regelbogen über `victoryLabels(S)`; Tutorial
+  „Die drei Wege zu gewinnen" lang und kurz mit `%s` aus `VICTORY_THRESHOLDS`; `placeTechView` setzt
+  `V.victoryMode`. Tests: `test.js` Freie Forschung (zwei, je Runde eine, danach keine, Wunder zählen
+  nicht, Spielstände von v96–v100), „Fähigkeiten"-Zahl bis zur zweiten, Texte mit `FREE_TECH_USES`, KI
+  (erwägt alles, eine je Zug, nach zweien keine, nimmt mit der letzten die Singularität; eine ganze
+  Partie: höchstens zwei, je Runde eine), Siegschwellen je Spielart samt Grenzfällen (4 von 7, 8 von
+  14, 5 von 8; Theologie, UN; zu dritt; im Duell 63 von 90), Bogen und Rechnung aus einer Quelle,
+  Marathon, Barbaren, Ausgeschiedene, Aufbau als Spielstand, Tutorialtext; `smoke.js` Regelbogen im
+  Marathon (4/7 · 2/5 · 1/2, neuer Fähigkeitstext, deutsch und englisch), Blatt „Fähigkeiten" (2 von 2
+  → 1 von 2 → verbraucht, englisch), Bogen der Legephase (Duell 7/10 · 2/3, zu viert 1/2 · 2/5).
 - **v100 auf einen Blick.** Gründungskosten: `foundCostOf(p, stadt, dist)` (`js/engine.js`) –
   Kartografie streicht den Weg, Kolonisten halbiert den Rest, aufgerundet, nie unter 1; `foundCost`
   und `kiSitesAll` (`js/ki.js`, bis v99 mit eigener Kopie der Regel) rufen sie. Marathon:
@@ -336,7 +532,7 @@ Gedächtnis rekonstruieren.
   `animDetails` sammelt alles, was die Aktion geändert hat; `animText` hat 'gratisarmee',
   'kopieren' und „baut eine Straße". Gruppen, `ANIM_KARTE`, `animGruppe`, `teile` und die Art
   'armeen' sind weg. Oberfläche: `prefs.anim` ('langsam' | 'schnell' | 'aus', `ANIM_STUFEN`;
-  `loadPrefs` macht aus `noAnim: true` 'aus'), Auswahl `#opt-anim` in den Einstellungen;
+  `loadPrefs` macht aus `noAnim: true` 'aus'), Auswahl seit v102 im Spielmenü ☰ (`#mm-anim`, bis v101 `#opt-anim` in den Einstellungen);
   `animFaktor(n)` statt `animTempo` (Langsam 1,5; Schnell wie v94 `min(1, max(0.6, 7/n))`),
   `animAn`/`animBlatt` lesen `prefs.anim`. Taiga: in `tileYield` nach dem Großen Leuchtturm
   `if (y[1] < 1 && hasAbil(p, 'russland', 'basis')) y[1] = 1` (die Zeile „Wald +1" ist weg);
@@ -515,8 +711,8 @@ Gedächtnis rekonstruieren.
   `hochciv.prefs`) stellt die Anzeige bis v81 wieder her.
 - **Ein Techtree (v82).** Die Kosten des früheren alternativen Techtrees stehen in `TECHS`;
   das Häkchen im Aufbau ist weg. Der alte Techtree (`OLD_TECH_COSTS`, `S.oldTree`) gilt nur
-  im Tutorial und in Partien, die vor v82 mit ihm begonnen wurden (`migrateState`); dort
-  nennen Weltblatt und Regelbogen ihn, im Tutorial nicht. `tools_ki.js … alterbaum` spielt
+  in Partien, die vor v82 mit ihm begonnen wurden (`migrateState`; v82–v101 auch im Tutorial);
+  dort nennen Weltblatt und Regelbogen ihn. `tools_ki.js … alterbaum` spielt
   zum Vergleich im alten.
 - **KI (v77).** Dritte Sitzart im Aufbau (Mensch / KI / Bot), ab Werk sind die Gegner KI.
   Sie spielt nach den Regeln für Menschen – nur über die Aktionen der Regelmaschine, also
@@ -535,10 +731,7 @@ Gedächtnis rekonstruieren.
   Singularität 100 (seit v88 120), Keramik und Theologie in der Techliste, Verbundwerkstoffe = kostenloses
   Wachstum, Sklaverei ab Moderne obsolet (im Bogen durchgestrichen), Siegschwellen stapeln
   nicht, Bots forschen zweimal. Griechenland hat **keinen** Würfelbonus.
-- **Tutorial in zwei Fassungen:** die kurze filtert `kurz: false` weg und ersetzt Texte
-  über `kurz: () => …`. Seit v60 darf ein Schritt über **`tKurz`** auch einen eigenen Titel
-  für die kurze Fassung tragen (genutzt in 2/24: lang „Woher deine Ressourcen kommen",
-  kurz „Aktionen"). Ohne `tKurz` gilt ein gemeinsamer Titel.
+- **Tutorial in zwei Fassungen** (v54–v101, seit v102 entfallen).
 - **Zivilisationsfähigkeiten:** je Reich drei zur Wahl (Grund + zwei Alternativen aus dem
   Civs-Bogen), im Aufbau umschaltbar. **Bots erhalten keinerlei Fähigkeit.** Wird das Reich
   ausgelost, steht auch die Fähigkeit auf *Zufall* – die frühere Option „Grundfähigkeit"
@@ -552,15 +745,12 @@ Gedächtnis rekonstruieren.
   Weg mit ihr verbunden ist, bringt +1 auf alle Erträge; bei reiner Eisenbahn +4 (seit v96,
   vorher +2). Gemischte Strecken zählen als Straße.
 - **Ereignisse** (Erweiterung, hart/leicht) mit Barbaren als neutraler Fraktion.
-  Seit v58 ein **Modul**: ab Werk aus, im Hauptmenü unter *Einstellungen* zuschaltbar.
+  Ab Werk aus, seit v102 direkt im Aufbau je Partie (v58–v101 erst über *Einstellungen* zuschaltbar).
 - **Weltwunder** (Erweiterung) mit Pyramidenregel, Kultursieg und vier eigenen Technologien
   (Baukräne, Wallfahrt, Militärlogistik, Raumfahrt). Bots bauen sie kostenlos, **ohne Effekte**
-  — einzige Ausnahme: Militärlogistik wirkt auch für Bots. Seit v58 ebenfalls ein **Modul**:
-  ab Werk aus, im Hauptmenü unter *Einstellungen* zuschaltbar.
-- **Einstellungen (v58):** eigener Bildschirm im Hauptmenü (`screen-options`), Wahl unter
-  `hochciv.opts`. Ist ein Modul aus, fehlt seine Zeile im Aufbau ganz **und sein Häkchen
-  wird gelöscht** – sonst liefe ein abgeschaltetes Modul unsichtbar weiter. Ist es an,
-  entscheidet das gewohnte Häkchen weiter je Partie.
+  — einzige Ausnahme: Militärlogistik wirkt auch für Bots. Ab Werk aus, seit v102 direkt im
+  Aufbau je Partie (v58–v101 erst über *Einstellungen* zuschaltbar).
+- **Einstellungen (v58–v101):** seit v102 entfallen – siehe „v102 auf einen Blick".
 - **Spielende (v58):** unter dem Ergebnis steht immer ein **Spieltipp** (43 Stück in `TIPS`,
   englisch in `DATA_EN.tips`; einer je Partie, Nummer in `S.tip` gemerkt). Allein gegen Bots
   zusätzlich **„Nochmal spielen"**: dieselbe Aufstellung, ausgelostes Reich samt Fähigkeit,
@@ -594,10 +784,7 @@ Gedächtnis rekonstruieren.
 - **Fähigkeit sichtbar (v54):** `abilInfo(p)` (engine) liefert `{k,n,e}`; die Kopfzeile
   zeigt den Kurznamen neben dem Reich, das Weltblatt listet alle Reiche mit Fähigkeit und
   Wirkung. Nötig, seit sich Fähigkeiten auslosen lassen.
-- **Tutorial (v54):** fragt beim Öffnen nach Erfahrung. „Nein" = lange Fassung (29
-  Schritte), „Ja" = kurze (24). **Eine** Schrittliste, jeder Schritt hat `kurz` (Text oder
-  `false`); Aufgaben sind damit in beiden identisch. Schritte mit `enter`/`dice` dürfen nie
-  `kurz: false` bekommen – „Eine gegnerische Armee vor der Stadt" setzt die Armee.
+- **Tutorial (v54–v101):** seit v102 entfallen; der eine Einstieg ist das Erste Spiel.
 - **Balance (v53):** Englands **Kolonisten** zahlt doppelt für Bevölkerungswachstum
   (`GROW_ABIL_FACTOR` in `js/engine.js`), **Seemacht** gibt +1 statt +2 je Küstenstadt
   (`SEA_CITY_BONUS` in `js/data.js`).
@@ -607,37 +794,42 @@ Gedächtnis rekonstruieren.
 - **Sprachen (v52):** zwei Flaggen im Menü, Deutsch ist Vorgabe und Quelle. Datentexte über
   `DATA_EN` (Tabelle, kein Eingriff im Code), Oberflächensätze über `T('deutscher Satz')`
   mit `UI_EN` (482 Einträge). Übersetzt sind Menü, Aufbau, alle Blätter, Technologiebogen,
-  Protokoll, Spielende, Regelbogen, Editor und das **komplette Tutorial** (482 Einträge).
+  Protokoll, Spielende, Regelbogen, Editor und das Erste Spiel.
   `smoke.js` läuft die Oberfläche auf Englisch ab, Grenze für deutsche Reste: 2.
-  **Achtung:** Das Tutorial filtert Knöpfe nach `data-label` (deutscher Schlüssel), nicht
-  nach der sichtbaren Beschriftung – wer `btn()` umbaut, muss das mitnehmen, sonst hängt
-  das Tutorial in der Fremdsprache. `TUT_STEPS` wird beim Laden gebaut – Titel und Aufgaben dort erst beim
-  Anzeigen übersetzen (`T(st.t)`), sonst frieren sie auf Deutsch ein. Alte Protokollzeilen
+  Knöpfe tragen ihren **deutschen** Schlüssel als `data-label` (das Erste Spiel prüft danach),
+  die sichtbare Beschriftung wechselt. Alte Protokollzeilen
   behalten ihre Sprache (das Protokoll speichert Sätze, keine Schlüssel).
 - **Aufbau (v51):** Zivilisation, Fähigkeit und Startspieler lassen sich **auslosen**
   („Zufall", aufgelöst erst beim Start in `resolveRandom`); bei mehr als einem Menschen ist
   der zufällige Startspieler die Vorgabe. Doppelgänger bekommen **je eine der vier
   Zivilisationsfarben**, keine Schattierungen.
-- **Siegschwellen:** `VICTORY_LABEL` / `DUEL_VICTORY_LABEL` in `js/data.js` sind die eine
-  Quelle für Rechnung (`victoryOption`) und Anzeige (`techEffect`, Regelübersicht). Im
-  Duell zeigte der Bogen vorher die Werte des Vierspielerspiels.
+- **Siegschwellen:** `VICTORY_THRESHOLDS` in `js/data.js` (seit v101; vorher `VICTORY_LABEL` /
+  `DUEL_VICTORY_LABEL` und getrennte Brüche) ist die eine Quelle für Rechnung (`victoryOption`,
+  verglichen ganzzahlig in `victoryMet`) und Anzeige (`victoryLabels`, `techEffect`,
+  Regelübersicht samt „Spielarten", Bevölkerungsstrich der Kopfzeile, Erstes Spiel) – je Spielart
+  (`duell`, `vier`, `drei`) Zähler und Nenner. **Seit v102 nennt kein Dokument und kein Test die
+  Brüche** außer dem einen Schnappschuss in `test.js` („Siegschwellen: der Schnappschuss"); eine
+  Änderung ist die Zeile in `js/data.js` plus dieser Schnappschuss. Welche gilt, sagt
+  `victoryMode(S)`: Duellmodus, sonst die Zahl der Reiche der Aufstellung (`empireCount`, ohne
+  Barbaren, Ausgeschiedene zählen mit); ohne Spielstand `vier`. Eine Wegwerf-Partie mit weniger
+  Reichen als die echte (die „Forschung" der Legephase) setzt `V.victoryMode`. Im Duell zeigte
+  der Bogen bis v50 die Werte des Vierspielerspiels.
 - **Zivilisationen (v51):** Auf Plättchenkarten darf jeder Platz frei wählen, **auch
   mehrfach dieselbe** (Doppelgänger: „Russland I/II/III", eigene Farbschattierung). Auf
   festen Karten bleibt jede Zivilisation einmalig. Identität ist damit `p.slot`, nicht
   `p.civ`: Plättchenkarten führen `map.capitals` als **Liste** `[{civ,r,c}]`, feste Karten
   weiter als Objekt; `capitalSpot()` kennt beide.
-- **Spielerzahlen 2, 3 und 4.** „Drei Reiche" ist neu (Standard-Siegschwellen, nicht die
-  des Duells); freie Zivilisationswahl bei 2 und 3.
+- **Spielerzahlen 2, 3 und 4.** „Drei Reiche" hat eigene Siegschwellen (bis v100 galten sie auch
+  zu viert); freie Zivilisationswahl bei 2 und 3.
 - **1 gegen 1:** zwei frei gewählte Reiche, immer die Plättchenkarte aus sechs Dreiecken
-  (die Kartenzeile bleibt deshalb weg), Wirtschaftssieg erst über 3/4 (Theologie 7/10,
-  UN 2/3).
+  (die Kartenzeile bleibt deshalb weg), Wirtschaftssieg mit den Schwellen des Duells (seit v102
+  höher, Anweisung des Autors).
 - **Spielende (v51):** Nur der **Militärsieg** endet sofort. Wirtschafts-, Forschungs- und
   Kultursieg werden **angemeldet** (`claimVictory`, `S.claims`, `S.endRound`); gespielt wird
   bis zum **Rundenende**, dort entscheidet `resolveClaims`. Mehrere Ansprüche in derselben
   Runde ⇒ **Punkte = Bevölkerung + Wunder + Technologien**. Ein Anspruch bleibt gültig, auch
   wenn die Bedingung später wegfällt. **Gleichstand: Mensch vor Bot**; mehrere Menschen
   gleichauf teilen den Sieg. Barbaren gewinnen nie. Details in `ANNAHMEN.md`.
-- **Tutorial:** geführtes Übungsspiel in der normalen Oberfläche, 29 Schritte, 19 mit Aufgabe.
 
 ### Abwehr neu gewichtet, Wissenschaft für die Forschung, kein Knopf „Armeen" (v79)
 
@@ -1041,10 +1233,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 2020 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2008 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (185 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (169 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -1103,8 +1295,24 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
 
 ## Bekannte Fragilitäten
 
-- **`sw.js`-Version** nach *jeder* Änderung hochzählen, sonst behält das installierte iPad
-  den alten Stand.
+- **`sw.js`: `VERSION` und `BUILD_HASH` nur über `node tools_version.js`.** Ohne neue `VERSION`
+  kommt eine Änderung nicht an; seit v106 auch nicht ohne passenden `BUILD_HASH` – der Einbau prüft
+  den Inhalt und übernimmt nur eine vollständige Fassung. Ein Host, der Dateien beim Ausliefern
+  umschreibt (Minify, eingefügte Skripte), verhindert damit jede Aktualisierung; dann die Prüfung in
+  `sw.js` herausnehmen. `build_single.py` sucht den Aufruf `swStart();` aus `boot.js` wörtlich.
+- **Maßstab großer Bildschirme (seit v103)**: `html{zoom:var(--ui)}` lässt auch `vh`/`vw` mitwachsen
+  (Chromium gemessen). Darum bleibt `--ui` gedreht bei 1 (die Drehung rechnet mit 100vh/100vw), und
+  wer neue Längen in `vh`/`vw` braucht, prüft sie bei `--ui` > 1. Höhen fürs CSS mit `offsetHeight`
+  messen, nicht mit `getBoundingClientRect` – das liefert gezoomte (und gedrehte) Bildschirmpixel.
+- **Ertragstexte als Summe (seit v103)**: „es gilt die beste" stimmt nur, solange je Ziel (Gelände
+  bzw. Bevölkerung) und Ertragsart genau eine Kette zuständig ist; zwei Ketten auf derselben
+  Ertragsart addierten sich (`YIELD_CHAINS`). Wer eine Ertragstechnologie neu anlegt, lässt `test.js`
+  laufen: es erzeugt jeden Text aus Grundertrag und Kette und prüft die Zuständigkeit.
+- **`S.bought` heißt nach dem Kaufen (seit v103 beansprucht)**: der Name blieb, damit Spielstände
+  passen. Ansprüche je Runde zählen `p.claimRound`/`p.claimCount` – nicht `S.bought`. Seit v104 liegt
+  kein Eintrag auf oder neben einer Stadt (`foundCity`, `settleGain`, `migrateState`); wer einen neuen
+  Weg baut, eine Stadt entstehen zu lassen, nimmt eigene Ansprüche dort heraus (`claimsApart`) und prüft
+  fremde (`foreignClaimNear`) – Bots gründen ohne `foundCity`, ihr `settleable` prüft eigens.
 - **Sechseckform (seit v99)**: `TILE_SHAPES.hex4` muss in einer geraden Zeile beginnen (oberste
   Feldzeile −6), sonst kippt der Versatz der Zeilen (`cubeToRC`, odd-r) und die Karte verzerrt sich.
   Wer Plätze verschiebt, verschiebt um ganze Gitterschritte ((5, −2), (2, 3), (−3, 5) axial) – nur so
@@ -1125,11 +1333,13 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   prüft es), England siedelt auf 6/8 und belagert von 5/6 aus. Wer die Karte, Startwerte des
   Duells, Kosten, Erträge oder Kampfregeln ändert, lässt `test.js` „Erstes Spiel" laufen:
   Es spielt alle drei Wege bis zum Sieg (seit v93 jeweils Runde 6, der Forschungsweg seit v97 Runde 7
-  – Griechenlands Rabatt und die Methode ziehen weniger ab) und schlägt an, wenn ein Ziel
+  – Griechenlands Rabatt und die Methode ziehen weniger ab –, der Wirtschaftsweg seit v102 Runde 7:
+  die Schwelle des Duells ist höher) und schlägt an, wenn ein Ziel
   nicht mehr erreichbar ist, ein Rätsel zwei Lösungen bekommt, ein Sieg auf dem falschen Weg fällt
   oder eine Lektion ausfällt. Die Texte nennen keine Zahl fest, außer den Staffeln der Regel
   (1/3/6 … Stadtkosten, 2/4/6/8/10 Methode, +3 Belagerungsmaschinen, 4 Münzen je Macht mit
-  Eisenverarbeitung, 4–6 und 50 % beim Würfeln, 3/4 und 7/10 im Duell) – ändert sich eine davon,
+  Eisenverarbeitung, 4–6 und 50 % beim Würfeln; die Siegschwellen kommen aus `victoryLabels`) –
+  ändert sich eine davon,
   den Text mitändern (deutsch in `firstgame.js`, englisch in `UI_EN`). Seit v93 hängt es auch an
   `FG_SPAETER`: Was ein Ziel oder Tipp nennt, muss dort stehen (`test.js` prüft die genannten),
   und der Würfel-Schritt rechnet mit Mathematik und Taktik als den ersten freien Technologien.
@@ -1452,10 +1662,14 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   oder das Tutorial auf den heutigen umstellt, muss die Texte „2 in der Antike, 4 im Mittelalter …",
   „2/4/6/8" und „Burgenbau (3)" und den Ablauf neu rechnen – `test.js` bindet die Texte an
   `OLD_METHOD_DISCOUNT`, `smoke.js` spielt das Tutorial durch.
-- **Die Freie Forschung zählt in `p.freeTechsUsed`** (seit v97, je Partie): nichts setzt den Zähler
-  zurück. Wer sie wieder je Runde haben will, braucht wieder eine Runde (bis v96 `p.freeTechUsed`,
-  das `migrateState` jetzt löscht). Die KI nimmt sie nur über `kiFreeTechChoices` – ein neuer Weg zu
-  einer Gratistechnologie, der dasselbe Kontingent verbraucht, gehört dorthin.
+- **Die Freie Forschung hat zwei Vermerke** (seit v101): `p.freeTechsUsed` zählt die Nutzungen der
+  Partie (nichts setzt ihn zurück, `FREE_TECH_USES` ist die Grenze, `freeTechsLeft` der Rest),
+  `p.freeTechUsed` ist die Runde der letzten Nutzung (sperrt eine zweite in derselben Runde). Beide
+  setzt nur `useFreeTech`. `migrateState` rechnet einem Stand von v99/v100 mit Rundenvermerk und ohne
+  Zähler eine als verbraucht an – wer die Bedeutung eines der beiden Felder ändert, ändert das mit.
+  Die KI nimmt sie nur über `kiFreeTechChoices` – ein neuer Weg zu einer Gratistechnologie, der
+  dasselbe Kontingent verbraucht, gehört dorthin. `freeTechsLeft` und `kiFreeTechChoices` sind
+  Funktionsdeklarationen, weil `tools_ki.js freie` sie für seine Vergleiche ersetzt.
 - **`tradeRoutes` rechnet mit einer eigenen Stadttabelle** (seit v83, Tempo): wer ändert, wie
   Städte Wege sperren oder als Straße zählen, ändert es dort mit – `effectiveRoad` allein
   reicht nicht. `test.js` vergleicht über eine ganze Marathonpartie mit der Fassung bis v82.
@@ -1541,6 +1755,20 @@ gegen die Fassung davor — identisch).
   Fehlerbehebung, nicht Aufräumen. Ebenso schreibt `mp()` das Dezimalkomma fest.
 
 ## Vollständige Bug-Historie (alle behoben — nicht versehentlich rückgängig machen)
+
+Aus der Sitzung v106:
+- **„Fähigkeiten" ging in der App auf dem Home-Bildschirm nicht auf** (gemeldet vom Autor, in jeder
+  Partie ab Zug 1; im Browser ging es): Der Offline-Cache hielt v105-Dateien neben älteren
+  (`copyRate is not defined`). Der Service Worker füllte ihn beim Einbau mit dem, was gerade auf dem
+  Server lag – auch mitten in einem Upload –, und über den HTTP-Cache des Browsers; danach erst wieder
+  bei neuer `VERSION`. Jetzt nur ganz oder gar nicht (frisch geladen, gegen `BUILD_HASH` geprüft).
+
+Aus der Sitzung v104:
+- **Gründen neben einem fremden beanspruchten Feld** (gemeldet vom Autor; bis v103 bewusst offen –
+  offener Punkt 3 –, mit dem kostenlosen Kolonialismus von v103 häufig): `foundSiteError` prüfte nur den Weg, nie den Platz und
+  seine Nachbarn. Das Feld gehörte danach beiden Reichen, beide bekamen seinen Ertrag; auf dem Feld
+  selbst ließ sich ebenso gründen, dann verlor es der andere. Jetzt gesperrt (`foreignClaimNear`),
+  auch für Bots (`settleable`) und KI (`kiSiteOk`); alte Spielstände bereinigt `migrateState`.
 
 Aus der Sitzung v96:
 - **Die KI erforschte die Wissenschaftliche Methode zu spät** (gemeldet vom Autor: „schlechte
@@ -1822,11 +2050,12 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
 2. **Wikinger „Beutezüge"** funktioniert, zahlt aber selten: der Ertrag ist Angriffswert minus
    Verteidigungswert, und ein Mensch überbietet Bots (Machtwert = Gesamtbevölkerung) selten.
    Gemessen: mit Macht 30 über 20 Partien 1809 Beute, mit normal gekaufter Macht 0.
-3. **Regelheft-Klausel, zweite Hälfte:** „gegnerische Territorien zählen als unpassierbar"
-   ist in v63 umgesetzt (siehe unten). Offen bleibt „**neben** ihnen darf nicht gegründet
-   werden" — das war nicht verlangt und würde die Ausbreitung noch deutlich stärker
-   einengen. Ebenso offen: gesperrt ist der Weg, nicht das Zielfeld — auf einem von außen
-   erreichbaren gekauften Fremdfeld darf weiter gegründet werden.
+3. **Regelheft-Klausel, zweite Hälfte – erledigt (v104):** „gegnerische Territorien zählen als
+   unpassierbar" ist seit v63 umgesetzt. „**Neben** ihnen darf nicht gegründet werden" seit v104
+   (Anweisung des Autors) so: nicht auf und nicht direkt neben einem fremden Feld – praktisch einem
+   beanspruchten, denn fremdes Stadtumland liegt wegen des Mindestabstands nie daneben. Nicht gemeint
+   war, dass das Umland der neuen Stadt fremdes Gebiet nicht berühren darf (das hätte die Ausbreitung
+   stark eingeengt: Mindestabstand 4).
 4. **Bot-Siedler** scheitert in späten Runden weiter gelegentlich, obwohl Platz da ist
    (Zufallslauf auf gefüllter Karte).
 5. **Plättchenkarten sind enger als die festen Karten:** 45 Felder je Reich (2 Spieler),
@@ -1938,8 +2167,8 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    Reichweite + 4, sobald es Straßen gibt); weiter entfernte Armeen, die eine lange Bahn
    heranbrächte, erwägt sie nicht. Fremde Bedrohungen rechnet sie mit der echten Wegsuche.
 22. **Tutorial im alten Techtree (v82, Anweisung des Autors: „bis ich ein besseres
-   Tutorialspiel liefere").** Kommt das neue Übungsspiel, fällt `oldTree: true` in
-   `tutorialSetup` weg. `OLD_TECH_COSTS` und `migrateState` bleiben, solange es Partien von
+   Tutorialspiel liefere") – erledigt (v102).** Das Tutorial ist entfernt, mit ihm
+   `tutorialSetup`. `OLD_TECH_COSTS` und `migrateState` bleiben, solange es Partien von
    vor v82 geben kann; das Beispiel aus dem Regelheft in `test.js` (Griechenland, Schrift
    kostet 0) rechnet ebenfalls im alten Techtree.
 23. **Längster KI-Zug im neuen Techtree (v82, nicht angefasst).** Im Zeittest von `test.js`
@@ -2211,6 +2440,60 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    Chance 25 %. Duell, drei Reiche, Originalkarte und Marathon nicht gemessen; der Draftwert im
    Marathon (7) ist geschätzt, ebenso, wie sich der Marathon ohne Gründungsgrenze spielt (eine
    Testpartie: höchstens 5 Gründungen in einem Zug).
+60. **Getroffene Auslegungen (v101) – zum Ändern angeboten.** (a) Die Freie Forschung darf weiter die
+   Singularität sein (seit v99) – genannt war nur, wie oft. (b) „Zu viert" heißt vier Reiche der
+   Aufstellung, gleich ob Mensch, KI oder Bot: auch der Marathon und das Tutorial; wer zu viert
+   beginnt, behält die Schwellen, auch wenn ein Reich ausscheidet. (c) Zu dritt bleibt es bei 2/3 ·
+   3/5 · 1/2. (d) Spielstände von v99/v100, in denen die Freie Forschung schon genutzt wurde, zählen
+   eine als verbraucht (die genaue Zahl steht nicht im Spielstand). (e) Die KI nutzt beide, sobald es geht, statt sie aufzuheben – drei Arten aufzuheben wurden gemessen und waren schwächer (12,8–15,0 % gegen 20,5 %, Punkt 61).
+61. **Messung zu v101 nur zu viert, mit der KI.** Freie Forschung (`tools_ki.js freie`, je 400 Partien,
+   Dreiecke, gepaart): Griechenland gewinnt mit ihr 20,5 % statt 30,3 % unter v100 – gleiche Chance
+   25 %, also jetzt darunter; Aufheben (für die Moderne oder die Singularität) war für die KI
+   schwächer (12,8–15,0 %). Wirtschaftssieg (`tools_ki.js wirtschaft`, je 400 Partien, gepaart):
+   auf den Dreiecken 35 statt 3 Wirtschaftssiege, auf den Sechsecken 45 statt 7. Nicht gemessen: Duell, drei Reiche,
+   Originalkarte, Marathon (Draftwert der Freien Forschung geschätzt 5), und wie Menschen spielen.
+
+62. **Getroffene Auslegungen (v103) – zum Ändern angeboten.** (a) „3× pro Runde" statt „je Zug": im
+   Spiel dasselbe (jedes Reich zieht einmal je Runde), so heißen auch Atomwaffen, Internet und die
+   Freie Forschung. (b) Beansprucht werden darf, was bis v102 gekauft werden durfte: jedes herrenlose
+   Feld der Karte, auch Meer und weit weg. (c) Offene Ansprüche zählen nicht in der Zahl an
+   „Fähigkeiten" – sie brauchen ein Feld auf der Karte. (d) Ertragstexte nennen die Summe mit
+   Grundertrag (Landwirtschaft „Grasland bringt 2 Nahrung"), Wunder (Leuchtturm), Taiga und
+   Ereignisse kommen wie bisher dazu bzw. setzen aus. (e) Der Maßstab beginnt bei 1366 × 720, damit
+   jedes iPad bleibt, wie es ist; gedreht gilt 1. (f) Unter „Armee bewegen" fiel der Hinweis „erreichbare
+   Felder werden markiert", die übrigen Unterzeilen der Blätter blieben.
+63. **Kolonialismus kostenlos – nicht gemessen.** Drei Felder je Runde ohne Preis, dazu Kolonien ohne Weg
+   und Bürokratie doppelt: vermutlich deutlich stärker als bis v102, und eigenes Gebiet sperrt fremde
+   Siedlerwege – drei Ansprüche je Runde reichen, Nachbarn den Weg zu verlegen. Die KI nutzt die
+   Ansprüche (bestes Feld nach Ertrag), bewertet die Technologie beim Forschen aber weiter mit 4 wie
+   die bezahlte. Messbar mit `tools_ki.js` (etwa gepaart mit und ohne Kolonialismus im Pool).
+
+64. **Getroffene Auslegungen (v104) – zum Ändern angeboten.** (a) Gemeldet war „neben"; gesperrt ist
+   auch **auf** einem fremden Anspruch – wie auf und neben einer Armee, und sonst verlöre der andere
+   sein Feld ganz. (b) Ein eigenes Feld, das so ein Feld der neuen Stadt wird, zählt nicht mehr zur
+   Hauptstadt (mit Bürokratie einfach statt doppelt) und geht mit der Stadt, wird sie erobert.
+   (c) Alte Spielstände: beim Laden wird jeder Anspruch auf oder neben einer Stadt ein Feld der Stadt –
+   ein eigener (bis v103 blieb er beansprucht) wie ein fremder aus dem Fehler (dann verliert ihn der,
+   der ihn beansprucht hatte; die Stadt steht schon). (d) Ansprüche ausgeschiedener Reiche sperren
+   nicht – wie bei `foreignTerritory`.
+
+65. **Getroffene Auslegungen (v105) – zum Ändern angeboten; nicht gemessen.** (a) Kopieren: je Weg eine
+   Kopie je Runde, auch mit beiden bezahlten Wegen (Rückfrage beim Autor). Damit sind bis zu drei
+   Kopien je Runde möglich, bis v104 mit Spionage unbegrenzt viele – vermutlich schwächer für
+   Spionage, stärker für Kundschafterei neben Spionage. (b) Die Grundkosten des Kopierens blieben die
+   der Partie (Marathon: mal Faktor), ohne Vergünstigung. (c) Die neuen Kosten gelten auch in laufenden
+   Partien; Spielstände von vor v82 (alter Techtree) behalten die alten. (d) Im Blatt steht am Gratis-Knopf
+   „gratis" – der Knopf ist ein Preis, anders als die ganzzeiligen kostenlosen Knöpfe, die seit v102
+   ohne das Wort auskommen. (e) KI: der Wert von Spionage und Kundschafterei ist geschätzt, nicht
+   gemessen. Belegt ist nur, dass sie über mehrere Wege kopiert (im Test mit 200 Münzen und ohne
+   Wissenschaft über alle drei).
+
+66. **Getroffene Auslegungen (v106) – zum Ändern angeboten.** (a) Eine übernommene Fassung lädt die
+   App nur im Menü gleich neu; mitten im Spiel kommt sie beim nächsten Start (immer neu zu laden
+   risse eine Partie aus dem Zug). (b) Passt der Inhalt nicht zu `BUILD_HASH`, bleibt die alte Fassung
+   ohne Hinweis – bei einem Upload in Etappen gewollt, bei einem Host, der Dateien umschreibt, ein
+   Dauerzustand (Fragilitäten). (c) Der Übergang von v105: Die gemischte Seite kennt `swStart` nicht,
+   dort braucht es einmal einen Neustart der App von Hand.
 
 ## Arbeitsweise, die der Autor schätzt
 
@@ -2223,10 +2506,11 @@ nicht die erstbeste Vermutung umsetzen. Jede Regeländerung mit Test absichern.
 
 ## Typischer Abschluss-Ablauf nach Änderungen
 
-1. `node test.js` und `node smoke.js` grün.
-2. Version hochzählen — **beide Stellen**: `APP_VERSION` in `js/data.js` und `VERSION`
-   in `sw.js`. Ein Test schlägt an, wenn sie auseinanderlaufen.
-3. `python3 build_single.py && node check_single.js`.
+1. `node test.js` und `node smoke.js` grün – je eine Zeile (`--verbose` zeigt alles).
+2. Version hochzählen mit `node tools_version.js` (setzt `APP_VERSION` in `js/data.js`, `VERSION`
+   und `BUILD_HASH` in `sw.js`). Ein Test schlägt an, wenn sie auseinanderlaufen.
+3. `python3 build_single.py && node check_single.js` (`build   ok`, `single  ok`). Neue Skripte
+   kommen nur in `index.html` – Build, Service Worker und Tests lesen die Liste dort.
 4. Nach `/mnt/user-data/outputs/` paketieren (Ordner + Zip + Einzeldatei, ohne
    `node_modules`), aus dem ausgelieferten Zip **noch einmal** `test.js`/`smoke.js` laufen
    lassen, dann mit `present_files` präsentieren (Einzeldatei zuerst).

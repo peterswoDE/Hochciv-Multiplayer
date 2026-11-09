@@ -2,7 +2,8 @@
  * Builds public/ from the game that ships with this repository – nothing is downloaded:
  *
  *   HochCiv/      → public/       the current game, served at /
- *   HochCiv-v98/  → public/v98/   the version deployed before: only for Rundenspiele that were
+ *   HochCiv-v100/ → public/v100/  the versions deployed before: only for Rundenspiele that were
+ *   HochCiv-v98/  → public/v98/
  *                                 started on it (mp.js sends their players there)
  *
  * Each copy gets mp.js and the script tags of inject.js. Development files of the game (tests,
@@ -19,6 +20,7 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'public');
 const GAMES = [
     { from: 'HochCiv', to: '' },
+    { from: 'HochCiv-v100', to: 'v100' },
     { from: 'HochCiv-v98', to: 'v98' },
 ];
 // what the browser needs – everything else in the game folder is development material

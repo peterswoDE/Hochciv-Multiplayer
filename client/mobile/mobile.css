@@ -54,10 +54,11 @@ html.w-narrow #mp-cred-box{font-size:11px !important;line-height:1.25;white-spac
 
 /* Aktionsleiste "4 + Mehr" */
 #a-more{display:none}
-html.w-narrow #screen-game .actionbar #a-abil,
-html.w-narrow #screen-game .actionbar #a-info,
-html.w-narrow #screen-game .actionbar #a-log{display:none}
-html.w-narrow #screen-game .actionbar #a-more{display:block}
+/* only where mobile.js set it up (m-bar-more: the game has Welt and Protokoll in the bar, up to v100) */
+html.w-narrow.m-bar-more #screen-game .actionbar #a-abil,
+html.w-narrow.m-bar-more #screen-game .actionbar #a-info,
+html.w-narrow.m-bar-more #screen-game .actionbar #a-log{display:none}
+html.w-narrow.m-bar-more #screen-game .actionbar #a-more{display:block}
 html.w-narrow .actionbar{gap:5px;padding:6px 6px calc(6px + var(--safe-b))}
 html.w-narrow .actionbar .btn.small{font-size:13px;line-height:1.15;padding:7px 4px;min-height:48px;
   white-space:normal;overflow-wrap:anywhere}

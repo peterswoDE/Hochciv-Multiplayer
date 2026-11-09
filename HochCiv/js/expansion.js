@@ -13,10 +13,11 @@ function eventColumn(S, mode, roll) {
   if (mode === 'easy') return roll % 2 === 1 ? (roll + 1) / 2 : 0;   // 1→1, 3→2, 5→3
   return Math.ceil(roll / 2);                                        // 1/2→1, 3/4→2, 5/6→3
 }
-function rollEvent(S) {
+// `round`: die Runde, deren Ereignis gewürfelt wird – mit festen Würfeln (fixedRand) der Schlüssel
+function rollEvent(S, round) {
   if (!evOn(S)) return null;
-  const row = d6(S, 'Ereignis: Zeile');
-  const col = eventColumn(S, S.ev.mode, d6(S, `Ereignis: Spalte (${S.ev.mode === 'easy' ? 'leicht' : 'hart'})`));
+  const row = d6(S, 'Ereignis: Zeile', { fixed: `event:${round}:row` });
+  const col = eventColumn(S, S.ev.mode, d6(S, `Ereignis: Spalte (${S.ev.mode === 'easy' ? 'leicht' : 'hart'})`, { fixed: `event:${round}:col` }));
   if (!col) return { row, col: 0, k: null };          // leicht: ins Leere gewürfelt
   const e = EVENT_ROWS[row - 1][col - 1];
   return { row, col, k: e.k };
@@ -25,7 +26,7 @@ function rollEvent(S) {
    schon jetzt und in evNext gemerkt, damit es nicht zweimal gewürfelt wird. */
 function peekNextEvent(S) {
   if (!evOn(S)) return null;
-  if (!S.evNext) S.evNext = rollEvent(S);
+  if (!S.evNext) S.evNext = rollEvent(S, S.round + 1);
   return S.evNext;
 }
 /* Wirkt das Ereignis in dieser Runde auf dieses Reich?
@@ -70,7 +71,7 @@ function startRound(S) {
   if (!evOn(S) || S.over) return;
   resolveBarbs(S);                       // zweiter Angriff kommt vor dem nächsten Ereignis
   if (S.over) return;
-  const ev = S.evNext || rollEvent(S);
+  const ev = S.evNext || rollEvent(S, S.round);
   S.evNext = null;
   S.event = { round: S.round, row: ev.row, col: ev.col, k: ev.k };
   if (!ev.k) { log(S, 'info', T('Ereignis: keines (Spalte ins Leere gewürfelt).')); return; }

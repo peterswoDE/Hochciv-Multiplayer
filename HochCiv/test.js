@@ -1,13 +1,24 @@
 /* Prüft die Regelmaschine gegen die Beispiele aus dem Regelheft. */
 const fs = require('fs'), vm = require('vm');
-for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ki.js', 'js/marathon.js', 'js/anim.js', 'js/tutorial.js', 'js/firstgame.js'])
+/* Die eine Skriptliste (v102): die <script>-Tags in index.html. Geladen wird alles außer der
+   Oberfläche (js/ui/…) – die fährt smoke.js; ihre Quelltexte liest dieser Test als Text. */
+const SKRIPTE = [...fs.readFileSync(__dirname + '/index.html', 'utf8').matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
+const UI_SKRIPTE = SKRIPTE.filter(f => f.startsWith('js/ui/'));
+const uiQuelle = () => UI_SKRIPTE.map(f => fs.readFileSync(__dirname + '/' + f, 'utf8')).join('\n');
+for (const f of SKRIPTE.filter(f => !UI_SKRIPTE.includes(f)))
   vm.runInThisContext(fs.readFileSync(__dirname + '/' + f, 'utf8'));
 
-let fails = 0;
+/* Ausgabe (v102): grün nur eine Zeile („test  2065 passed"), rot jede FAIL-Zeile. Alles andere –
+   „ok"-Zeilen und die eingerückten Messwerte – nur mit `node test.js --verbose`. */
+const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
+const say = console.log;
+if (!VERBOSE) console.log = (...a) => { const z = a.join(' '); if (z.startsWith('FAIL')) say(z); };
+let fails = 0, passed = 0;
+const SPAETER = [];   // asynchrone Prüfungen (seit v106 der Einbau des Service Workers) – laufen zum Schluss
 const eq = (got, want, label) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
   if (!ok) { fails++; console.log(`FAIL ${label}: ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`); }
-  else console.log(`  ok  ${label}`);
+  else { passed++; console.log(`  ok  ${label}`); }
 };
 
 // Bringt die Zielzivilisation auf Index 0, indem Spieler samt Städte/Armeen umnummeriert
@@ -159,7 +170,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const glieder = Object.values(YIELD_CHAINS).flat();
   eq(glieder.flat().map(g => g.k).sort(), keys.slice().sort(), 'jede Ertragstechnologie steht in genau einer Kette');
   eq(glieder.filter(ch => new Set(ch.map(g => TECH_BY_KEY[g.k].f)).size !== 1).length, 0, 'eine Kette bleibt in ihrem Feld');
-  // Sortiert wird nach t.c – im alten Techtree (Tutorial) und im Marathon muss es dieselbe Reihe sein
+  // Sortiert wird nach t.c – im alten Techtree und im Marathon muss es dieselbe Reihe sein
   const reihe = (X, ch) => ch.map(g => TECH_BY_KEY[g.k]).sort((a, b) => techBase(X, a) - techBase(X, b)).map(t => t.k).join();
   eq([null, { oldTree: true }, { marathon: true }].map(X => glieder.filter(ch => reihe(X, ch) !== ch.map(g => g.k).join()).length),
     [0, 0, 0], 'Reihenfolge jeder Kette: Standard, alter Techtree und Marathon gleich');
@@ -187,30 +198,45 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     }
   }
   eq([abw.slice(0, 2), n], [[], 2800], 'Gegenprobe: 400 zufällige Techstände × 7 Ziele wie nach der Regel gerechnet');
-  // Die Techtexte nennen die Summe, die ihr Glied setzt – deutsch und englisch. Seit v89 ohne
-  // „(inkl. …)" (Anweisung des Autors); die Regel steht im Regelbogen.
-  const ZIEL = { de: { G: 'Grasland', W: 'Wald', B: 'Gebirge', F: 'Fluss', M: 'Meer', pop: 'Je Bevölkerung' },
-    en: { G: 'Grassland', W: 'Forest', B: 'Mountains', F: 'River', M: 'Sea', pop: 'Per population' } };
+  /* Die Techtexte nennen, was ein Feld bzw. jede Bevölkerung mit ihrem Glied INSGESAMT bringt –
+     Grundertrag plus Summe (v103, Anweisung des Autors: „Wald: +2 Wissenschaft" las sich, als
+     stapelten Mathematik und Elektrizität). Deutsch und englisch; seit v89 ohne „(inkl. …)". */
+  const ZIEL = {
+    de: { G: 'Grasland bringt', W: 'Wald bringt', B: 'Gebirge bringt', F: 'Fluss bringt', M: 'Meer bringt', pop: 'Bevölkerung bringt je' },
+    en: { G: 'Grassland yields', W: 'Forest yields', B: 'Mountains yield', F: 'River yields', M: 'Sea yields', pop: 'Population yields' } };
   const ART = { de: [['Wissenschaft', 'Wissenschaft'], ['Nahrung', 'Nahrung'], ['Münze', 'Münzen']],
     en: [['science', 'science'], ['food', 'food'], ['coin', 'coins']] };
+  const grund = on => on === 'pop' ? CITY_YIELD : TERRAIN[on].yield;
   const de = k => DATA_DE ? DATA_DE.tech[k] : [TECH_BY_KEY[k].n, TECH_BY_KEY[k].e];
   const tx = (lang, k) => lang === 'de' ? de(k) : DATA_EN.tech[k];
-  const soll = (lang, on, ch, i) => ZIEL[lang][on] + ': ' +
-    ch[i].y.map((v, j) => v ? `+${v} ${ART[lang][j][v > 1 ? 1 : 0]}` : '').filter(Boolean).join(', ');
+  const soll = (lang, on, ch, i) => ZIEL[lang][on] + ' ' +
+    ch[i].y.map((v, j) => v ? `${grund(on)[j] + v} ${ART[lang][j][grund(on)[j] + v > 1 ? 1 : 0]}` : '').filter(Boolean).join(', ') +
+    (lang === 'en' && on === 'pop' ? ' each' : '');
   const falsch = [];
   for (const on of Object.keys(YIELD_CHAINS)) for (const ch of YIELD_CHAINS[on]) ch.forEach((g, i) => {
     for (const lang of ['de', 'en']) if (tx(lang, g.k)[1] !== soll(lang, on, ch, i)) falsch.push(`${lang}:${g.k} „${tx(lang, g.k)[1]}" statt „${soll(lang, on, ch, i)}"`);
   });
-  eq(falsch, [], 'jeder Ertragstext (deutsch und englisch) nennt die Summe, die sein Glied setzt');
-  eq(de('ki')[1], 'Wald: +3 Wissenschaft', 'so liest sich das: Künstliche Intelligenz');
-  eq(DATA_EN.tech.containerlogistik[1], 'Sea: +2 food, +1 coin', '… und Containerlogistik englisch');
+  eq(falsch, [], 'jeder Ertragstext (deutsch und englisch) nennt, was das Feld mit seinem Glied insgesamt bringt');
+  eq([de('mathematik')[1], de('elektrizitaet')[1], de('ki')[1]], ['Wald bringt 1 Wissenschaft', 'Wald bringt 2 Wissenschaft', 'Wald bringt 3 Wissenschaft'],
+    'so liest sich das: Mathematik, Elektrizität, Künstliche Intelligenz');
+  eq([de('landwirtschaft')[1], de('chemie')[1], de('schrift')[1]], ['Grasland bringt 2 Nahrung', 'Gebirge bringt 2 Wissenschaft', 'Bevölkerung bringt je 2 Wissenschaft'],
+    '… mit Grundertrag: Grasland hat schon 1 Nahrung, Gebirge 1 Wissenschaft, jede Bevölkerung 1 Wissenschaft');
+  eq([DATA_EN.tech.containerlogistik[1], DATA_EN.tech.robotik[1]], ['Sea yields 2 food, 2 coins', 'Population yields 3 coins each'], '… und englisch');
+  // Die Texte stimmen mit dem, was tileYield rechnet (Meer hat 1 Münze Grundertrag)
+  eq([y(['containerlogistik'], 'M'), y(['landwirtschaft'], 'G'), py(['robotik'])], [[0, 2, 2], [0, 2, 0], [1, -1, 3]], 'Text und Rechnung: dieselben Zahlen');
+  /* „Es gilt die beste" ist die ganze Regel nur, solange je Ziel und Ertragsart genau eine Kette
+     zuständig ist – zwei Ketten auf derselben Ertragsart würden sich addieren (YIELD_CHAINS). */
+  const zustaendig = {};
+  for (const on of Object.keys(YIELD_CHAINS)) for (const ch of YIELD_CHAINS[on])
+    ch[ch.length - 1].y.forEach((v, j) => { if (v) (zustaendig[on + ':' + j] = zustaendig[on + ':' + j] || []).push(ch[0].k); });
+  eq(Object.entries(zustaendig).filter(([, l]) => l.length > 1), [], 'je Ziel und Ertragsart genau eine Kette');
   eq(TECHS.filter(t => /inkl\.|incl\./.test(de(t.k)[1] + ' ' + DATA_EN.tech[t.k][1])).map(t => t.k), [],
     'kein Techtext sagt mehr „inkl." bzw. „incl." (v89)');
 }
 
 /* --- Griechische Technologiekosten aus dem Beispiel
    Das Beispiel im Regelheft rechnet mit den alten Kosten (Schrift 1, Biologie 15). Die gelten
-   seit v82 nur noch im Tutorial – das Beispiel läuft deshalb im alten Techtree. Dieselben
+   seit v82 nur noch in alten Spielständen – das Beispiel läuft deshalb im alten Techtree. Dieselben
    Abzüge auf die heutigen Kosten prüft der Abschnitt „Techtree" weiter unten.
    Seit v97 (Anweisung des Autors) zieht Griechenland 1/1/2/2/5 ab statt 1/2/3/4/5 wie im
    Regelheft: Papier und Alchemie (Mittelalter) kosten 1 mehr als dort, Biologie
@@ -269,6 +295,19 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(armyCost(W, 0), 5, 'Wikinger: nächste Armee kostet 5 statt 10');
   W.armies.push({ id: 98, owner: 0, r: 0, c: 0, mp: 0, born: 0 });
   eq(armyCost(W, 0), 10, 'Wikinger: dritte Armee kostet 10 statt 15');
+}
+/* --- Demokratie und Nationalismus (v103, Anweisung des Autors: der Text soll zeigen, dass sie
+   Armeen verbilligen): „Armeekosten 4 statt 5 × Anzahl". Die Zahlen kommen aus armyCost – mit
+   beiden gilt Nationalismus, die zwei stapeln nicht. */
+{
+  const faktor = techs => armyCost(mk('griechenland', techs), 0);   // erste Armee: Faktor × 1
+  const [grund, demo, nat, beide] = [[], ['demokratie'], ['nationalismus'], ['demokratie', 'nationalismus']].map(faktor);
+  eq([grund, demo, nat, beide], [5, 4, 2, 2], 'Faktor ohne, mit Demokratie, mit Nationalismus, mit beiden (stapelt nicht)');
+  const de = k => DATA_DE ? DATA_DE.tech[k][1] : TECH_BY_KEY[k].e;
+  eq([de('demokratie'), de('nationalismus'), DATA_EN.tech.demokratie[1], DATA_EN.tech.nationalismus[1]],
+    [`Armeekosten ${demo} statt ${grund} × Anzahl`, `Armeekosten ${nat} statt ${grund} × Anzahl`,
+      `Army cost ${demo} instead of ${grund} × count`, `Army cost ${nat} instead of ${grund} × count`],
+    'die Texte nennen die Zahlen aus armyCost, deutsch und englisch');
 }
 
 /* --- Umrechnung: 2 Münzen = 1 Nahrung; England 1:1 */
@@ -404,16 +443,16 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   }
   /* Texte seit v96 (Anweisung des Autors): die Kachel im Technologiebogen sagt nicht mehr, was die
      Bürokratie mitverdoppelt – nur „Hauptstadt produziert doppelt"; im Regelbogen steht alles
-     (techEffectFull), samt der gekauften Felder (v96). */
+     (techEffectFull), samt der beanspruchten Felder (v96; bis v102 gekauft). */
   eq([TECH_BY_KEY.buerokratie.e, DATA_EN.tech.buerokratie[1]], ['Hauptstadt produziert doppelt', 'The capital produces double'],
     'Kachel der Bürokratie: nur „Hauptstadt produziert doppelt", englisch ebenso (v96)');
-  eq(/Handelsrouten, Ökologie, Gentechnik und gekaufte Felder/.test(techEffectFull(TECH_BY_KEY.buerokratie, null)), true,
+  eq(/Handelsrouten, Ökologie, Gentechnik und beanspruchte Felder/.test(techEffectFull(TECH_BY_KEY.buerokratie, null)), true,
     'Regelbogen: der Text der Bürokratie nennt alle vier');
-  eq(/trade routes, ecology, genetic engineering and bought tiles/.test(DATA_EN.tech.buerokratie[2]), true, 'englisch ebenso');
+  eq(/trade routes, ecology, genetic engineering and claimed tiles/.test(DATA_EN.tech.buerokratie[2]), true, 'englisch ebenso');
 }
 
 /* --- Gekaufte Felder zählen zur Hauptstadt (v96, Anweisung des Autors): mit Bürokratie bringt
-   ein per Kolonialismus gekauftes Feld das Doppelte, wo es auch liegt. Auslegungen (ANNAHMEN
+   ein per Kolonialismus gekauftes – seit v103 beanspruchtes – Feld das Doppelte, wo es auch liegt. Auslegungen (ANNAHMEN
    v96): einmal doppelt, auch wenn ein gekauftes Feld zugleich ans Umland der Hauptstadt grenzt;
    ohne Hauptstadt nicht doppelt (wie das Umland); bei einer Revolution produziert es weiter (wie
    die Handelsrouten seit v86). */
@@ -427,7 +466,7 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const y = tileYield(X, 0, terrainAt(X, frei[0], frei[1]));
   const dop = y.map(n => 2 * n);
   p.res = { sci: 0, food: 0, coins: 10 };
-  eq(buyTile(X, 0, frei[0], frei[1]), null, `Feld ${frei.join('/')} gekauft (Ertrag ${y.join('/')})`);
+  eq(claimTile(X, 0, frei[0], frei[1]), null, `Feld ${frei.join('/')} beansprucht (Ertrag ${y.join('/')})`);
   // Einkommen mit und ohne das gekaufte Feld (über incomeBreakdown, also mit `pre`)
   const anteil = () => {
     const mit = income(X, 0), merk = X.bought[0];
@@ -463,15 +502,16 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const b = incomeBreakdown(X, 0);
   eq(JSON.stringify([0, 1, 2].map(i => b.rows.reduce((n, r) => n + r.y[i], 0) + b.extra.reduce((n, e) => n + e.y[i], 0) + b.pop.y[i])),
     JSON.stringify(b.total), 'Zeilen und Summe gehen auf (gekauftes Feld, Bürokratie)');
-  // Texte: die Kachel des Kolonialismus wie bisher, im Regelbogen der Zusatz
-  eq(TECH_BY_KEY.kolonialismus.e, `Für ${COLONY_COST} Münzen Feld kaufen; dort auch ohne Weg gründen`, 'Kachel des Kolonialismus unverändert');
+  // Texte: die Kachel des Kolonialismus ohne Bürokratie, im Regelbogen der Zusatz
+  eq(TECH_BY_KEY.kolonialismus.e, `${COLONY_CLAIMS}× pro Runde: ein herrenloses Feld beanspruchen; dort auch ohne Weg gründen`, 'Kachel des Kolonialismus (v103)');
   eq([/zählen zur Hauptstadt \(mit Bürokratie doppelt\)/.test(techEffectFull(TECH_BY_KEY.kolonialismus, X)),
     /count towards the capital \(doubled with Bureaucracy\)/.test(DATA_EN.tech.kolonialismus[2])], [true, true],
-  'Regelbogen: gekaufte Felder zählen zur Hauptstadt (deutsch und englisch)');
-  // Die KI sieht den doppelten Ertrag auch beim Aussuchen (kiColonySpots): Schwelle mit Bürokratie halb so hoch
-  const spots = () => kiColonySpots(X, 0).length;
+  'Regelbogen: beanspruchte Felder zählen zur Hauptstadt (deutsch und englisch)');
+  // Die KI sieht den doppelten Ertrag auch beim Aussuchen (kiColonySpots): Bürokratie verdoppelt den Wert
+  const spots = () => kiColonySpots(X, 0);
   const mitB = spots(); delete p.techs.buerokratie; const ohneB = spots(); p.techs.buerokratie = true;
-  eq(mitB >= ohneB, true, `KI: mit Bürokratie mindestens so viele Kaufkandidaten (${mitB} gegen ${ohneB})`);
+  eq([mitB.length, mitB[0][2]], [ohneB.length, 2 * ohneB[0][2]], `KI: mit Bürokratie dieselben Felder, doppelt bewertet (${mitB.length} Felder)`);
+  eq(ohneB.every(t => t[2] > 0), true, 'seit v103 kostenlos: jedes Feld mit Ertrag ist ein Kandidat, auch eines mit 1');
 }
 /* --- Kacheln ohne Bürokratie-Zusätze (v96, Anweisung des Autors): keine Kachel des Bogens sagt,
    was die Bürokratie mitverdoppelt – das steht nur im Regelbogen (`voll`, techEffectFull). Wer
@@ -488,8 +528,8 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const en = [TECH_BY_KEY.buerokratie.e, techEffectFull(TECH_BY_KEY.buerokratie, null), techEffectFull(TECH_BY_KEY.mathematik, null)];
   setLang('de', { quiet: true });
   const de = [TECH_BY_KEY.buerokratie.e, techEffectFull(TECH_BY_KEY.buerokratie, null), techEffectFull(TECH_BY_KEY.mathematik, null)];
-  eq(en, ['The capital produces double', DATA_EN.tech.buerokratie[2], 'Forest: +1 science'], 'englisch: Kachel und Regelbogen; ohne `voll` derselbe Text');
-  eq(de, ['Hauptstadt produziert doppelt', 'Hauptstadt produziert doppelt, dazu Handelsrouten, Ökologie, Gentechnik und gekaufte Felder', 'Wald: +1 Wissenschaft'],
+  eq(en, ['The capital produces double', DATA_EN.tech.buerokratie[2], 'Forest yields 1 science'], 'englisch: Kachel und Regelbogen; ohne `voll` derselbe Text');
+  eq(de, ['Hauptstadt produziert doppelt', 'Hauptstadt produziert doppelt, dazu Handelsrouten, Ökologie, Gentechnik und beanspruchte Felder', 'Wald bringt 1 Wissenschaft'],
     'zurück auf Deutsch: beide Texte wieder deutsch');
 }
 
@@ -535,15 +575,6 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const de = DATA_DE ? DATA_DE.tech.belagerung[1] : TECH_BY_KEY.belagerung.e;
   eq([de, DATA_EN.tech.belagerung[1]], [`+${SIEGE_BONUS} Angriff gegen Städte`, `+${SIEGE_BONUS} attack against cities`],
     'Techtext nennt den Bonus, deutsch und englisch');
-  /* Das Tutorial rechnet ihn vor: Belagerungsmaschinen und 3 Macht gegen Verteidigung 3. Die
-     Zahlen stehen fest im Text (deutsch in tutorial.js, englisch in i18n.js) – hier gebunden. */
-  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
-  const enTut = Object.entries(UI_EN).filter(([k]) => /Belagerungsmaschinen<\/b> forschen \(/.test(k)).map(([, v]) => v);
-  eq([[...tut.matchAll(/Belagerungsmaschinen<\/b> forschen \(\+(\d+) Angriff gegen Städte\)/g)].map(m => +m[1]),
-    [...tut.matchAll(/greift deine Armee mit <b>(\d+) statt 3<\/b>/g)].map(m => +m[1])],
-    [[SIEGE_BONUS, SIEGE_BONUS], [3 + SIEGE_BONUS, 3 + SIEGE_BONUS]], 'Tutorial (deutsch, lang und kurz): +3, also 6 statt 3');
-  eq([enTut.length, enTut.every(v => v.includes(`(+${SIEGE_BONUS} attack against cities)`) &&
-    v.includes(`<b>${3 + SIEGE_BONUS} instead of 3</b>`))], [2, true], 'Tutorial (englisch): dieselben Zahlen');
 }
 
 /* --- Kampfphase (v91, Anweisung des Autors): erst die Städte, dann wird flankiert – wie bis
@@ -1119,60 +1150,170 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(c.pop, 3, 'nur eine Bevölkerung geopfert');
 }
 
-/* Kolonialismus: nur herrenlose Felder */
+/* Kolonialismus: nur herrenlose Felder – seit v103 (Anweisung des Autors) kostenlos, COLONY_CLAIMS
+   je Runde (bis v102 für 3 Münzen je Feld). Was nicht genutzt wird, verfällt. */
 {
   const S = mk('griechenland', ['kolonialismus']);
-  const cap = capitalOf(S, 0);
+  const cap = capitalOf(S, 0), p = S.players[0], n = COLONY_CLAIMS;
   const owned = neighbors(cap.r, cap.c).find(([r, c]) => terrainAt(S, r, c) && !cityAt(S, r, c));
-  S.players[0].res.coins = 20;
-  eq(typeof buyTile(S, 0, owned[0], owned[1]), 'string', 'eigenes Umland ist nicht kaufbar');
-  // ein weit entferntes herrenloses Feld finden
-  let free = null;
-  for (const [r, c] of within(cap.r, cap.c, 6))
-    if (terrainAt(S, r, c) && !S.players.some((_, i) => controlledTiles(S, i).has(key(r, c))) && !cityAt(S, r, c)) { free = [r, c]; break; }
-  eq(buyTile(S, 0, free[0], free[1]), null, 'herrenloses Feld ist kaufbar');
+  p.res = { sci: 0, food: 0, coins: 0 };
+  eq(claimTile(S, 0, owned[0], owned[1]), 'Nur herrenlose Felder können beansprucht werden.', 'eigenes Umland lässt sich nicht beanspruchen');
+  eq(claimsLeft(S, 0), n, 'ein abgelehnter Anspruch zählt nicht');
+  // herrenlose Felder in der Nähe
+  const frei = within(cap.r, cap.c, 6).filter(([r, c]) => terrainAt(S, r, c) && !isOff(terrainAt(S, r, c)) &&
+    !S.players.some((_, i) => controlledTiles(S, i).has(key(r, c))) && !cityAt(S, r, c));
+  eq(frei.length > n + 1, true, `genug herrenlose Felder (${frei.length})`);
+  eq(frei.slice(0, n).map(([r, c]) => claimTile(S, 0, r, c)), Array(n).fill(null), `${n} herrenlose Felder beansprucht – ohne Münzen`);
+  eq([p.res.coins, claimsLeft(S, 0), S.bought[0].length], [0, 0, n], 'nichts bezahlt, nichts mehr offen, die Felder stehen beim Reich');
+  eq(frei.slice(0, n).every(([r, c]) => controlledTiles(S, 0).has(key(r, c))), true, 'beanspruchte Felder sind eigenes Gebiet');
+  eq(claimTile(S, 0, frei[0][0], frei[0][1]), 'Nur herrenlose Felder können beansprucht werden.', 'dasselbe Feld kein zweites Mal');
+  eq(claimTile(S, 0, frei[n][0], frei[n][1]), `Diese Runde schon ${n} Felder beansprucht.`, `ein ${n + 1}. Feld in derselben Runde nicht`);
+  S.round++;
+  eq(claimsLeft(S, 0), n, 'nächste Runde wieder alle');
+  eq([claimTile(S, 0, frei[n][0], frei[n][1]), claimsLeft(S, 0)], [null, n - 1], 'und es geht weiter');
+  eq(claimsLeft(mk('griechenland'), 0), 0, 'ohne Kolonialismus keine Ansprüche');
+  delete p.claimRound; delete p.claimCount;
+  eq(claimsLeft(S, 0), n, 'Spielstand von vor v103 (ohne Zähler): alle offen');
+  eq(S.log.slice(-1)[0].m, `Griechenland: Feld ${frei[n][0]}/${frei[n][1]} beansprucht.`, 'Protokoll');
+}
+/* Gründen und beanspruchte Felder (v104, gemeldet vom Autor: man konnte neben einem fremden
+   beanspruchten Feld gründen – das Feld gehörte danach beiden Reichen; auch darauf ging es). Nicht auf
+   und nicht neben einem fremden Anspruch, wie neben einer gegnerischen Armee; ein eigener wird beim
+   Gründen ein gewöhnliches Feld der neuen Stadt. */
+{
+  const neu = () => {
+    const S = newGame({ seed: 5, players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }] });
+    S.players.forEach(p => { p.res = { sci: 0, food: 99, coins: 0 }; p.techs.kolonialismus = true; });
+    return S;
+  };
+  const herrenlos = (S, r, c) => !S.players.some((_, i) => controlledTiles(S, i).has(key(r, c)));
+  // ein herrenloses Landfeld mit Ertrag; daneben und zwei Felder weiter dürfte `wer` gründen
+  const lage = (S, wer) => {
+    for (let r = 0; r < S.map.rows.length; r++) for (let c = 0; c < S.map.rows[r].length; c++) {
+      const t = terrainAt(S, r, c);
+      if (!t || isOff(t) || !TERRAIN[t].land || TERRAIN[t].block || cityAt(S, r, c) || !herrenlos(S, r, c)) continue;
+      if (!tileYield(S, wer, t).some(n => n > 0)) continue;
+      const nb = neighbors(r, c).find(([a, b]) => !foundSiteError(S, wer, a, b));
+      const weit = within(r, c, 2).find(([a, b]) => hexDistance(a, b, r, c) === 2 && !foundSiteError(S, wer, a, b));
+      if (nb && weit) return { x: [r, c], nb, weit };
+    }
+    return null;
+  };
+  const msg = 'Nicht auf oder direkt neben gegnerischem Gebiet.';
+  // Fremder Anspruch: England kann weder darauf noch daneben gründen, zwei Felder weiter schon
+  {
+    const S = neu(), L = lage(S, 1);
+    eq(claimTile(S, 0, ...L.x), null, `Griechenland beansprucht ${L.x.join('/')}`);
+    eq([foundSiteError(S, 1, ...L.x), foundSiteError(S, 1, ...L.nb), foundSiteError(S, 1, ...L.weit)], [msg, msg, null],
+      'England: auf und neben dem fremden Anspruch nicht, zwei Felder weiter schon');
+    eq([foundCity(S, 1, ...L.nb), controlledTiles(S, 1).has(key(...L.x))], [msg, false], 'foundCity lehnt ebenso ab, das Feld bleibt Griechenlands');
+    eq([settleable(S, 1, ...L.nb), kiSiteOk(S, 1, ...L.nb), settleable(S, 1, ...L.weit), kiSiteOk(S, 1, ...L.weit)],
+      [false, false, true, true], 'Bots und KI sehen dieselbe Regel');
+    eq(foundSiteError(S, 0, ...L.nb), null, 'Griechenland selbst darf neben seinem Anspruch gründen');
+  }
+  // Eigener Anspruch: gründen daneben geht, das Feld wird ein gewöhnliches Feld der Stadt
+  {
+    const S = neu(), L = lage(S, 0), k = key(...L.x);
+    S.players[0].techs.buerokratie = true;
+    eq(claimTile(S, 0, ...L.x), null, 'Griechenland beansprucht ein Feld');
+    const y = tileYield(S, 0, terrainAt(S, ...L.x));
+    eq(tileYieldAt(S, 0, ...L.x), y.map(n => 2 * n), 'beansprucht: mit Bürokratie doppelt (zählt zur Hauptstadt)');
+    const vorher = income(S, 0), gain = settleGain(S, 0, ...L.nb);
+    eq(foundCity(S, 0, ...L.nb), null, 'Stadt daneben gegründet');
+    eq([S.bought[0].includes(k), controlledTiles(S, 0).has(k), tileYieldAt(S, 0, ...L.x)], [false, true, y],
+      'danach ein gewöhnliches Feld der neuen Stadt: nicht mehr beansprucht, einfacher Ertrag');
+    const nachher = income(S, 0);
+    eq([nachher.sci - vorher.sci, nachher.food - vorher.food, nachher.coins - vorher.coins], [gain.sci, gain.food, gain.coins],
+      `Ertrag beim Siedeln (settleGain) sah es voraus: ${[gain.sci, gain.food, gain.coins].join('/')}`);
+  }
+  // Spielstände von davor: Ansprüche auf oder neben einer Stadt werden beim Laden Felder der Stadt
+  {
+    const S = neu(), L = lage(S, 1);
+    eq(foundCity(S, 1, ...L.nb), null, 'England gründet');
+    const fern = within(L.x[0], L.x[1], 5).find(([r, c]) => terrainAt(S, r, c) && !isOff(terrainAt(S, r, c)) && herrenlos(S, r, c) &&
+      !S.cities.some(ct => hexDistance(ct.r, ct.c, r, c) <= 1));
+    S.bought[0] = [key(...L.x), key(...fern)];          // wie bis v103: Englands Stadt neben Griechenlands Anspruch
+    eq([controlledTiles(S, 0).has(key(...L.x)), controlledTiles(S, 1).has(key(...L.x))], [true, true], 'vorher gehört das Feld beiden');
+    migrateState(S);
+    eq([S.bought[0], controlledTiles(S, 0).has(key(...L.x))], [[key(...fern)], false], 'nach dem Laden: Feld der Stadt, der ferne Anspruch bleibt');
+    const wieder = migrateState(JSON.parse(JSON.stringify(S)));
+    eq(JSON.stringify(wieder.bought), JSON.stringify(S.bought), 'ein zweites Laden ändert nichts');
+  }
 }
 
-/* Internet: genau eine Gratiskopie pro Runde */
+/* Kopieren (v105, Anweisung des Autors): Internet, Spionage und Kundschafterei sind je EINE Kopie
+   je Runde, unabhängig voneinander – gratis, 1× und 2× der Grundkosten in Münzen. Bis v104
+   kopierten die beiden bezahlten Wege beliebig oft, und Spionage ersetzte Kundschafterei. */
 {
-  const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 14 });
-  S.players[1].techs.stadtmauern = true; S.players[1].techs.taktik = true;
-  S.players[0].techs.internet = true;
-  eq(internetAvailable(S, 0), true, 'Internet-Kopie steht zu Rundenbeginn bereit');
-  const opt = copyableTechs(S, 0);
-  eq(opt.length >= 2 && opt.every(o => o.freeOk && o.paidCoins == null), true, 'reines Internet: nur Gratiskopie, kein bezahlter Weg');
-  eq(copyTech(S, 0, 'stadtmauern'), null, 'erste Gratiskopie klappt');
-  eq(typeof copyTech(S, 0, 'taktik'), 'string', 'zweite Kopie in derselben Runde wird abgelehnt');
-}
+  const spiel = (...wege) => {
+    const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 15 });
+    ['stadtmauern', 'taktik', 'mathematik', 'astronomie'].forEach(k => { S.players[1].techs[k] = true; delete S.players[0].techs[k]; });
+    wege.forEach(k => { S.players[0].techs[k] = true; });
+    S.players[0].res.coins = 50;
+    return S;
+  };
+  const preise = (S, k) => copyableTechs(S, 0).find(o => o.tech.k === k).ways.map(w => w.k + ' ' + w.coins).join(', ');
+  const offen = S => copyWaysOpen(S, 0).map(w => w.k).join(' ');
 
-/* Kundschafterei/Spionage + Internet: jede Tech bietet bezahlt UND gratis an */
-{
-  const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 15 });
-  S.players[1].techs.stadtmauern = true;   // Kosten 2 (bis v83: 5)
-  S.players[1].techs.taktik = true;        // Kosten 1
-  S.players[0].techs.kundschafterei = true; S.players[0].techs.internet = true;
-  S.players[0].res.coins = 50;
-  const sm = copyableTechs(S, 0).find(o => o.tech.k === 'stadtmauern');
-  eq(sm.paidCoins, 4, 'Kundschafterei: 2× Basiskosten (2×2) in Münzen');
-  eq(sm.freeOk, true, 'Internet-Gratiskopie steht trotz Kundschafterei zur Verfügung (Bugfix)');
-  // Gratiskopie kostet keine Münzen und verbraucht das Rundenkontingent
-  eq(copyTech(S, 0, 'stadtmauern', 'free'), null, 'gratis kopieren klappt');
-  eq(S.players[0].res.coins, 50, 'Gratiskopie kostet keine Münzen');
-  eq(internetAvailable(S, 0), false, 'Internet-Kontingent danach verbraucht');
-  // eine zweite Kopie in derselben Runde geht nur noch bezahlt
-  const tk = copyableTechs(S, 0).find(o => o.tech.k === 'taktik');
-  eq(tk.freeOk, false, 'keine zweite Gratiskopie in derselben Runde');
-  eq(tk.paidCoins, 2, 'bezahlter Weg (2×1) bleibt');
-}
-
-/* Nur Spionage (ohne Internet): bezahlt, keine Gratiskopie */
-{
-  const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 15 });
-  S.players[1].techs.stadtmauern = true;
-  S.players[0].techs.spionage = true;
-  const sm = copyableTechs(S, 0).find(o => o.tech.k === 'stadtmauern');
-  eq(sm.paidCoins, 2, 'Spionage: 1× Basiskosten in Münzen (Stadtmauern 2)');
-  eq(sm.freeOk, false, 'ohne Internet keine Gratiskopie');
+  // Nur Internet: eine Gratiskopie, die zweite in derselben Runde nicht
+  {
+    const S = spiel('internet');
+    eq([offen(S), preise(S, 'stadtmauern')], ['internet', 'internet 0'], 'Internet: ein Weg, gratis');
+    eq(copyTech(S, 0, 'stadtmauern'), null, 'erste Kopie (ohne Angabe: der billigste Weg) klappt');
+    eq([copyTech(S, 0, 'taktik'), copyTech(S, 0, 'taktik', 'internet')], ['Diese Runde schon kopiert.', 'Diese Runde schon per Internet kopiert.'],
+      'zweite Kopie in derselben Runde wird abgelehnt');
+    eq([S.players[0].res.coins, S.players[0].copied], [50, { internet: S.round }], 'kostet nichts, vermerkt die Runde');
+  }
+  // Nur Spionage: einmal je Runde zum Einfachen
+  {
+    const S = spiel('spionage');
+    eq(preise(S, 'stadtmauern'), 'spionage 2', 'Spionage: 1× Grundkosten (Stadtmauern 2)');
+    eq([copyTech(S, 0, 'stadtmauern', 'spionage'), S.players[0].res.coins], [null, 48], 'Spionage kopiert für 2 Münzen');
+    eq([copyTech(S, 0, 'taktik', 'spionage'), copyableTechs(S, 0)], ['Diese Runde schon per Spionage kopiert.', []],
+      'ein zweites Mal in derselben Runde nicht – bis v104 beliebig oft');
+    S.round++;
+    eq([offen(S), copyTech(S, 0, 'taktik', 'spionage'), S.players[0].res.coins], ['spionage', null, 47], 'nächste Runde wieder: Taktik für 1');
+  }
+  // Nur Kundschafterei: einmal je Runde zum Doppelten
+  {
+    const S = spiel('kundschafterei');
+    eq(preise(S, 'stadtmauern'), 'kundschafterei 4', 'Kundschafterei: 2× Grundkosten (2×2)');
+    eq([copyTech(S, 0, 'stadtmauern'), copyTech(S, 0, 'taktik'), S.players[0].res.coins], [null, 'Diese Runde schon kopiert.', 46],
+      'einmal für 4 Münzen, kein zweites Mal');
+  }
+  // Alle drei: drei Kopien in einer Runde, je Weg eine, jede zu ihrem Preis
+  {
+    const S = spiel('internet', 'spionage', 'kundschafterei');
+    eq(preise(S, 'astronomie'), 'internet 0, spionage 2, kundschafterei 4', 'alle drei Wege, billigster zuerst (Astronomie 2)');
+    eq(copyTech(S, 0, 'astronomie', 'kundschafterei'), null, 'Kundschafterei zuerst – Spionage ersetzt sie nicht mehr');
+    eq(preise(S, 'mathematik'), 'internet 0, spionage 1', 'danach steht Kundschafterei nirgends mehr');
+    eq(copyTech(S, 0, 'mathematik', 'spionage'), null, 'Spionage auf Mathematik');
+    eq(copyTech(S, 0, 'stadtmauern', 'internet'), null, 'Internet auf Stadtmauern');
+    eq([offen(S), copyableTechs(S, 0).length, S.players[0].res.coins], ['', 0, 50 - 4 - 1], 'drei Kopien, alle Wege genutzt, 5 Münzen bezahlt');
+    eq(S.log.filter(l => / kopiert \(/.test(l.m)).map(l => l.m.replace(/^[^:]+: /, '')),
+      ['Astronomie kopiert (Kundschafterei, 4 Münzen).', 'Mathematik kopiert (Spionage, 1 Münzen).', 'Stadtmauern kopiert (Internet, gratis).'],
+      'das Protokoll nennt den Weg');
+  }
+  // Zu wenig Münzen: der Weg bleibt offen
+  {
+    const S = spiel('kundschafterei');
+    S.players[0].res = { sci: 0, food: 0, coins: 3 };
+    eq([copyTech(S, 0, 'stadtmauern', 'kundschafterei'), offen(S)], ['Zu wenig Münzen (4 nötig).', 'kundschafterei'], 'zu wenig Münzen: abgelehnt, nichts verbraucht');
+  }
+  // Ein Spielstand von vor v105 (p.internetUsed) zählt weiter
+  {
+    const S = spiel('internet');
+    S.players[0].internetUsed = S.round;
+    migrateState(S);
+    eq([S.players[0].internetUsed, S.players[0].copied, offen(S)], [undefined, { internet: S.round }, ''], 'alter Spielstand: diese Runde schon kopiert');
+  }
+  // freeActions zählt nur die Gratiskopie
+  {
+    const S = spiel('spionage', 'kundschafterei');
+    eq(freeActions(S, 0).includes('internet'), false, 'bezahltes Kopieren ist keine kostenlose Aktion');
+    S.players[0].techs.internet = true;
+    eq(freeActions(S, 0).includes('internet'), true, 'die Gratiskopie schon');
+  }
 }
 
 /* === Regeln der Hauptvariante (vormals v2) === */
@@ -1182,21 +1323,12 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const S = mk('griechenland');
   eq(SINGULARITY.c, 120, 'Singularität-Grundkosten 120');
   eq(techCost(S, 0, SINGULARITY), 115, 'griechischer Rabatt auch auf Singularität');
-  /* Das Tutorial (Russland, alter Techtree) nennt die Kosten fest im Text: ohne und mit der
-     Wissenschaftlichen Methode. Hier an die Regel gebunden, deutsch und englisch. */
+  /* Im alten Techtree (Spielstände von vor v82): ohne und mit der Wissenschaftlichen Methode. */
   const T0 = newGame({ seed: 7, oldTree: true, players: [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }] });
   const ohne = techCost(T0, 0, SINGULARITY);
   T0.players[0].techs.wiss_methode = true;
   const mit = techCost(T0, 0, SINGULARITY);
-  eq([T0.oldTree, ohne, mit], [true, 120, 110], 'Tutorial: Singularität 120, mit der Methode 110');
-  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
-  eq([[...tut.matchAll(/<b>Singularität<\/b>: (\d+) Wissenschaft/g)].map(m => +m[1]),
-    [...tut.matchAll(/mit der wissenschaftlichen Methode (\d+)\./g)].map(m => +m[1])],
-    [[ohne, ohne], [mit]], 'Tutorialtexte (lang und kurz) nennen dieselben Kosten');
-  const en = Object.values(UI_EN).join('\n');
-  eq([[...en.matchAll(/<b>Singularity<\/b>: (\d+) science/g)].map(m => +m[1]),
-    [...en.matchAll(/, (\d+) with the scientific method\./g)].map(m => +m[1])],
-    [[ohne, ohne], [mit]], '… englisch ebenso');
+  eq([T0.oldTree, ohne, mit], [true, 120, 110], 'alter Techtree: Singularität 120, mit der Methode 110');
 }
 
 /* Griechenland hat keinen Würfelbonus mehr, der Kostenrabatt bleibt */
@@ -1214,14 +1346,6 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(!!TECH_BY_KEY.theologie, true, 'Theologie ist eine normale Technologie');
   eq(techsIn(1, 0).map(t => t.k).includes('keramik'), true, 'Keramik: Produktion/Antike');
   eq(techsIn(3, 1).map(t => t.k).includes('theologie'), true, 'Theologie: Spezial/Mittelalter');
-}
-
-/* Theologie senkt die Siegschwelle auf 3/5, UN gewinnt bei Gleichstand die niedrigere */
-{
-  const S = mk('griechenland', ['theologie']);
-  eq(victoryOption(S, S.players[0]).frac, 3 / 5, 'Theologie setzt Schwelle auf 3/5');
-  S.players[0].techs.un = true;
-  eq(victoryOption(S, S.players[0]).frac, 0.5, 'UN (1/2) schlägt Theologie (3/5)');
 }
 
 /* Keramik + Verbundwerkstoffe: bis 3x wachsen, davon 1x gratis */
@@ -2604,15 +2728,15 @@ const setEvent = (S, k) => {
       foundBlockReason(mitMauer('feindgebiet'), 0, ZR, ZC)],
     ['wasser', 'gelaende', 'gebiet'], 'die drei Gründe sind einzeln ablesbar');
 
-  /* OFFEN (bewusst nicht mitgeändert): gesperrt ist der WEG. Auf einem einzelnen
-     fremden Feld, das man von außen erreicht, darf weiter gegründet werden – pathSteps
-     prüft das Zielfeld nie, und canFound hat dafür keine eigene Regel. Praktisch nur
-     bei per Kolonialismus gekauften Feldern möglich: das Umland fremder Städte liegt
-     ohnehin näher als drei Felder an einer Stadt. Wer das auch sperren will, sagt es. */
+  /* Bis v103 offen (bewusst nicht mitgeändert): gesperrt war nur der WEG – auf einem einzelnen
+     fremden Feld, das man von außen erreicht, durfte gegründet werden, und daneben auch. Seit v104
+     (Anweisung des Autors, gemeldet als Fehler) nicht mehr: auf und neben einem fremden
+     beanspruchten Feld wird nicht gegründet, wie neben einer gegnerischen Armee. Das Umland fremder
+     Städte erreicht ein Platz ohnehin nie – der Mindestabstand von 3 hält es zwei Felder fern. */
   {
     const S = flacheKarte();
     S.bought[1] = [key(ZR, ZC)];
-    eq(canFound(S, 0, ZR, ZC), null, 'auf einem fremden Einzelfeld darf noch gegründet werden');
+    eq(canFound(S, 0, ZR, ZC), 'Nicht auf oder direkt neben gegnerischem Gebiet.', 'auf einem fremden Einzelfeld wird nicht gegründet (v104)');
   }
 
   /* Kolonien (v84, Anweisung des Autors): ein per Kolonialismus gekauftes Feld darf auch
@@ -3125,8 +3249,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
    Mathematik 1, Astronomie 2, Philosophie 3, Schrift 4 · Produktion Bewässerung 1,
    Landwirtschaft 5 · Forschung in der Industrialisierung Chemie 11, Biologie 12,
    Wissenschaftliche Methode 15. Die alten Kosten (bis v81 der Standard) gibt es nur noch
-   im Tutorial (S.oldTree, OLD_TECH_COSTS) und in Partien, die vor v82 damit begonnen
-   haben. Feld, Zeitalter und Wirkung sind in beiden gleich.                           */
+   in Partien, die vor v82 begonnen haben (S.oldTree, OLD_TECH_COSTS). Feld, Zeitalter und Wirkung sind in beiden gleich.                           */
 {
   const auf = civ => [{ civ, kind: 'human' }, { civ: 'wikinger', kind: 'bot' }];
   const mkT = (civ, old, techs = [], extra = {}) => {
@@ -3146,14 +3269,26 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     wiss_methode: 11, chemie: 12, biologie: 15,
     landwirtschaft: 1, bewaesserung: 5,
     eisenverarbeitung: 2, belagerung: 4, stadtmauern: 5,
-  }, 'alter Techtree: die neun Kosten bis v81 und die drei militärischen bis v83');
+    theologie: 10, buerokratie: 8, militaergericht: 13, nationalismus: 11, stahl: 8, burgenbau: 7,
+    kunstduenger: 14, dampfmaschine: 11, eisenbahn: 13,
+  }, 'alter Techtree: die neun Kosten bis v81, die drei militärischen bis v83, die neun bis v104');
+  /* v105 (Anweisung des Autors): neun Kosten getauscht bzw. gedreht, jede im selben Zeitalter wie
+     vorher – im Tutorial (alter Techtree) bleiben die alten, sein Ablauf rechnet mit Burgenbau 7. */
+  const v105 = { theologie: 8, buerokratie: 10, militaergericht: 11, nationalismus: 13, stahl: 7, burgenbau: 8,
+    kunstduenger: 11, dampfmaschine: 13, eisenbahn: 14 };
+  eq(Object.fromEntries(Object.keys(v105).map(k => [k, TECH_BY_KEY[k].c])), v105, 'v105: die neun neuen Grundkosten');
+  eq(Object.keys(v105).filter(k => ageOfCost(v105[k]) !== ageOfCost(OLD_TECH_COSTS[k])), [], 'v105: keine wechselt das Zeitalter');
+  eq([leiter(STD, 3, 1), leiter(STD, 3, 2), leiter(STD, 2, 1), leiter(STD, 1, 2)].map(l => l.join(' ')),
+    ['rittertum kundschafterei theologie kartografie buerokratie', 'militaergericht spionage nationalismus kolonialismus',
+      'stahl burgenbau schiesspulver', 'kunstduenger dampfmaschine eisenbahn fliessband'],
+    'v105: die vier Leitern – Spezial Mittelalter und Industrialisierung, Militär Mittelalter, Produktion Industrialisierung');
   // v84 (Anweisung des Autors): Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5
   eq(['stadtmauern', 'eisenverarbeitung', 'belagerung'].map(k => TECH_BY_KEY[k].c), [2, 4, 5],
     'Militär/Antike: Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5 (v84)');
   eq(leiter(STD, 2), ['taktik', 'stadtmauern', 'eisenverarbeitung', 'belagerung'],
     'Standard: Militär/Antike nach Kosten 1, 2, 4, 5');
   eq(leiter(OLD, 2), ['taktik', 'eisenverarbeitung', 'belagerung', 'stadtmauern'],
-    'alter Techtree (Tutorial): Militär/Antike wie bis v83'); 
+    'alter Techtree: Militär/Antike wie bis v83'); 
   eq([STD.oldTree, OLD.oldTree], [false, true], 'der alte Techtree steht als Schalter im Spielstand');
   eq(newGame({ seed: 7, players: auf('england') }).oldTree, false, 'ohne Angabe gilt der (neue) Standard');
   eq(newGame({ seed: 7, players: auf('england'), altTree: false }).oldTree, false,
@@ -3174,7 +3309,10 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     const [W0, W1] = [false, true].map(old => mkT('england', old, [], { wonders: true }));
     const anders = [], ungeordnet = [];
     for (let f = 0; f < 4; f++) for (let a = 0; a < 4; a++) {
-      const geaendert = (a === 0 && f < 3) || (a === 2 && f === 0);     // Antike 0/1/2, Industrialisierung 0
+      // Antike 0/1/2, Industrialisierung 0; seit v105 Spezial Mittelalter/Industrialisierung,
+      // Militär Mittelalter, Produktion Industrialisierung
+      const geaendert = (a === 0 && f < 3) || (a === 2 && f === 0) ||
+        (f === 3 && (a === 1 || a === 2)) || (f === 2 && a === 1) || (f === 1 && a === 2);
       if (!geaendert && leiter(W0, f, a).join() !== leiter(W1, f, a).join()) anders.push(`${f}/${a}`);
       for (const X of [W0, W1]) {
         const k = techsIn(f, a, X).map(t => techBase(X, t));
@@ -3219,58 +3357,57 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     eq([doResearch(S, 0, 'mathematik'), p.res.sci], [null, 0], 'Mathematik kostet 1');
   }
 
-  // Kopieren zahlt die Basiskosten der Partie
+  // Kopieren zahlt die Basiskosten der Partie (je bezahltem Weg sein Preis – seit v105 beide nebeneinander)
   {
+    const bezahlt = o => o.ways.filter(w => w.coins).map(w => w.coins);
     const preise = S => {
       S.players[1].techs.schrift = true; S.players[1].techs.landwirtschaft = true; S.players[1].techs.mathematik = true;
-      return ['schrift', 'landwirtschaft', 'mathematik'].map(k => copyableTechs(S, 0).find(o => o.tech.k === k).paidCoins);
+      return ['schrift', 'landwirtschaft', 'mathematik'].map(k => bezahlt(copyableTechs(S, 0).find(o => o.tech.k === k)).join('/'));
     };
-    eq(preise(mkT('england', false, ['spionage'])), [4, 5, 1], 'Standard: Spionage kopiert zu 4/5/1 Münzen');
-    eq(preise(mkT('england', true, ['spionage'])), [1, 1, 2], 'alter Techtree: Spionage kopiert zu 1/1/2 Münzen');
+    eq(preise(mkT('england', false, ['spionage'])), ['4', '5', '1'], 'Standard: Spionage kopiert zu 4/5/1 Münzen');
+    eq(preise(mkT('england', true, ['spionage'])), ['1', '1', '2'], 'alter Techtree: Spionage kopiert zu 1/1/2 Münzen');
     // v72: Kundschafterei kopiert in beiden Techtrees zum Doppelten der Grundkosten der Partie
-    eq(preise(mkT('england', false, ['kundschafterei'])), [8, 10, 2], 'Standard: Kundschafterei zum Doppelten');
-    eq(preise(mkT('england', true, ['kundschafterei'])), [2, 2, 4], 'alter Techtree: Kundschafterei zum Doppelten');
-    eq(preise(mkT('england', false, ['kundschafterei', 'spionage'])), [4, 5, 1],
-      'mit beiden Wegen gilt der günstigere – Spionage');
+    eq(preise(mkT('england', false, ['kundschafterei'])), ['8', '10', '2'], 'Standard: Kundschafterei zum Doppelten');
+    eq(preise(mkT('england', true, ['kundschafterei'])), ['2', '2', '4'], 'alter Techtree: Kundschafterei zum Doppelten');
+    eq(preise(mkT('england', false, ['kundschafterei', 'spionage'])), ['4/8', '5/10', '1/2'],
+      'mit beiden Wegen beide Preise – seit v105 je eine Kopie (bis v104 galt nur Spionage)');
     const preise3 = S => {
       ['wiss_methode', 'chemie', 'biologie'].forEach(k => { S.players[1].techs[k] = true; });
-      return ['wiss_methode', 'chemie', 'biologie'].map(k => copyableTechs(S, 0).find(o => o.tech.k === k).paidCoins);
+      return ['wiss_methode', 'chemie', 'biologie'].map(k => bezahlt(copyableTechs(S, 0).find(o => o.tech.k === k)).join('/'));
     };
-    eq(preise3(mkT('england', false, ['spionage'])), [15, 11, 12], 'Standard: Spionage kopiert zu 15/11/12 Münzen');
-    eq(preise3(mkT('england', true, ['spionage'])), [11, 12, 15], 'alter Techtree: Spionage kopiert zu 11/12/15 Münzen');
-    eq(preise3(mkT('england', false, ['kundschafterei'])), [30, 22, 24], 'Standard: Kundschafterei 30/22/24');
+    eq(preise3(mkT('england', false, ['spionage'])), ['15', '11', '12'], 'Standard: Spionage kopiert zu 15/11/12 Münzen');
+    eq(preise3(mkT('england', true, ['spionage'])), ['11', '12', '15'], 'alter Techtree: Spionage kopiert zu 11/12/15 Münzen');
+    eq(preise3(mkT('england', false, ['kundschafterei'])), ['30', '22', '24'], 'Standard: Kundschafterei 30/22/24');
   }
 
-  /* v72 (Anweisung des Autors): Kolonialismus kauft ein Feld für 3 Münzen (vorher 5),
-     Kundschafterei kopiert zum Doppelten der Grundkosten (vorher zum Dreifachen) – in
-     BEIDEN Techtrees; sie unterscheiden sich nur in den Forschungskosten. */
+  /* Kolonialismus: seit v103 (Anweisung des Autors) COLONY_CLAIMS kostenlose Felder je Runde – bis
+     v102 kaufte er eines für 3 Münzen (v72, vorher 5). Kundschafterei kopiert seit v72 zum Doppelten
+     der Grundkosten (vorher zum Dreifachen). Beides in BEIDEN Techtrees; sie unterscheiden sich nur
+     in den Forschungskosten. */
   {
-    eq([COLONY_COST, SCOUTING_RATE], [3, 2], 'Kolonialismus 3 Münzen je Feld, Kundschafterei 2×');
-    const kauf = (old, muenzen) => {
+    eq([COLONY_CLAIMS, SCOUTING_RATE], [3, 2], 'Kolonialismus 3 Felder je Runde, Kundschafterei 2×');
+    const anspruch = old => {
       const S = mkT('england', old, ['kolonialismus']), p = S.players[0], cap = capitalOf(S, 0);
-      S.cur = 0; p.res = { sci: 0, food: 0, coins: muenzen };
+      S.cur = 0; p.res = { sci: 0, food: 0, coins: 0 };
       const frei = within(cap.r, cap.c, 6).find(([r, c]) => terrainAt(S, r, c) && !cityAt(S, r, c) &&
         !S.players.some((_, i) => controlledTiles(S, i).has(key(r, c))));
-      const err = buyTile(S, 0, frei[0], frei[1]);
-      return [err, p.res.coins, (S.bought[0] || []).length, S.log[S.log.length - 1].m];
+      const err = claimTile(S, 0, frei[0], frei[1]);
+      return [err, p.res.coins, (S.bought[0] || []).length, claimsLeft(S, 0)];
     };
-    const std = kauf(false, 5);
-    eq(std.slice(0, 3), [null, 2, 1], 'Standard: das Feld kostet 3 Münzen');
-    eq(kauf(true, 5).slice(0, 3), [null, 2, 1], 'alter Techtree: ebenfalls 3 Münzen');
-    eq(/\(3 Münzen\)/.test(std[3]), true, 'das Protokoll nennt den Preis');
-    eq(kauf(false, 2).slice(0, 3), [T('Zu wenig Münzen.'), 2, 0], 'mit 2 Münzen reicht es nicht');
+    eq(anspruch(false), [null, 0, 1, COLONY_CLAIMS - 1], 'Standard: ohne Münzen beansprucht, noch zwei offen');
+    eq(anspruch(true), anspruch(false), 'alter Techtree: ebenso');
     // Die Techtexte nennen dieselben Zahlen wie die Regel – in beiden Sprachen und Techtrees
     const K = TECH_BY_KEY, A = { oldTree: true };
     const texte = X => [techEffect(K.kolonialismus, X), techEffect(K.kundschafterei, X)];
-    eq(texte(STD), [`Für ${COLONY_COST} Münzen Feld kaufen; dort auch ohne Weg gründen`, `Tech kopieren (${SCOUTING_RATE}× Kosten in Münzen)`],
-      'Techtexte nennen den Feldpreis und den Kopierfaktor der Regel');
+    eq(texte(STD), [`${COLONY_CLAIMS}× pro Runde: ein herrenloses Feld beanspruchen; dort auch ohne Weg gründen`, `1 Tech/Runde kopieren (${SCOUTING_RATE}× Kosten in Münzen)`],
+      'Techtexte nennen die Ansprüche je Runde und den Kopierfaktor der Regel');
     eq(texte(A), texte(STD), 'der alte Techtree zeigt dieselben Texte');
     setLang('en', { quiet: true });
     const en = [texte(null), texte(A)];
     setLang('de', { quiet: true });
-    const kauftext = `Buy a tile for ${COLONY_COST} coins; found a city there even without a route`;
-    eq(en, [[kauftext, `Copy a tech (${SCOUTING_RATE}× its cost in coins)`],
-      [kauftext, `Copy a tech (${SCOUTING_RATE}× its cost in coins)`]], 'englisch ebenso');
+    const text = `${COLONY_CLAIMS}× per round: claim an unowned tile; found a city there even without a route`;
+    eq(en, [[text, `Copy 1 tech per round (${SCOUTING_RATE}× its cost in coins)`],
+      [text, `Copy 1 tech per round (${SCOUTING_RATE}× its cost in coins)`]], 'englisch ebenso');
   }
 
   // Plättchenmodus: der Vorabwurf läuft im selben Techtree wie die Partie. Geprüft an
@@ -3306,17 +3443,6 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     const M = migrateState(JSON.parse(JSON.stringify(STD)));
     eq([M.oldTree, leiter(M, 0)[0]], [false, 'mathematik'], '… und der Standard der Standard');
     eq(migrateState(migrateState(JSON.parse(JSON.stringify(OLD)))).oldTree, true, 'zweimal migriert ändert nichts');
-  }
-
-  // Das Tutorial läuft im alten Techtree – Texte und Aufgaben sind darauf zugeschnitten
-  {
-    // tutorialSetup schreibt das globale S und ui – danach wieder wie vorher, sonst griffe
-    // der Tutorial-Haken (tutBotTech) in die Bot-Partien gleich darunter ein.
-    const merkS = typeof S !== 'undefined' ? S : undefined, merkUi = typeof ui !== 'undefined' ? ui : undefined;
-    tutorialSetup();
-    eq([S.oldTree, leiter(S, 0)[0], techCost(S, 0, TECH_BY_KEY.schrift)], [true, 'schrift', 1],
-      'Tutorial: alter Techtree (Schrift 1 vorn auf der Leiter)');
-    S = merkS; ui = merkUi;
   }
 
   // Bots forschen auf denselben Leitern – je zehn vollständige Partien ohne Ausnahme
@@ -3367,8 +3493,8 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const ki = K.players.findIndex(p => p.civ === 'russland');
   eq(growPrice(K, ki, capitalOf(K, ki)), { food: 0, coins: 2 }, 'Kolonisten und Fruchtbarkeit zusammen: keine Nahrung, doppelte Münzen');
   // keine Prüfung der Grundfähigkeit ohne Zivilisation mehr im Quelltext
-  const quelle = ['engine', 'expansion', 'bots', 'ki', 'marathon', 'ui']
-    .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8')).join('\n');
+  const quelle = ['engine', 'expansion', 'bots', 'ki', 'marathon']
+    .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8')).join('\n') + uiQuelle();
   eq((quelle.match(/isAbil\([^)]*'basis'\)/g) || []).length, 0, "kein isAbil(…, 'basis') mehr im Quelltext");
 }
 
@@ -3411,6 +3537,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   // --- Technologiekosten
   const M = newGame({ seed: 3, map: marathonMap(3), marathon: true, players: CIVS.map(c => ({ civ: c.k, kind: 'human', drafted: ['england:basis', 'russland:basis'] })) });
   const N = newGame({ seed: 3, players: CIVS.map(c => ({ civ: c.k, kind: 'human', ability: 'gratistech' })) });
+  eq([victoryMode(M), victoryOption(M, M.players[0]).label], ['vier', VICTORY_THRESHOLDS.vier.base.join('/')], 'Marathon: vier Reiche, also die Siegschwellen zu viert (v101)');
   const k4 = ['mathematik', 'papier', 'chemie', 'computertechnik'].map(k => TECH_BY_KEY[k]);
   eq(k4.map(t => techCost(M, 0, t)), k4.map((t, i) => techCost(N, 0, t) * [2, 3, 4, 5][i]),
     'Marathon: Antike ×2, Mittelalter ×3, Industrialisierung ×4, Moderne ×5');
@@ -3420,7 +3547,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   eq(techCost(M, gr, TECH_BY_KEY.papier), 6 * 3 - 2, 'Rabatte ziehen danach ab, im Marathon doppelt (v85; seit v97 Papier 18 − 2 × 1)');
   M.players[gr].techs.spionage = true;
   ['schrift', 'papier'].forEach(k => { M.players[(gr + 1) % 4].techs[k] = true; });
-  eq(['schrift', 'papier'].map(k => copyableTechs(M, gr).find(o => o.tech.k === k).paidCoins), [8, 18],
+  eq(['schrift', 'papier'].map(k => copyableTechs(M, gr).find(o => o.tech.k === k).ways[0].coins), [8, 18],
     'Kopieren zahlt die Grundkosten des Marathons (Schrift 4 × 2, Papier 6 × 3)');
 
   // --- Gründungen je Zug: im Marathon v84–v99 höchstens fünf, seit v100 ohne Grenze
@@ -3681,49 +3808,69 @@ const duellKarte = (civA, civB, seed) => {
       `${a.n} gegen ${b.n} bekommt zwei Startpunkte`);
   }
 }
-/* Siegschwellen im Duell: >3/4, mit Theologie >7/10, mit UN >2/3 – niedrigste gilt */
+/* Siegschwellen des Wirtschaftssiegs (v102: eine Stelle für die Zahlen). Dies ist der EINZIGE Test,
+   der sie nennt – ein Schnappschuss der Tabelle in js/data.js. Eine Regeländerung ändert dort die
+   Zeile und hier den Schnappschuss; alle anderen Tests unten rechnen aus VICTORY_THRESHOLDS. */
+eq(VICTORY_THRESHOLDS, {
+  duell: { base: [4, 5], theologie: [3, 4], un: [2, 3] },
+  vier: { base: [4, 7], theologie: [1, 2], un: [2, 5] },
+  drei: { base: [2, 3], theologie: [3, 5], un: [1, 2] },
+}, 'Siegschwellen: der Schnappschuss (zuletzt geändert v102 im Duell, v101 zu viert – Anweisungen des Autors)');
+
+/* Aus der Tabelle gerechnet (v102): Beschriftung, Bruch, Zähler/Nenner, die niedrigste gilt. */
+const VT = VICTORY_THRESHOLDS;
+const bruch = t => t.join('/');
+const niedrigste = (mode, ...ks) => ks.map(k => VT[mode][k]).sort((x, y) => x[0] / x[1] - y[0] / y[1])[0];
+// Spiele je Spielart: vier und drei Reiche, das Duell auf seiner Plättchenkarte
+const spielArt = mode => mode === 'duell'
+  ? newGame({ seed: 9, duel: true, map: duellKarte('griechenland', 'england', 9),
+    players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }] })
+  : newGame({ seed: 9, players: (mode === 'vier' ? CIVS.map(c => c.k) : ['russland', 'griechenland', 'england']).map(k => ({ civ: k, kind: 'human' })) });
 {
-  const S = newGame({
-    seed: 8, duel: true, map: duellKarte('griechenland', 'england', 8),
-    players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }],
-  });
-  eq(S.duel, true, 'der Duellmodus steht im Spielstand');
-  eq(S.players.length, 2, 'nur zwei Reiche');
-  const p = S.players[0];
-  const o = victoryOption(S, p);
-  eq([o.frac, o.strict, o.label], [3 / 4, true, '3/4'], 'Grundschwelle im Duell ist >3/4');
-  p.techs.theologie = true;
-  eq(victoryOption(S, p).label, '7/10', 'mit Theologie >7/10');
-  p.techs.un = true;
-  eq(victoryOption(S, p).label, '2/3', 'mit Vereinten Nationen >2/3, die niedrigste gilt');
-  // im normalen Spiel bleiben die alten Schwellen
-  const N = mk('griechenland', ['theologie', 'un']);
-  eq(victoryOption(N, N.players[0]).label, '1/2', 'ohne Duell weiter UN 1/2');
-  eq(victoryOption(N, mk('griechenland').players[0]).label, '2/3', 'und Grundschwelle 2/3');
+  for (const mode of ['vier', 'drei', 'duell']) {
+    const X = spielArt(mode), p = X.players[0];
+    for (const techs of [[], ['theologie'], ['un'], ['theologie', 'un']]) {
+      p.techs = {}; techs.forEach(t => { p.techs[t] = true; });
+      const soll = niedrigste(mode, 'base', ...techs), o = victoryOption(X, p);
+      eq([victoryMode(X), o.label, o.frac, o.num, o.den, o.strict], [mode, bruch(soll), soll[0] / soll[1], soll[0], soll[1], true],
+        `${mode}${techs.length ? ' mit ' + techs.join(' und ') : ''}: die niedrigste Schwelle der Tabelle gilt`);
+    }
+  }
 }
-/* Wirtschaftssieg im Duell greift erst über 3/4 */
+
+/* Spielarten (v102 ohne eigene Brüche): der Duellmodus steht im Spielstand; zwei Reiche ohne ihn
+   (gibt es im Aufbau nicht) zählen wie drei. */
 {
-  const S = newGame({
-    seed: 9, duel: true, map: duellKarte('griechenland', 'england', 9),
-    players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }],
-  });
-  const a = capitalOf(S, 0), b = capitalOf(S, 1);
-  // seit v85 geprüft am Rundenende (checkEconomyRoundEnd), auch schon in Runde 1
-  a.pop = 3; b.pop = 1;                     // genau 3/4
-  checkEconomyRoundEnd(S);
-  eq(S.claims.length, 0, 'genau 3/4 reicht nicht (strikt größer)');
-  a.pop = 4;                                 // 4/5 > 3/4
-  checkEconomyRoundEnd(S);
-  eq(S.claims.map(c => c.pi), [0], 'über 3/4 wird der Sieg angemeldet');
-  // im Vier-Reiche-Spiel hätte 3/4 schon gereicht – dort gilt „mehr als 2/3" (seit v77
-  // strikt wie alle anderen Schwellen; bis v74 genügten genau 2/3)
-  const N = newGame({ seed: 9, players: CIVS.map(c => ({ civ: c.k, kind: 'human' })) });
-  N.cities.forEach(c => { c.pop = c.owner === 0 ? 6 : 1; });   // 6 von 9 = genau 2/3
-  checkEconomyRoundEnd(N);
-  eq(N.claims.length, 0, 'ohne Duell reichen genau 2/3 nicht mehr (mehr als 2/3, v77)');
-  N.cities.forEach(c => { c.pop = c.owner === 0 ? 7 : 1; });   // 7 von 10 > 2/3
-  checkEconomyRoundEnd(N);
-  eq(N.claims.map(c => c.pi), [0], 'mehr als 2/3 wird angemeldet');
+  const S = spielArt('duell');
+  eq([S.duel, S.players.length, victoryMode(S)], [true, 2, 'duell'], 'der Duellmodus steht im Spielstand, zwei Reiche');
+  eq(victoryMode(mk('griechenland')), 'drei', 'zwei Reiche ohne Duellmodus: wie zu dritt');
+}
+/* Am Rundenende angemeldet, wer MEHR als die Schwelle hat – genau auf ihr reicht nicht. Je Spielart
+   und Technologie: Bevölkerung genau auf der Schwelle der Tabelle, dann eine mehr. Die Fremden
+   verteilen sich auf ihre Hauptstädte, je mindestens 1. */
+{
+  const setze = (X, eigen, fremd) => {
+    const andere = X.cities.filter(c => c.owner !== 0);
+    andere.forEach((c, i) => { c.pop = 1 + (i === 0 ? fremd - andere.length : 0); });
+    X.cities.filter(c => c.owner === 0).forEach(c => { c.pop = eigen; });
+  };
+  const anmelden = (mode, techs, eigen, fremd) => {
+    const X = spielArt(mode);
+    techs.forEach(t => { X.players[0].techs[t] = true; });
+    setze(X, eigen, fremd);
+    checkEconomyRoundEnd(X);
+    return X.claims.map(c => c.pi);
+  };
+  for (const mode of ['vier', 'drei', 'duell']) for (const techs of [[], ['theologie'], ['un']]) {
+    const [n, d] = niedrigste(mode, 'base', ...techs), andere = mode === 'vier' ? 3 : mode === 'drei' ? 2 : 1;
+    const k = Math.ceil(andere / (d - n));          // genug fremde Bevölkerung für alle Hauptstädte
+    eq([anmelden(mode, techs, k * n, k * (d - n)), anmelden(mode, techs, k * n + 1, k * (d - n))], [[], [0]],
+      `${mode}${techs.length ? ' mit ' + techs[0] : ''}: genau ${k * n} von ${k * d} nicht, ${k * n + 1} von ${k * d + 1} schon`);
+  }
+  // ganzzahlig verglichen (v101): 63 von 90 sind genau 7/10 – mit dem Gleitkommabruch galt das bis
+  // v100 als „mehr als" (eine reine Rechenprobe, keine Regelzahl)
+  eq([63 > 90 * (7 / 10), victoryMet({ num: 7, den: 10, strict: true }, 63, 90), victoryMet({ num: 7, den: 10, strict: false }, 63, 90)],
+    [true, false, true], 'victoryMet: der Bruch allein hätte sich verrechnet; „mehr als" und „mindestens" an der Grenze');
 }
 /* Wirtschaftssieg am Rundenende (v85, Anweisung des Autors): einmal je Runde, an ihrem Ende –
    wenn alle gleich oft gezogen haben –, mit der Bevölkerung von dort. Wer gewinnt, gewinnt
@@ -3734,7 +3881,8 @@ const duellKarte = (civA, civB, seed) => {
     players: ['russland', 'griechenland', 'england', 'wikinger'].map(k => ({ civ: k, kind: 'human' })) });
   const S = vier();
   endTurn(S);                                                     // Russland fertig
-  capitalOf(S, 1).pop = 9;                                        // Griechenland: 9 von 12 > 2/3
+  capitalOf(S, 1).pop = 9;                                        // Griechenland: 9 von 12, über der Schwelle
+  eq(victoryMet(victoryOption(S, S.players[1]), 9, 12), true, 'Vorbedingung: 9 von 12 liegen über der Schwelle zu viert');
   endTurn(S); endTurn(S);                                         // Griechenland, England
   eq([S.claims.length, S.over], [0, null], 'während der Runde wird nichts angemeldet');
   endTurn(S);                                                     // Wikinger: Rundenende
@@ -3751,7 +3899,7 @@ const duellKarte = (civA, civB, seed) => {
   const U = vier();
   endTurn(U);                                                     // Russland
   claimVictory(U, 1, 'Forschungssieg (Singularität)');            // Griechenland in seinem Zug
-  capitalOf(U, 2).pop = 12;                                       // England: 12 von 15 > 2/3
+  capitalOf(U, 2).pop = 12;                                       // England: 12 von 15, über der Schwelle
   for (let i = 0; i < 3; i++) endTurn(U);
   eq([U.claims.map(c => c.pi), !!U.over, U.over && U.over.score && U.over.score.length], [[1, 2], true, 2],
     'Wirtschaftssieg am Rundenende neben der Singularität derselben Runde: die Punkte entscheiden');
@@ -3763,12 +3911,12 @@ const duellKarte = (civA, civB, seed) => {
   const S = newGame({ seed: 8, duel: true, map: duellKarte('russland', 'england', 8),
     players: [{ civ: 'russland', kind: 'human' }, { civ: 'england', kind: 'human' }] });
   eq(S.round, 1, 'das Spiel beginnt in Runde 1');
-  const a = capitalOf(S, 0), b = capitalOf(S, 1);
-  a.pop = 4; b.pop = 1;                              // 4 von 5 – über 3/4
+  const a = capitalOf(S, 0), b = capitalOf(S, 1), [n, d] = VT.duell.base;
+  a.pop = n + 1; b.pop = d - n;                      // eine mehr als genau auf der Schwelle
   endTurn(S);                                         // erster Spieler fertig
   eq([S.claims.length, S.over], [0, null], 'nach dem ersten Zug noch nichts – der zweite zieht noch');
   endTurn(S);                                         // zweiter fertig: Ende von Runde 1
-  eq([!!S.over, S.over && S.over.winner, S.round], [true, 0, 1], 'am Ende von Runde 1 gewinnt 4 von 5');
+  eq([!!S.over, S.over && S.over.winner, S.round], [true, 0, 1], `am Ende von Runde 1 gewinnt ${n + 1} von ${d + 1}`);
 }
 /* Eine vollständige 1-gegen-1-Partie Mensch gegen Bot läuft durch */
 {
@@ -3965,8 +4113,9 @@ const duellKarte = (civA, civB, seed) => {
 }
 
 /* Griechenland: Alternativen ersetzen den Kostenrabatt.
-   Freie Forschung seit v99 (Anweisung des Autors): einmal je Runde jede erforschbare Technologie,
-   aus jedem Zeitalter und auch die Singularität – also der Forschungssieg. v97–v98 zweimal je
+   Freie Forschung seit v101 (Anweisung des Autors): höchstens zweimal je Partie und höchstens
+   einmal je Runde jede erforschbare Technologie, aus jedem Zeitalter und auch die Singularität –
+   also der Forschungssieg. v99–v100 einmal je Runde ohne Grenze je Partie, v97–v98 zweimal je
    Partie ohne die Singularität, bis v96 einmal je Runde und nur bis zur Industrialisierung. */
 {
   const S = mkA('griechenland', 'gratistech'), p = S.players[0];
@@ -3978,15 +4127,28 @@ const duellKarte = (civA, civB, seed) => {
   eq(useFreeTech(S, 0, 'chemie'), T('Nicht möglich.'), '… und nicht Verfügbares geht auch nicht');
   eq(freeTechOptions(S, 0).map(t => t.k).sort(), researchable(S, 0).map(t => t.k).sort(),
     'zur Wahl steht genau, was der Bogen erforschbar nennt');
+  eq([FREE_TECH_USES, freeTechsLeft(p)], [2, 2], 'zweimal je Partie, beide offen');
   const vorrat = JSON.stringify(p.res);
   eq(useFreeTech(S, 0, 'papier'), null, 'Gratisforschung klappt');
-  eq([has(p, 'papier'), JSON.stringify(p.res) === vorrat, p.freeTechUsed], [true, true, S.round],
-    'Tech ist erforscht, nichts bezahlt, die Runde ist vermerkt');
-  eq([freeTechOptions(S, 0).length, useFreeTech(S, 0, 'robotik')], [0, T('Nicht möglich.')],
-    'einmal je Runde: eine zweite im selben Zug geht nicht');
+  eq([has(p, 'papier'), JSON.stringify(p.res) === vorrat, p.freeTechUsed, p.freeTechsUsed, freeTechsLeft(p)],
+    [true, true, S.round, 1, 1], 'Tech ist erforscht, nichts bezahlt, Runde und Zahl sind vermerkt – noch eine offen');
+  eq([freeTechOptions(S, 0).length, useFreeTech(S, 0, 'robotik'), p.freeTechsUsed], [0, T('Nicht möglich.'), 1],
+    'höchstens einmal je Runde: eine zweite im selben Zug geht nicht (und zählt nicht)');
   S.round += 1;
   eq(freeTechOptions(S, 0).some(t => t.k === 'robotik'), true, 'in der nächsten Runde wieder');
-  eq([useFreeTech(S, 0, 'robotik'), has(p, 'robotik')], [null, true], 'nächste Runde: Robotik (Moderne) umsonst');
+  eq([useFreeTech(S, 0, 'robotik'), has(p, 'robotik'), freeTechsLeft(p)], [null, true, 0],
+    'nächste Runde: Robotik (Moderne) umsonst – damit sind beide verbraucht');
+  p.avail.chemie = true;
+  for (const r of [1, 2, 5]) {
+    S.round += r;
+    eq([freeTechOptions(S, 0).length, useFreeTech(S, 0, 'chemie'), has(p, 'chemie')], [0, T('Nicht möglich.'), false],
+      `zweimal je Partie: auch ${r} Runde(n) später keine dritte`);
+  }
+  // was sonst kostenlos kommt (etwa aus einem Wunder), verbraucht keine Freie Forschung
+  const O = mkA('griechenland', 'gratistech'), o = O.players[0];
+  o.avail.papier = true;
+  eq([grantTech(O, 0, 'papier', 'Oxford'), freeTechsLeft(o), o.freeTechUsed], [null, 2, undefined],
+    'eine Technologie aus einem Wunder zählt nicht mit');
   // die Singularität auch, sobald sie erforschbar ist – das ist der Forschungssieg
   const G = mkA('griechenland', 'gratistech'), q = G.players[0];
   eq(freeTechOptions(G, 0).some(t => t.k === 'singularitaet'), false, 'ohne die Moderne in jedem Feld keine Singularität');
@@ -4004,24 +4166,45 @@ const duellKarte = (civA, civB, seed) => {
   D.players[0].avail.papier = true;
   setEvent(D, 'dunkles_zeitalter');
   eq([evActive(D, 0, 'dunkles_zeitalter'), freeTechOptions(D, 0).length], [true, 0], 'Dunkles Zeitalter: keine Freie Forschung');
-  // Spielstand von v97/v98: der Zähler (p.freeTechsUsed) bedeutet nichts mehr
+  // … und verbraucht nichts: die Freie Forschung bleibt für die nächste Runde
+  eq([D.players[0].freeTechsUsed, freeTechsLeft(D.players[0])], [undefined, 2], 'ein Dunkles Zeitalter verbraucht keine');
+  // Spielstand von v97/v98: der Zähler (p.freeTechsUsed) bedeutet wieder dasselbe – zwei verbraucht
   const A = mkA('griechenland', 'gratistech');
   A.players[0].freeTechsUsed = 2;
   A.players[0].avail.papier = true;
   migrateState(A);
-  eq(['freeTechsUsed' in A.players[0], freeTechOptions(A, 0).some(t => t.k === 'papier')], [false, true],
-    'Spielstand von v97/v98: der Zähler verschwindet, die Freie Forschung ist wieder offen');
-  // Spielstand von v96: die Runde der letzten Nutzung gilt weiter (dieselbe Bedeutung wie heute)
+  eq([A.players[0].freeTechsUsed, freeTechOptions(A, 0).length], [2, 0],
+    'Spielstand von v97/v98: der Zähler bleibt (bis v100 gelöscht), beide sind verbraucht');
+  const A1 = mkA('griechenland', 'gratistech');
+  A1.players[0].freeTechsUsed = 1; A1.players[0].avail.papier = true;
+  migrateState(A1);
+  eq([freeTechsLeft(A1.players[0]), freeTechOptions(A1, 0).some(t => t.k === 'papier')], [1, true],
+    'Spielstand von v97/v98 mit einer genutzten: eine offen');
+  // Spielstand von v99/v100 (und bis v96): nur die Runde der letzten Nutzung – mindestens eine verbraucht
   const B = mkA('griechenland', 'gratistech');
   B.players[0].freeTechUsed = B.round; B.players[0].avail.papier = true;
   migrateState(B);
-  eq(freeTechOptions(B, 0).length, 0, 'Spielstand von v96: in dieser Runde schon genutzt – bleibt so');
+  eq([freeTechOptions(B, 0).length, B.players[0].freeTechsUsed], [0, 1],
+    'Spielstand von v99/v100: in dieser Runde schon genutzt – bleibt so, und eine zählt als verbraucht');
+  B.round += 1;
+  eq([useFreeTech(B, 0, 'papier'), freeTechsLeft(B.players[0])], [null, 0], '… in der nächsten Runde die zweite, dann keine mehr');
+  const C = mkA('griechenland', 'gratistech');
+  C.round = 4; C.players[0].freeTechUsed = 2; C.players[0].avail.papier = true;
+  migrateState(C);
+  eq([freeTechsLeft(C.players[0]), freeTechOptions(C, 0).some(t => t.k === 'papier')], [1, true],
+    'Spielstand von v99/v100, in Runde 2 genutzt: in Runde 4 noch eine offen');
+  const U = mkA('griechenland', 'gratistech');
+  migrateState(U); migrateState(U);
+  eq([U.players[0].freeTechsUsed, freeTechsLeft(U.players[0])], [undefined, 2], 'nie genutzt: beide offen, auch nach zweimal migrateState');
+  migrateState(B);
+  eq(B.players[0].freeTechsUsed, 2, 'migrateState ändert einen neuen Spielstand nicht');
 }
 
 /* Marathon (v85, Anweisung des Autors): Griechenlands Günstige Forschung und die
    Wissenschaftliche Methode ziehen doppelt ab – seit v97 also 2/2/4/4/10 bzw. 4/6/8/10/20. Die
    Freie Forschung reichte im Marathon nur bis ins Mittelalter; seit v97 gilt sie überall gleich
-   (v99: einmal je Runde, alles Erforschbare). Im normalen Spiel zieht nichts doppelt ab. */
+   (v99: alles Erforschbare; v101: zweimal je Partie, höchstens einmal je Runde). Im normalen Spiel
+   zieht nichts doppelt ab. */
 {
   const spiel = (marathon, ab) => {
     const S = newGame({ seed: 7, map: marathon ? marathonMap(7) : undefined, marathon,
@@ -4086,9 +4269,12 @@ const duellKarte = (civA, civB, seed) => {
   const minus = METHOD_DISCOUNT.map(n => '−' + n).join('/');
   eq([TECH_BY_KEY.wiss_methode.e.includes(minus), DATA_EN.tech.wiss_methode[1].includes(minus)], [true, true],
     `Wissenschaftliche Methode nennt ${minus}, deutsch und englisch`);
-  eq([ab('griechenland:gratistech').e.startsWith('1× pro Runde') && ab('griechenland:gratistech').e.includes('auch die Singularität'),
-    en('griechenland', 'gratistech').startsWith('Once per round') && en('griechenland', 'gratistech').includes('the Singularity included')],
-    [true, true], 'Freie Forschung: einmal je Runde, auch die Singularität (v99), deutsch und englisch');
+  const wie = { 2: 'Twice' }[FREE_TECH_USES] || FREE_TECH_USES + ' times';
+  eq([ab('griechenland:gratistech').e.startsWith(FREE_TECH_USES + '× pro Partie, höchstens 1× pro Runde') &&
+    ab('griechenland:gratistech').e.includes('auch die Singularität'),
+    en('griechenland', 'gratistech').startsWith(wie + ' per game, at most once per round') &&
+    en('griechenland', 'gratistech').includes('the Singularity included')],
+    [true, true], `Freie Forschung: ${FREE_TECH_USES}× je Partie, höchstens einmal je Runde, auch die Singularität (v101), deutsch und englisch`);
   eq([ab('wikinger:armeemacht').e.includes('+' + WARRIOR_POWER + ' Macht'), en('wikinger', 'armeemacht').includes('+' + WARRIOR_POWER + ' power')],
     [true, true], `Kriegerkultur nennt +${WARRIOR_POWER} Macht`);
   eq([ab('russland:wachstum').e, en('russland', 'wachstum')].map(t => /zusätzliches Wachstum|extra growth/.test(t)), [true, true],
@@ -4781,7 +4967,7 @@ const duellKarte = (civA, civB, seed) => {
 
 /* ==================================================== Siedelertrag (settleGain)
    Was eine gedachte Stadt der Größe 1 auf einem Feld einbrächte. Die Oberfläche zeigt
-   das im Feldblatt an; das Tutorial rechnet damit seine Beispielzahlen aus. */
+   das im Feldblatt an. */
 {
   const S = mk('russland');
   const pi = 0, cap = capitalOf(S, pi);
@@ -4923,65 +5109,6 @@ const duellKarte = (civA, civB, seed) => {
   S.players[wi].dead = true;
   eq(powerView(S).cities.find(x => x.city === cap).atk.map(a => a.pi), [en], 'ein ausgeschiedenes Reich greift nicht an');
 }
-/* Der Protokollschritt im Tutorial darf beim Weiterschalten nicht das offene Fenster
-   wegreißen – dafür gibt es keepOpen. */
-{
-  const look = TUT_STEPS.filter(st => st.keepOpen);
-  eq(look.length, 1, 'genau ein Leseschritt ist als keepOpen markiert');
-  eq(look.every(st => !!st.goal), true, 'der Leseschritt hat ein Ziel');
-  eq(TUT_STEPS[TUT_STEPS.length - 1].goal, undefined,
-    'der letzte Schritt hat keine Aufgabe – sonst würde er sich selbst beenden');
-}
-
-/* Bots forschen zufällig – nur im Tutorial liegt das Ergebnis fest.
-   Der Hook tauscht ausschließlich das ERGEBNIS im Militärfeld; gewürfelt wird normal
-   weiter, damit sich die feste Würfelfolge nicht verschiebt. */
-{
-  // Außerhalb des Tutorials greift der Hook nicht.
-  // ACHTUNG: hier keine lokale Konstante `S` anlegen – tutorialSetup() schreibt in die
-  // globale, eine Schattenvariable würde stillschweigend auf ein anderes Spiel zeigen.
-  ui = { tut: null };
-  {
-    const frei = mk('russland');
-    eq(tutBotTech(frei, 0, 2), null, 'ohne laufendes Tutorial keine Vorgabe');
-  }
-  // Im Tutorial: nur Griechenland, nur das Militärfeld
-  tutorialSetup();
-  const gi = S.players.findIndex(p => p.civ === 'griechenland');
-  const ri = S.players.findIndex(p => p.civ === 'russland');
-  eq(tutBotTech(S, gi, 2).k, 'eisenverarbeitung', 'Griechenland bekommt zuerst Eisenverarbeitung');
-  eq(tutBotTech(S, gi, 0), null, 'in anderen Feldern gibt es keine Vorgabe');
-  eq(tutBotTech(S, ri, 2), null, 'andere Reiche sind nicht betroffen');
-  S.players[gi].techs.eisenverarbeitung = true;
-  eq(tutBotTech(S, gi, 2).k, 'stahl', 'danach Stahl');
-  S.players[gi].techs.stahl = true;
-  eq(tutBotTech(S, gi, 2), null, 'danach greift wieder der Würfel');
-
-  // Zwei komplette Durchläufe: Griechenland forscht jedes Mal dasselbe
-  const durchlauf = () => {
-    tutorialSetup();
-    for (let i = 0; i < TUT_STEPS.length; i++) {
-      ui.tut.i = i; tutEnter();
-      const st = TUT_STEPS[i];
-      if (st.goal && !st.goal()) st.auto();
-    }
-    const g = S.players.findIndex(p => p.civ === 'griechenland');
-    return {
-      techs: Object.keys(S.players[g].techs).filter(k => S.players[g].techs[k]).sort().join(','),
-      wuerfel: ui.tut.die,
-      alle: S.players.map(p => Object.keys(p.techs).filter(k => p.techs[k]).sort().join(',')).join('|'),
-    };
-  };
-  const a1 = durchlauf(), a2 = durchlauf();
-  eq(a1.techs, a2.techs, 'Griechenland forscht in beiden Durchläufen dasselbe');
-  eq(a1.alle, a2.alle, 'auch alle anderen Reiche forschen identisch');
-  eq(a1.wuerfel, a2.wuerfel, 'und es werden gleich viele Würfel verbraucht');
-  eq(a1.techs.includes('eisenverarbeitung') && a1.techs.includes('stahl'), true,
-    'Eisenverarbeitung und Stahl sind dabei: ' + a1.techs);
-  eq(a1.techs.includes('stadtmauern') || a1.techs.includes('burgenbau'), false,
-    'Stadtmauern und Burgenbau nicht: ' + a1.techs);
-  ui = { sel: null, army: null, mode: null, botTimer: null };
-}
 
 /* ==================================================== Fähigkeiten: Sammelaktionen (v87)
    Wunsch des Autors: unter „Fähigkeiten" alle Städte auf einmal wachsen lassen (kostenlos mit
@@ -5122,13 +5249,17 @@ const duellKarte = (civA, civB, seed) => {
 {
   const art = (S) => freeActions(S, 0);
   // Griechenland, Freie Forschung
-  // (seit v99 wieder einmal je Runde: genutzt zählt sie nicht mehr, in der nächsten Runde wieder)
+  // (seit v101 zweimal je Partie, höchstens einmal je Runde: genutzt zählt sie in dieser Runde
+  // nicht mehr, in der nächsten wieder – nach der zweiten nie mehr)
   const S = mkA('griechenland', 'gratistech');
   eq(art(S), ['forschung'], 'Freie Forschung offen: eine Art');
   eq(useFreeTech(S, 0, freeTechOptions(S, 0)[0].k), null, 'Freie Forschung genutzt');
   eq(art(S), [], 'diese Runde genutzt – keine Art mehr');
   S.round++;
   eq(art(S), ['forschung'], 'in der nächsten Runde wieder eine Art');
+  eq(useFreeTech(S, 0, freeTechOptions(S, 0)[0].k), null, 'die zweite genutzt');
+  S.round++;
+  eq(art(S), [], 'beide verbraucht – auch in der nächsten Runde keine Art mehr');
   // Verbundwerkstoffe in drei Städten: EINE Art; an der Nahrungsgrenze keine
   const W = mkA('russland', 'basis', ['verbundwerkstoffe']);
   W.map.rows = W.map.rows.map(z => 'G'.repeat(z.length));
@@ -5150,7 +5281,7 @@ const duellKarte = (civA, civB, seed) => {
   eq(art(N), [], 'Internet ohne etwas zu kopieren: zählt nicht');
   N.players[1].techs.schrift = true; delete N.players[0].techs.schrift;
   eq(art(N), ['internet'], 'Internet mit einer fremden Technologie: zählt');
-  eq(copyTech(N, 0, 'schrift', 'free'), null, 'per Internet kopiert');
+  eq(copyTech(N, 0, 'schrift', 'internet'), null, 'per Internet kopiert');
   N.players[1].techs.rad = true; delete N.players[0].techs.rad;
   eq(art(N), [], 'danach zählt das bezahlte Kopieren (Spionage) nicht');
   // Kostenlose Technologie aus einem Wunder – und alles zusammen
@@ -5201,8 +5332,8 @@ const duellKarte = (civA, civB, seed) => {
      über die zwischengespeicherten Dateien, den dieser Test nachrechnet. */
   {
     const crypto = require('crypto');
-    const liste = [...sw.match(/const FILES = \[([\s\S]*?)\];/)[1]
-      .matchAll(/'\.\/([^']+)'/g)].map(x => x[1])
+    const liste = [...sw.match(/const STATIC = \[([\s\S]*?)\];/)[1]
+      .matchAll(/'\.\/([^']+)'/g)].map(x => x[1]).concat(SKRIPTE)
       .filter(f => f && !/^icons\//.test(f) && f !== 'manifest.webmanifest');
     const h = crypto.createHash('sha1');
     liste.slice().sort().forEach(f => { h.update(f); h.update(fs.readFileSync(__dirname + '/' + f)); });
@@ -5210,155 +5341,40 @@ const duellKarte = (civA, civB, seed) => {
     const soll = (sw.match(/const BUILD_HASH = '([^']*)'/) || [])[1];
     eq(ist, soll, `sw.js kennt den Stand der Dateien (sonst: node tools_version.js)`);
   }
-}
-
-/* ==================================================== Tutorial
-   Geführtes Übungsspiel auf Schienen. Geprüft wird: Aufbau der Schritte, dass jede Aufgabe
-   erfüllbar ist, dass der Verlauf deterministisch ist und dass die im Text genannten Zahlen
-   aus dem Spielstand stammen. Den Durchlauf über die Oberfläche fährt smoke.js. */
-{
-  eq(TUT_STEPS.length >= 20, true, `${TUT_STEPS.length} Tutorialschritte`);
-  eq(TUT_STEPS.every(st => st.t && typeof st.html === 'function'), true,
-    'jeder Schritt hat Titel und Text');
-  eq(TUT_STEPS.some(st => st.sub), false,
-    'die Zugablauf-Einordnung ist überall entfernt');
-  eq(TUT_STEPS.every(st => !st.goal || st.auto), true, 'jede Aufgabe hat einen Ausweg');
-  eq(TUT_STEPS.every(st => !st.task || st.goal), true, 'jede Aufgabenzeile hat ein Ziel');
-  eq(TUT_STEPS.every(st => !st.task || st.allow), true, 'jede Aufgabe schaltet gezielt frei');
-  const tasks = TUT_STEPS.filter(st => st.goal);
-  eq(tasks.length >= 10, true, `${tasks.length} Aufgaben zum Selbermachen`);
-  // jede Aufgabe sagt, wo man tippen muss
-  // Keine Koordinaten in den Texten – es wird über die goldene Umrandung gesprochen
-  {
-    tutorialSetup();
-    const bad = [];
-    for (let i = 0; i < TUT_STEPS.length; i++) {
-      ui.tut.i = i; tutEnter();
-      const st = TUT_STEPS[i];
-      const txt = (st.html() + ' ' + (st.task || '')).replace(/<[^>]+>/g, ' ')
-        .replace(/Zug 1\/2/g, '')                        // Belagerungszähler ist keine Koordinate
-        .replace(/\d+(\/\d+)+\)/g, ')');                 // Kostenstaffeln wie (1/3/6/10) auch nicht
-      if (/\b\d{1,2}\/\d{1,2}\b/.test(txt)) bad.push(st.t);
-      if (st.goal && !st.goal()) st.auto();
-    }
-    eq(bad.length, 0, 'keine Feldkoordinaten in den Texten: ' + bad.join(', '));
-    ui = { sel: null, army: null, mode: null, botTimer: null };
-  }
-  // Keine Erwähnung der Erweiterungen. Ausnahme: der Siegschritt muss sagen, wie der
-  // Punktvergleich am Rundenende rechnet – und dort zählen Weltwunder mit (ohne die
-  // Erweiterung sind es null für alle). Nur dieser eine Schritt darf das Wort führen.
-  {
-    const text = st => [st.html, st.kurz].filter(x => typeof x === 'function')
-      .map(f => f.toString()).join(' ');
-    const sieg = TUT_STEPS.filter(s2 => /Wege zu gewinnen/.test(s2.t));
-    eq(sieg.length, 1, 'es gibt genau einen Siegschritt');
-    const andere = TUT_STEPS.filter(s2 => !/Wege zu gewinnen/.test(s2.t)).map(text).join(' ');
-    const all = TUT_STEPS.map(text).join(' ');
-    for (const w of ['Ereignis', 'Kultursieg', '1 gegen 1', 'Zufallskarte', 'Karteneditor'])
-      eq(all.includes(w), false, `„${w}" kommt im Tutorial nicht vor`);
-    eq(andere.includes('Weltwunder'), false, '„Weltwunder" nur im Siegschritt');
-    eq(/Bevölkerung \+ Weltwunder \+ Technologien/.test(text(sieg[0])), true,
-      'der Siegschritt nennt die Punkte für den Vergleich am Rundenende');
-    eq(/sofort/.test(text(sieg[0])), true, 'und dass nur der Militärsieg sofort endet');
-  }
-  // Jede Aktionsart wird mindestens einmal mit Klickweg erklärt (Wiederholungen sind raus)
-  const all = TUT_STEPS.map(st => st.html.toString()).join(' ');
-  for (const kind of ['gründest', 'forschst', 'wächst', 'baust', 'bewegst', 'beendest', 'kaufst', 'liest'])
-    eq(new RegExp('So ' + kind + ' du').test(all), true, `Klickweg für „${kind}" erklärt`);
-  // und keine Aktionsart wird zweimal erklärt
-  for (const kind of ['gründest', 'wächst', 'baust', 'bewegst', 'kaufst'])
-    eq((all.match(new RegExp('So ' + kind + ' du', 'g')) || []).length, 1,
-      `Klickweg für „${kind}" steht nur einmal da`);
-  // kein Verweis auf die Beispielpartie des Autors
-  const body = TUT_STEPS.map(st => st.html.toString()).join(' ');
-  eq(/im Protokoll (gewonnen|angefangen|hat Russland)/.test(body), false,
-    'kein „so wie im Protokoll" im Text');
-}
-/* Der komplette Ablauf, zweimal gestartet – identischer Verlauf */
-function tutRun() {
-  tutorialSetup();                       // genau derselbe Aufbau wie in der App
-  const ru = S.players.findIndex(p => p.civ === 'russland');
-  const trace = [];
-  for (let i = 0; i < TUT_STEPS.length; i++) {
-    ui.tut.i = i;
-    const st = TUT_STEPS[i];
-    if (st.enter && !ui.tut.seen[i]) { ui.tut.seen[i] = true; st.enter(); }
-    const text = st.html();
-    if (st.goal && !st.goal()) { st.auto(); trace.push(i + ':' + st.t); }
-    trace.push(`${i}|${text.length}|${st.goal ? (st.goal() ? 'ok' : 'offen') : '-'}`);
-  }
-  return { trace: trace.join(';'), ru };
-}
-{
-  const a = tutRun();
-  const state = () => {
-    const ru = a.ru;
-    return JSON.stringify({
-      round: S.round, cities: citiesOf(S, ru).map(c => [c.r, c.c, c.pop]),
-      techs: Object.keys(S.players[ru].techs).sort(), power: S.players[ru].power,
-    });
-  };
-  const after1 = state();
-  eq(a.trace.includes('offen'), false, 'jede Aufgabe im Durchlauf wurde erfüllt');
-  eq(S.round >= 3, true, 'das Übungsspiel läuft bis Runde 3');
-  eq(citiesOf(S, a.ru).length >= 3, true, 'drei Städte gegründet');
-  eq(has(S.players[a.ru], 'schrift') && has(S.players[a.ru], 'papier') &&
-    has(S.players[a.ru], 'wiss_methode') && has(S.players[a.ru], 'stadtmauern'), true,
-    'die vorgesehenen Technologien sind erforscht');
-  eq(has(S.players[a.ru], 'fischerei') && has(S.players[a.ru], 'eisenverarbeitung'), true,
-    'die beiden Gratis-Technologien sind dabei');
-  eq(!S.over, true, 'das Spiel ist danach offen');
-  const b = tutRun();
-  eq(b.trace, a.trace, 'zweiter Durchlauf nimmt genau denselben Verlauf');
-  eq(state(), after1, 'und endet in genau demselben Zustand');
-  ui = { sel: null, army: null, mode: null, botTimer: null };
-}
-/* Schienen: nur die vorgesehenen Felder, Knöpfe und Technologien */
-{
-  S = newGame({
-    seed: TUT_SEED, map: MAP_ORIGINAL, startPlayer: 0,
-    players: [{ civ: 'russland', kind: 'human', ability: 'basis' },
-      { civ: 'griechenland', kind: 'bot', diff: 'david' }],
+  /* Der Einbau (v106): jede Datei frisch vom Server, und in den Cache nur, wenn der Inhalt
+     BUILD_HASH ergibt – sonst bleibt die alte Fassung. Gemeldet nach v105: Die App auf dem
+     Home-Bildschirm hielt neue Dateien neben alten, „Fähigkeiten" ging nicht mehr auf. sw.js
+     läuft hier in eigener Umgebung; fetch liest die Dateien dieses Ordners (auf Wunsch eine
+     verändert, wie bei einem halb fertigen Upload), caches merkt sich, was abgelegt wird. */
+  SPAETER.push(async () => {
+    const einbau = async veraltet => {
+      const h = {}, abgelegt = new Map(), modi = new Set();
+      let uebernommen = false, fehler = null, warten = null;
+      const g = {
+        crypto: require('crypto').webcrypto, TextEncoder,
+        caches: { open: async () => ({ put: async (u, r) => { abgelegt.set(u, r); } }) },
+        fetch: async (u, opt) => {
+          modi.add(opt && opt.cache);
+          const f = u.replace(/^\.\//, '') || 'index.html';
+          const inhalt = fs.readFileSync(__dirname + '/' + f);
+          return new Response(f === veraltet ? Buffer.concat([inhalt, Buffer.from('\n// alt')]) : inhalt);
+        },
+        addEventListener: (art, fn) => { h[art] = fn; },
+        skipWaiting: async () => { uebernommen = true; },
+      };
+      g.self = g;
+      vm.runInNewContext(sw, g);
+      h.install({ waitUntil: p => { warten = p; } });
+      try { await warten; } catch (e) { fehler = e.message; }
+      return { abgelegt: abgelegt.size, modi: [...modi], uebernommen, fehler };
+    };
+    const n = 8 + SKRIPTE.length;    // STATIC samt './', Icons und Favicons, dazu die Skripte
+    eq(await einbau(null), { abgelegt: n, modi: ['reload'], uebernommen: true, fehler: null },
+      `Service Worker: mit den Dateien dieser Fassung kommen alle ${n} frisch vom Server in den Cache`);
+    const halb = await einbau('js/ui/sheets.js');
+    eq([halb.abgelegt, halb.uebernommen, /passen \(noch\) nicht/.test(halb.fehler || '')], [0, false, true],
+      'Service Worker: weicht eine Datei ab (halber Upload, alter HTTP-Cache), kommt nichts in den Cache – die alte Fassung bleibt');
   });
-  ui = { tut: { i: 0, seen: {} } };
-  // Leseschritt: nur Nachschlagen erlaubt
-  eq(tutAllow().bar, ['a-info', 'a-log'], 'im Leseschritt sind nur Welt und Protokoll offen');
-  // Gründungsschritt
-  ui.tut.i = TUT_STEPS.findIndex(st => /zweite Stadt/.test(st.t));
-  // v75: gegründet wird über „Stadt gründen" in der Leiste – nur dieser Knopf ist frei
-  eq(tutAllow().bar, ['a-found'], 'beim Gründen ist nur „Stadt gründen" in der Leiste offen');
-  eq(tutAllow().labels.map(String), ['/Hier gründen/'], 'und im Blatt nur „Hier gründen"');
-  eq(tutHexOk(...TUT_CITY_1), true, 'das Zielfeld ist freigegeben');
-  eq(tutHexOk(0, 0), false, 'andere Felder nicht');
-  // Forschungsschritt – über die Freigabe gesucht, nicht über den Titel: die Texte
-  // werden umgeschrieben, die Schienen bleiben.
-  ui.tut.i = TUT_STEPS.findIndex(st => st.allow && (st.allow.techs || []).includes('schrift'));
-  eq(tutAllow().techs, ['schrift'], 'im Forschungsschritt ist nur Schrift freigegeben');
-  eq(tutAllow().bar, ['a-tech'], 'und nur der Forschen-Knopf');
-  // Armeeschritt: Zugziel ist gebunden
-  ui.tut.i = TUT_STEPS.findIndex(st => /Armee bewegen/.test(st.t));
-  ui.tutArmyTo = [5, 12];
-  eq(tutMoveOk(5, 12), true, 'das Wachfeld ist als Zug erlaubt');
-  eq(tutMoveOk(5, 11), false, 'andere Zielfelder nicht');
-  ui = { sel: null, army: null, mode: null, botTimer: null };
-}
-/* Die Begründungen rechnen mit echten Werten */
-{
-  S = newGame({ seed: TUT_SEED, map: MAP_ORIGINAL, startPlayer: 0,
-    players: [{ civ: 'russland', kind: 'human', ability: 'basis' },
-      { civ: 'griechenland', kind: 'bot', diff: 'david' }] });
-  const ru = S.players.findIndex(p => p.civ === 'russland');
-  const before = income(S, ru);
-  const g = tutGain(...TUT_CITY_1);
-  S.players[ru].res = { sci: 0, food: 99, coins: 0 };
-  eq(foundCity(S, ru, ...TUT_CITY_1), null, 'Stadt gegründet');
-  const after = income(S, ru);
-  eq([g.sci, g.food, g.coins], [after.sci - before.sci, after.food - before.food, after.coins - before.coins],
-    'die im Text genannte Verbesserung entspricht dem echten Einkommenszuwachs');
-  eq(tutNeighbourText(...TUT_CITY_1).includes('Wald'), true, 'die Geländeaufstellung nennt den Wald');
-  eq(S.cities.length >= 2, true, 'Stadt steht');
-  ui = { sel: null, army: null, mode: null, botTimer: null };
-  S = null;
 }
 
 /* --- Vollständige Partien: 4 Bots, keine Ausnahmen, Spiel endet */
@@ -5480,7 +5496,7 @@ function tutRun() {
    den Verlauf verlassen würde, und dass sie auch zufälliges Spiel aushalten, ohne dass eine
    Lektion übersprungen wird. Die Oberfläche (Seite vor der Partie, blasse Kacheln) fährt
    smoke.js.
-   ACHTUNG: fgSetup schreibt die globalen S und ui (wie tutorialSetup) – am Ende wird ui
+   ACHTUNG: fgSetup schreibt die globalen S und ui – am Ende wird ui
    zurückgesetzt, sonst griffen die Würfel des Ersten Spiels (fgNextDie) in spätere Partien. */
 // Spielt bis zum Ende oder bis zum Schritt `bis` (dort wird angehalten, bevor er gelöst wird)
 function fgLauf(pfad, opts) {
@@ -5514,7 +5530,8 @@ const FG_GEMEINSAM = FG_STEPS.filter(st => !st.pfad && !st.ende).map(st => st.id
     ['hauptstadt', true, false], 'v93: keine Wahl mehr in Runde 5 – der Würfel kommt gleich nach dem kostenlosen Forschen');
   // Würfel nur im Ersten Spiel: ohne ui.fg bleibt es beim echten Wurf
   ui = { sel: null, army: null, mode: null, botTimer: null };
-  eq(tutNextDie({ pi: 0, tech: 'schrift' }), null, 'ohne Erstes Spiel lenkt tutNextDie keinen Wurf');
+  { const W = mk('griechenland'), vorher = W.seed, v = d6(W, 'Test');
+    eq([v >= 1 && v <= 6, W.seed !== vorher], [true, true], 'ohne Erstes Spiel würfelt d6 echt (der Startwert läuft weiter)'); }
 }
 {
   fgSetup('militaer');
@@ -5600,8 +5617,10 @@ const FG_GEMEINSAM = FG_STEPS.filter(st => !st.pfad && !st.ende).map(st => st.id
 /* Jeder Weg mit der Musterlösung: Sieg auf diesem Weg, in dieser Runde – zweimal gespielt
    genau gleich (die Würfel hängen nur am Anlass, nicht an der Reihenfolge). Der Forschungsweg
    siegt seit v97 in Runde 7 (bis v96 in Runde 6): Griechenlands Rabatt und die Wissenschaftliche
-   Methode ziehen weniger ab, in Runde 5 reicht es nicht mehr für die Moderne in allen vier Feldern. */
-for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft', /^Wirtschaftssieg/, 6], ['wissenschaft', /^Forschungssieg/, 7]]) {
+   Methode ziehen weniger ab, in Runde 5 reicht es nicht mehr für die Moderne in allen vier Feldern.
+   Der Wirtschaftsweg siegt seit v102 in Runde 7 (bis v101 in Runde 6): im Duell braucht es mit
+   Theologie eine höhere Schwelle (Anweisung des Autors), dafür eine Runde Wachstum mehr. */
+for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft', /^Wirtschaftssieg/, 7], ['wissenschaft', /^Forschungssieg/, 7]]) {
   const spur = fgLauf(pfad);
   eq([S.over && S.over.winner, art.test(S.over && S.over.how), S.round], [FG_ICH, true, runde],
     `Erstes Spiel, ${pfad}: Sieg auf diesem Weg in Runde ${runde} (${S.over && S.over.how})`);
@@ -5944,7 +5963,7 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
     const rec = animAufnahme(S, () => {
       applyWonderEffect(S, 0, cap, WONDER_BY_KEY.koloss);
       applyWonderEffect(S, 0, cap, WONDER_BY_KEY.pentagon);
-      copyTech(S, 0, 'schrift', 'paid');
+      copyTech(S, 0, 'schrift', 'spionage');
     });
     const sz = animSzenen(rec, 0);
     eq([sz.map(s => s.art).join(), sz[1].ringe, sz[3].techs, animText(sz[2], 'Griechenland') === sz[2].texte[0], /Pentagon/.test(sz[2].texte[0])],
@@ -6736,9 +6755,9 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   eq(TERRAIN.X.land, false, 'außerhalb ist kein Land');
   // v73: X gehört nie zum Gebiet – sonst zog die Reichsgrenze um leere Sechsecke
   eq(controlledTiles(S, 0).has(key(nr, nc)), false, 'es gehört nicht zum Gebiet der Stadt daneben');
-  S.players[0].techs.kolonialismus = true; S.players[0].res.coins = 20;
-  eq(buyTile(S, 0, nr, nc), 'Kein Feld.', 'kaufen lässt es sich auch nicht');
-  eq([S.players[0].res.coins, (S.bought[0] || []).length], [20, 0], 'und es kostet nichts');
+  S.players[0].techs.kolonialismus = true;
+  eq(claimTile(S, 0, nr, nc), 'Kein Feld.', 'beanspruchen lässt es sich auch nicht');
+  eq([claimsLeft(S, 0), (S.bought[0] || []).length], [COLONY_CLAIMS, 0], 'und es verbraucht keinen Anspruch');
 }
 /* Plättchenkarten liegen in einem Rechteck aus X. Eine Stadt am Kartenrand oder am Loch
    zog bis v72 die leeren Sechsecke dahinter in ihr Gebiet – sichtbar als Reichsgrenze
@@ -7122,16 +7141,37 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
     seed: 1, duel: true,
     players: [{ civ: 'england', kind: 'bot' }, { civ: 'russland', kind: 'bot' }],
   });
-  eq(techEffect(T, N), '>3/5 der Bevölkerung zum Sieg', 'Theologie normal: 3/5');
-  eq(techEffect(U, N), '>1/2 der Bevölkerung zum Sieg', 'Vereinte Nationen normal: 1/2');
-  eq(techEffect(T, D), '>7/10 der Bevölkerung zum Sieg', 'Theologie im Duell: 7/10');
-  eq(techEffect(U, D), '>2/3 der Bevölkerung zum Sieg', 'Vereinte Nationen im Duell: 2/3');
+  const zumSieg = t => `>${bruch(t)} der Bevölkerung zum Sieg`;
+  const Z = newGame({ seed: 1, players: ['england', 'russland', 'wikinger'].map(k => ({ civ: k, kind: 'bot' })) });
+  eq([techEffect(T, N), techEffect(U, N), techEffect(T, D), techEffect(U, D), techEffect(T, Z), techEffect(U, Z)],
+    [VT.vier.theologie, VT.vier.un, VT.duell.theologie, VT.duell.un, VT.drei.theologie, VT.drei.un].map(zumSieg),
+    'Theologie und Vereinte Nationen nennen die Schwelle ihrer Spielart (zu viert, im Duell, zu dritt)');
   eq(techEffect(TECH_BY_KEY.rad, D), TECH_BY_KEY.rad.e, 'andere Technologien bleiben, wie sie sind');
-  eq(techEffect(T, null), '>3/5 der Bevölkerung zum Sieg', 'ohne Spielstand die Normalwerte');
+  eq(techEffect(T, null), zumSieg(VT.vier.theologie), 'ohne Spielstand die Werte zu viert (die Vorgabe im Aufbau)');
+  eq([T.e, U.e], [techEffect(T, null), techEffect(U, null)], 'der Text am Bogen (TECHS) nennt dieselben Werte');
+  eq([DATA_EN.tech.theologie[1], DATA_EN.tech.un[1]], [VT.vier.theologie, VT.vier.un].map(t => `>${bruch(t)} of the population to win`),
+    '… englisch ebenso');
   // die Anzeige muss zur Rechnung passen
   const pT = { civ: 'england', techs: { theologie: true }, kind: 'human', ability: 'basis' };
-  eq(victoryOption(D, pT).label, '7/10', 'Rechnung und Anzeige nennen dieselbe Schwelle');
-  eq(victoryOption(N, pT).label, '3/5', 'auch im normalen Spiel');
+  eq([victoryOption(D, pT).label, victoryOption(N, pT).label, victoryOption(Z, pT).label],
+    ['duell', 'vier', 'drei'].map(m => bruch(niedrigste(m, 'base', 'theologie'))),
+    'Rechnung und Anzeige nennen dieselbe Schwelle – im Duell, zu viert, zu dritt');
+  for (const X of [N, D, Z]) {
+    const L = victoryLabels(X);
+    eq([L.base, L.theologie, L.un], [victoryOption(X, { techs: {} }).label, victoryOption(X, { techs: { theologie: true } }).label,
+      victoryOption(X, { techs: { un: true } }).label], `Beschriftungen und Rechnung aus einer Quelle (${victoryMode(X)})`);
+  }
+  // Spielart: Barbaren zählen nicht, Ausgeschiedene schon; ein Aufbau zählt wie ein Spielstand
+  const B = newGame({ seed: 2, events: true, players: ['russland', 'griechenland', 'england'].map(k => ({ civ: k, kind: 'human' })) });
+  barbIndex(B);                                                    // die Barbaren erscheinen (Ereignis)
+  eq([B.players.length, victoryMode(B)], [4, 'drei'], 'Barbaren machen aus drei Reichen keine vier');
+  N.players[3].dead = true;
+  eq(victoryMode(N), 'vier', 'wer zu viert beginnt, behält die Schwellen zu viert, auch wenn ein Reich ausscheidet');
+  eq([victoryMode({ duel: true, players: [{ kind: 'human' }, { kind: 'ki' }] }),
+    victoryMode({ players: [{ kind: 'human' }, { kind: 'ki' }, { kind: 'bot' }] }),
+    victoryMode({ players: [{ kind: 'human' }, { kind: 'ki' }, { kind: 'bot' }, { kind: 'bot' }] })],
+    ['duell', 'drei', 'vier'], 'ein Aufbau (players, duel) zählt wie ein Spielstand');
+  eq(victoryMode({ victoryMode: 'drei', players: [{ kind: 'human' }] }), 'drei', 'S.victoryMode übersteuert die Zählung (Legephase)');
 }
 
 /* ============================================================ Sprachen (i18n)
@@ -7170,7 +7210,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
 
   // Umschalten und zurück
   setLang('en', { quiet: true });
-  eq([TECH_BY_KEY.schrift.n, TECH_BY_KEY.schrift.e], ['Writing', 'Per population: +1 science'],
+  eq([TECH_BY_KEY.schrift.n, TECH_BY_KEY.schrift.e], ['Writing', 'Population yields 2 science each'],
     'Technologien wechseln Name und Wirkung');
   eq(TERRAIN.G.name, 'Grassland', 'Gelände wechselt');
   eq([CIVS[0].n, CIVS[0].abilities[0].n], ['Greece', 'Cheap research'], 'Zivilisation und Fähigkeit wechseln');
@@ -7183,12 +7223,12 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
     'auf Englisch ist kein deutscher Tipp übrig: ' + (TIPS.find(t => /[äöüß]/.test(t)) || '').slice(0, 40));
   eq(TILE_SHAPES[2].name, 'Tile map (6 triangles)', 'Kartenformen wechseln');
   // techEffect rechnet weiter mit den Duellschwellen, jetzt auf Englisch
-  eq(techEffect(TECH_BY_KEY.theologie, { duel: true }), '>7/10 of the population to win',
+  eq(techEffect(TECH_BY_KEY.theologie, { duel: true }), `>${bruch(VT.duell.theologie)} of the population to win`,
     'Duellschwellen auch auf Englisch');
   // T(): Übersetzung, Platzhalter, Rückfall auf Deutsch
   eq(T('Neues Spiel'), 'New game', 'Oberflächensatz wird übersetzt');
-  eq(T('Runde %s · Bevölkerung %s/%s (%s %)', 3, 4, 12, 33),
-    'Round 3 · Population 4/12 (33 %)', 'Platzhalter werden der Reihe nach ersetzt');
+  eq(T('Wirtschaftssieg über %s der Weltbevölkerung (Theologie %s, Vereinte Nationen %s).', 'A', 'B', 'C'),
+    'Economic victory above A of the world population (Theology B, United Nations C).', 'Platzhalter werden der Reihe nach ersetzt');
   /* Kein Schlüssel darf zweimal in UI_EN stehen. Ein Objektliteral verschluckt die
      Doppelung stillschweigend – der spätere Eintrag gewinnt, der frühere verschwindet
      ohne jede Meldung. Solange beide dieselbe Übersetzung tragen, fällt das nie auf;
@@ -7214,9 +7254,9 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
      die Flaggen direkt aus LANGS, ohne T(). Die Zahl darf sinken, nicht steigen. */
   {
     const norm = x => x.replace(/\s+/g, ' ');
-    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'anim', 'ui', 'tutorial', 'firstgame']
+    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'anim', 'firstgame']
       .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8'))
-      .concat(fs.readFileSync(__dirname + '/index.html', 'utf8')).join('\n');
+      .concat(uiQuelle(), fs.readFileSync(__dirname + '/index.html', 'utf8')).join('\n');
     const heu = norm(quellen);
     const roh = fs.readFileSync(__dirname + '/js/i18n.js', 'utf8');
     const ab = roh.indexOf('const UI_EN = {');
@@ -7247,58 +7287,6 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   eq(TIPS[0].startsWith('Es ist nicht immer korrekt'), true, 'auch die Spieltipps sind zurück');
 }
 
-/* =================== Tutorialschienen bleiben sprachunabhängig
-   Das Tutorial filtert die Knöpfe im Aktionsblatt über deutsche Ausdrücke. Damit das
-   auch auf Englisch trägt, tragen die Knöpfe ihren **deutschen** Schlüssel als
-   `data-label` – die sichtbare Beschriftung wechselt, der Schlüssel nicht. Zweimal ist
-   genau das schiefgegangen (Schritt 4 „Stadt gründen", Schritt 24 „Straße bauen"),
-   deshalb prüft dieser Block die Quelle statt der Oberfläche.                       */
-{
-  const ui = fs.readFileSync(__dirname + '/js/ui.js', 'utf8');
-  // 1) Kein btn()-Aufruf darf im **ersten** Parameter eine Übersetzung bekommen –
-  //    dort steht der Schlüssel. In den übrigen Parametern ist T(…) richtig.
-  const ersteParameter = [];
-  for (const m of ui.matchAll(/\bbtn\(/g)) {
-    let i = m.index + m[0].length, tiefe = 0, arg = '';
-    for (; i < ui.length; i++) {
-      const ch = ui[i];
-      if (ch === '(' || ch === '[') tiefe++;
-      else if (ch === ')' || ch === ']') { if (!tiefe) break; tiefe--; }
-      else if (ch === ',' && !tiefe) break;
-      arg += ch;
-    }
-    ersteParameter.push(arg.trim());
-  }
-  eq(ersteParameter.filter(a => a.includes('T(')), [],
-    'btn() bekommt im ersten Parameter immer den deutschen Schlüssel, nie T(…)');
-  // 2) Alle deutschen Schlüssel einsammeln, die die Oberfläche vergeben kann
-  const schluessel = [
-    ...[...ui.matchAll(/btn\(\s*'([^']+)'/g)].map(m => m[1]),
-    ...[...ui.matchAll(/btn\([^']*\?\s*'([^']+)'\s*:\s*'([^']+)'/g)].flatMap(m => [m[1], m[2]]),
-    ...[...ui.matchAll(/data-label="([^"]+)"/g)].map(m => m[1]),
-  ];
-  eq(schluessel.length > 10, true, `die Oberfläche vergibt ${schluessel.length} Knopf-Schlüssel`);
-  // 3) Jeder Ausdruck des Tutorials muss auf mindestens einen davon passen
-  const ohne = [];
-  TUT_STEPS.forEach((st, i) => {
-    (st.allow && st.allow.labels || []).forEach(rx => {
-      if (!schluessel.some(k => rx.test(k))) ohne.push(`${i + 1}: ${rx}`);
-    });
-  });
-  eq(ohne, [], 'jeder Knopf-Ausdruck des Tutorials trifft einen vorhandenen Schlüssel');
-  // 4) Titel und Aufgaben aller Schritte haben eine englische Fassung
-  setLang('en', { quiet: true });
-  const fehlt = [];
-  TUT_STEPS.forEach((st, i) => {
-    if (st.t && st.t !== 'Hochzeivilization' && T(st.t) === st.t) fehlt.push(`${i + 1} Titel`);
-    if (st.tKurz && T(st.tKurz) === st.tKurz) fehlt.push(`${i + 1} Kurztitel`);
-    if (st.task && T(st.task) === st.task) fehlt.push(`${i + 1} Aufgabe`);
-  });
-  eq(fehlt, [], 'alle 29 Tutorialschritte haben Titel und Aufgabe auf Englisch');
-  clearMissing();
-  setLang('de', { quiet: true });
-}
-
 /* ============================ Zivilisationen aus data/civs.json (v53)
    Die JSON ist die Quelle, js/civs.js die daraus erzeugte Fassung. Dieser Block prüft,
    dass beide zusammenpassen – wer die JSON ändert und `node tools_civs.js` vergisst,
@@ -7327,8 +7315,8 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   eq(new Set(CIVS.map(c => c.sym)).size, CIVS.length, 'jede Zivilisation hat ein eigenes Zeichen');
   // Jeder Fähigkeitsschlüssel, der nicht 'basis' ist, muss im Code auch vorkommen –
   // sonst hängt eine Alternative in der Auswahl, ohne etwas zu tun.
-  const code = ['js/engine.js', 'js/expansion.js', 'js/bots.js', 'js/ui.js']
-    .map(f => fs.readFileSync(__dirname + '/' + f, 'utf8')).join('\n');
+  const code = ['js/engine.js', 'js/expansion.js', 'js/bots.js']
+    .map(f => fs.readFileSync(__dirname + '/' + f, 'utf8')).join('\n') + uiQuelle();
   const ohneWirkung = CIVS.flatMap(c => c.abilities.filter(a => a.k !== 'basis').map(a => a.k))
     .filter(k => !code.includes(`'${k}'`));
   eq(ohneWirkung, [], 'jede Alternativfähigkeit wird im Code auch geprüft');
@@ -7383,49 +7371,6 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
     // Gegenprobe: mit doppeltem Zuschlag wäre es das Doppelte
     if (zeile) eq(zeile.y[0] * 2, zeile.count * 2, 'vor v53 waren es +2 – jetzt die Hälfte');
   }
-}
-
-/* ====================== Zwei Tutorialfassungen aus einer Schrittliste (v54)
-   „Ja, ich kenne solche Spiele" führt in eine kurze Fassung: **dieselben Aufgaben**,
-   nur die Eigenheiten dieses Spiels erklärt. Was hier geprüft wird, ist genau das:
-   dass die Kurzfassung nichts weglässt, was den Ablauf trägt.                       */
-{
-  const kurz = TUT_STEPS.filter(st => st.kurz !== false);
-  eq(TUT_STEPS.every(st => st.kurz !== undefined), true,
-    'jeder Schritt sagt, was in der kurzen Fassung mit ihm passiert');
-  eq(TUT_STEPS.filter(st => st.task).every(st => st.kurz !== false), true,
-    'die kurze Fassung enthält jede Aufgabe der langen');
-  eq(TUT_STEPS.filter(st => st.enter || st.dice).every(st => st.kurz !== false), true,
-    'kein Schritt mit Nebenwirkung (enter/dice) fällt weg');
-  eq(TUT_STEPS.filter(st => st.goal).every(st => st.kurz !== false), true,
-    'kein Schritt mit Ziel fällt weg');
-  eq(kurz.length < TUT_STEPS.length, true,
-    `die kurze Fassung ist kürzer (${kurz.length} statt ${TUT_STEPS.length} Schritte)`);
-  eq(kurz[0].t, TUT_STEPS[0].t, 'sie beginnt mit demselben Schritt');
-  eq(kurz[kurz.length - 1].t, TUT_STEPS[TUT_STEPS.length - 1].t, 'und endet mit demselben');
-  // Textmenge: „deutlich abgespeckt" soll auch messbar sein
-  const laenge = x => (typeof x === 'function' ? x() : x || '').length;
-  const lang = TUT_STEPS.reduce((a, st) => a + laenge(st.html), 0);
-  const kurzL = kurz.reduce((a, st) => a + laenge(st.kurz || st.html), 0);
-  eq(kurzL < lang / 2, true, `die kurze Fassung hat weniger als die Hälfte Text ` +
-    `(${kurzL} von ${lang} Zeichen, ${Math.round(100 * kurzL / lang)} %)`);
-  // Die Schlüsselpraktiken müssen in der kurzen Fassung vorkommen
-  const text = kurz.map(st => laenge(st.kurz || st.html) && (typeof (st.kurz || st.html) === 'function'
-    ? (st.kurz || st.html)() : (st.kurz || st.html))).join(' ');
-  [['verfallen', 'Ressourcen verfallen'], ['aufeinanderfolgenden Zügen', 'Kampfsystem'],
-   ['zufällig', 'Zufall im Technologiebaum'], ['Zivilisationsfähigkeit', 'Reichsfähigkeiten'],
-   ['Militärsieg', 'Siegwege'], ['Punkte', 'Punktvergleich am Rundenende']]
-    .forEach(([wort, was]) => eq(text.includes(wort), true, `die kurze Fassung erklärt ${was}`));
-  // und beide Fassungen auf Englisch
-  setLang('en', { quiet: true });
-  const ohne = [];
-  TUT_STEPS.forEach((st, i) => {
-    if (typeof st.kurz === 'function' && /[äöüß]/.test(st.kurz())) ohne.push(`${i + 1} kurz`);
-    if (typeof st.html === 'function' && /[äöüß]/.test(st.html())) ohne.push(`${i + 1} lang`);
-  });
-  eq(ohne, [], 'beide Fassungen sind auf Englisch übersetzt');
-  clearMissing();
-  setLang('de', { quiet: true });
 }
 
 /* ========================= Ausgeloste Fähigkeit muss ablesbar sein (v54) */
@@ -7561,6 +7506,24 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   kiTurn(Z, z);
   eq(popOf(Z, z) + citiesOf(Z, z).length > vorher, true, 'im ersten Zug wächst oder siedelt die KI');
   eq(Z.players[z].res.food + Z.players[z].res.coins < inc.food + inc.coins, true, '… und bezahlt dafür');
+  // Kolonialismus (v103): die KI nutzt die kostenlosen Ansprüche, auch ohne einen Vorrat
+  const K = newGame({ seed: 11, players: [kiP('russland', 'basis'), kiP('griechenland', 'basis')] });
+  const k = K.cur, kp = K.players[k];
+  kp.techs.kolonialismus = true; kp.res = { sci: 0, food: 0, coins: 0 };
+  kiTurn(K, k);
+  eq([(K.bought[k] || []).length, claimsLeft(K, k)], [COLONY_CLAIMS, 0], `die KI beansprucht in ihrem Zug ${COLONY_CLAIMS} Felder, ohne Münzen`);
+  eq(K.log.filter(l => /Feld \d+\/\d+ beansprucht/.test(l.m)).length, COLONY_CLAIMS, '… und das Protokoll nennt jedes');
+  /* Kopieren (v105): die Wege sind unabhängig – die KI kopiert im selben Zug über mehrere, über
+     jeden höchstens einmal. Ohne Wissenschaft geht es nur so (hier über alle drei); ob sie die
+     doppelt teure Kundschafterei nimmt, wägt sie gegen anderes ab – geprüft wird nur „mehrere". */
+  const C = newGame({ seed: 11, players: [kiP('russland', 'basis'), kiP('griechenland', 'basis')] });
+  const ci = C.cur, cp = C.players[ci], co = 1 - ci;
+  ['internet', 'spionage', 'kundschafterei'].forEach(k => { cp.techs[k] = true; });
+  ['wiss_methode', 'universitaet', 'buerokratie', 'chemie'].forEach(k => { C.players[co].techs[k] = true; delete cp.techs[k]; });
+  cp.res = { sci: 0, food: 0, coins: 200 };
+  kiTurn(C, ci);
+  const kopien = C.log.filter(l => / kopiert \((Internet|Spionage|Kundschafterei)/.test(l.m)).map(l => l.m.replace(/^.* kopiert \(([^,]+).*$/, '$1'));
+  eq([kopien.length >= 2, new Set(kopien).size === kopien.length], [true, true], `die KI kopiert über mehrere Wege, über jeden einmal: ${kopien.join(', ')}`);
 }
 {
   // --- Volle Partien: 2, 3 und 4 Reiche, Plättchenkarte mit Legephase und feste Karte,
@@ -7917,8 +7880,11 @@ function kiAbwehrLage(popKI, gross) {
   //     vorbei. v82: Startwert 303 statt 300 – im heutigen Techtree (bis v81 der
   //     alternative) kommt die KI mit 300 nur zweimal mit Alchemie an diese Stelle, beide
   //     Male ohne Unterschied; mit 303 sechsmal (225 statt 188). Die Zahl aus v79 (300:
-  //     127 statt 105) galt im alten Techtree und gilt dort weiter.
-  const S = newGame({ seed: 303, players: CIVS.map((c, i) => ({ civ: c.k, kind: 'ki', kiLevel: 'schwer', ability: c.abilities[i % 3].k })) });
+  //     127 statt 105) galt im alten Techtree und gilt dort weiter. v103: Startwert 304 statt
+  //     303 – mit 303 erforscht England in Runde 5 Kolonialismus und beansprucht seither drei
+  //     Felder je Runde; der Verlauf danach kommt ohne die Reserve aus (338 gegen 338). Mit 304
+  //     ist kein Kolonialismus im Spiel: sechsmal, 149 statt 98, in v102 wie in v103.
+  const S = newGame({ seed: 304, players: CIVS.map((c, i) => ({ civ: c.k, kind: 'ki', kiLevel: 'schwer', ability: c.abilities[i % 3].k })) });
   let mit = 0, ohne = 0, zuege = 0, guard = 0;
   const forschung = (X, pi) => {
     let n = 0;
@@ -7981,34 +7947,27 @@ function kiAbwehrLage(popKI, gross) {
     `Gegenprobe – die Reihenfolge bis v95: ${kurz(a0)} · ${kurz(c0)}`);
 }
 {
-  /* --- v97: die Wissenschaftliche Methode zieht 2/3/4/5/10 ab – im alten Techtree (Tutorial) weiter
-     2/4/6/8/10, sonst ginge sein fester Ablauf nicht auf: Burgenbau (Mittelalter, 7) kostet dort mit
-     der Methode 3, und die Texte des Tutorials nennen 2/4/6/8 und „Burgenbau (3)". */
+  /* --- v97: die Wissenschaftliche Methode zieht 2/3/4/5/10 ab – im alten Techtree weiter
+     2/4/6/8/10 (Spielstände von vor v82 rechnen weiter so). */
   const mit = oldTree => {
     const S = newGame({ seed: 7, oldTree, players: [{ civ: 'russland', kind: 'human' }, { civ: 'griechenland', kind: 'bot' }] });
     S.players[0].techs.wiss_methode = true;
     return S;
   };
   const N = mit(false), O = mit(true), burg = TECH_BY_KEY.burgenbau;
-  eq([techCost(N, 0, burg), techCost(O, 0, burg)], [7 - 3, 7 - 4], 'Burgenbau mit der Methode: 4, im alten Techtree 3');
+  eq([techCost(N, 0, burg), techCost(O, 0, burg)], [8 - 3, 7 - 4], 'Burgenbau mit der Methode: 5 (seit v105 Grundkosten 8), im alten Techtree 3');
   eq([techCost(N, 0, TECH_BY_KEY.robotik), techCost(O, 0, TECH_BY_KEY.robotik)], [19 - 5, 19 - 8], 'Robotik (Moderne): 19 − 5, im alten Techtree 19 − 8');
   eq([techCost(N, 0, SINGULARITY), techCost(O, 0, SINGULARITY)], [110, 110], 'die Singularität in beiden −10');
   eq([techEffect(TECH_BY_KEY.wiss_methode, N), techEffect(TECH_BY_KEY.wiss_methode, O)],
     [TECH_BY_KEY.wiss_methode.e, 'Techkosten −2/−4/−6/−8/−10 (je Zeitalter)'], 'der Bogen nennt, was gilt – im alten Techtree die alte Methode');
   eq(UI_EN['Techkosten %s (je Zeitalter)'], 'Tech costs %s (by age)', '… auch englisch');
-  const tut = fs.readFileSync(__dirname + '/js/tutorial.js', 'utf8');
-  const d = OLD_METHOD_DISCOUNT;
-  eq([tut.includes(`<b>${d[0]} in der Antike, ${d[1]} im Mittelalter, ${d[2]} in der Industrialisierung, ${d[3]} in der Moderne</b>`),
-    tut.includes(`um ${d.slice(0, 4).join('/')} (je Zeitalter)`), /<b>Burgenbau<\/b> \(3\)/.test(tut)], [true, true, true],
-    'die Tutorialtexte (lang und kurz) nennen die Methode des alten Techtrees, Burgenbau 3');
-  eq(/function tutorialSetup[\s\S]*?newGame\(\{[\s\S]*?oldTree: true/.test(tut), true, 'das Tutorial spielt im alten Techtree');
   // die KI wertet die Methode im Verhältnis ihres Rabatts ab dem Mittelalter (bis v96 4 + 6 + 8 = 18)
   eq([kiMethodeAnteil(N), kiMethodeAnteil(O)], [12 / 18, 1], 'KI: Zuschlag der Methode auf zwei Drittel, im alten Techtree wie bisher');
 }
 {
-  /* --- v99: Freie Forschung einmal je Runde – die KI erwägt jede Runde alles, was zur Wahl steht
-     (bis v98 hob sie die zwei Freien Forschungen je Partie für die Moderne auf), und mit der
-     Moderne in jedem Feld holt sie sich die Singularität umsonst. */
+  /* --- v101: Freie Forschung zweimal je Partie, höchstens einmal je Runde – die KI erwägt sie,
+     sobald sie geht, für alles, was zur Wahl steht (wie v99–v100; gemessen besser als Aufheben,
+     ANNAHMEN.md v101), und mit der Moderne in jedem Feld holt sie sich die Singularität umsonst. */
   const lage = (runde, avail) => {
     const S = newGame({ seed: 5, players: [{ civ: 'griechenland', kind: 'ki', kiLevel: 'schwer', ability: 'gratistech' }, { civ: 'england', kind: 'bot' }] });
     const pi = S.players.findIndex(p => p.kind === 'ki'), p = S.players[pi];
@@ -8021,12 +7980,24 @@ function kiAbwehrLage(popKI, gross) {
   eq(kiFreeTechChoices(a.S, a.pi, K).map(t => t.k).sort(), freeTechOptions(a.S, a.pi).map(t => t.k).sort(),
     'die KI erwägt jede Freie Forschung, die zur Wahl steht');
   kiTurn(a.S, a.pi);
-  eq(a.p.freeTechUsed, 2, 'ein Zug der KI: die Freie Forschung dieser Runde ist genutzt');
+  eq([a.p.freeTechUsed, a.p.freeTechsUsed], [2, 1], 'ein Zug der KI: die Freie Forschung dieser Runde ist genutzt, eine verbraucht');
+  eq(kiFreeTechChoices(a.S, a.pi, kiContext(a.S, a.pi)), [], '… und im selben Zug erwägt sie keine zweite');
+  a.p.freeTechsUsed = 2; a.S.round = 3;
+  eq(kiFreeTechChoices(a.S, a.pi, kiContext(a.S, a.pi)), [], 'beide verbraucht: auch in der nächsten Runde keine');
   const b = lage(3, {});
   for (const f of [0, 1, 2, 3]) b.p.techs[TECHS.find(t => t.f === f && t.age === 3).k] = true;
+  b.p.freeTechsUsed = 1; b.p.freeTechUsed = 2;          // die letzte
   kiTurn(b.S, b.pi);
-  eq([has(b.p, 'singularitaet'), (b.S.claims || []).some(c => c.pi === b.pi)], [true, true],
-    'mit der Moderne in jedem Feld: die KI nimmt die Singularität umsonst und meldet den Forschungssieg an');
+  eq([has(b.p, 'singularitaet'), (b.S.claims || []).some(c => c.pi === b.pi), b.p.freeTechsUsed], [true, true, 2],
+    'mit der Moderne in jedem Feld: die KI nimmt mit der letzten Freien Forschung die Singularität und meldet den Forschungssieg an');
+  // eine ganze Partie (KI gegen KI): nie mehr als zwei, nie zwei in derselben Runde
+  const G = newGame({ seed: 41, startPlayer: 0, players: [{ civ: 'griechenland', kind: 'ki', kiLevel: 'schwer', ability: 'gratistech' },
+    { civ: 'england', kind: 'ki', kiLevel: 'schwer', ability: 'basis' }] });
+  for (let i = 0; i < 24 && !G.over; i++) { kiTurn(G, G.cur); if (G.over) break; endTurn(G); }
+  const frei = G.log.filter(l => /\(Freie Forschung\)\.$/.test(l.m));
+  const gr = G.players.find(p => p.civ === 'griechenland');
+  eq([frei.length <= FREE_TECH_USES, new Set(frei.map(l => l.r)).size === frei.length, gr.freeTechsUsed || 0],
+    [true, true, frei.length], `eine Partie der KI: ${frei.length} Freie Forschung(en) in Runde ${frei.map(l => l.r).join(', ') || '–'} – höchstens zwei, je Runde eine`);
 }
 {
   // --- Entschlossener Angreifer (Menschen): sein Budget enthält Alchemie, wenn er sie diesen
@@ -8191,6 +8162,43 @@ function kiAbwehrLage(popKI, gross) {
   eq([D.cities.length, D.duel], [2, true], 'Duell auf einer eigenen Karte, zweimal dieselbe Zivilisation');
 }
 {
+  // --- Feste Würfel (Mehrspieler-Erweiterung, Wochen-Challenge): cfg.fixedDice macht Verfügbarkeit und
+  //     Ereignisse unabhängig davon, wie gespielt wurde – alle Versuche einer Woche haben denselben Techbaum.
+  const civs4 = CIVS.map(c => ({ civ: c.k, kind: 'human' }));
+  const neu = (seed, fixedDice, more) => newGame(Object.assign({ seed, map: MAP_ORIGINAL, players: civs4.map(p => Object.assign({}, p)), fixedDice }, more || {}));
+  const ohne = neu(5);
+  eq('fixedDice' in ohne, false, 'ohne feste Würfel: kein Feld fixedDice im Spielstand');
+  const A = neu(5, 4242), B = neu(5, 4242);
+  // B würfelt vorher anderes (Kampf, Ziele …): der laufende Zufall steht woanders
+  for (let i = 0; i < 37; i++) nextRand(B);
+  const zeitalter = (S, age) => S.players.map((p, i) => {
+    for (let f = 0; f < 4; f++) rollAvailability(S, i, f, age);
+    return TECHS.filter(t => t.age === age && p.avail[t.k]).map(t => t.k).join(',');
+  });
+  eq(zeitalter(A, 1), zeitalter(B, 1), 'feste Würfel: Zeitalter 2 gleich, auch wenn vorher anders gewürfelt wurde');
+  eq(zeitalter(A, 2), zeitalter(B, 2), 'feste Würfel: Zeitalter 3 gleich');
+  eq(A.players.map(p => p.avail), B.players.map(p => p.avail), 'feste Würfel: die ganze Verfügbarkeit gleich');
+  // ein anderer Startwert der Partie ändert nichts, solange fixedDice gleich bleibt – nur der Start (Zeitalter 1) ist schon aus fixedDice
+  const C = neu(99, 4242);
+  eq(zeitalter(C, 1), zeitalter(A, 1), 'feste Würfel: unabhängig von S.seed');
+  // ohne feste Würfel hängt es am laufenden Zufall (Gegenprobe über mehrere Partien)
+  let anders = 0;
+  for (let k = 0; k < 6; k++) {
+    const X = neu(100 + k), Y = neu(100 + k);
+    for (let i = 0; i < 11; i++) nextRand(Y);
+    if (zeitalter(X, 1).join('|') !== zeitalter(Y, 1).join('|')) anders++;
+  }
+  eq(anders > 0, true, 'Gegenprobe: ohne feste Würfel hängt die Verfügbarkeit am laufenden Zufall');
+  // Ereignisse: je Runde dasselbe, auch über das Orakel (Vorschau auf die nächste Runde)
+  const E1 = neu(5, 777, { events: true, eventMode: 'hard' }), E2 = neu(5, 777, { events: true, eventMode: 'hard' });
+  for (let i = 0; i < 23; i++) nextRand(E2);
+  const ev = (S, r) => { const e = rollEvent(S, r); return [e.row, e.col, e.k].join(); };
+  eq([2, 3, 4, 5, 6].map(r => ev(E1, r)), [2, 3, 4, 5, 6].map(r => ev(E2, r)), 'feste Würfel: dieselben Ereignisse je Runde');
+  const vorschau = peekNextEvent(E2);
+  eq([vorschau.row, vorschau.col, vorschau.k].join(), ev(E1, E2.round + 1), 'Orakel: die Vorschau ist das Ereignis der nächsten Runde');
+  eq(E1.event && [E1.event.row, E1.event.col, E1.event.k].join(), (() => { const Z = neu(5, 777, { events: true, eventMode: 'hard' }); return Z.event && [Z.event.row, Z.event.col, Z.event.k].join(); })(), 'Ereignis der ersten Runde gleich');
+}
+{
   // --- Doppelgänger (Mehrspieler-Erweiterung): Ziffern und Farben bis acht Reiche
   const viermal = markDoubles(['england', 'england', 'england', 'england'].map(civ => ({ civ })));
   eq(viermal.map(p => p.roman), ['I', 'II', 'III', 'IV'], 'vier Englands: I bis IV');
@@ -8229,5 +8237,10 @@ function kiAbwehrLage(popKI, gross) {
   eq(langsamster < 8000, true, `langsamster KI-Zug ${langsamster} ms (unter 8 s)`);
 }
 
-console.log(fails ? `\n${fails} Test(s) fehlgeschlagen` : '\nAlle Tests bestanden');
-process.exit(fails ? 1 : 0);
+(async () => {
+  for (const f of SPAETER) {
+    try { await f(); } catch (e) { fails++; console.log(`FAIL ${e.message}`); }
+  }
+  say(fails ? `test   ${fails} failed · ${passed} passed` : `test   ${passed} passed`);
+  process.exit(fails ? 1 : 0);
+})();
