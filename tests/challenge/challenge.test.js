@@ -8,7 +8,8 @@
  *
  * Unit: ISO weeks (also week 53 and the turn of the year), week bounds and the week's setup. A
  * starts this week's challenge from the multiplayer menu: a Rundenspiel alone against three KI
- * with the week's nation, ability, map and settings, A's turn, labelled in the list. Leaving,
+ * with the week's nation, ability, map and settings and the week's fixed dice (the same tech
+ * availability and events in every attempt), A's turn, labelled in the list. Leaving,
  * cancelling and a self-made "challenge" through the
  * normal API are refused. A resigns – a loss with A's points; other results (wins) rank above it
  * (fewer rounds first, each player's best attempt once). A plays again (a new attempt) and starts
@@ -105,11 +106,13 @@ function unit() {
         ok(/Deine Nation/.test(text) && /3 KI/.test(text) && /Woche \d+\/\d{4}/.test(text), 'the page: setup, opponents, week', text.replace(/\s+/g, ' ').slice(0, 160));
         await p.click('#ch-start');
         await p.waitForFunction(() => typeof ASYNC !== 'undefined' && ASYNC.view && ASYNC.view.config && ASYNC.view.config.challenge && typeof S !== 'undefined' && S, null, { timeout: 20000 });
-        const v = await p.evaluate(() => ({ cfg: ASYNC.view.config, seats: ASYNC.view.seats.map(s => s.kind + ':' + s.civ + ':' + s.ability), my: MP.isMyTurn(), id: ASYNC.view.id, status: ASYNC.view.status }));
+        const v = await p.evaluate(() => ({ cfg: ASYNC.view.config, seats: ASYNC.view.seats.map(s => s.kind + ':' + s.civ + ':' + s.ability), my: MP.isMyTurn(), id: ASYNC.view.id, status: ASYNC.view.status, fixedDice: S.fixedDice }));
         const mine = v.seats.find(s => s.startsWith('human:'));
         ok(v.status === 'playing' && v.my && v.cfg.challenge === week && !v.cfg.isPublic && !v.cfg.ranked && v.seats.filter(s => s.startsWith('ki:')).length === 3
             && mine === `human:${guest.setup.civ}:${guest.setup.ability}` && v.cfg.mapKey === guest.setup.mapKey && v.cfg.difficulty === guest.setup.difficulty,
             'started: alone against three KI with the week\'s setup, A\'s turn', JSON.stringify({ seats: v.seats, map: v.cfg.mapKey }));
+        // the week's seed is the game's fixed dice: the same tech availability and events in every attempt
+        ok(v.fixedDice === guest.setup.seed, 'fixed dice: the week\'s seed (same techs and events for everybody)', `${v.fixedDice} / ${guest.setup.seed}`);
         const api = (method, path, body) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : undefined, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, body: await r.json() }; }, [method, path, body]);
         const leave = await api('POST', `/api/async/${v.id}/leave`), cancel = await api('POST', `/api/async/${v.id}/cancel`);
         ok(leave.body.error === 'Die Wochen-Challenge kann man nur aufgeben.' && cancel.body.error === 'Die Wochen-Challenge kann man nur aufgeben.', 'leaving and cancelling are refused');

@@ -15,8 +15,24 @@ function nextRand(S) {
    Technologie, { pi, pick } beim Auswürfeln, wenn nichts verfügbar wurde. Nur das Erste Spiel
    liest es (fgNextDie): dort fallen die Würfe so, wie die geführte Partie es braucht. Das
    Protokoll zeigt sie wie jeden anderen Wurf. */
+/* Feste Würfel (Mehrspieler-Erweiterung, Wochen-Challenge): Mit S.fixedDice (aus cfg.fixedDice)
+   fallen die Würfe, deren ctx einen Schlüssel `fixed` trägt, allein nach Schlüssel und
+   S.fixedDice – nicht nach dem laufenden Zufall S.seed, der mit jedem Wurf davor weiterzählt.
+   So bekommt jede Partie mit demselben S.fixedDice dieselbe Verfügbarkeit der Technologien
+   (Spieler, Technologie) und dieselben Ereignisse (Runde), ganz gleich, wie gespielt wird.
+   Alle anderen Würfe (Kampf, Ziele, Bots) laufen wie immer über S.seed. Ohne S.fixedDice
+   ändert sich nichts. */
+function fixedRand(S, key) {
+  let h = 0x811c9dc5 ^ S.fixedDice;                 // FNV-1a über den Schlüssel …
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193);
+  let t = (h + 0x6D2B79F5) | 0;                     // … dann ein Schritt wie nextRand
+  t = Math.imul(t ^ t >>> 15, 1 | t);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
 function d6(S, why, ctx) {
   let v = (typeof ui !== 'undefined' && ui && ui.fg && typeof fgNextDie === 'function') ? fgNextDie(ctx) : null;
+  if (!v && S.fixedDice != null && ctx && ctx.fixed) v = 1 + Math.floor(fixedRand(S, ctx.fixed) * 6);
   if (!v) v = 1 + Math.floor(nextRand(S) * 6);
   log(S, 'roll', '🎲 ' + v + (why ? ' — ' + why : ''));
   return v;
@@ -311,6 +327,8 @@ function newGame(cfg) {
   const S = {
     v: 2, seed: (cfg.seed ?? Math.floor(Math.random() * 2 ** 31)) | 0,
     round: 1, cur: 0, over: null, log: [],
+    // feste Würfel (Mehrspieler-Erweiterung, siehe fixedRand) – nur, wenn gesetzt
+    ...(cfg.fixedDice != null ? { fixedDice: cfg.fixedDice | 0 } : {}),
     // Angemeldete Siege (alles außer Militärsieg) und die Runde, in der sie fallen
     claims: [], endRound: null,
     map: JSON.parse(JSON.stringify(cfg.map || DEFAULT_MAP)),
@@ -413,12 +431,12 @@ function rollAvailability(S, pi, field, age) {
   let any = false;
   for (const t of list) {
     if (p.avail[t.k] || p.techs[t.k]) { any = true; continue; }
-    const v = d6(S, T('Verfügbarkeit %s%s', t.n, bonus ? ' (+' + bonus + ')' : ''), { pi, tech: t.k, bonus }) + bonus;
+    const v = d6(S, T('Verfügbarkeit %s%s', t.n, bonus ? ' (+' + bonus + ')' : ''), { pi, tech: t.k, bonus, fixed: `avail:${p.slot}:${t.k}` }) + bonus;
     if (v >= 4) { p.avail[t.k] = true; any = true; }
   }
   if (!any) {   // "Falls danach keine Technologie verfügbar ist, eine auswürfeln die verfügbar ist"
-    let idx = 0;
-    do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length), { pi, pick: list.map(t => t.k) }); } while (idx > list.length);
+    let idx = 0, n = 0;
+    do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length), { pi, pick: list.map(t => t.k), fixed: `pick:${p.slot}:${field}:${age}:${n++}` }); } while (idx > list.length);
     p.avail[list[idx - 1].k] = true;
   }
   log(S, 'info', T('%s: verfügbar in %s (%s):', civOf(p).n, FIELDS[field], AGES[age]) +

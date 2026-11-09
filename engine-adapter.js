@@ -153,6 +153,8 @@ function makeAdapter(engineDir, label) {
             eventMode: cfg.eventMode || 'hard',
             wonders: !!cfg.wonders,
             startPlayer: cfg.startPlayer ?? 0,
+            // weekly challenge: the same tech availability and events in every attempt (engine v106+)
+            ...(Number.isInteger(cfg.fixedDice) ? { fixedDice: cfg.fixedDice } : {}),
             // Marathon (v83): bigger tech costs; the map and drafted abilities come from the draft
             marathon: !!cfg.marathon || !!(cfg.mapKey === 'eigene' && cfg.customMap && cfg.customMap.marathon),
         };
