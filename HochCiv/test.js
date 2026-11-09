@@ -8162,6 +8162,43 @@ function kiAbwehrLage(popKI, gross) {
   eq([D.cities.length, D.duel], [2, true], 'Duell auf einer eigenen Karte, zweimal dieselbe Zivilisation');
 }
 {
+  // --- Feste Würfel (Mehrspieler-Erweiterung, Wochen-Challenge): cfg.fixedDice macht Verfügbarkeit und
+  //     Ereignisse unabhängig davon, wie gespielt wurde – alle Versuche einer Woche haben denselben Techbaum.
+  const civs4 = CIVS.map(c => ({ civ: c.k, kind: 'human' }));
+  const neu = (seed, fixedDice, more) => newGame(Object.assign({ seed, map: MAP_ORIGINAL, players: civs4.map(p => Object.assign({}, p)), fixedDice }, more || {}));
+  const ohne = neu(5);
+  eq('fixedDice' in ohne, false, 'ohne feste Würfel: kein Feld fixedDice im Spielstand');
+  const A = neu(5, 4242), B = neu(5, 4242);
+  // B würfelt vorher anderes (Kampf, Ziele …): der laufende Zufall steht woanders
+  for (let i = 0; i < 37; i++) nextRand(B);
+  const zeitalter = (S, age) => S.players.map((p, i) => {
+    for (let f = 0; f < 4; f++) rollAvailability(S, i, f, age);
+    return TECHS.filter(t => t.age === age && p.avail[t.k]).map(t => t.k).join(',');
+  });
+  eq(zeitalter(A, 1), zeitalter(B, 1), 'feste Würfel: Zeitalter 2 gleich, auch wenn vorher anders gewürfelt wurde');
+  eq(zeitalter(A, 2), zeitalter(B, 2), 'feste Würfel: Zeitalter 3 gleich');
+  eq(A.players.map(p => p.avail), B.players.map(p => p.avail), 'feste Würfel: die ganze Verfügbarkeit gleich');
+  // ein anderer Startwert der Partie ändert nichts, solange fixedDice gleich bleibt – nur der Start (Zeitalter 1) ist schon aus fixedDice
+  const C = neu(99, 4242);
+  eq(zeitalter(C, 1), zeitalter(A, 1), 'feste Würfel: unabhängig von S.seed');
+  // ohne feste Würfel hängt es am laufenden Zufall (Gegenprobe über mehrere Partien)
+  let anders = 0;
+  for (let k = 0; k < 6; k++) {
+    const X = neu(100 + k), Y = neu(100 + k);
+    for (let i = 0; i < 11; i++) nextRand(Y);
+    if (zeitalter(X, 1).join('|') !== zeitalter(Y, 1).join('|')) anders++;
+  }
+  eq(anders > 0, true, 'Gegenprobe: ohne feste Würfel hängt die Verfügbarkeit am laufenden Zufall');
+  // Ereignisse: je Runde dasselbe, auch über das Orakel (Vorschau auf die nächste Runde)
+  const E1 = neu(5, 777, { events: true, eventMode: 'hard' }), E2 = neu(5, 777, { events: true, eventMode: 'hard' });
+  for (let i = 0; i < 23; i++) nextRand(E2);
+  const ev = (S, r) => { const e = rollEvent(S, r); return [e.row, e.col, e.k].join(); };
+  eq([2, 3, 4, 5, 6].map(r => ev(E1, r)), [2, 3, 4, 5, 6].map(r => ev(E2, r)), 'feste Würfel: dieselben Ereignisse je Runde');
+  const vorschau = peekNextEvent(E2);
+  eq([vorschau.row, vorschau.col, vorschau.k].join(), ev(E1, E2.round + 1), 'Orakel: die Vorschau ist das Ereignis der nächsten Runde');
+  eq(E1.event && [E1.event.row, E1.event.col, E1.event.k].join(), (() => { const Z = neu(5, 777, { events: true, eventMode: 'hard' }); return Z.event && [Z.event.row, Z.event.col, Z.event.k].join(); })(), 'Ereignis der ersten Runde gleich');
+}
+{
   // --- Doppelgänger (Mehrspieler-Erweiterung): Ziffern und Farben bis acht Reiche
   const viermal = markDoubles(['england', 'england', 'england', 'england'].map(civ => ({ civ })));
   eq(viermal.map(p => p.roman), ['I', 'II', 'III', 'IV'], 'vier Englands: I bis IV');
