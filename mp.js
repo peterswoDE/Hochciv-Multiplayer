@@ -1090,6 +1090,7 @@ const MP = {
           </table>
 
           <h4>${TX('Spieleinstellungen')}</h4>
+          ${isHost && typeof PRESETS !== 'undefined' ? PRESETS.rowHtml('live') : ''}
           <div class="mp-settings" style="pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
               <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
@@ -2500,6 +2501,7 @@ const ASYNC = {
             ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-invite', true) : ''}
 
             <h4>${TX('Spieleinstellungen')}</h4>
+            ${typeof PRESETS !== 'undefined' ? PRESETS.rowHtml('async') : ''}
             <div class="mp-settings">
               <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
                 ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}
