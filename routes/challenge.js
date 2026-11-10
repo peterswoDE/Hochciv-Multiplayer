@@ -6,6 +6,9 @@
  *                                          own attempts (public)
  *   POST /api/challenge/start            – { week? }: start an attempt at this week (or a past
  *                                          one); a running attempt is resigned (login)
+ *   GET  /api/challenge/compare?week=<YYYY-Www>&game=<match id>
+ *                                        – an attempt (without `game`: one's best) next to the
+ *                                          week's best, the challenger's empire per round (F26)
  */
 const express = require('express');
 const rateLimitLib = require('express-rate-limit');
@@ -29,6 +32,8 @@ const send = (res, p) => p.then(r => {
 });
 
 router.get('/', (req, res) => send(res, challenge.info(req.user || null, typeof req.query.week === 'string' ? req.query.week : null)));
+router.get('/compare', (req, res) => send(res, challenge.compare(req.user || null,
+    typeof req.query.week === 'string' ? req.query.week : null, typeof req.query.game === 'string' ? req.query.game : null)));
 router.post('/start', (req, res) => {
     if (!(req.isAuthenticated && req.isAuthenticated())) return res.status(401).json({ error: 'Die Wochen-Challenge gibt es nur mit Anmeldung.' });
     const b = req.body || {};

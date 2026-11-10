@@ -2037,6 +2037,8 @@ if (originalGameOver) {
             MP.addRematch();
             if (MP.lastStats && typeof STATS !== 'undefined') STATS.addToEndScreen(MP.lastStats);
             if (MP.lastRecord && typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(MP.lastRecord);
+            // a weekly challenge attempt: compare it with the week's best (client/challenge.js)
+            if (MP.lastRecord && typeof CHALLENGE !== 'undefined') CHALLENGE.addToEndScreen(MP.lastRecord);
             MP.updatePlayerList();
             MP.setTurnClock(null);
         }

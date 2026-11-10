@@ -149,6 +149,7 @@ Only public data goes out: names, nations, points, MMR – no e-mail, role or ac
 |---|---|---|---|
 | GET | `/?week=<YYYY-Www>` | public | The week (default: this one; back to the oldest week anyone played, older ones are refused) with its bounds, `previous` / `next`, `weeks` (all playable weeks, newest first), `setup` (map, nation, ability, KI count and level, events, wonders), the top 20 (each player's best attempt finished before the week ended), `finished` (players on the leaderboard) / `playing` (running attempts) and – logged in – `me`: `attempts` (finished), `running` (`{ asyncId, week }` of the running attempt of any week, or null), `ranked` (the leaderboard entry), `best` (a better later attempt, not ranked) |
 | POST | `/start` | login | `{ week? }`: start an attempt at this week or a past one (a Rundenspiel alone against three KI) → `{ asyncId }`. A running attempt (of any week) is resigned first: one runs at a time |
+| GET | `/compare?week=<YYYY-Www>&game=<match id>` | public | An attempt (`game`; without it one's best of the week) next to the week's best: `best`, `attempt` (leaderboard row with `rank` or null, `civ`, `series`: the challenger's values per round – `s`, `c`, `pop`, `t`, `a`, `w` …), `same` (it is the best one) |
 
 ## Friends – `/api/friends` (login)
 

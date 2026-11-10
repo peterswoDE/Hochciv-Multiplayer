@@ -33,7 +33,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ✅ |
 | 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ✅ |
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ✅ |
-| 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ⬜ |
+| 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ✅ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ⬜ |
 | 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ⬜ |
 
@@ -569,9 +569,13 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** see where one fell behind in the weekly challenge.
 
-**Planned:** after an attempt (and from the leaderboard), a chart of one's points per round next to the week's best attempt, from the statistics stored with each match.
+**Built:**
+- `utils/challenge.js` `compare(user, week, gameId)`, `GET /api/challenge/compare`: the attempt (or one's best of the week) and the week's best, each with the challenger's values per round from the match statistics (utils/stats.js; the attempt's one human seat). Public like the leaderboard; an attempt that is not one of the week's is refused.
+- `client/challenge.js`: *📈 Mit der Bestleistung vergleichen* below one's result (not when one holds the best), 📈 on every leaderboard row but the first, and on the end screen of an attempt (`addToEndScreen`, called from the `gameOver` hook in `mp.js`, shown below the result). The view: both results, notes where the gap grew (level until round n, the round that lost the most points, the largest gap) and one chart with two lines in their own colours and shapes – `STATS.render` (client/stats.js) with two "players" and `noMoments`, so every value of the post-game statistics can be picked.
 
-**Status:** ⬜ planned.
+**Tests:** `tests/challenge/compare.test.js`: the API (best, a given attempt, the best against itself, refused, public), the dialog (results, notes, chart, another value), the leaderboard button, the end screen. `tests/challenge/challenge.test.js` still passes.
+
+**Status:** ✅ on `development`.
 
 ---
 
