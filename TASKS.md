@@ -31,7 +31,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
 | 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ✅ |
-| 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ⬜ |
+| 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ✅ |
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ⬜ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ⬜ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ⬜ |
@@ -543,9 +543,11 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** share a moment of a game.
 
-**Planned:** `/?replay=<id>&turn=<n>` opens the replay at that turn; the replay timeline gets *Link zu diesem Zug*.
+**Built:** `/?replay=<id>&turn=<n>` opens the replay at turn n (1-based, as the timeline counts; out of range → the first or the last turn, the end screen). The timeline has *🔗 Dieser Zug*: the share sheet on phones, the clipboard elsewhere (`client/replay.js` `link()`, `shareTurn()`). A match of an older version keeps the turn when it moves to `/vNN/`. `mp.js` passes `turn` to `REPLAY.open`.
 
-**Status:** ⬜ planned.
+**Tests:** `tests/replay/replay.test.js`: a link opens the 4th turn, *🔗 Dieser Zug* copies the link to the shown turn, a turn past the end opens the end screen.
+
+**Status:** ✅ on `development`.
 
 ---
 
