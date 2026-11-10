@@ -329,7 +329,7 @@ function resetForRematch(sessionId) {
     Object.assign(session, {
         status: 'lobby', state: null, gameOverProcessed: false, stats: null, replay: null, gameRecord: null,
         chat: [], marks: null, summaryKey: null, lastSummary: null,
-        placementState: null, draft: null, turnClock: null,
+        placementState: null, draft: null, turnClock: null, paused: null, converting: false, converted: null,
     });
     recordActivity(sessionId);
     return session;

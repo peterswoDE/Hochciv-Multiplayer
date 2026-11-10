@@ -46,7 +46,8 @@ const MP = {
     },
     /** It is our turn and we play it ourselves. */
     isMyTurn: function () {
-        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk() && !this.hasResigned();
+        return typeof S !== 'undefined' && !!S && S.cur === this.playerIndex && !this.isAfk() && !this.hasResigned()
+            && !(this.paused && !this.asyncId);          // a paused live game (client/pause.js)
     },
     /** We gave up (F16): the KI plays our seat to the end, we only watch. */
     hasResigned: function () {
@@ -464,6 +465,7 @@ const MP = {
             if (typeof CHAT !== 'undefined') CHAT.attach(this.socket);       // client/chat.js
             if (typeof MATCH !== 'undefined') MATCH.attach(this.socket);     // client/matchmaking.js
             if (typeof FRIENDS !== 'undefined') FRIENDS.attach(this.socket); // client/friends.js
+            if (typeof PAUSE !== 'undefined') PAUSE.attach(this.socket);     // client/pause.js
 
             this.socket.on('connect', () => {
                 // Auto re-authenticate if we disconnect and reconnect mid-session
@@ -603,6 +605,7 @@ const MP = {
                 MP.lastRecord = null;
                 MP.takeSummary(data.summary);
                 MP.setTurnClock(data.turn);
+                if (typeof PAUSE !== 'undefined') PAUSE.set(data.paused);      // a paused game (client/pause.js)
                 MP.lastTurn = S.cur;
                 MP.lastTurnKey = S.round + ':' + S.cur;
 
@@ -621,6 +624,7 @@ const MP = {
             this.socket.on('state:update', data => {
                 if (MP.asyncId) return;
                 MP.setTurnClock(data.turn);
+                if (typeof PAUSE !== 'undefined') PAUSE.set(data.paused);
                 MP.takeSummary(data.summary);
                 // what the others did plays first (client/scenes.js), then the new state – unless our
                 // turn has begun with the clock running: the time is ours, the scenes are skipped
@@ -870,7 +874,8 @@ const MP = {
     /** `turn` from the server: { total, left } in ms (left null: no clock now), or null without a limit. */
     setTurnClock: function (turn) {
         const was = this.turnClock;
-        this.turnClock = turn && !this.asyncId ? { total: turn.total, deadline: turn.left == null ? null : Date.now() + turn.left } : null;
+        this.turnClock = turn && !this.asyncId ? { total: turn.total, deadline: turn.left == null || turn.paused ? null : Date.now() + turn.left,
+            frozen: turn.paused && turn.left != null ? turn.left : null } : null;      // paused: the time left stands still
         // warn once per turn, also when the deadline is corrected by a later update
         if (this.turnClock && was && was.deadline && this.turnClock.deadline) this.turnClock.warned = was.warned;
         if (this.turnClock && !this._clockTimer) this._clockTimer = setInterval(() => this.drawTurnClock(), 250);
@@ -881,6 +886,13 @@ const MP = {
         const el = $('mp-turn-clock');
         if (!el) return;
         const tc = this.turnClock;
+        if (this.active && tc && tc.frozen != null && typeof S !== 'undefined' && S && !S.over) {
+            const fs = Math.ceil(tc.frozen / 1000);
+            el.hidden = false;
+            el.classList.remove('mp-clock-low');
+            el.textContent = `⏸ ${Math.floor(fs / 60)}:${String(fs % 60).padStart(2, '0')}`;
+            return;
+        }
         if (!this.active || !tc || !tc.deadline || typeof S === 'undefined' || !S || S.over) { el.hidden = true; return; }
         const left = Math.max(0, tc.deadline - Date.now());
         const sec = Math.ceil(left / 1000);
@@ -3053,6 +3065,8 @@ window.addEventListener('DOMContentLoaded', () => {
             snd.onclick = () => { ALERTS.setSound(!ALERTS.soundOn()); label(); };
             quit.parentNode.insertBefore(snd, quit);
         }
+        // the host of a live game: pause, continue as a Rundenspiel (client/pause.js)
+        if (typeof PAUSE !== 'undefined') PAUSE.menu(quit.parentNode, quit);
         quit.remove();
     }, 0));
     MP.fetchUser().then(() => {

@@ -34,7 +34,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ✅ |
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ✅ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ✅ |
-| 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ⬜ |
+| 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ✅ |
 | 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ⬜ |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
@@ -583,9 +583,14 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** a live game is not lost when players have to leave.
 
-**Planned:** the host can pause a live game (the turn timer stops, nobody can act, everyone sees it) and resume it, or turn the running game into a Rundenspiel with the same players, seats and state, which then goes on with the Rundenspiel rules (turn deadline, notifications). Guests can't play Rundenspiele, so their seats would go to the KI (to be decided when building it).
+**Built:**
+- **Pause** (`sockets/game.js` `game:pause`, host only): `session.paused = { by, at }`; moves are refused; the turn clock keeps the time left (`turnClock.left`) and gets it back on resume; a turn that begins while paused waits with its full time. `game:paused` to everyone, `paused` in `state:update` / `game:start` (reconnects, spectators). A KI turn under way still finishes. The session still ends after 2 hours without activity.
+- **Continue as a Rundenspiel** (`game:toAsync` { turnDays }, host with an account, not during a KI turn): `async/service.js` `fromLive` builds the Rundenspiel from the session – the state (copied), `stats`, the last 200 chat messages, the replay frames (as `replay_frames` rows), the config (`fromLive`: the join code; not public). Seats: accounts (also player-bots, also seats the KI held after missed turns) play on; players who resigned stay replaced (lost game, ranked penalty); **guests' empires go to the KI** (*mittel*, ranked *schwer*); KI seats stay KI. Then it settles like any Rundenspiel move (the KI moves if it is its turn, the player on turn is notified); the other players get an e-mail/push. The live session is marked `converted` (no match record, no MMR there) and removed.
+- `client/pause.js` (injected after `mp.js`): host buttons in the game menu (*⏸ Pause* / *▶ Fortsetzen*, *📨 Als Rundenspiel fortsetzen* with the time per turn and the guests named), the banner, the frozen clock (*⏸ m:ss*, `mp.js` `setTurnClock`), `MP.isMyTurn()` false while paused. On `game:toAsync` players with an account open `/?async=<id>`; guests, resigned players and spectators are told.
 
-**Status:** ⬜ planned.
+**Tests:** `tests/pause/pause.test.js`: only the host, the menu, the banner for everyone, moves refused, the clock standing still, resume; the move to a Rundenspiel (dialog, A and B land in it, the guest is told, round, seats, statistics, replay frames, chat, who it waits for, a move there, the live game gone). `tests/resign` and `tests/timer` still pass.
+
+**Status:** ✅ on `development`.
 
 ---
 

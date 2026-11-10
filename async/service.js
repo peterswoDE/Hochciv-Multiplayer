@@ -350,6 +350,90 @@ async function create(user, body, internal) {
     return { id: g.id, joinCode: g.joinCode, inviteErrors: inviteErr };
 }
 
+/**
+ * A running live game goes on as a Rundenspiel (F27, sockets/game.js 'game:toAsync'): the same
+ * state, statistics, chat and replay frames. Players with an account keep their seats (also
+ * player-bots); guests can't play Rundenspiele, so the KI takes their empires, as it plays the
+ * seats of players who resigned (they keep their lost game and, ranked, the penalty). The
+ * host's time per turn (`turnDays`, 1 / 3 / 7) holds from now on. Returns { id, guests } or
+ * { error }.
+ */
+async function fromLive(hostUser, session, opts) {
+    const active = await AsyncGame.count({ where: { status: ACTIVE, participantIds: { [Op.contains]: [hostUser.id] } } });
+    if (active >= MAX_ACTIVE_PER_USER) return { error: `Höchstens ${MAX_ACTIVE_PER_USER} laufende Rundenspiele.` };
+    const gc = session.gameConfig || {};
+    const S = JSON.parse(JSON.stringify(session.state));
+    const ranked = gc.ranked === true;
+    const takeover = ranked ? 'schwer' : 'mittel';
+    const now = Date.now();
+    const guests = [];
+    const seats = session.players.map((lp, slot) => {
+        const i = engine.stateIndexOf(S, slot, lp);
+        const sp = i >= 0 ? S.players[i] : null;
+        const seat = {
+            slot, civ: lp.civ, ability: lp.ability, drafted: lp.drafted || null, kind: 'ki', userId: null, name: null,
+            roman: sp ? sp.roman || null : null, color: sp ? sp.color || null : null,
+            kiLevel: (sp && sp.kiLevel) || lp.kiLevel || engine.kiLevelFor(gc.difficulty),
+            started: true, replaced: false, penalty: 0, joinedAt: now,
+        };
+        if (lp.kind === 'human' && lp.dbUserId && !lp.resigned) {
+            // an account: plays on (also when the KI held the seat for a while – it waits now)
+            Object.assign(seat, { kind: 'human', userId: lp.dbUserId, name: lp.dbUsername || lp.name, botAccount: !!lp.playerBot, kiLevel: null });
+            if (sp) sp.kind = 'human';
+        } else if (lp.kind === 'human' && lp.dbUserId) {
+            // resigned: the KI plays on, the player keeps the lost game
+            Object.assign(seat, { userId: lp.dbUserId, name: lp.dbUsername || lp.name, replaced: true, resigned: true, kiLevel: takeover, penalty: ranked ? -L.MMR_PENALTY : 0 });
+        } else if (lp.kind === 'human') {
+            // a guest: no Rundenspiele without an account – the KI takes the empire
+            guests.push(lp.name);
+            seat.kiLevel = takeover;
+            if (sp) Object.assign(sp, { kind: 'ki', kiLevel: takeover });
+        }
+        return seat;
+    });
+    if (!seats.some(s => s.kind === 'human' && s.userId === hostUser.id)) return { error: 'Du spielst in diesem Spiel nicht mit.' };
+    const humans = seats.filter(s => s.kind === 'human').length;
+    const mapKey = gc.mapKey === 'random' ? 'plaettchen' : ['0', 'plaettchen', 'marathon', 'eigene'].includes(gc.mapKey) ? gc.mapKey : '0';
+    const config = {
+        mapKey, civMode: gc.randomCivs ? 'random' : 'fixed', events: !!gc.events, eventMode: gc.eventMode === 'easy' ? 'easy' : 'hard',
+        wonders: !!gc.wonders, hexTiles: !!gc.hexTiles, difficulty: engine.kiLevelFor(gc.difficulty), ranked, isPublic: false,
+        turnDays: L.TURN_DAYS.includes(opts && opts.turnDays) ? opts.turnDays : 3,
+        seed: gc.seed || 0, playerCount: seats.length, humanCount: humans, noKi: false, duel: seats.length === 2,
+        playerBots: gc.playerBots === true, playerBotLimit: gc.playerBotLimit || null,
+        startPlayer: 0, fromLive: session.joinCode || true,
+    };
+    if (gc.customMap) config.customMap = gc.customMap;
+    const g = {
+        engine: engine.version(), hostUserId: hostUser.id, status: 'playing', config, seats,
+        invites: [], pre: null, hold: false, result: null, state: S,
+        chat: (session.chat || []).slice(-200), chatMutes: {},
+        stats: session.stats ? JSON.parse(JSON.stringify(session.stats)) : null,
+        marks: null, scenes: null, replay: null,
+    };
+    g.joinCode = generateJoinCode();
+    g.waitSince = now;
+    g.reminded = false;
+    const row = await AsyncGame.create(Object.assign({ joinCode: g.joinCode, hostUserId: hostUser.id }, rowFields(g)));
+    g.id = row.id;
+    // the replay so far: the live frames become the Rundenspiel's frame rows (utils/replay.js)
+    const rec = session.replay;
+    if (rec && rec.frames && rec.frames.length) {
+        const { ReplayFrame } = require('../models');
+        await ReplayFrame.bulkCreate(rec.frames.map((data, seq) => ({ gameKey: g.id, seq, data })));
+        g.replay = { key: rec.key, seq: rec.frames.length };
+    }
+    cache.set(g.id, { g, queue: Promise.resolve(), touched: now, busy: 0 });
+    // saved, the KI moves on if it is its turn, the players whose turn it is are notified
+    await withGame(g.id, () => ({ ok: true }));
+    const others = seats.filter(s => s.kind === 'human' && s.userId && s.userId !== hostUser.id).map(s => s.userId);
+    if (others.length) notify(others, {
+        type: 'invite', gameId: g.id,
+        subject: 'Euer Spiel geht als Rundenspiel weiter',
+        text: `${hostUser.username} hat euer Live-Spiel als Rundenspiel fortgesetzt. Ziehe, wann es dir passt – ${config.turnDays === 1 ? '1 Tag' : config.turnDays + ' Tage'} pro Zug.`,
+    });
+    return { id: g.id, guests };
+}
+
 const canSee = (g, uid, code) => g.seats.some(s => s.userId === uid) ||
     g.invites.some(i => i.userId === uid) || g.config.isPublic || (code && code.toUpperCase() === g.joinCode);
 
@@ -688,7 +772,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report, resign,
+    init, evict, create, fromLive, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report, resign,
     setNotifyEmail, sweep, room, removeUser, purgeEndedChats,
     processResult,      // for tests/score
 };
