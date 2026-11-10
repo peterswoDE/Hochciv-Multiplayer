@@ -23,6 +23,7 @@
             <button class="nav-tab" data-target="tab-profile">Profil</button>
             <button class="nav-tab" data-target="tab-security">Sicherheit</button>
             <button class="nav-tab" data-target="tab-history">Spielhistorie</button>
+            <button class="nav-tab" data-target="tab-stats">Meine Statistiken</button>
             <button class="nav-tab bots-tab" data-target="tab-bots" hidden>Meine Bots</button>
             <div class="acc-nav-sep admin-link" hidden></div>
             <a class="acc-switch admin-link" href="admin.html" hidden>Admin-Bereich ›</a>
@@ -161,6 +162,15 @@
                 </div>
             </section>
 
+            <!-- Personal statistics (F23, client/gamestats.js) -->
+            <section id="tab-stats" class="tab-content">
+                <h1 class="acc-h">Meine Statistiken</h1>
+                <p class="acc-lede">Deine Siegquote je Nation, Fähigkeit und Startplatz, wie du gewinnst und mit welchen Technologien – aus deinen beendeten Spielen.</p>
+                <div class="acc-card">
+                    <div id="my-stats-body"></div>
+                </div>
+            </section>
+
             <!-- Bot accounts (client/account.js, routes/bots.js) -->
             <section id="tab-bots" class="tab-content">
                 <h1 class="acc-h">Meine Bots</h1>
@@ -271,6 +281,7 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     </script>
     <script src="stats.js"></script>
+    <script src="gamestats.js"></script>
     <script src="account-common.js"></script>
     <script src="account.js"></script>
 </body>

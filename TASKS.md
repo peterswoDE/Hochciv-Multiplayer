@@ -30,7 +30,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
-| 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ⬜ |
+| 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ✅ |
 | 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ⬜ |
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ⬜ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ⬜ |
@@ -526,9 +526,15 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** the overall statistics (F13), but only over one's own matches: win rate per nation, ability and turn position, how one wins, which techs one wins with.
 
-**Planned:** a *Meine Statistiken* view on the account page and in one's player profile, built from the stored facts per match with a filter on the account's seat.
+**Built:**
+- `utils/facts.js` `markAccounts(f, participants)`: the account of each seat (`uid`), added in memory when the facts are read – the stored facts stay anonymous. Matched by nation and ability: first the players who played to the end (human seats), then seats the KI took over or that were resigned (`replacedUserId`; they count as the player's).
+- `utils/gamestats.js` `aggregate(rows, { user })`: only that account's matches and seats, whatever `seats` says; the victory types count its wins; `query.seats` is `'user'`.
+- `routes/stats.js`: `GET /api/stats/player/:userId` (public like the profile, 404 for an id that is no account id).
+- `client/gamestats.js` `render(el, { user })`: no seat filter, a win-rate tile, "Siege nach Siegart", "Am Spielende" and the tech columns as won against lost. `client/account.html`/`account.js`: tab *Meine Statistiken* (`#stats`). `client/profile.js`: *📊 Statistiken* in every profile, drawn when opened.
 
-**Status:** ⬜ planned.
+**Tests:** `tests/stats/overall.test.js` part 6: markAccounts (a nation twice, a taken-over seat), the aggregation per account, the endpoint (also with a Rundenspiel seat the KI took over), the account tab and the profile.
+
+**Status:** ✅ on `development`.
 
 ---
 

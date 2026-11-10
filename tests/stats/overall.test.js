@@ -19,6 +19,10 @@
  * 4. The game page: menu button "Statistiken", the overlay with its tables, a filter, sorting by
  *    a column head, English.
  * 5. The account page: the admin tab "Statistiken" with the admin detail and the export.
+ * 6. Personal statistics (F23): markAccounts (which seat is whose, a taken-over seat too), the
+ *    aggregation over one account, GET /api/stats/player/:id, the account tab
+ *    "Meine Statistiken" and the "📊 Statistiken" part of the player profile. Its test match is
+ *    stored before the first request, as the server keeps the matches for a minute.
  *
  * Test accounts and games are deleted afterwards. Uses an installed Chrome or Edge (no browser
  * download); set HOCHCIV_BROWSER to its path if it is not found.
@@ -160,6 +164,73 @@ function aggregate() {
     const count = seats => { const x = aggregate(one, { seats }); return `${x.query.seats}:${x.seats}:${civ(x, 'england').games}`; };
     ok(count('humans') === 'humans:2:1' && count('bots') === 'bots:1:0' && count('players') === 'players:3:1' && count('ki') === 'ki:1:0' && count('all') === 'all:4:1' && count('x') === 'humans:2:1',
         'aggregate: people only, player-bots only, both, the KI only, all seats; unknown → people', ['humans', 'bots', 'players', 'ki', 'all'].map(count).join(' '));
+
+    // personal statistics (F23): the account of each seat, from the match record
+    const { markAccounts } = require('../../utils/facts');
+    const two = g(3, 'normal', 'v96', [P('england', 'human', 1, true), P('russland', 'human', 2, false, { ab: 'taiga' }),
+        P('russland', 'ki', 3, false)]).f;
+    const acc = markAccounts(two, [{ civ: 'england', dbUserId: 'A' }, { civ: 'russland', ability: 'basis', replacedUserId: 'B', replaced: true },
+        { civ: 'russland', ability: 'taiga', dbUserId: 'C' }, { civ: 'wikinger', isBot: true }]);
+    ok(acc.p.map(p => p.uid).join() === 'A,C,B' && !two.p.some(p => p.uid) && markAccounts(two, []) === two,
+        'markAccounts: players first (human seats), then a seat the KI took over; the facts themselves untouched', acc.p.map(p => p.uid).join());
+    const mine = u => { const x = aggregate([{ id: 'u', ver: 'v96', f: acc }], { user: u, seats: 'all' }); return `${x.query.seats}:${x.games}:${x.seats}:${x.winners.won.seats}:${Object.keys(x.victory).length}`; };
+    ok(mine('A') === 'user:1:1:1:1' && mine('B') === 'user:1:1:0:0' && mine('Z') === 'user:0:0:0:0',
+        'aggregate { user }: only that account\'s seat, whatever "seats" says; victory types only of its wins', ['A', 'B', 'Z'].map(mine).join(' '));
+}
+
+/** A match of one account (F23), stored before the server reads the matches (it keeps them for a minute). */
+function personalMatch() {
+    const u = makeUser();
+    const seat = (civ, kind, won, extra) => Object.assign({ civ, ab: 'basis', kind, lvl: kind === 'ki' ? 3 : null, pos: kind === 'ki' ? 2 : 1, won, dead: false,
+        s: won ? 60 : 30, c: won ? 5 : 2, pop: won ? 14 : 6, a: 3, w: [], t: { landwirtschaft: 2 } }, extra);
+    const f = { v: 1, src: 'replay', ver: 'v106', r: 24, n: 2, mode: 'duel', map: null, ev: false, wo: false, win: 'science', shared: false,
+        p: [seat('england', 'human', true), seat('russland', 'ki', false)] };
+    const parts = [{ name: u.name, dbUserId: u.id, dbUsername: u.name, civ: 'england', ability: 'basis', isWinner: true, points: 60 },
+        { name: 'Russland', dbUserId: null, civ: 'russland', ability: 'basis', isBot: true, isWinner: false, points: 30 }];
+    u.game = inServer(`const { Game } = require('./models');
+        Game.create({ version: 'v106', durationRounds: 24, winnerUsername: '${u.name}', participants: ${JSON.stringify(parts)}, facts: ${JSON.stringify(f)} })
+            .then(g => { console.log(g.id); process.exit(0); })`);
+    return u;
+}
+
+async function personal(browser, errors, me) {
+    try {
+        const d = await (await fetch(`${BASE}/api/stats/player/${me.id}?seats=all&mode=duel`)).json();
+        ok(d.query.seats === 'user' && d.games === 1 && d.seats === 1 && d.winners.won.seats === 1 && d.victory.science === 1 && d.civs.length === 1 && d.civs[0].k === 'england',
+            'GET /api/stats/player/:id: only the account\'s seat in its matches', JSON.stringify({ q: d.query, games: d.games, seats: d.seats }));
+        const none = await fetch(`${BASE}/api/stats/player/not-a-uuid`);
+        ok(none.status === 404, 'GET /api/stats/player/:id: an id that is no account id → 404', String(none.status));
+        // the account page: tab "Meine Statistiken"
+        const ctx = await browser.newContext({ locale: 'de-DE' });
+        const login = await ctx.request.post(BASE + '/api/auth/login', { data: { username: me.name, password: PASSWORD } });
+        ok(login.status() === 200, 'personal: the player logs in');
+        const page = await ctx.newPage();
+        page.on('pageerror', e => errors.push('personal: ' + e.message));
+        await page.goto(BASE + '/client/account.html#stats');
+        await page.waitForSelector('#my-stats-body .hcg-tiles');
+        const acc = await page.evaluate(() => ({
+            tiles: [...document.querySelectorAll('#my-stats-body .hcg-tile')].map(t => t.textContent.replace(/\s+/g, ' ').trim()),
+            seats: !!document.querySelector('#my-stats-body [data-hcg-q="seats"]'),
+            h3: [...document.querySelectorAll('#my-stats-body h3')].map(h => h.textContent),
+        }));
+        ok(/^1\D/.test(acc.tiles[0]) && /^100%.*1 Sieg\)/.test(acc.tiles[1]) && !acc.seats && acc.h3.includes('Siege nach Siegart') && acc.h3.includes('Am Spielende'),
+            'account page: "Meine Statistiken" over one\'s own match, no seat filter, won against lost', acc.tiles.join(' | ') + ' · ' + acc.h3.join(' · '));
+        // the game page: the player profile has "📊 Statistiken"
+        const game = await ctx.newPage();
+        game.on('pageerror', e => errors.push('profile: ' + e.message));
+        await game.goto(BASE + '/');
+        await game.waitForFunction(() => window.PROFILE && window.GAMESTATS);
+        await game.evaluate(id => PROFILE.open(id), me.id);
+        await game.waitForSelector('#hcp-body .hcp-gs summary');
+        await game.click('#hcp-body .hcp-gs summary');
+        await game.waitForSelector('#hcp-body .hcp-gs-body .hcg-tiles');
+        const prof = await game.$eval('#hcp-body .hcp-gs-body', el => ({ tiles: el.querySelector('.hcg-tile b').textContent, civ: el.querySelectorAll('.hcg-table')[1].textContent }));
+        ok(prof.tiles === '1' && /England/i.test(prof.civ), 'profile: "📊 Statistiken" opens the player\'s statistics', JSON.stringify(prof));
+        await ctx.close();
+    } finally {
+        sql(`DELETE FROM games WHERE id = '${me.game}'`);
+        sql(`DELETE FROM users WHERE id = '${me.id}'`);
+    }
 }
 
 async function rundenspiel() {
@@ -182,6 +253,8 @@ async function rundenspiel() {
         ok(f.mode === 'duel' && ver.query.ver === f.ver && ver.query.mode === 'duel' && ver.games >= 1, 'GET /api/stats: filters', JSON.stringify(ver.query));
         const bad = await (await fetch(`${BASE}/api/stats?seats=x&n=9&mode=<b>&ver=1;drop`)).json();
         ok(bad.query.seats === 'humans' && bad.query.n === 'all' && bad.query.mode === 'all' && bad.query.ver === 'all', 'GET /api/stats: unknown filter values fall back to all');
+        const pa = await (await fetch(`${BASE}/api/stats/player/${a.id}`)).json();
+        ok(pa.games >= 1 && pa.seats === pa.games, 'GET /api/stats/player/:id: a seat the KI took over still counts for its player', JSON.stringify({ games: pa.games, seats: pa.seats }));
         const adm = await fetch(`${BASE}/api/admin/stats`);
         ok(adm.status === 401 || adm.status === 403, 'GET /api/admin/stats needs an admin', String(adm.status));
         ok(!JSON.stringify(all).includes(a.name) && !JSON.stringify(f).includes(a.id), 'the statistics carry no names or accounts');
@@ -269,11 +342,13 @@ async function adminTab(browser, errors) {
 (async () => {
     facts();
     aggregate();
+    const me = personalMatch();
     await rundenspiel();
     const { chromium } = require('playwright-core');
     const browser = await chromium.launch({ executablePath: BROWSER });
     const errors = [];
     try {
+        await personal(browser, errors, me);
         await page(browser, errors);
         await adminTab(browser, errors);
         ok(errors.length === 0, 'no page errors', errors.join(' | '));

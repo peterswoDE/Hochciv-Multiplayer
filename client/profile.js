@@ -127,6 +127,9 @@
         .hcp-tier-none { font-weight: 400; opacity: .8; }
         .hcp-past { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-soft, #6f6551); margin: -4px 0 10px; }
         .hcp-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+        .hcp-gs { margin: 4px 0 14px; }
+        .hcp-gs > summary { cursor: pointer; margin: 0; padding: 6px 0; }
+        .hcp-gs-body { padding-top: 6px; }
         .hcp-badge { border: 1px solid var(--rule, #d8ccb0); border-radius: 12px; padding: 3px 9px; font-size: 13px; background: var(--paper, #fbf6e9); cursor: help; }
     `;
 
@@ -262,6 +265,7 @@
             </div>
             ${seasonHtml(data)}
             ${badgesHtml(data)}
+            ${window.GAMESTATS ? `<details class="hcp-gs"><summary class="hcp-h">📊 ${tx('Statistiken')}</summary><div class="hcp-gs-body"></div></details>` : ''}
             <h3 class="hcp-h">${tx('Spiele')}</h3>
             ${games.length ? games.map(g => gameHtml(g, data.id)).join('') : `<p class="hcp-empty">${tx('Noch keine Spiele.')}</p>`}
             ${games.length < total ? `<button class="hcp-more" id="hcp-more">${tx('Weitere Spiele laden')}</button>` : ''}`;
@@ -271,6 +275,12 @@
             const img = box.querySelector('img');
             img.onload = () => { box.firstChild.textContent = ''; };
         }
+        // personal statistics (F23, client/gamestats.js), drawn when opened
+        const gs = body.querySelector('.hcp-gs');
+        if (gs) gs.addEventListener('toggle', () => {
+            const box = gs.querySelector('.hcp-gs-body');
+            if (gs.open && !box.childElementCount) GAMESTATS.render(box, { user: data.id });
+        });
         // friends list (client/friends.js, game page only): add / accept / "Freund"
         if (window.FRIENDS && window.FRIENDS.decorateProfile) window.FRIENDS.decorateProfile(body.querySelector('.hcp-top'), data);
         const more = body.querySelector('#hcp-more');

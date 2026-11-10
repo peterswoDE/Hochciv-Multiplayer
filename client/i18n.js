@@ -1371,6 +1371,23 @@
         'Siegquote mit': 'Win rate with it',
         '%s Plätze hatten sie': '%s seats had it',
         'Gebaut': 'Built',
+        // personal statistics (F23)
+        'Siege nach Siegart': 'Wins by victory type',
+        'Am Spielende': 'At the end of the game',
+        'Durchschnitt je Partie: gewonnene gegen verlorene.': 'Average per match: won against lost.',
+        'Mit wie vielen Städten gewonnen': 'Cities at a win',
+        'Wie oft eine Technologie am Ende da war, in gewonnenen und in verlorenen Partien, die Siegquote mit ihr und die Runde, in der sie in gewonnenen Partien im Schnitt erforscht war. Aus %s Partien mit Wiederholung.':
+            'How often a technology was there at the end, in won and in lost matches, the win rate with it, and the average round it was researched by in won matches. From %s matches with a replay.',
+        'Vorsprung in Siegen': 'Lead in wins',
+        'Bei Siegen': 'Won',
+        'Bei Niederlagen': 'Lost',
+        'Gewonnen': 'Won',
+        'Verloren': 'Lost',
+        '%s Siege': '%s wins',
+        '1 Sieg': '1 win',
+        'Meine Statistiken': 'My statistics',
+        'Deine Siegquote je Nation, Fähigkeit und Startplatz, wie du gewinnst und mit welchen Technologien – aus deinen beendeten Spielen.':
+            'Your win rate by nation, ability and turn position, how you win and with which technologies – from your finished games.',
         'Admin': 'Admin',
         'Quelle der Daten: %s aus Wiederholungen (vollständig), %s aus dem Spielbericht (ohne Technologien und Startplatz), %s ohne Daten.':
             'Data source: %s from replays (complete), %s from the match record (no technologies or turn position), %s without data.',

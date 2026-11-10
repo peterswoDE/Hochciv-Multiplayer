@@ -13,7 +13,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let historyGames = [];
     let myBots = [];               // last loaded bot list (loadBots runs before init is done)
 
-    const openFromHash = ACC.tabs();
+    // *Meine Statistiken* (F23): drawn when the section is opened, once the account is known
+    const drawStats = () => {
+        const el = document.getElementById('my-stats-body');
+        if (currentUser && el && !el.dataset.drawn) { el.dataset.drawn = '1'; GAMESTATS.render(el, { user: currentUser.id }); }
+    };
+    const openFromHash = ACC.tabs(id => { if (id === 'tab-stats') drawStats(); });
     openFromHash();                       // again below, once "Meine Bots" may be visible
 
     // --- Init & Auth Check ---
@@ -23,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     ACC.drawWho(currentUser);
+    if (document.getElementById('tab-stats').classList.contains('active')) drawStats();
     document.getElementById('input-email').value = currentUser.email || '';
     document.getElementById('display-username').textContent = currentUser.username || '-';
     document.getElementById('display-email').textContent = currentUser.email || '';
