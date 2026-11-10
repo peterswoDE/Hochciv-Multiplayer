@@ -35,7 +35,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ✅ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ✅ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ✅ |
-| 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | 🔨 server ✅, app open |
+| 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ✅ server · app: PR open |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -620,6 +620,6 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Tests:** `tests/solo/solo.test.js`: the recorder with a real game (from round 1, tech rounds, points, compact state, queued once), waiting without a login and sent after it, the stored match (seat, facts, chart), what is not recorded; the API (login, duplicates, refused uploads, hotseat); *Herkunft* in the overall and personal statistics, the profile (tiles, numbers, list, badge). `tests/stats/overall.test.js`, `tests/seasons`, `tests/account/pages.test.js` still pass.
 
-**Still open:** the Android app (HochCiv-Android): the offline copy gets `client/solo.js`; its bridge hands the offline queue to the native side, which gives it to the online page (`SOLO.importQueue`) and drops what was delivered.
+**Android app** (HochCiv-Android PR #4, into `main`): the offline copy carries `client/solo.js` (`syncOfflineGame` copies it); `bridge.js` hands the offline queue to the app (`soloQueue`), `SoloQueue.kt` keeps it in `files/solo-queue.json`, the online page takes it (`soloPull` → `SOLO.importQueue`) and reports what was sent (`soloDelivered`), and the offline page drops it (`soloForget`). Tested with unit tests and in the browser (offline copy under the app's host with a fake native channel → online page → stored); not yet on a device. Reaches players with the next app release.
 
-**Status:** 🔨 server and browser on `development`; the app part follows.
+**Status:** ✅ server and browser on `development`; the app part waits in its PR.
