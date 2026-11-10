@@ -3,6 +3,10 @@
  * the facts of utils/facts.js) and its closed seasons (season_results). Nothing is stored: a
  * badge appears as soon as the history has earned it, also for matches before this feature.
  *
+ * Single-player games (F28, utils/solo.js) don't count for the multiplayer badges; they have
+ * their own (solo_*): first win, 10 and 50 wins, a win against the KI at its hardest level, a
+ * win of every kind.
+ *
  * Returns [{ k, n?, of? }] – the client (client/profile.js) has the names and descriptions.
  */
 const { sequelize, Game, SeasonResult } = require('../models');
@@ -23,11 +27,22 @@ async function badgesOf(userId) {
     const games = await Game.findAll({ where: sequelize.literal(has), attributes: ['participants', 'facts'], order: [['matchDate', 'DESC']], limit: MAX_GAMES });
     let played = 0, wins = 0, wonders = 0, duelWins = 0;
     const victories = new Set(), wonWith = new Set();
+    const solo = { wins: 0, hardest: false, victories: new Set() };
+    const levels = (engine.engineConst('KI_LEVELS') || []).map(l => l.k);
+    const hardest = levels[levels.length - 1];
     for (const g of games) {
         const parts = g.participants || [];
         const k = parts.findIndex(p => p.dbUserId === userId);
         if (k < 0) continue;
         const me = parts[k];
+        if (me.solo) {
+            if (!me.isWinner) continue;
+            const f = g.facts || null;
+            solo.wins++;
+            if (f && VICTORIES.includes(f.win)) solo.victories.add(f.win);
+            if (f && Array.isArray(f.p) && hardest && f.p.some(x => x.kind === 'ki' && x.lvl === hardest)) solo.hardest = true;
+            continue;
+        }
         played++;
         const f = g.facts || null;
         // the facts list the empires in state order; find ours by nation (and result)
@@ -54,6 +69,12 @@ async function badgesOf(userId) {
     if (nations.length && nWon === nations.length) add('nations_all');
     if (wonders >= 10) add('wonders_10');
     if (duelWins >= 5) add('duels_5');
+    // single-player games (F28)
+    if (solo.wins >= 1) add('solo_first_win');
+    if (solo.wins >= 10) add('solo_wins_10');
+    if (solo.wins >= 50) add('solo_wins_50');
+    if (solo.hardest) add('solo_hardest');
+    if (VICTORIES.every(v => solo.victories.has(v))) add('solo_all_victories');
     // seasons: the best tier ever, and podium places
     const results = await SeasonResult.findAll({ where: { userId }, attributes: ['tier', 'rank', 'games'] });
     const best = results.reduce((b, r) => Math.max(b, TIER_ORDER.indexOf(r.tier)), -1);

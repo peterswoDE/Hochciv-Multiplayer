@@ -367,7 +367,8 @@ router.get('/stats/export', async (req, res) => {
 // Facts are computed once per match; after a change to utils/facts.js they can be rebuilt
 router.post('/stats/recompute', isSuperAdmin, async (req, res) => {
     try {
-        const [count] = await Game.update({ facts: null }, { where: {} });
+        // not the single-player games: their facts come from the upload (utils/solo.js), which is not kept
+        const [count] = await Game.update({ facts: null }, { where: sequelize.literal(`NOT ("participants"::jsonb @> '[{"solo": true}]'::jsonb)`) });
         Facts.backfill().catch(err => console.error('[Facts] Recompute failed:', err));
         res.json({ success: true, games: count });
     } catch (err) {
