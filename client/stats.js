@@ -76,8 +76,8 @@ const STATS = {
         return 10 * step;
     },
 
-    /** The chart, legend, key moments and table into `el`. */
-    render: function (el, stats) {
+    /** The chart, legend, key moments and table into `el`. `opts.noMoments`: without the key moments. */
+    render: function (el, stats, opts) {
         if (!el) return;
         if (!stats || !stats.rounds || stats.rounds.length < 1) {
             el.innerHTML = `<p class="sub">${TX('Für dieses Spiel gibt es keine Statistik.')}</p>`;
@@ -103,7 +103,8 @@ const STATS = {
         draw();
         const sel = el.querySelector('.hcs-metric select');
         if (sel) sel.onchange = () => { k = sel.value; tables.innerHTML = ''; draw(); };
-        this.moments(el.querySelector('.hcs-moments'), stats);
+        if (opts && opts.noMoments) el.querySelector('.hcs-moments').remove();
+        else this.moments(el.querySelector('.hcs-moments'), stats);
         btn.onclick = () => {
             tables.hidden = !tables.hidden;
             btn.textContent = tables.hidden ? TX('Als Tabelle') : TX('Tabelle ausblenden');

@@ -30,8 +30,14 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
+| 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ✅ |
+| 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ✅ |
+| 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ✅ |
+| 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ✅ |
+| 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ✅ |
+| 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ✅ server · app: PR open |
 
-The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
 F1–F14 are in production. Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
@@ -514,3 +520,106 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Planned:** the host splits the empires into teams in the lobby; a team wins together, and teammates have a team chat. The details depend on what the engine allows without changing the game files (alliances, victory check).
 
 **Status:** built (PRs #90, #91), then removed before it reached `main`: it does not fit the game for now. It may come back; the code is in the history of `development` (commits 56152c0 and 7bf2a65).
+
+---
+
+## F23 Personal statistics
+
+**Goal:** the overall statistics (F13), but only over one's own matches: win rate per nation, ability and turn position, how one wins, which techs one wins with.
+
+**Built:**
+- `utils/facts.js` `markAccounts(f, participants)`: the account of each seat (`uid`), added in memory when the facts are read – the stored facts stay anonymous. Matched by nation and ability: first the players who played to the end (human seats), then seats the KI took over or that were resigned (`replacedUserId`; they count as the player's).
+- `utils/gamestats.js` `aggregate(rows, { user })`: only that account's matches and seats, whatever `seats` says; the victory types count its wins; `query.seats` is `'user'`.
+- `routes/stats.js`: `GET /api/stats/player/:userId` (public like the profile, 404 for an id that is no account id).
+- `client/gamestats.js` `render(el, { user })`: no seat filter, a win-rate tile, "Siege nach Siegart", "Am Spielende" and the tech columns as won against lost. `client/account.html`/`account.js`: tab *Meine Statistiken* (`#stats`). `client/profile.js`: *📊 Statistiken* in every profile, drawn when opened.
+
+**Tests:** `tests/stats/overall.test.js` part 6: markAccounts (a nation twice, a taken-over seat), the aggregation per account, the endpoint (also with a Rundenspiel seat the KI took over), the account tab and the profile.
+
+**Status:** ✅ on `development`.
+
+---
+
+## F24 Replay link to a turn
+
+**Goal:** share a moment of a game.
+
+**Built:** `/?replay=<id>&turn=<n>` opens the replay at turn n (1-based, as the timeline counts; out of range → the first or the last turn, the end screen). The timeline has *🔗 Dieser Zug*: the share sheet on phones, the clipboard elsewhere (`client/replay.js` `link()`, `shareTurn()`). A match of an older version keeps the turn when it moves to `/vNN/`. `mp.js` passes `turn` to `REPLAY.open`.
+
+**Tests:** `tests/replay/replay.test.js`: a link opens the 4th turn, *🔗 Dieser Zug* copies the link to the shown turn, a turn past the end opens the end screen.
+
+**Status:** ✅ on `development`.
+
+---
+
+## F25 Lobby presets
+
+**Goal:** start the usual game in one click.
+
+**Built:**
+- `users.lobbyPresets` (JSONB), `utils/presets.js` (cleaning: known keys and values only, names trimmed and unique, at most 10), `GET/PUT /api/account/presets` (routes/account.js).
+- `client/presets.js` (injected after `mp.js`): the row *📋 Vorlagen* above the settings of a live lobby (host, logged in) and of *Neues Rundenspiel*: pick a preset to load it, *💾 Als Vorlage* saves under a name (the loaded one is suggested; the same name updates it), 🗑 deletes. One preset serves both kinds: the map (*Plättchenkarte* is `random` in the lobby, `plaettchen` in the form), and the live time per turn and the Rundenspiel days are kept side by side. Loading in a lobby sends one `lobby:config` (numbers within what the map allows, as `updateLobbyConfig`); the server checks it as always. A custom map is kept by its name; if it is no longer in *Meine Karten*, the map stays.
+
+**Tests:** `tests/presets/presets.test.js`: the API (login, cleaning, limit), a live lobby (save, change, load), the Rundenspiel form (load, save keeps the live time, delete), no row for guests.
+
+**Status:** ✅ on `development`.
+
+---
+
+## F26 Challenge: compare with the best attempt
+
+**Goal:** see where one fell behind in the weekly challenge.
+
+**Built:**
+- `utils/challenge.js` `compare(user, week, gameId)`, `GET /api/challenge/compare`: the attempt (or one's best of the week) and the week's best, each with the challenger's values per round from the match statistics (utils/stats.js; the attempt's one human seat). Public like the leaderboard; an attempt that is not one of the week's is refused.
+- `client/challenge.js`: *📈 Mit der Bestleistung vergleichen* below one's result (not when one holds the best), 📈 on every leaderboard row but the first, and on the end screen of an attempt (`addToEndScreen`, called from the `gameOver` hook in `mp.js`, shown below the result). The view: both results, notes where the gap grew (level until round n, the round that lost the most points, the largest gap) and one chart with two lines in their own colours and shapes – `STATS.render` (client/stats.js) with two "players" and `noMoments`, so every value of the post-game statistics can be picked.
+
+**Tests:** `tests/challenge/compare.test.js`: the API (best, a given attempt, the best against itself, refused, public), the dialog (results, notes, chart, another value), the leaderboard button, the end screen. `tests/challenge/challenge.test.js` still passes.
+
+**Status:** ✅ on `development`.
+
+---
+
+## F27 Pause a live game, or continue it as a Rundenspiel
+
+**Goal:** a live game is not lost when players have to leave.
+
+**Built:**
+- **Pause** (`sockets/game.js` `game:pause`, host only): `session.paused = { by, at }`; moves are refused; the turn clock keeps the time left (`turnClock.left`) and gets it back on resume; a turn that begins while paused waits with its full time. `game:paused` to everyone, `paused` in `state:update` / `game:start` (reconnects, spectators). A KI turn under way still finishes. The session still ends after 2 hours without activity.
+- **Continue as a Rundenspiel** (`game:toAsync` { turnDays }, host with an account, not during a KI turn): `async/service.js` `fromLive` builds the Rundenspiel from the session – the state (copied), `stats`, the last 200 chat messages, the replay frames (as `replay_frames` rows), the config (`fromLive`: the join code; not public). Seats: accounts (also player-bots, also seats the KI held after missed turns) play on; players who resigned stay replaced (lost game, ranked penalty); **guests' empires go to the KI** (*mittel*, ranked *schwer*); KI seats stay KI. Then it settles like any Rundenspiel move (the KI moves if it is its turn, the player on turn is notified); the other players get an e-mail/push. The live session is marked `converted` (no match record, no MMR there) and removed.
+- `client/pause.js` (injected after `mp.js`): host buttons in the game menu (*⏸ Pause* / *▶ Fortsetzen*, *📨 Als Rundenspiel fortsetzen* with the time per turn and the guests named), the banner, the frozen clock (*⏸ m:ss*, `mp.js` `setTurnClock`), `MP.isMyTurn()` false while paused. On `game:toAsync` players with an account open `/?async=<id>`; guests, resigned players and spectators are told.
+
+**Tests:** `tests/pause/pause.test.js`: only the host, the menu, the banner for everyone, moves refused, the clock standing still, resume; the move to a Rundenspiel (dialog, A and B land in it, the guest is told, round, seats, statistics, replay frames, chat, who it waits for, a move there, the live game gone). `tests/resign` and `tests/timer` still pass.
+
+**Status:** ✅ on `development`.
+
+---
+
+## F28 Single-player games in the statistics
+
+**Goal:** single-player games – in the browser and offline in the Android app – are recorded for the statistics, like the multiplayer matches.
+
+**Decided (2026-11-10):**
+- Only games of logged-in accounts are recorded. Offline games in the app wait on the device until it is online and logged in.
+- They are their own kind of match: the overall statistics get a filter *Herkunft*: *Alle* (default), *Online*, *Einzelspiel*. It works with every other filter, e.g. *Nur Menschen* + *Einzelspiel*. So single-player games can be left out of every view.
+- The personal statistics (F23) and the match history show them too, with the same filter.
+- No MMR. Single-player games get their own badges (e.g. first win, 10 and 50 wins, a win against the hardest KI, every kind of victory), apart from the multiplayer badges.
+
+**Planned:**
+- The game runs on the player's device, so the server can't check the moves; it only checks that the result is plausible (a known game version, a finished state the engine accepts, sane numbers) and takes each game once (a game id from the device).
+- **Browser:** a small recorder (`client/solo.js`, loaded with the game page) follows a single-player game while it is played: the round in which each empire got each technology, the start player, the numbers per round for the post-game chart. When the game ends it sends that with the final state to `POST /api/solo/games` (logged in), or keeps it in the browser until it can. A whole replay is not stored (too big for the browser's storage).
+- **Server:** facts from the final state and the recorded tech rounds (the same shape as `utils/facts.js`), stored as a match marked `solo`. The facts get `src`/kind *solo*, `utils/gamestats.js` the new filter, `utils/badges.js` the single-player badges.
+- **Android app (HochCiv-Android):** the offline copy gets the same recorder, which keeps finished games in the offline storage. When the app goes online, the native bridge moves them to the online page, which uploads them if the player is logged in. This needs a new app release.
+- Hotseat games (several people on one device) count in the overall statistics as human seats, but in no account's personal statistics or badges, as the device can't tell who played which empire.
+
+**Built (server and browser):**
+- `client/solo.js` (injected after `mp.js`; works without it too, for the app's offline copy): follows `saveGame()` (every redraw) and `gameOver()`. A game seen from round 1 gets an id; per state player the round each technology first appeared, a point per round (score, cities, population, techs, armies, wonders, out). At the end: queued with the final state, compact (no map tiles, no log) – `hochciv.solo.cur` / `hochciv.solo.queue` (at most 30). Sent when logged in (now, or after a later login via `MP.fetchUser`); kept on network errors, a 401 and 5xx; dropped once stored, a duplicate or refused. Not recorded: games first seen in a later round (saved before this existed), the guided first game (`S.fg`), multiplayer games. For the app: `SOLO.pending()`, `SOLO.importQueue(items)`, `SOLO.delivered(cids)`, and `window.__hochciv.soloDelivered(cids)` after sending.
+- `routes/solo.js` `POST /api/solo/games` (login, no bots, 120 an hour, bodies up to 2 MB – `server.js` lets only this path past the 20 KB limit), `utils/solo.js`: the check (a known version – current or kept –, players, kinds, winners, cities, armies, wonders, tech rounds within the game, the chart's numbers, the engine of that version scores every empire) and the match: participants `solo: true, soloId`, the account on the one human seat (hotseat: none), points and score as usual, the chart (`stats`), facts from the final state with the recorded tech rounds (`src: 'solo'`). Stored once per `cid`.
+- Statistics: `utils/gamestats.js` marks the rows `solo`; filter `origin` = `all` | `online` | `solo` (`GET /api/stats`, `/api/stats/player/:id`, admin) and *Herkunft* in `client/gamestats.js`; the admin note counts them. "Neu berechnen" leaves single-player games alone (their upload isn't kept).
+- Profile (`routes/profile.js`, `client/profile.js`): the tiles count multiplayer games (`played`, `wins`), single-player games apart (`solo: { games, wins }`, "Einzelspiele: n, davon m gewonnen"); the list shows *Einzelspiel*. Badges (`utils/badges.js`): single-player games don't count for the multiplayer ones; their own `solo_first_win`, `solo_wins_10`, `solo_wins_50`, `solo_hardest`, `solo_all_victories`. Seasons count ranked games only, so nothing changes there.
+- Privacy policy: a paragraph on single-player games.
+
+**Tests:** `tests/solo/solo.test.js`: the recorder with a real game (from round 1, tech rounds, points, compact state, queued once), waiting without a login and sent after it, the stored match (seat, facts, chart), what is not recorded; the API (login, duplicates, refused uploads, hotseat); *Herkunft* in the overall and personal statistics, the profile (tiles, numbers, list, badge). `tests/stats/overall.test.js`, `tests/seasons`, `tests/account/pages.test.js` still pass.
+
+**Android app** (HochCiv-Android PR #4, into `main`): the offline copy carries `client/solo.js` (`syncOfflineGame` copies it); `bridge.js` hands the offline queue to the app (`soloQueue`), `SoloQueue.kt` keeps it in `files/solo-queue.json`, the online page takes it (`soloPull` → `SOLO.importQueue`) and reports what was sent (`soloDelivered`), and the offline page drops it (`soloForget`). Tested with unit tests and in the browser (offline copy under the app's host with a fake native channel → online page → stored); not yet on a device. Reaches players with the next app release.
+
+**Status:** ✅ server and browser on `development`; the app part waits in its PR.

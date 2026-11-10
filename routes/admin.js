@@ -334,6 +334,7 @@ router.get('/games', async (req, res) => {
             { [Op.iLike]: `%${q.replace(/[\\%_]/g, c => '\\' + c)}%` }) : undefined;
         const { count, rows } = await Game.findAndCountAll({
             where, order: [['matchDate', 'DESC']], offset, limit: GAMES_PAGE,
+            attributes: { include: [[sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay']] },     // the dialog links the replay
         });
         res.json({ total: count, offset, pageSize: GAMES_PAGE, finished: rows });
     } catch (err) {
@@ -367,7 +368,8 @@ router.get('/stats/export', async (req, res) => {
 // Facts are computed once per match; after a change to utils/facts.js they can be rebuilt
 router.post('/stats/recompute', isSuperAdmin, async (req, res) => {
     try {
-        const [count] = await Game.update({ facts: null }, { where: {} });
+        // not the single-player games: their facts come from the upload (utils/solo.js), which is not kept
+        const [count] = await Game.update({ facts: null }, { where: sequelize.literal(`NOT ("participants"::jsonb @> '[{"solo": true}]'::jsonb)`) });
         Facts.backfill().catch(err => console.error('[Facts] Recompute failed:', err));
         res.json({ success: true, games: count });
     } catch (err) {

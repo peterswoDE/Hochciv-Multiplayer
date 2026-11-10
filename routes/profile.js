@@ -44,6 +44,7 @@ function gameEntry(g, userId) {
         hasStats: !!g.get('hasStats'),        // statistics over the rounds (GET /api/games/:id)
         hasReplay: !!g.get('hasReplay'),      // replay (GET /api/games/:id/replay)
         async: g.participants.some(p => p.async),
+        solo: g.participants.some(p => p.solo),           // a single-player game (F28, utils/solo.js)
         ranked: g.participants.some(p => p.mmrShift != null),
         won: !!me.isWinner && me.dbUserId === userId,
         replaced: me.replacedUserId === userId,
@@ -90,9 +91,14 @@ router.get('/:userId', limit, async (req, res) => {
             limit: PAGE,
         });
 
-        const wins = await Game.count({
-            where: sequelize.literal(`"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: user.id, isWinner: true }]))}::jsonb`),
-        });
+        // the tiles count multiplayer games; single-player games (F28) have their own numbers
+        const soloSql = `"participants"::jsonb @> '[{"solo": true}]'::jsonb`;
+        const wonSql = `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: user.id, isWinner: true }]))}::jsonb`;
+        const [wins, soloGames, soloWins] = await Promise.all([
+            Game.count({ where: sequelize.literal(`${wonSql} AND NOT ${soloSql}`) }),
+            Game.count({ where: sequelize.literal(`${has('dbUserId')} AND ${soloSql}`) }),
+            Game.count({ where: sequelize.literal(`${wonSql} AND ${soloSql}`) }),
+        ]);
 
         // season tier and badges (F10) – only with the first page
         const extra = offset ? {} : { ...(await seasons.profileOf(user)), ...(await badgesOf(user.id)) };
@@ -103,6 +109,8 @@ router.get('/:userId', limit, async (req, res) => {
             mmr: user.mmr,
             gamesPlayed: user.gamesPlayed,
             wins,
+            played: count - soloGames,                    // multiplayer games (live, Rundenspiele)
+            solo: { games: soloGames, wins: soloWins },
             avatarUrl: user.avatarUrl,
             memberSince: user.createdAt,
             isBotAccount: user.accountType === 'bot',

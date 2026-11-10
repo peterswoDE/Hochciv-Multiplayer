@@ -52,6 +52,12 @@
         season_diamant: ['💎', 'Diamant-Saison', 'Eine Saison in Diamant beendet.'],
         season_podium: ['🎗', 'Saison-Podest', 'Eine Saison unter den ersten drei beendet.'],
         season_champion: ['👑', 'Saisonsieger', 'Eine Saison auf Platz 1 beendet.'],
+        // single-player games (F28)
+        solo_first_win: ['🗡', 'Einzelkämpfer', 'Ein Einzelspiel gegen die KI gewonnen.'],
+        solo_wins_10: ['🛡', 'Bezwinger der KI', '10 Einzelspiele gewonnen.'],
+        solo_wins_50: ['🏰', 'Herrscher', '50 Einzelspiele gewonnen.'],
+        solo_hardest: ['🔥', 'Gegen die Stärkste', 'Ein Einzelspiel gegen die KI auf der schwersten Stufe gewonnen.'],
+        solo_all_victories: ['✨', 'Allrounder allein', 'Einzelspiele mit allen vier Siegarten gewonnen.'],
     };
     function seasonHtml(data) {
         if (!data.season) return '';
@@ -127,6 +133,10 @@
         .hcp-tier-none { font-weight: 400; opacity: .8; }
         .hcp-past { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-soft, #6f6551); margin: -4px 0 10px; }
         .hcp-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+        .hcp-gs { margin: 4px 0 14px; }
+        .hcp-solo { margin: -10px 0 12px; }
+        .hcp-gs > summary { cursor: pointer; margin: 0; padding: 6px 0; }
+        .hcp-gs-body { padding-top: 6px; }
         .hcp-badge { border: 1px solid var(--rule, #d8ccb0); border-radius: 12px; padding: 3px 9px; font-size: 13px; background: var(--paper, #fbf6e9); cursor: help; }
     `;
 
@@ -215,7 +225,7 @@
             : g.won ? `<span class="hcp-res win">${tx('Sieg')}</span>` : `<span class="hcp-res loss">${tx('Niederlage')}</span>`;
         const shift = g.mmrShift == null ? ''
             : ` · <span class="hcp-shift ${g.mmrShift > 0 ? 'up' : g.mmrShift < 0 ? 'down' : ''}">${esc(fmtShift(g.mmrShift))} MMR</span>`;
-        const type = (g.async ? tx('Rundenspiel') : tx('Live')) + (g.ranked ? ', ' + tx('gewertet') : '');
+        const type = g.solo ? tx('Einzelspiel') : (g.async ? tx('Rundenspiel') : tx('Live')) + (g.ranked ? ', ' + tx('gewertet') : '');
         const players = [...g.players].sort((a, b) => b.points - a.points);
         const rows = players.map(p => `<tr class="${p.isWinner ? 'win' : ''}">
                 <td>${p.userId === ownerId ? esc(p.name) : link(p.name, p.userId)}${p.isBot ? ` <small>(${tx('Bot')})</small>` : p.botAccount ? ' 🤖' : ''}</td>
@@ -243,8 +253,10 @@
     function render() {
         const { data, games } = current;
         const body = overlay.querySelector('#hcp-body');
-        const total = data.games.total;
+        // the tiles: multiplayer games; single-player games (F28) below them
+        const total = data.played != null ? data.played : data.games.total;
         const rate = total ? Math.round(100 * data.wins / total) + ' %' : '–';
+        const solo = data.solo && data.solo.games ? data.solo : null;
         const avatar = data.avatarUrl
             ? `<img src="${esc(data.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
         body.innerHTML = `
@@ -260,17 +272,25 @@
               <div class="hcp-stat"><b>${esc(data.wins)}</b><span>${tx('Siege')}</span></div>
               <div class="hcp-stat"><b>${esc(rate)}</b><span>${tx('Siegquote')}</span></div>
             </div>
+            ${solo ? `<p class="hcp-sub hcp-solo">${tx('Einzelspiele: %s, davon %s gewonnen', esc(solo.games), esc(solo.wins))}</p>` : ''}
             ${seasonHtml(data)}
             ${badgesHtml(data)}
+            ${window.GAMESTATS ? `<details class="hcp-gs"><summary class="hcp-h">📊 ${tx('Statistiken')}</summary><div class="hcp-gs-body"></div></details>` : ''}
             <h3 class="hcp-h">${tx('Spiele')}</h3>
             ${games.length ? games.map(g => gameHtml(g, data.id)).join('') : `<p class="hcp-empty">${tx('Noch keine Spiele.')}</p>`}
-            ${games.length < total ? `<button class="hcp-more" id="hcp-more">${tx('Weitere Spiele laden')}</button>` : ''}`;
+            ${games.length < data.games.total ? `<button class="hcp-more" id="hcp-more">${tx('Weitere Spiele laden')}</button>` : ''}`;
         if (avatar) {
             const box = body.querySelector('.hcp-avatar');
             box.insertAdjacentHTML('beforeend', avatar);
             const img = box.querySelector('img');
             img.onload = () => { box.firstChild.textContent = ''; };
         }
+        // personal statistics (F23, client/gamestats.js), drawn when opened
+        const gs = body.querySelector('.hcp-gs');
+        if (gs) gs.addEventListener('toggle', () => {
+            const box = gs.querySelector('.hcp-gs-body');
+            if (gs.open && !box.childElementCount) GAMESTATS.render(box, { user: data.id });
+        });
         // friends list (client/friends.js, game page only): add / accept / "Freund"
         if (window.FRIENDS && window.FRIENDS.decorateProfile) window.FRIENDS.decorateProfile(body.querySelector('.hcp-top'), data);
         const more = body.querySelector('#hcp-more');

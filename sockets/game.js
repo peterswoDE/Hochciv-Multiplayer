@@ -136,7 +136,7 @@ module.exports = function registerHandlers(io) {
                 socket.emit('game:start', {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
                     yourIndex: sortedStateIndex,
-                    turn: turnInfo(s),
+                    turn: turnInfo(s), paused: s.paused || null,
                     // back in the middle of one's own turn: its summary again
                     summary: s.lastSummary && s.lastSummary.me === sortedStateIndex ? s.lastSummary : undefined,
                 });
@@ -157,7 +157,7 @@ module.exports = function registerHandlers(io) {
             io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(s) });
             if (s.status === 'draft' && s.draft) socket.emit('draft:update', engine.draftPayload(s));
             if (s.status === 'playing' && s.state) {
-                socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, turn: turnInfo(s) });
+                socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, turn: turnInfo(s), paused: s.paused || null });
             }
         }
 
@@ -297,6 +297,8 @@ module.exports = function registerHandlers(io) {
             const finalIndex = engine.stateIndexOf(session.state, myIndex(), me);
 
             if (me.resigned) return ack({ error: 'Du hast aufgegeben.' });
+            if (session.paused) return ack({ error: 'Das Spiel ist pausiert.' });
+            if (session.converting) return ack({ error: 'Das Spiel wird gerade als Rundenspiel fortgesetzt.' });
             if (session.state.cur !== finalIndex)
                 return ack({ error: 'Du bist nicht am Zug.' });
 
@@ -421,6 +423,56 @@ module.exports = function registerHandlers(io) {
             ack({ ok: true });
             io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
             broadcastState(io, session);
+        });
+
+        // ── Pause (F27): the host stops the game – nobody can act, the turn timer stands still ──
+        on(socket, 'game:pause', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost()) return ack({ error: 'Nur der Host kann das Spiel anhalten.' });
+            const S = session.state;
+            if (session.status !== 'playing' || !S || S.over) return ack({ error: 'Spiel läuft nicht.' });
+            const pause = data.pause !== false;
+            if (!!session.paused === pause) return ack({ ok: true });
+            const tc = session.turnClock;
+            if (pause) {
+                // the time left of the running turn waits with the game
+                if (tc && tc.deadline) { tc.left = Math.max(0, tc.deadline - Date.now()); tc.deadline = null; }
+                session.paused = { by: me.name, at: Date.now() };
+            } else {
+                if (tc && tc.left != null) { tc.deadline = Date.now() + tc.left; tc.left = null; }
+                session.paused = null;
+            }
+            sessions.recordActivity(sessionId);
+            console.log(`[Pause] Session ${sessionId}: ${pause ? 'paused' : 'resumed'} by ${me.name}`);
+            ack({ ok: true });
+            io.to(sessionId).emit('game:paused', { paused: session.paused });
+            broadcastState(io, session);
+        });
+
+        // ── Continue as a Rundenspiel (F27): the running game moves to async/service.js ──
+        on(socket, 'game:toAsync', async (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (!isHost()) return ack({ error: 'Nur der Host kann das Spiel als Rundenspiel fortsetzen.' });
+            const S = session.state;
+            if (session.status !== 'playing' || !S || S.over || session.converting) return ack({ error: 'Spiel läuft nicht.' });
+            if (!me.dbUserId) return ack({ error: 'Rundenspiele gibt es nur mit Anmeldung.' });
+            // a KI turn being played right now would go on in the old game
+            if (engine.isAutoPlayer(S.players[S.cur])) return ack({ error: 'Die KI zieht gerade – versuche es gleich noch einmal.' });
+            session.converting = true;
+            let r;
+            try {
+                r = await require('../async/service').fromLive(socket.request.user, session, { turnDays: data.turnDays });
+            } catch (err) {
+                console.error(`[ToAsync] Session ${sessionId}:`, err);
+                r = { error: 'Das Spiel konnte nicht umgewandelt werden.' };
+            }
+            if (r.error) { session.converting = false; return ack(r); }
+            session.converted = r.id;
+            session.turnClock = null;
+            console.log(`[ToAsync] Session ${sessionId} → Rundenspiel ${r.id}`);
+            ack({ ok: true, asyncId: r.id });
+            io.to(sessionId).emit('game:toAsync', { asyncId: r.id, by: me.name, guests: r.guests });
+            setTimeout(() => sessions.removeSession(sessionId), 2000);
         });
 
         // ── Resign (F16): the KI plays the seat to the end ───────────────────
@@ -734,7 +786,7 @@ function sendIndices(io, session) {
 
 /** Finish the game once: notify everyone and record history / MMR. */
 function checkGameOver(io, session) {
-    if (!session.state.over || session.gameOverProcessed) return;
+    if (!session.state.over || session.gameOverProcessed || session.converted) return;
     session.gameOverProcessed = true;
     session.status = 'finished';
     recordStats(session, true);
@@ -754,13 +806,13 @@ function emitGameStart(io, session) {
             io.to(lobbyPlayer.socketId).emit('game:start', {
                 state: engine.stateForPlayer(session.state, finalIndex),
                 yourIndex: finalIndex,
-                turn: turnInfo(session),
+                turn: turnInfo(session), paused: session.paused || null,
             });
         }
     });
     for (const w of session.spectators || []) {
         if (!w.connected || !w.socketId) continue;
-        io.to(w.socketId).emit('game:start', { state: engine.stateForPlayer(session.state, -1), yourIndex: -1, turn: turnInfo(session) });
+        io.to(w.socketId).emit('game:start', { state: engine.stateForPlayer(session.state, -1), yourIndex: -1, turn: turnInfo(session), paused: session.paused || null });
     }
 }
 
@@ -857,7 +909,7 @@ function broadcastState(io, session) {
         state: sharedState,
         currentPlayer: session.state.cur,
         round: session.state.round,
-        turn: turnInfo(session),
+        turn: turnInfo(session), paused: session.paused || null,
         summary: turnSummary(session),
         scenes: newScenes(session),
     });
@@ -899,7 +951,9 @@ function updateTurnClock(session) {
     if (session.turnClock && session.turnClock.key === key) return;
     const ms = turnTimeMs(session);
     const human = !engine.isAutoPlayer(S.players[S.cur]);
-    session.turnClock = { key, deadline: ms && human ? Date.now() + ms : null };
+    // paused (F27): the new turn's time waits until the game goes on
+    session.turnClock = session.paused ? { key, deadline: null, left: ms && human ? ms : null }
+        : { key, deadline: ms && human ? Date.now() + ms : null };
 }
 
 /** For the clients: { total, left } in ms (left null: no clock running now), or null without a limit. */
@@ -908,6 +962,7 @@ function turnInfo(session) {
     const total = turnTimeMs(session);
     if (!total) return null;
     const tc = session.turnClock;
+    if (session.paused) return { total, left: tc && tc.left != null ? tc.left : null, paused: true };
     return { total, left: tc && tc.deadline ? Math.max(0, tc.deadline - Date.now()) : null };
 }
 

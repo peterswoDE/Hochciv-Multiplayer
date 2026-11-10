@@ -57,6 +57,7 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 | GET | `/history` | login | The last 50 games of this account (including Rundenspiele where the KI took over) |
 | GET / POST | `/blocks` | login | List / add blocked chat players |
 | DELETE | `/blocks/:key` | login | Unblock |
+| GET / PUT | `/presets` | login | Lobby presets: `{ list: [{ name, s }] }`, read and replaced as a whole; at most 10, unknown settings and values out of range are dropped (utils/presets.js) |
 | POST | `/delete` | recent | Delete the own account (username typed as confirmation) |
 
 ## Second factors – `/api/mfa` (login; changes need recent)
@@ -129,7 +130,9 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 | GET | `/api/games/:id` | Finished match: date, version, rounds, players with points and MMR changes, statistics, whether a replay exists, nation and wonder names (German, English; nations with their colour) |
 | GET | `/api/games/:id/replay` | The replay `{ v, version, names, frames }`, Brotli-compressed for browsers that accept it |
 | GET | `/api/profile/:userId[?offset=n]` | Name, MMR, games played, wins and the player's games |
-| GET | `/api/stats[?seats=humans\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
+| GET | `/api/stats[?seats=humans\|bots\|players\|ki\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN&origin=all\|online\|solo]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
+| GET | `/api/stats/player/:userId[?n=…&mode=…&ver=…]` | The same over one account's own seats (personal statistics, public like the profile): "how games are won" counts its wins, `query.seats` is `user`; a seat the KI took over still counts for its player |
+| POST | `/api/solo/games` | A finished single-player game (login, no bots; up to 2 MB): `{ cid, ver, state, t, rounds }` from client/solo.js → `{ ok, id, duplicate? }`. Checked for plausibility (known version, sane numbers, a finish the engine can score) and stored once per `cid` as a match marked `solo`; hotseat games without an account on any seat (utils/solo.js) |
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
 
@@ -147,6 +150,7 @@ Only public data goes out: names, nations, points, MMR – no e-mail, role or ac
 |---|---|---|---|
 | GET | `/?week=<YYYY-Www>` | public | The week (default: this one; back to the oldest week anyone played, older ones are refused) with its bounds, `previous` / `next`, `weeks` (all playable weeks, newest first), `setup` (map, nation, ability, KI count and level, events, wonders), the top 20 (each player's best attempt finished before the week ended), `finished` (players on the leaderboard) / `playing` (running attempts) and – logged in – `me`: `attempts` (finished), `running` (`{ asyncId, week }` of the running attempt of any week, or null), `ranked` (the leaderboard entry), `best` (a better later attempt, not ranked) |
 | POST | `/start` | login | `{ week? }`: start an attempt at this week or a past one (a Rundenspiel alone against three KI) → `{ asyncId }`. A running attempt (of any week) is resigned first: one runs at a time |
+| GET | `/compare?week=<YYYY-Www>&game=<match id>` | public | An attempt (`game`; without it one's best of the week) next to the week's best: `best`, `attempt` (leaderboard row with `rank` or null, `civ`, `series`: the challenger's values per round – `s`, `c`, `pop`, `t`, `a`, `w` …), `same` (it is the best one) |
 
 ## Friends – `/api/friends` (login)
 

@@ -30,6 +30,8 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `session:rematch` | – | host | Back to the lobby after the game |
 | `turn:reclaim` | – | player | *Ich bin zurück*: take the seat back from the KI after missed turns |
 | `game:resign` | – | player | Resign: the KI plays the seat to the end; may end the game ([Resign](#resign)) |
+| `game:pause` | `{ pause }` | host | Pause / resume a running game: moves are refused (`Das Spiel ist pausiert.`), the turn timer stands still; everybody gets `game:paused`, and `state:update` / `game:start` carry `paused` (`{ by, at }` or null) and `turn.paused` |
+| `game:toAsync` | `{ turnDays }` (1 / 3 / 7, default 3) | host with an account | Continue the game as a Rundenspiel (`async/service.js` fromLive): same state, statistics, chat and replay frames; accounts keep their seats, the KI takes the guests' empires (and those of players who resigned). Refused while a KI turn is being played. Ack `{ ok, asyncId }`; everybody gets `game:toAsync`, then the live session is removed |
 
 ### Server → client
 
@@ -47,6 +49,8 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `state:update` | New state after every action or KI turn, with turn/timer info and the scenes since the last update (`scenes`, `client/scenes.js`) |
 | `turn:timeout` | Your turn ran out; `{ afk }` when the KI keeps the seat |
 | `game:resigned` | `{ index, name }`: a player resigned (the player list follows with `resigned: true`) |
+| `game:paused` | `{ paused }`: the host paused (`{ by, at }`) or resumed (null) the game |
+| `game:toAsync` | `{ asyncId, by, guests }`: the game goes on as that Rundenspiel – players with an account open it (`/?async=<id>`) |
 | `chat:history` | `{ list, guest, mute }` – the chat so far, on connect |
 | `chat:msg` | A new chat message or ping |
 | `game:over` | The result |

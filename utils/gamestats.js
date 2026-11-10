@@ -4,7 +4,13 @@
  * they own. Built from the facts of each match (utils/facts.js); GET /api/stats sends it
  * (routes/stats.js), client/gamestats.js draws it.
  *
- *   aggregate(rows, { seats: 'humans' | 'all', n: 'all' | '2' … | '5+', mode, ver }, detail)
+ *   aggregate(rows, { seats: 'humans' | 'bots' | 'players' | 'ki' | 'all', n: 'all' | '2' … | '5+', mode, ver, user }, detail)
+ *
+ * `origin` (F28): 'all' (default), 'online' – live games and Rundenspiele –, or 'solo' – the
+ * single-player games of logged-in players (utils/solo.js). Works with every other filter.
+ *
+ * `user` (an account id, F23): only that account's seats count, whatever `seats` says, and only
+ * its matches – the personal statistics. "How games are won" then counts the matches it won.
  *
  * Every match counts under its game type – normal, 1 gegen 1 or Marathon, whose rules differ
  * (Marathon: drafted abilities, dearer techs; 1 gegen 1: higher economic threshold) – so each can
@@ -12,8 +18,8 @@
  * mode (older ones from the match record) get it from what is known: drafted abilities →
  * Marathon, two empires → 1 gegen 1, otherwise normal.
  *
- * A "seat" is one empire in one match. With seats = 'humans' only human seats count – KI and
- * bots still play in those matches, they are just not counted. A shared win counts as a win for
+ * A "seat" is one empire in one match. `seats` picks which seats count (SEATS below): with
+ * 'humans' only real people – KI and bots still play in those matches, they are just not counted. A shared win counts as a win for
  * every winner. `detail` (admin) adds the matches per version, the KI levels and the sources.
  */
 const { Op } = require('sequelize');
@@ -30,10 +36,14 @@ async function rows() {
     if (cache && Date.now() - cache.at < CACHE_MS) return cache.rows;
     const list = await Game.findAll({
         where: { facts: { [Op.ne]: null } },
-        attributes: ['id', 'version', 'matchDate', 'facts'],
+        attributes: ['id', 'version', 'matchDate', 'facts', 'participants'],
         order: [['matchDate', 'DESC']],
     });
-    const out = list.map(g => ({ id: g.id, date: g.matchDate, ver: g.version, f: g.facts }))
+    const out = list.map(g => ({
+        id: g.id, date: g.matchDate, ver: g.version,
+        solo: Array.isArray(g.participants) && g.participants.some(p => p && p.solo),     // a single-player game (F28)
+        f: Facts.markAccounts(Facts.markPlayerBots(g.facts, g.participants), g.participants),
+    }))
         .filter(x => x.f && x.f.p && x.f.p.length);
     cache = { at: Date.now(), rows: out };
     return out;
@@ -65,21 +75,39 @@ function names() {
 
 const bucket = n => (n >= 5 ? '5+' : String(n));
 const MODES = ['normal', 'duel', 'marathon'];
+const ORIGINS = ['all', 'online', 'solo'];
 /** The game type of a match (see above). */
 const modeOf = f => f.mode || (f.p.some(p => Array.isArray(p.ab)) ? 'marathon' : f.n === 2 ? 'duel' : 'normal');
 const avg = (sum, n) => (n ? Math.round((sum / n) * 10) / 10 : null);
+
+/**
+ * Which seats count (`seats`): 'humans' – real people only; 'bots' – player-bots (bot accounts,
+ * utils/bots.js, `pb` from Facts.markPlayerBots); 'players' – both, every seat a player took;
+ * 'ki' – the computer players of the game itself (its KI and bots); 'all' – every seat.
+ */
+const SEATS = {
+    humans: p => p.kind === 'human' && !p.pb,
+    bots: p => p.kind === 'human' && !!p.pb,
+    players: p => p.kind === 'human',
+    ki: p => p.kind !== 'human',
+    all: () => true,
+};
 
 /** Ability keys of a seat: 'basis' → 'civ:basis'; drafted (Marathon) are 'civ:ability' already. */
 const abilityKeys = p => (Array.isArray(p.ab) ? p.ab : [p.civ + ':' + (p.ab || 'basis')]);
 
 function aggregate(all, q, detail) {
     q = q || {};
-    const seatsMode = q.seats === 'all' ? 'all' : 'humans';
+    const seatsMode = Object.prototype.hasOwnProperty.call(SEATS, q.seats) ? q.seats : 'humans';
     const mode = MODES.includes(q.mode) ? q.mode : 'all';
-    const keepGame = x => (!q.n || q.n === 'all' || bucket(x.f.n) === q.n)
+    const user = q.user ? String(q.user) : null;
+    const origin = ORIGINS.includes(q.origin) ? q.origin : 'all';
+    const keepGame = x => (!user || x.f.p.some(p => p.uid === user))
+        && (origin === 'all' || (origin === 'solo') === !!x.solo)
+        && (!q.n || q.n === 'all' || bucket(x.f.n) === q.n)
         && (mode === 'all' || modeOf(x.f) === mode)
         && (!q.ver || q.ver === 'all' || (x.f.ver || x.ver) === q.ver);
-    const keepSeat = p => seatsMode === 'all' || p.kind === 'human';
+    const keepSeat = user ? p => p.uid === user : SEATS[seatsMode];
     const games = all.filter(keepGame);
 
     const civs = {}, abil = {}, pos = {}, win = {}, wonders = {}, techs = {};
@@ -95,7 +123,7 @@ function aggregate(all, q, detail) {
         const m = modeOf(f);
         roundsByMode[m] = roundsByMode[m] || { games: 0, rounds: 0 };
         roundsByMode[m].games++; roundsByMode[m].rounds += f.r || 0;
-        if (f.win) win[f.win] = (win[f.win] || 0) + 1;
+        if (f.win && (!user || f.p.some(p => p.uid === user && p.won))) win[f.win] = (win[f.win] || 0) + 1;
         for (const p of f.p) {
             if (!keepSeat(p)) continue;
             seats++;
@@ -143,7 +171,7 @@ function aggregate(all, q, detail) {
             versions: [...new Set(all.map(x => x.f.ver || x.ver).filter(Boolean))].sort((a, b) => parseInt(b.slice(1)) - parseInt(a.slice(1))),
             current: engine.version(),
         },
-        query: { seats: seatsMode, n: q.n || 'all', mode, ver: q.ver || 'all' },
+        query: { seats: user ? 'user' : seatsMode, n: q.n || 'all', mode, ver: q.ver || 'all', origin },
         games: games.length, seats,
         rounds: { avg: avg(roundsSum, games.length), byMode: Object.fromEntries(Object.entries(roundsByMode).map(([k, v]) => [k, { games: v.games, avg: avg(v.rounds, v.games) }])) },
         victory: win,
@@ -182,4 +210,4 @@ async function overall(q, detail) {
     return aggregate(await rows(), q, detail);
 }
 
-module.exports = { aggregate, overall, rows, names, modeOf };
+module.exports = { aggregate, overall, rows, names, modeOf, SEATS: Object.keys(SEATS) };

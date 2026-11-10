@@ -8,6 +8,7 @@ const { sendMail } = require('../utils/mailer');
 const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
 const terms = require('../utils/terms');
+const presets = require('../utils/presets');
 const {
     EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, secondFactors, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, consumeCode, destroyOtherSessions,
@@ -202,12 +203,30 @@ router.get('/history', async (req, res) => {
         const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: req.user.id }]))}::jsonb`;
         const games = await Game.findAll({
             where: sequelize.literal(`(${has('dbUserId')} OR ${has('replacedUserId')})`),
+            // with a stored replay? (the dialog then links it, client/account-common.js)
+            attributes: { include: [[sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay']] },
             order: [['matchDate', 'DESC']],
             limit: 50
         });
         res.json(games);
     } catch (err) {
         console.error(err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// Lobby presets (F25, utils/presets.js): the whole list is read and written at once
+router.get('/presets', (req, res) => res.json({ list: req.user.lobbyPresets || [], max: presets.MAX }));
+router.put('/presets', async (req, res) => {
+    const list = presets.cleanList(req.body && req.body.list);
+    if (!list) return res.status(400).json({ error: `Höchstens ${presets.MAX} Vorlagen.` });
+    try {
+        req.user.lobbyPresets = list;
+        req.user.changed('lobbyPresets', true);
+        await req.user.save({ fields: ['lobbyPresets'] });
+        res.json({ list });
+    } catch (err) {
+        console.error('[Presets]', err);
         res.status(500).json({ error: 'Serverfehler' });
     }
 });

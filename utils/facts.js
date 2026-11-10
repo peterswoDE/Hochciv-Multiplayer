@@ -5,7 +5,7 @@
  * account ids, so account deletion and merging don't touch them.
  *
  *   facts = {
- *     v: 1, src: 'replay' | 'record', ver, r: rounds, n: empires, mode: 'normal' | 'duel' | 'marathon',
+ *     v: 1, src: 'replay' | 'record' | 'solo' (a single-player game, utils/solo.js), ver, r: rounds, n: empires, mode: 'normal' | 'duel' | 'marathon',
  *     map, ev, wo,                                   // map name, events / wonders on
  *     win: 'military' | 'science' | 'economy' | 'culture' | 'other' | null, shared,
  *     p: [{ civ, ab, kind, lvl, pos, won, dead, s, c, pop, a,
@@ -99,6 +99,50 @@ function fromStates(states, version) {
     };
 }
 
+/**
+ * Seats played by a player-bot account (utils/bots.js) get `pb: true`. Such a bot plays a human
+ * seat, so the facts – from the replay – can't tell it from a person; the match record can
+ * (participants[].botAccount). Matched by nation (and ability, for a nation played twice) among
+ * the human seats. Done when the statistics are read (utils/gamestats.js), so every stored match
+ * counts right without recomputing its facts.
+ */
+function markPlayerBots(f, participants) {
+    const bots = (Array.isArray(participants) ? participants : []).filter(x => x && x.botAccount);
+    if (!bots.length || !f || !Array.isArray(f.p)) return f;
+    const p = f.p.map(s => Object.assign({}, s));
+    for (const b of bots) {
+        const free = s => s.kind === 'human' && !s.pb && s.civ === b.civ;
+        const s = p.find(s => free(s) && !Array.isArray(s.ab) && s.ab === (b.ability || 'basis')) || p.find(free);
+        if (s) s.pb = true;
+    }
+    return Object.assign({}, f, { p });
+}
+
+/**
+ * The account of each seat, as `uid`, for the personal statistics (F23, utils/gamestats.js).
+ * The stored facts stay anonymous; this is added in memory when they are read, from the match
+ * record (participants[].dbUserId, or replacedUserId for a seat the KI took over or that was
+ * resigned – it counts as the player's lost game). Matched like markPlayerBots, by nation and
+ * ability: first the players who played to the end (a human seat), then the taken-over seats
+ * (which may end as KI seats).
+ */
+function markAccounts(f, participants) {
+    const list = (Array.isArray(participants) ? participants : []).filter(x => x && (x.dbUserId || x.replacedUserId));
+    if (!list.length || !f || !Array.isArray(f.p)) return f;
+    const p = f.p.map(s => Object.assign({}, s));
+    // players who played to the end first – their seat is a human one; then the taken-over seats
+    const gone = x => !x.dbUserId;
+    for (const x of list.filter(x => !gone(x)).concat(list.filter(gone))) {
+        const ab = x.ability || 'basis';
+        const sameAb = s => !Array.isArray(s.ab) && s.ab === ab;
+        const score = s => (sameAb(s) ? 2 : 0) + (s.kind === 'human' ? 1 : 0);
+        const s = p.filter(s => !s.uid && s.civ === x.civ && (gone(x) || s.kind === 'human'))
+            .sort((a, b) => score(b) - score(a))[0];
+        if (s) s.uid = String(x.dbUserId || x.replacedUserId);
+    }
+    return Object.assign({}, f, { p });
+}
+
 /** Facts from the match record alone (no replay): no techs, no turn positions. */
 function fromRecord(game) {
     const parts = game.participants || [];
@@ -164,6 +208,8 @@ function storeLater(gameId) {
 let onChange = null;
 /** utils/gamestats.js drops its cache when facts change. */
 function setOnChange(fn) { onChange = fn; }
+/** Facts were stored elsewhere (a single-player game, utils/solo.js). */
+function changed() { if (typeof onChange === 'function') onChange(); }
 
 /** All matches without facts (older ones, or after "recompute"), one after another. */
 async function backfill() {
@@ -180,4 +226,4 @@ function startBackfill() {
     setTimeout(() => backfill().catch(err => console.error('[Facts] Backfill failed:', err)), 30 * 1000).unref();
 }
 
-module.exports = { fromStates, fromRecord, victoryOf, store, storeLater, backfill, startBackfill, setOnChange };
+module.exports = { fromStates, fromRecord, markPlayerBots, markAccounts, victoryOf, store, storeLater, backfill, startBackfill, setOnChange, changed };

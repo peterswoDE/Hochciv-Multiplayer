@@ -165,6 +165,12 @@ module.exports = (sequelize) => {
             defaultValue: [],
             allowNull: false,
         },
+        // Lobby presets (F25, utils/presets.js): [{ name, s: { map, events, … } }]
+        lobbyPresets: {
+            type: DataTypes.JSONB,
+            defaultValue: [],
+            allowNull: false,
+        },
         // The terms of use this account agreed to, and when (utils/terms.js)
         termsVersion: {
             type: DataTypes.STRING,
