@@ -32,7 +32,7 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
 | 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ✅ |
 | 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ✅ |
-| 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ⬜ |
+| 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ✅ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ⬜ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ⬜ |
 | 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ⬜ |
@@ -555,9 +555,13 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Goal:** start the usual game in one click.
 
-**Planned:** a host saves the lobby settings (map, empires, KI seats and level, nations, events, wonders, timer, player-bots) under a name, kept with the account; live lobbies and the Rundenspiel form load them.
+**Built:**
+- `users.lobbyPresets` (JSONB), `utils/presets.js` (cleaning: known keys and values only, names trimmed and unique, at most 10), `GET/PUT /api/account/presets` (routes/account.js).
+- `client/presets.js` (injected after `mp.js`): the row *📋 Vorlagen* above the settings of a live lobby (host, logged in) and of *Neues Rundenspiel*: pick a preset to load it, *💾 Als Vorlage* saves under a name (the loaded one is suggested; the same name updates it), 🗑 deletes. One preset serves both kinds: the map (*Plättchenkarte* is `random` in the lobby, `plaettchen` in the form), and the live time per turn and the Rundenspiel days are kept side by side. Loading in a lobby sends one `lobby:config` (numbers within what the map allows, as `updateLobbyConfig`); the server checks it as always. A custom map is kept by its name; if it is no longer in *Meine Karten*, the map stays.
 
-**Status:** ⬜ planned.
+**Tests:** `tests/presets/presets.test.js`: the API (login, cleaning, limit), a live lobby (save, change, load), the Rundenspiel form (load, save keeps the live time, delete), no row for guests.
+
+**Status:** ✅ on `development`.
 
 ---
 

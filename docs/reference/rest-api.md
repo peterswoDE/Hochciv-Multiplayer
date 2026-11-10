@@ -57,6 +57,7 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 | GET | `/history` | login | The last 50 games of this account (including Rundenspiele where the KI took over) |
 | GET / POST | `/blocks` | login | List / add blocked chat players |
 | DELETE | `/blocks/:key` | login | Unblock |
+| GET / PUT | `/presets` | login | Lobby presets: `{ list: [{ name, s }] }`, read and replaced as a whole; at most 10, unknown settings and values out of range are dropped (utils/presets.js) |
 | POST | `/delete` | recent | Delete the own account (username typed as confirmation) |
 
 ## Second factors – `/api/mfa` (login; changes need recent)
