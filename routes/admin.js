@@ -27,31 +27,47 @@ async function detachBotsOf(io, ownerId) {
     }
 }
 
-const ROLES = ['user', 'botcreator', 'admin', 'superadmin'];
-const isPrivileged = role => role === 'admin' || role === 'superadmin';
+const ROLES = ['user', 'botcreator', 'reviewadmin', 'admin', 'superadmin'];
+const isPrivileged = role => role === 'admin' || role === 'superadmin' || role === 'reviewadmin';
+
+/*
+ * The review admin ('reviewadmin') sees everything a superadmin sees, but may never change
+ * anything: only reading requests (plus the word check, which changes nothing) – see readOnly.
+ */
+const READ_ONLY_POSTS = new Set(['/words/check']);
+const isReviewAdmin = user => !!user && user.role === 'reviewadmin';
 
 /**
- * Admins manage normal users. Anything that touches an admin/superadmin account, or that
- * hands out admin rights, needs a superadmin.
+ * Admins manage normal users. Anything that touches an admin/superadmin/review admin account,
+ * or that hands out admin rights, needs a superadmin.
  */
 function mayManage(actor, target) {
     if (actor.role === 'superadmin') return true;
     return !isPrivileged(target.role);
 }
 
-// Admin Middleware (allows admin and superadmin)
+// Admin Middleware (allows admin, superadmin and – read only – review admin)
 function isAdmin(req, res, next) {
-    if (req.isAuthenticated() && (req.user.role === 'admin' || req.user.role === 'superadmin')) return next();
+    if (req.isAuthenticated() && ['admin', 'superadmin', 'reviewadmin'].includes(req.user.role)) return next();
     res.status(403).json({ error: 'Nur für Administratoren' });
 }
 
-// Super Admin Middleware (superadmin only)
+// The review admin only reads: every request that could change something is refused
+function readOnly(req, res, next) {
+    if (!isReviewAdmin(req.user) || req.method === 'GET' || req.method === 'HEAD'
+        || (req.method === 'POST' && READ_ONLY_POSTS.has(req.path))) return next();
+    res.status(403).json({ error: 'Nur Lesezugriff: Als Review-Admin kannst du nichts ändern.' });
+}
+
+// Super Admin Middleware (superadmin only; the review admin may look)
 function isSuperAdmin(req, res, next) {
-    if (req.isAuthenticated() && req.user.role === 'superadmin') return next();
+    if (req.isAuthenticated() && (req.user.role === 'superadmin'
+        || (isReviewAdmin(req.user) && req.method === 'GET'))) return next();
     res.status(403).json({ error: 'Nur für Super-Administratoren' });
 }
 
 router.use(isAdmin);
+router.use(readOnly);
 
 // --- Metrics & Config ---
 router.get('/metrics', (req, res) => {
@@ -470,11 +486,12 @@ router.get('/oauth', isSuperAdmin, async (req, res) => {
         // callbackBase: what the server really uses in redirect_uri (from BASE_URL)
         const result = { google: null, discord: null, callbackBase: config.BASE_URL };
         for (const p of providers) {
+            // Secrets never leave the server – not even to a superadmin: only whether one is set
             result[p.provider] = {
                 id: p.id,
                 clientId: p.clientId,
-                clientSecret: p.clientSecret,
-                botToken: p.botToken,
+                hasClientSecret: !!p.clientSecret,
+                hasBotToken: !!p.botToken,
                 enabled: p.enabled
             };
         }
@@ -491,7 +508,7 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
         if (!['google', 'discord'].includes(provider)) {
             return res.status(400).json({ error: 'Ungültiger Provider' });
         }
-        const { clientId, clientSecret, botToken, enabled } = req.body;
+        const { clientId, clientSecret, botToken, clearBotToken, enabled } = req.body;
 
         const [oauthProvider] = await OAuthProvider.findOrCreate({
             where: { provider },
@@ -500,9 +517,11 @@ router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
 
         // Update fields
         if (clientId !== undefined) oauthProvider.clientId = clientId;
-        if (clientSecret !== undefined) oauthProvider.clientSecret = clientSecret;
+        // The page never has the stored secrets: an empty field keeps them, a new value replaces them
+        if (typeof clientSecret === 'string' && clientSecret.trim()) oauthProvider.clientSecret = clientSecret.trim();
         // Bot token: Discord Activity only
-        if (provider === 'discord' && typeof botToken === 'string') oauthProvider.botToken = botToken.trim();
+        if (provider === 'discord' && clearBotToken === true) oauthProvider.botToken = '';
+        else if (provider === 'discord' && typeof botToken === 'string' && botToken.trim()) oauthProvider.botToken = botToken.trim();
         if (enabled !== undefined) oauthProvider.enabled = enabled;
         await oauthProvider.save();
 

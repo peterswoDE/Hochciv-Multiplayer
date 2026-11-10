@@ -30,7 +30,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!ACC.isAdmin(currentUser)) { window.location.href = 'account.html'; return; }
     ACC.drawWho(currentUser);
     document.querySelectorAll('.admin-tab').forEach(el => el.hidden = false);
-    if (currentUser.role === 'superadmin') document.querySelectorAll('.superadmin-tab').forEach(el => el.hidden = false);
+    const readOnly = ACC.isReviewAdmin(currentUser);      // sees everything, changes nothing
+    if (currentUser.role === 'superadmin' || readOnly) document.querySelectorAll('.superadmin-tab').forEach(el => el.hidden = false);
+    if (readOnly) {
+        document.body.classList.add('admin-readonly');
+        document.getElementById('admin-readonly-note').hidden = false;
+        // switches and fields keep showing their state, but can't be used
+        document.querySelectorAll('.w-lock').forEach(el => { el.disabled = true; el.readOnly = true; });
+    }
     loadReportCount();
     setInterval(loadReportCount, 60000);
 
@@ -66,8 +73,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${esc(({ lobby: tx('Lobby'), ...LIVE_STATUS })[l.status] || l.status)}</td>
                     <td>${tx('%s Spieler', l.players.length)}</td>
                     <td>
-                        <button onclick="adminAction('lobby', '${esc(l.id)}', 'broadcast')" class="btn small">${tx('Rundruf')}</button>
-                        <button onclick="adminAction('lobby', '${esc(l.id)}', 'close')" class="btn small error">${tx('Schließen')}</button>
+                        <button onclick="adminAction('lobby', '${esc(l.id)}', 'broadcast')" class="btn small w">${tx('Rundruf')}</button>
+                        <button onclick="adminAction('lobby', '${esc(l.id)}', 'close')" class="btn small error w">${tx('Schließen')}</button>
                     </td>
                 </tr>`).join('');
         } catch (e) {
@@ -199,6 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    const ROLE_NAMES = { user: tx('User'), botcreator: tx('Bot-Ersteller'), reviewadmin: tx('Review Admin'), admin: 'Admin', superadmin: tx('Super Admin') };
     function drawUsers() {
         const q = document.getElementById('admin-users-q').value.trim().toLowerCase();
         const users = q ? adminUsers.filter(u => (u.username + ' ' + (u.email || '')).toLowerCase().includes(q)) : adminUsers;
@@ -216,11 +224,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             // bot accounts: whose bot it is; bot creators: how many bots, and the limit
             const sub = isBotUser ? tx('Besitzer: %s', u.owner ? u.owner.username : '–') : (u.email || '');
             const botLimit = !u.bots ? '' : `<br><small>${u.bots.limit == null ? tx('%s Bots (ohne Obergrenze)', u.bots.count) : tx('%s von %s Bots', u.bots.count, u.bots.limit)}</small>
-                    ${u.bots.limit == null ? '' : `<button onclick="adminBotLimit('${id}')" class="btn small">${tx('Bot-Limit')}</button>`}`;
-            const roleSelect = isBotUser ? '' : `
+                    ${u.bots.limit == null ? '' : `<button onclick="adminBotLimit('${id}')" class="btn small w">${tx('Bot-Limit')}</button>`}`;
+            const roleSelect = isBotUser ? '' : readOnly ? `<span>${esc(ROLE_NAMES[u.role] || u.role)}</span>` : `
                     <select onchange="adminChangeRole('${id}', this.value)" style="padding:4px 6px; font-size:13px;">
                         <option value="user" ${u.role === 'user' ? 'selected' : ''}>${tx('User')}</option>
                         <option value="botcreator" ${u.role === 'botcreator' ? 'selected' : ''}>${tx('Bot-Ersteller')}</option>
+                        <option value="reviewadmin" ${u.role === 'reviewadmin' ? 'selected' : ''}>${tx('Review Admin')}</option>
                         <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                         <option value="superadmin" ${u.role === 'superadmin' ? 'selected' : ''}>${tx('Super Admin')}</option>
                     </select>`;
@@ -232,10 +241,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${esc(u.mmr)}</td>
                 <td>
                     <div class="acc-btns" style="gap:4px;">
-                        <button onclick="adminAction('user', '${id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small ${u.isBanned ? '' : 'error'}">${u.isBanned ? tx('Entbannen') : tx('Bannen')}</button>
-                        ${isBotUser ? '' : `<button onclick="adminAction('user', '${id}', 'force_password')" class="btn small">${tx('PW Reset')}</button>
+                        <button onclick="adminAction('user', '${id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small w ${u.isBanned ? '' : 'error'}">${u.isBanned ? tx('Entbannen') : tx('Bannen')}</button>
+                        ${isBotUser ? '' : `<button onclick="adminAction('user', '${id}', 'force_password')" class="btn small w">${tx('PW Reset')}</button>
                         <button onclick="toggleAdminUserMfa('${id}')" class="btn small">${tx('MFA Verwalten')}</button>`}
-                        ${u.id === currentUser.id ? '' : `<button onclick="adminDeleteUser('${id}')" class="btn small error">${tx('Konto löschen')}</button>`}
+                        ${u.id === currentUser.id ? '' : `<button onclick="adminDeleteUser('${id}')" class="btn small error w">${tx('Konto löschen')}</button>`}
                     </div>
                     <div id="admin-user-mfa-${id}" class="acc-sub-panel" style="display:none;"></div>
                 </td>
@@ -264,7 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             container.innerHTML = tokens.map(t => {
                 const tokenId = t.id ? `'${esc(t.id)}'` : 'null';
                 return `<div><span>${esc(txs(t.name))}</span>
-                    <button class="link-btn" onclick="adminDeleteUserMfa('${esc(id)}', '${esc(t.type)}', ${tokenId})">${tx('Löschen')}</button></div>`;
+                    <button class="link-btn w" onclick="adminDeleteUserMfa('${esc(id)}', '${esc(t.type)}', ${tokenId})">${tx('Löschen')}</button></div>`;
             }).join('');
         } catch (e) {
             container.innerHTML = `<span style="color:var(--red);">${tx('Fehler beim Laden.')}</span>`;
@@ -418,7 +427,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${r.reason ? `<div><strong>${tx('Grund:')}</strong> ${esc(r.reason)}</div>` : ''}
             <div class="report-map-box">${mapPreview(r.context)}</div>
             ${closed}
-            <div class="report-actions">${actions}</div>
+            <div class="report-actions w">${actions}</div>
         </div>`;
     }
 
@@ -452,7 +461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ? tx('Folge: keine Texte mehr in diesem Spiel (2. Verstoß)') : tx('Folge: 5 Minuten keine Texte'))}</div>` : ''}
             <div class="report-chat">${chat}</div>
             ${closed}
-            <div class="report-actions">${actions}</div>
+            <div class="report-actions w">${actions}</div>
         </div>`;
     }
 
@@ -490,7 +499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <td>${w.kind === 'allow' ? tx('Erlauben') : tx('Sperren')}</td>
             <td>${w.kind === 'allow' ? '–' : (w.match === 'part' ? tx('auch als Wortteil') : tx('nur als ganzes Wort'))}</td>
             <td>${esc(w.addedBy || '')}</td>
-            <td><button class="btn small" data-word="${esc(w.id)}" title="${tx('Entfernen')}">✕</button></td>
+            <td><button class="btn small w" data-word="${esc(w.id)}" title="${tx('Entfernen')}">✕</button></td>
         </tr>`).join('') : `<tr><td colspan="5" class="acc-empty">${tx('Noch keine eigenen Wörter – es gelten die eingebauten Listen.')}</td></tr>`;
     }
     async function loadAdminWords() {
@@ -558,15 +567,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     tx('BASE_URL in der .env des Servers setzen, sonst schlägt der Login fehl (redirect_uri).');
                 cbDiscord.parentNode.after(warn);
             }
+            // the secrets themselves never come from the server – only whether they are stored
+            const stored = (id, has) => {
+                const el = document.getElementById(id);
+                el.value = '';
+                el.placeholder = has ? tx('Gespeichert – leer lassen, um es zu behalten') : tx('Nicht gesetzt');
+            };
             if (data.google) {
                 document.getElementById('oauth-google-clientid').value = data.google.clientId || '';
-                document.getElementById('oauth-google-secret').value = data.google.clientSecret || '';
+                stored('oauth-google-secret', data.google.hasClientSecret);
                 document.getElementById('oauth-google-enabled').checked = data.google.enabled || false;
             }
             if (data.discord) {
                 document.getElementById('oauth-discord-clientid').value = data.discord.clientId || '';
-                document.getElementById('oauth-discord-secret').value = data.discord.clientSecret || '';
-                document.getElementById('oauth-discord-bottoken').value = data.discord.botToken || '';
+                stored('oauth-discord-secret', data.discord.hasClientSecret);
+                stored('oauth-discord-bottoken', data.discord.hasBotToken);
+                document.getElementById('oauth-discord-clear-bottoken').parentNode.hidden = !data.discord.hasBotToken;
                 document.getElementById('oauth-discord-enabled').checked = data.discord.enabled || false;
             }
         } catch (e) {
@@ -595,11 +611,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             enabled: document.getElementById(`oauth-${provider}-enabled`).checked,
         };
         if (botTokenEl) body.botToken = botTokenEl.value;
+        const clearEl = document.getElementById(`oauth-${provider}-clear-bottoken`);
+        if (clearEl && clearEl.checked) body.clearBotToken = true;
         try {
             const res = await post(`/api/admin/oauth/${provider}`, body);
             if (res.ok) {
                 msg.textContent = tx('Gespeichert! Strategien neu geladen.');
                 msg.style.color = 'var(--ok)';
+                if (clearEl) clearEl.checked = false;
+                oauthLoaded = false;          // show what is stored now (the fields empty again)
+                loadOAuthConfig();
             } else {
                 const err = await res.json();
                 msg.textContent = txs(err.error || 'Fehler beim Speichern.');
