@@ -193,6 +193,23 @@ function rundenspiel() {
     }
 }
 
+/** The account page: the match in "Spielhistorie" links its replay. */
+async function history(browser, errors, user, record) {
+    const ctx = await browser.newContext({ locale: 'de-DE' });
+    await ctx.request.post(BASE + '/api/auth/login', { data: { username: user.name, password: PASSWORD } });
+    const list = await (await ctx.request.get(BASE + '/api/account/history')).json();
+    const g = list.find(x => x.id === record.id);
+    ok(g && g.hasReplay === true, 'history: the API marks the match with its replay');
+    const page = await ctx.newPage();
+    page.on('pageerror', e => errors.push(`history: ${e.message}`));
+    await page.goto(BASE + '/client/account.html#history');
+    await page.waitForSelector('#table-history tbody tr[onclick]');
+    await page.click('#table-history tbody tr[onclick]');
+    await page.waitForSelector('#hm-body a[href^="/?replay="]');
+    ok(await page.$eval('#hm-body a[href^="/?replay="]', a => a.getAttribute('href')) === '/?replay=' + record.id, 'history: the match dialog links "Wiederholung ansehen"');
+    await ctx.close();
+}
+
 function deletion(user, record) {
     inServer(`const { User } = require('./models'); const { deleteAccount } = require('./utils/deleteAccount');
         User.findByPk('${user.id}').then(u => deleteAccount(u)).then(r => { console.log(r || 'ok'); process.exit(0); })`);
@@ -236,6 +253,7 @@ function deletion(user, record) {
         const r = await live(browser, errors, user);
         record = r.record;
         await viewer(browser, errors, r.record, r.doc);
+        await history(browser, errors, user, r.record);
         rundenspiel();
         deletion(user, r.record);
         ok(errors.length === 0, 'no page errors', errors.join(' | '));

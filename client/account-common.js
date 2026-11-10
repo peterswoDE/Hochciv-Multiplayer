@@ -99,7 +99,9 @@ const ACC = {
         document.getElementById('hm-title').innerHTML = `${tx('Spielauswertung')} <small style="font-family:inherit; font-size:14px; font-weight:400; color:var(--ink-soft);">${esc(date)}</small>`;
         // the statistics over the rounds (client/stats.js): chart with a choice of values, key moments
         const withStats = g.stats && typeof STATS !== 'undefined';
-        document.getElementById('hm-body').innerHTML = table + (withStats ? '<div id="hm-stats"></div>' : '');
+        // the replay (F7), if one is stored – it opens in the game, in the version it was played with
+        const replay = g.hasReplay ? `<p style="margin:10px 0 0"><a class="btn btn-ghost small" href="/?replay=${encodeURIComponent(g.id)}" target="_blank" rel="noopener">▶ ${tx('Wiederholung ansehen')}</a></p>` : '';
+        document.getElementById('hm-body').innerHTML = table + replay + (withStats ? '<div id="hm-stats"></div>' : '');
         if (withStats) STATS.loadInto(document.getElementById('hm-stats'), g.id);
         ACC.openModal('history-modal');
     },

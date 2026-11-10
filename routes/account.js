@@ -203,6 +203,8 @@ router.get('/history', async (req, res) => {
         const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: req.user.id }]))}::jsonb`;
         const games = await Game.findAll({
             where: sequelize.literal(`(${has('dbUserId')} OR ${has('replacedUserId')})`),
+            // with a stored replay? (the dialog then links it, client/account-common.js)
+            attributes: { include: [[sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay']] },
             order: [['matchDate', 'DESC']],
             limit: 50
         });

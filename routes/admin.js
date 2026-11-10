@@ -334,6 +334,7 @@ router.get('/games', async (req, res) => {
             { [Op.iLike]: `%${q.replace(/[\\%_]/g, c => '\\' + c)}%` }) : undefined;
         const { count, rows } = await Game.findAndCountAll({
             where, order: [['matchDate', 'DESC']], offset, limit: GAMES_PAGE,
+            attributes: { include: [[sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay']] },     // the dialog links the replay
         });
         res.json({ total: count, offset, pageSize: GAMES_PAGE, finished: rows });
     } catch (err) {
