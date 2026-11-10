@@ -76,7 +76,8 @@ module.exports = (sequelize) => {
         resetCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
         emailOtpCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
         emailChangeCodeAttempts: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
-        // 'user' | 'botcreator' (may create bot accounts) | 'admin' | 'superadmin'
+        // 'user' | 'botcreator' (may create bot accounts) | 'reviewadmin' (sees the admin area, changes
+        // nothing) | 'admin' | 'superadmin'
         role: {
             type: DataTypes.STRING,
             defaultValue: 'user',

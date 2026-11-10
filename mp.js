@@ -943,7 +943,7 @@ const MP = {
                 <div class="mp-auth">
                     <span>${TX('Eingeloggt als %s (%s MMR, %s Spiele)', `<b>${escHtml(this.user.username)}</b>`, escHtml(this.user.mmr), escHtml(this.user.gamesPlayed))}</span>
                     <button class="btn small" onclick="MP.showAccountModal()">${TX('Mein Konto')}</button>
-                    ${this.user.role === 'admin' || this.user.role === 'superadmin'      // only admins (the page checks it again)
+                    ${['admin', 'superadmin', 'reviewadmin'].includes(this.user.role)      // only admins (the page checks it again)
                         ? `<button class="btn small" id="mp-admin-btn" onclick="location.href='/client/admin.html'">${TX('Admin')}</button>` : ''}
                     <button class="btn small ghost" onclick="MP.logout()">${TX('Abmelden')}</button>
                 </div>

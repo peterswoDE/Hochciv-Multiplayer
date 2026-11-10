@@ -19,7 +19,9 @@ const tx = (de, ...args) => HC_I18N.t(de, ...args);
 const txs = msg => HC_I18N.tr(msg);
 
 const ACC = {
-    isAdmin: u => !!u && (u.role === 'admin' || u.role === 'superadmin'),
+    // may open the admin area – the review admin too, who only looks (routes/admin.js readOnly)
+    isAdmin: u => !!u && ['admin', 'superadmin', 'reviewadmin'].includes(u.role),
+    isReviewAdmin: u => !!u && u.role === 'reviewadmin',
 
     /** The logged-in user, or null (then the page goes back to the game). */
     me: async function () {
