@@ -17,7 +17,7 @@
  * statistics, badges); it changes no MMR.
  */
 const crypto = require('crypto');
-const { ChallengeResult } = require('../models');
+const { ChallengeResult, Game } = require('../models');
 const engine = require('../engine-adapter');
 
 const DAY = 86400000;
@@ -188,6 +188,57 @@ async function recordResult(g, players, gameId) {
     }, { where: { weekId: week, userId: g.hostUserId, asyncId: g.id } });
 }
 
+/**
+ * Compare an attempt with the week's best (F26): the challenger's empire over the rounds in
+ * both matches (utils/stats.js points: score, cities, population, techs, armies, wonders …).
+ * `gameId`: that attempt (it must be one of this week's); without it, the user's best one.
+ * Public like the leaderboard.
+ */
+const SERIES_KEYS = ['s', 'c', 'pop', 't', 'a', 'w', 'ys', 'yf', 'yc', 'rs', 'rf', 'rc'];
+async function seriesOf(row, rank) {
+    if (!row || !row.gameId) return null;
+    const g = await Game.findByPk(row.gameId, { attributes: ['id', 'stats'] });
+    const st = g && g.stats;
+    if (!st || !Array.isArray(st.rounds) || !st.rounds.length) return null;
+    // the one human seat of an attempt (the others are the KI)
+    let i = (st.players || []).findIndex(p => p && p.kind === 'human');
+    if (i < 0) i = 0;
+    const p = (st.players || [])[i] || {};
+    return Object.assign(publicRow(row, rank), {
+        civ: p.civ || null,
+        series: st.rounds.map(rd => {
+            const x = (rd.p || [])[i] || {};
+            const o = { r: rd.r };
+            for (const k of SERIES_KEYS) if (x[k] != null) o[k] = x[k];
+            return o;
+        }),
+    });
+}
+async function compare(user, weekId, gameId) {
+    const now = weekOf(new Date());
+    const week = weekId && WEEK_RE.test(weekId) ? weekId : now.id;
+    const bounds = boundsOf(week);
+    if (!bounds || week > now.id) return { error: 'Diese Woche gibt es nicht.' };
+    const rows = await ranked(week, bounds);
+    let mine = null;
+    if (gameId) {
+        if (!/^[0-9a-f-]{36}$/i.test(gameId)) return { error: 'Diesen Versuch gibt es nicht.' };
+        mine = await ChallengeResult.findOne({ where: { weekId: week, gameId, finished: true } });
+        if (!mine) return { error: 'Diesen Versuch gibt es nicht.' };
+    } else if (user) {
+        const done = (await ChallengeResult.findAll({ where: { weekId: week, userId: user.id, finished: true } })).sort(better);
+        mine = rows.find(r => r.userId === user.id) || done[0] || null;
+    }
+    const rankOf = r => { const k = rows.findIndex(x => x.id === r.id); return k >= 0 ? k + 1 : null; };
+    const best = rows[0] || null;
+    return {
+        week,
+        best: await seriesOf(best, 1),
+        attempt: mine ? await seriesOf(mine, rankOf(mine)) : null,
+        same: !!(best && mine && best.id === mine.id),
+    };
+}
+
 /** Account deleted: its attempts go. */
 async function removeUser(userId, transaction) {
     await ChallengeResult.destroy({ where: { userId }, transaction });
@@ -203,4 +254,4 @@ async function migrate() {
     await ChallengeResult.sequelize.query('DROP INDEX IF EXISTS "challenge_results_week_user_key"');
 }
 
-module.exports = { weekOf, boundsOf, setupOf, info, start, recordResult, removeUser, mergeUser, migrate, WEEK_RE };
+module.exports = { weekOf, boundsOf, setupOf, info, start, compare, recordResult, removeUser, mergeUser, migrate, WEEK_RE };
