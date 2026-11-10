@@ -35,8 +35,9 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ⬜ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ⬜ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ⬜ |
+| 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ⬜ |
 
-The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
 F1–F14 are in production. Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
@@ -573,5 +574,26 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Goal:** a live game is not lost when players have to leave.
 
 **Planned:** the host can pause a live game (the turn timer stops, nobody can act, everyone sees it) and resume it, or turn the running game into a Rundenspiel with the same players, seats and state, which then goes on with the Rundenspiel rules (turn deadline, notifications). Guests can't play Rundenspiele, so their seats would go to the KI (to be decided when building it).
+
+**Status:** ⬜ planned.
+
+---
+
+## F28 Single-player games in the statistics
+
+**Goal:** single-player games – in the browser and offline in the Android app – are recorded for the statistics, like the multiplayer matches.
+
+**Decided (2026-11-10):**
+- Only games of logged-in accounts are recorded. Offline games in the app wait on the device until it is online and logged in.
+- They are their own kind of match: the overall statistics get a filter *Herkunft*: *Alle* (default), *Online*, *Einzelspiel*. It works with every other filter, e.g. *Nur Menschen* + *Einzelspiel*. So single-player games can be left out of every view.
+- The personal statistics (F23) and the match history show them too, with the same filter.
+- No MMR. Single-player games get their own badges (e.g. first win, 10 and 50 wins, a win against the hardest KI, every kind of victory), apart from the multiplayer badges.
+
+**Planned:**
+- The game runs on the player's device, so the server can't check the moves; it only checks that the result is plausible (a known game version, a finished state the engine accepts, sane numbers) and takes each game once (a game id from the device).
+- **Browser:** a small recorder (`client/solo.js`, loaded with the game page) follows a single-player game while it is played: the round in which each empire got each technology, the start player, the numbers per round for the post-game chart. When the game ends it sends that with the final state to `POST /api/solo/games` (logged in), or keeps it in the browser until it can. A whole replay is not stored (too big for the browser's storage).
+- **Server:** facts from the final state and the recorded tech rounds (the same shape as `utils/facts.js`), stored as a match marked `solo`. The facts get `src`/kind *solo*, `utils/gamestats.js` the new filter, `utils/badges.js` the single-player badges.
+- **Android app (HochCiv-Android):** the offline copy gets the same recorder, which keeps finished games in the offline storage. When the app goes online, the native bridge moves them to the online page, which uploads them if the player is logged in. This needs a new app release.
+- **Open:** hotseat games (several people on one device): the plan is to count them in the overall statistics as human seats, but in no account's personal statistics or badges, as the device can't tell who played which empire.
 
 **Status:** ⬜ planned.
