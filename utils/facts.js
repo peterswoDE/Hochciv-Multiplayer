@@ -118,6 +118,31 @@ function markPlayerBots(f, participants) {
     return Object.assign({}, f, { p });
 }
 
+/**
+ * The account of each seat, as `uid`, for the personal statistics (F23, utils/gamestats.js).
+ * The stored facts stay anonymous; this is added in memory when they are read, from the match
+ * record (participants[].dbUserId, or replacedUserId for a seat the KI took over or that was
+ * resigned – it counts as the player's lost game). Matched like markPlayerBots, by nation and
+ * ability: first the players who played to the end (a human seat), then the taken-over seats
+ * (which may end as KI seats).
+ */
+function markAccounts(f, participants) {
+    const list = (Array.isArray(participants) ? participants : []).filter(x => x && (x.dbUserId || x.replacedUserId));
+    if (!list.length || !f || !Array.isArray(f.p)) return f;
+    const p = f.p.map(s => Object.assign({}, s));
+    // players who played to the end first – their seat is a human one; then the taken-over seats
+    const gone = x => !x.dbUserId;
+    for (const x of list.filter(x => !gone(x)).concat(list.filter(gone))) {
+        const ab = x.ability || 'basis';
+        const sameAb = s => !Array.isArray(s.ab) && s.ab === ab;
+        const score = s => (sameAb(s) ? 2 : 0) + (s.kind === 'human' ? 1 : 0);
+        const s = p.filter(s => !s.uid && s.civ === x.civ && (gone(x) || s.kind === 'human'))
+            .sort((a, b) => score(b) - score(a))[0];
+        if (s) s.uid = String(x.dbUserId || x.replacedUserId);
+    }
+    return Object.assign({}, f, { p });
+}
+
 /** Facts from the match record alone (no replay): no techs, no turn positions. */
 function fromRecord(game) {
     const parts = game.participants || [];
@@ -199,4 +224,4 @@ function startBackfill() {
     setTimeout(() => backfill().catch(err => console.error('[Facts] Backfill failed:', err)), 30 * 1000).unref();
 }
 
-module.exports = { fromStates, fromRecord, markPlayerBots, victoryOf, store, storeLater, backfill, startBackfill, setOnChange };
+module.exports = { fromStates, fromRecord, markPlayerBots, markAccounts, victoryOf, store, storeLater, backfill, startBackfill, setOnChange };

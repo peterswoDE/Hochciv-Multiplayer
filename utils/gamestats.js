@@ -4,7 +4,10 @@
  * they own. Built from the facts of each match (utils/facts.js); GET /api/stats sends it
  * (routes/stats.js), client/gamestats.js draws it.
  *
- *   aggregate(rows, { seats: 'humans' | 'bots' | 'players' | 'ki' | 'all', n: 'all' | '2' … | '5+', mode, ver }, detail)
+ *   aggregate(rows, { seats: 'humans' | 'bots' | 'players' | 'ki' | 'all', n: 'all' | '2' … | '5+', mode, ver, user }, detail)
+ *
+ * `user` (an account id, F23): only that account's seats count, whatever `seats` says, and only
+ * its matches – the personal statistics. "How games are won" then counts the matches it won.
  *
  * Every match counts under its game type – normal, 1 gegen 1 or Marathon, whose rules differ
  * (Marathon: drafted abilities, dearer techs; 1 gegen 1: higher economic threshold) – so each can
@@ -33,7 +36,7 @@ async function rows() {
         attributes: ['id', 'version', 'matchDate', 'facts', 'participants'],
         order: [['matchDate', 'DESC']],
     });
-    const out = list.map(g => ({ id: g.id, date: g.matchDate, ver: g.version, f: Facts.markPlayerBots(g.facts, g.participants) }))
+    const out = list.map(g => ({ id: g.id, date: g.matchDate, ver: g.version, f: Facts.markAccounts(Facts.markPlayerBots(g.facts, g.participants), g.participants) }))
         .filter(x => x.f && x.f.p && x.f.p.length);
     cache = { at: Date.now(), rows: out };
     return out;
@@ -89,10 +92,12 @@ function aggregate(all, q, detail) {
     q = q || {};
     const seatsMode = Object.prototype.hasOwnProperty.call(SEATS, q.seats) ? q.seats : 'humans';
     const mode = MODES.includes(q.mode) ? q.mode : 'all';
-    const keepGame = x => (!q.n || q.n === 'all' || bucket(x.f.n) === q.n)
+    const user = q.user ? String(q.user) : null;
+    const keepGame = x => (!user || x.f.p.some(p => p.uid === user))
+        && (!q.n || q.n === 'all' || bucket(x.f.n) === q.n)
         && (mode === 'all' || modeOf(x.f) === mode)
         && (!q.ver || q.ver === 'all' || (x.f.ver || x.ver) === q.ver);
-    const keepSeat = SEATS[seatsMode];
+    const keepSeat = user ? p => p.uid === user : SEATS[seatsMode];
     const games = all.filter(keepGame);
 
     const civs = {}, abil = {}, pos = {}, win = {}, wonders = {}, techs = {};
@@ -108,7 +113,7 @@ function aggregate(all, q, detail) {
         const m = modeOf(f);
         roundsByMode[m] = roundsByMode[m] || { games: 0, rounds: 0 };
         roundsByMode[m].games++; roundsByMode[m].rounds += f.r || 0;
-        if (f.win) win[f.win] = (win[f.win] || 0) + 1;
+        if (f.win && (!user || f.p.some(p => p.uid === user && p.won))) win[f.win] = (win[f.win] || 0) + 1;
         for (const p of f.p) {
             if (!keepSeat(p)) continue;
             seats++;
@@ -156,7 +161,7 @@ function aggregate(all, q, detail) {
             versions: [...new Set(all.map(x => x.f.ver || x.ver).filter(Boolean))].sort((a, b) => parseInt(b.slice(1)) - parseInt(a.slice(1))),
             current: engine.version(),
         },
-        query: { seats: seatsMode, n: q.n || 'all', mode, ver: q.ver || 'all' },
+        query: { seats: user ? 'user' : seatsMode, n: q.n || 'all', mode, ver: q.ver || 'all' },
         games: games.length, seats,
         rounds: { avg: avg(roundsSum, games.length), byMode: Object.fromEntries(Object.entries(roundsByMode).map(([k, v]) => [k, { games: v.games, avg: avg(v.rounds, v.games) }])) },
         victory: win,

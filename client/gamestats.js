@@ -1,13 +1,18 @@
 /**
  * Overall statistics over all finished matches (F13) – win rates per nation, ability and turn
  * position, victory types, what winners have at the end, technologies and wonders.
- * Loaded by the game (menu button "Statistiken", mp.js) and by the account page (admin tab).
+ * Loaded by the game (menu button "Statistiken", mp.js, and the player profile), the account
+ * page (*Meine Statistiken*) and the admin page.
  *
  *   GAMESTATS.open()                 – the public statistics in their own overlay
  *   GAMESTATS.render(el, { admin })  – draw them into `el`; admin adds matches per version,
  *                                      KI levels, the sources, export and recompute
+ *   GAMESTATS.render(el, { user })   – one account's own seats only (F23, personal statistics):
+ *                                      no seat filter, won against lost instead of winners
+ *                                      against the others
  *
- * Data: GET /api/stats (routes/stats.js) or GET /api/admin/stats, built by utils/gamestats.js.
+ * Data: GET /api/stats (routes/stats.js), GET /api/stats/player/:id or GET /api/admin/stats,
+ * built by utils/gamestats.js.
  * Every bar has its number next to it, so the tables are the accessible view as well. Every
  * table sorts by a click on its column heads (again: the other way round).
  */
@@ -110,16 +115,19 @@
     function sections(d) {
         const N = d.names;
         const out = [];
+        const me = d.query.seats === 'user';          // personal statistics: won against lost
+        const rate = pct(d.winners.won.seats, d.seats);
         out.push(`<div class="hcg-tiles">
             <div class="hcg-tile"><b>${d.games}</b><span>${tx('Partien')}</span></div>
-            <div class="hcg-tile"><b>${d.seats}</b><span>${tx(SEAT_TILE[d.query.seats] || 'Plätze')}</span></div>
+            ${me ? `<div class="hcg-tile"><b>${rate == null ? '–' : rate + '%'}</b><span>${tx('Siegquote')} (${d.winners.won.seats === 1 ? tx('1 Sieg') : tx('%s Siege', d.winners.won.seats)})</span></div>`
+                : `<div class="hcg-tile"><b>${d.seats}</b><span>${tx(SEAT_TILE[d.query.seats] || 'Plätze')}</span></div>`}
             <div class="hcg-tile"><b>${d.rounds.avg == null ? '–' : d.rounds.avg}</b><span>${tx('Ø Runden')}</span></div></div>`);
         if (!d.games) return out.join('') + `<p class="hcg-empty">${tx('Für diese Auswahl gibt es noch keine beendeten Partien.')}</p>`;
 
         // victory types
         const vt = Object.entries(d.victory).sort((a, b) => b[1] - a[1]);
         const vtSum = vt.reduce((n, x) => n + x[1], 0);
-        out.push(`<h3>${tx('Wie gewonnen wird')}</h3>` + table([[tx('Siegart')], [tx('Partien'), 'num'], [tx('Anteil')]],
+        out.push(`<h3>${tx(me ? 'Siege nach Siegart' : 'Wie gewonnen wird')}</h3>` + table([[tx('Siegart')], [tx('Partien'), 'num'], [tx('Anteil')]],
             vt.map(([k, n]) => `<tr><td>${tx(VICTORY[k] || k)}</td><td class="num">${n}</td><td>${bar(pct(n, vtSum))}</td></tr>`)));
 
         // nations
@@ -142,14 +150,16 @@
         // winners vs the others
         const W = d.winners.won, L = d.winners.lost;
         const metric = (label, k) => `<tr><td>${label}</td><td class="num"><b>${W[k] == null ? '–' : W[k]}</b></td><td class="num">${L[k] == null ? '–' : L[k]}</td></tr>`;
-        out.push(`<h3>${tx('Sieger am Spielende')}</h3><p class="hcg-note">${tx('Durchschnitt je Platz: Sieger gegen alle anderen.')}</p>` +
-            table([[''], [tx('Sieger'), 'num'], [tx('Andere'), 'num']], [
+        out.push((me
+            ? `<h3>${tx('Am Spielende')}</h3><p class="hcg-note">${tx('Durchschnitt je Partie: gewonnene gegen verlorene.')}</p>`
+            : `<h3>${tx('Sieger am Spielende')}</h3><p class="hcg-note">${tx('Durchschnitt je Platz: Sieger gegen alle anderen.')}</p>`) +
+            table([[''], [tx(me ? 'Gewonnen' : 'Sieger'), 'num'], [tx(me ? 'Verloren' : 'Andere'), 'num']], [
                 metric(tx('Städte'), 'cities'), metric(tx('Bevölkerung'), 'pop'), metric(tx('Technologien'), 'techs'),
                 metric(tx('Weltwunder'), 'wonders'), metric(tx('Armeen'), 'armies'), metric(tx('Punkte'), 'score'),
             ]));
         const hist = Object.entries(d.winners.cities).map(([c, n]) => [+c, n]).sort((a, b) => a[0] - b[0]);
         const histMax = Math.max(1, ...hist.map(h => h[1]));
-        out.push(`<p class="hcg-note" style="margin-top:10px"><b>${tx('Mit wie vielen Städten gewonnen wird')}</b></p>` +
+        out.push(`<p class="hcg-note" style="margin-top:10px"><b>${tx(me ? 'Mit wie vielen Städten gewonnen' : 'Mit wie vielen Städten gewonnen wird')}</b></p>` +
             table([[tx('Städte')], [tx('Siege')]], hist.map(([c, n]) => `<tr><td>${c}</td><td>${bar(n, histMax)}</td></tr>`)));
 
         // technologies
@@ -163,12 +173,14 @@
             };
         });
         const ages = N.ages[en() ? 1 : 0] || [];
-        out.push(`<h3>${tx('Technologien')}</h3><p class="hcg-note">${tx('Wie oft Sieger und andere eine Technologie am Ende hatten, die Siegquote mit ihr und die Runde, in der Sieger sie im Schnitt erforscht haben. Aus %s Plätzen mit Wiederholung.', T.seats)}</p>
+        out.push(`<h3>${tx('Technologien')}</h3><p class="hcg-note">${me
+                ? tx('Wie oft eine Technologie am Ende da war, in gewonnenen und in verlorenen Partien, die Siegquote mit ihr und die Runde, in der sie in gewonnenen Partien im Schnitt erforscht war. Aus %s Partien mit Wiederholung.', T.seats)
+                : tx('Wie oft Sieger und andere eine Technologie am Ende hatten, die Siegquote mit ihr und die Runde, in der Sieger sie im Schnitt erforscht haben. Aus %s Plätzen mit Wiederholung.', T.seats)}</p>
             <div class="hcg-filters"><label>${tx('Sortieren')}<select data-hcg-sort>
-              <option value="gap">${tx('Vorsprung der Sieger')}</option><option value="won">${tx('Bei Siegern')}</option>
+              <option value="gap">${tx(me ? 'Vorsprung in Siegen' : 'Vorsprung der Sieger')}</option><option value="won">${tx(me ? 'Bei Siegen' : 'Bei Siegern')}</option>
               <option value="rate">${tx('Siegquote')}</option><option value="round">${tx('Ø Runde')}</option><option value="tree">${tx('Techbaum')}</option>
             </select></label></div><div data-hcg-techs></div>`);
-        out.techs = { techs, ages };
+        out.techs = { techs, ages, me };
 
         // wonders
         out.push(`<h3>${tx('Weltwunder')}</h3>` + table([[tx('Wunder')], [tx('Gebaut'), 'num'], [tx('Siege'), 'num'], [tx('Siegquote')]],
@@ -187,7 +199,7 @@
             round: (a, b) => (a.round == null ? 99 : a.round) - (b.round == null ? 99 : b.round),
             tree: (a, b) => a.order - b.order,
         }[sort] || (() => 0);
-        return table([[tx('Technologie')], [tx('Bei Siegern')], [tx('Bei anderen')], [tx('Siegquote mit'), 'num'], [tx('Ø Runde'), 'num']],
+        return table([[tx('Technologie')], [tx(state.me ? 'Bei Siegen' : 'Bei Siegern')], [tx(state.me ? 'Bei Niederlagen' : 'Bei anderen')], [tx('Siegquote mit'), 'num'], [tx('Ø Runde'), 'num']],
             state.techs.slice().sort(by).map(t => `<tr class="${t.had < SMALL ? 'small' : ''}" title="${esc(tx('%s Plätze hatten sie', t.had))}">
                 <td>${esc(t.name)}<small>${esc(state.ages[t.age] || '')}</small></td><td>${bar(t.won)}</td><td>${bar(t.lost)}</td>
                 <td class="num">${t.rate == null ? '–' : t.rate + '%'}</td><td class="num">${t.round == null ? '–' : t.round}</td></tr>`));
@@ -245,12 +257,13 @@
     async function render(el, opts) {
         style();
         opts = opts || {};
-        const q = el._hcgQuery || (el._hcgQuery = { mode: 'all', seats: 'humans', n: 'all', ver: 'all' });
+        const q = el._hcgQuery || (el._hcgQuery = opts.user ? { mode: 'all', n: 'all', ver: 'all' } : { mode: 'all', seats: 'humans', n: 'all', ver: 'all' });
         el.classList.add('hcg');
         el.innerHTML = `<p class="hcg-empty">${tx('Lädt...')}</p>`;
         let d;
         try {
-            const res = await fetch((opts.admin ? '/api/admin/stats?' : '/api/stats?') + new URLSearchParams(q), { credentials: 'same-origin' });
+            const url = opts.user ? `/api/stats/player/${encodeURIComponent(opts.user)}?` : opts.admin ? '/api/admin/stats?' : '/api/stats?';
+            const res = await fetch(url + new URLSearchParams(q), { credentials: 'same-origin' });
             d = await res.json();
             if (!res.ok) throw new Error(d.error || res.status);
         } catch (e) {
@@ -261,7 +274,7 @@
             `<option value="${esc(v)}"${q[key] === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
         const filters = `<div class="hcg-filters">
             ${sel('mode', tx('Spielart'), MODES.map(([v, t]) => [v, tx(t)]))}
-            ${sel('seats', tx('Gezählt'), SEATS.map(([v, t]) => [v, tx(t)]))}
+            ${opts.user ? '' : sel('seats', tx('Gezählt'), SEATS.map(([v, t]) => [v, tx(t)]))}
             ${q.mode !== 'duel' ? sel('n', tx('Reiche'), NS.filter(([v]) => q.mode !== 'normal' || v !== '2').map(([v, t]) => [v, tx(t)])) : ''}
             ${sel('ver', tx('Version'), [['all', tx('Alle')], ...d.filters.versions.map(v => [v, v + (v === d.filters.current ? ' ' + tx('(aktuell)') : '')])])}
         </div>`;
