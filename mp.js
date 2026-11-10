@@ -3087,7 +3087,7 @@ window.addEventListener('DOMContentLoaded', () => {
             MP.openInvite(join, params.get('pw'));
         } else if (replay && typeof REPLAY !== 'undefined') {
             history.replaceState(null, '', location.pathname);
-            REPLAY.open(replay);
+            REPLAY.open(replay, params.get('turn'));
         } else if (id) {
             history.replaceState(null, '', location.pathname);
             ASYNC.open(id);

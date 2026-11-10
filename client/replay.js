@@ -5,6 +5,10 @@
  * mp.js), and a timeline steps through them. A match is opened in the game version it was
  * played with (/v88/ etc. for older ones, as Rundenspiele are).
  *
+ * A link can point to one turn (F24): ?replay=<id>&turn=<n> opens the replay at turn n (1-based,
+ * as the timeline counts); *🔗 Dieser Zug* in the timeline shares it (share sheet on phones,
+ * clipboard elsewhere).
+ *
  * The local single-player save stays untouched: mp.js stops the game's saveGame while MP.active
  * and makes the end screen's "Zurück zum Menü" only leave.
  */
@@ -15,7 +19,7 @@ const REPLAY = {
     timer: null,
     SPEED_MS: 1200,
 
-    open: async function (id) {
+    open: async function (id, turn) {
         let doc, meta = null;
         try {
             const res = await fetch(`/api/games/${encodeURIComponent(id)}/replay`);
@@ -30,7 +34,7 @@ const REPLAY = {
         // the version the match was played with (OLD_VERSIONS / APP_VERSION_HERE in mp.js)
         const here = OLD_VERSIONS.includes(APP_VERSION_HERE) ? APP_VERSION_HERE : null;
         const want = OLD_VERSIONS.includes(doc.version) ? doc.version : null;
-        if (here !== want) { location.href = (want ? '/' + want + '/' : '/') + '?replay=' + encodeURIComponent(id); return; }
+        if (here !== want) { location.href = (want ? '/' + want + '/' : '/') + '?replay=' + encodeURIComponent(id) + (turn ? '&turn=' + turn : ''); return; }
 
         this.id = id;
         this.doc = doc;
@@ -44,7 +48,9 @@ const REPLAY = {
         const cred = $('mp-cred-box');
         if (cred) cred.textContent = '▶ ' + TX('Wiederholung');
         this.buildBar();
-        this.go(0, true);
+        // ?turn=n: that turn (1-based), within the replay
+        const k = Math.max(1, Math.min(doc.frames.length, parseInt(turn, 10) || 1)) - 1;
+        this.go(k, true);
     },
 
     /** Show frame k. */
@@ -91,11 +97,23 @@ const REPLAY = {
         this.pause();
         this.go(k);
     },
-    copyLink: function () {
-        const url = location.origin + '/?replay=' + encodeURIComponent(this.id);
+    /** The link to the replay, with `turn` (1-based) to that turn. */
+    link: function (turn) {
+        return location.origin + '/?replay=' + encodeURIComponent(this.id) + (turn ? '&turn=' + turn : '');
+    },
+    copyLink: function (url) {
+        url = url || this.link();
         const done = () => toast(TX('Link kopiert.'));
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt(TX('Link zur Wiederholung:'), url));
         else prompt(TX('Link zur Wiederholung:'), url);
+    },
+    /** Share the shown turn: the share sheet where there is one (phones), else the clipboard. */
+    shareTurn: function () {
+        const f = this.doc.frames[this.at], url = this.link(this.at + 1);
+        const text = TX('Hochciv – Wiederholung, Runde %s', f.round);
+        if (navigator.share && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) {
+            navigator.share({ title: text, url }).catch(e => { if (e && e.name !== 'AbortError') this.copyLink(url); });
+        } else this.copyLink(url);
     },
 
     buildBar: function () {
@@ -114,7 +132,7 @@ const REPLAY = {
               <input type="range" id="mpr-slider" min="0" value="0" aria-label="${TX('Zug')}">
             </div>
             <div class="mpr-row mpr-info"><span id="mpr-label"></span>
-              <span class="mpr-links"><a href="#" data-act="copy">${TX('Link kopieren')}</a> · <a href="${location.pathname}">${TX('Beenden')}</a></span></div>`;
+              <span class="mpr-links"><a href="#" data-act="turn-link" title="${TX('Link zu diesem Zug')}">🔗 ${TX('Dieser Zug')}</a> · <a href="#" data-act="copy">${TX('Link kopieren')}</a> · <a href="${location.pathname}">${TX('Beenden')}</a></span></div>`;
         document.body.appendChild(bar);
         document.documentElement.classList.add('mp-replay');
         bar.addEventListener('click', e => {
@@ -122,6 +140,7 @@ const REPLAY = {
             if (!b) return;
             const act = b.dataset.act, n = this.doc.frames.length;
             if (act === 'copy') { e.preventDefault(); return this.copyLink(); }
+            if (act === 'turn-link') { e.preventDefault(); this.pause(); return this.shareTurn(); }
             if (act === 'play') return this.play();
             this.pause();
             if (act === 'first') this.go(0);

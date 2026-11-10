@@ -10,7 +10,9 @@
  *    turn, in order, the last one the end; served Brotli-compressed to browsers that accept it.
  * 2. Viewer (a fresh browser, ?replay=<id>): timeline (next / previous / rounds / slider / play),
  *    read-only, the end screen with statistics and without rematch, and the local single-player
- *    save is neither written nor deleted. The player's profile links the replay.
+ *    save is neither written nor deleted. The player's profile links the replay. A link to one
+ *    turn (F24, ?replay=<id>&turn=<n>) opens there; *🔗 Dieser Zug* copies that link; a turn
+ *    out of range is clamped.
  * 3. Rundenspiel (tests/stats/finish-async.js): frames kept in replay_frames while it runs, one
  *    replay at the end, the rows gone, the finished view links it.
  * 4. Account deletion: the player's name leaves the stored replay (names, states, log) and the
@@ -155,6 +157,23 @@ async function viewer(browser, errors, record, doc) {
     await page.waitForFunction(() => !location.search && document.getElementById('screen-menu').classList.contains('show'));
     ok(await page.evaluate(() => localStorage.getItem('hochciv.save')) === '"LOCAL-GAME"', 'viewer: the local game is neither overwritten nor deleted');
     await ctx.close();
+
+    // F24: a link to one turn
+    const tctx = await browser.newContext({ locale: 'de-DE', viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+    const tp = await tctx.newPage();
+    tp.on('pageerror', e => errors.push(`turn link: ${e.message}`));
+    await tp.goto(`${BASE}/?replay=${record.id}&turn=4`);
+    await tp.waitForSelector('#mp-replay-bar');
+    const t = await tp.evaluate(() => ({ at: REPLAY.at, key: S.round + ':' + S.cur, label: document.getElementById('mpr-label').textContent }));
+    ok(t.at === 3 && t.key === key(3) && /Zug 4 von/.test(t.label) && !/replay=/.test(tp.url()), 'turn link: ?turn=4 opens at the 4th turn', t.label);
+    await tp.click('[data-act="next"]');
+    await tp.click('[data-act="turn-link"]');
+    const copied = await tp.evaluate(() => navigator.clipboard.readText());
+    ok(copied === `${BASE}/?replay=${record.id}&turn=5`, 'turn link: "🔗 Dieser Zug" copies the link to the shown turn', copied);
+    await tp.goto(`${BASE}/?replay=${record.id}&turn=99999`);
+    await tp.waitForSelector('#ov-body');
+    ok(await tp.evaluate(n => REPLAY.at === n - 1 && !!S.over, doc.frames.length), 'turn link: a turn past the end opens the end');
+    await tctx.close();
 }
 
 function rundenspiel() {
