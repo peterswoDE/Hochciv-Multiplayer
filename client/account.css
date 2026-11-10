@@ -52,7 +52,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; color: var(--ink); }
 }
 .nav-tab:hover { background: rgba(255, 253, 246, .55); color: var(--ink); }
 .nav-tab.active { background: var(--paper); color: var(--red); font-weight: 600; box-shadow: 0 1px 0 rgba(0, 0, 0, .05); }
-.nav-tab[hidden] { display: none; }
+.nav-tab[hidden], .acc-switch[hidden], .acc-nav-sep[hidden] { display: none; }   /* their display would show them anyway */
 .nav-count:not(:empty) { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--red); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
 .acc-nav-sep { height: 1px; background: var(--rule); margin: 12px 12px; }
 .acc-switch { display: block; padding: 9px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; }
