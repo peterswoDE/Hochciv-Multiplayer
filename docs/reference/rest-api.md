@@ -129,7 +129,7 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 | GET | `/api/games/:id` | Finished match: date, version, rounds, players with points and MMR changes, statistics, whether a replay exists, nation and wonder names (German, English; nations with their colour) |
 | GET | `/api/games/:id/replay` | The replay `{ v, version, names, frames }`, Brotli-compressed for browsers that accept it |
 | GET | `/api/profile/:userId[?offset=n]` | Name, MMR, games played, wins and the player's games |
-| GET | `/api/stats[?seats=humans\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
+| GET | `/api/stats[?seats=humans\|bots\|players\|ki\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
 

@@ -10,12 +10,14 @@
  *    replay. Checked: turn positions from the start player, winners, the round of each tech,
  *    victory type, barbarians left out; the fallback from a match record.
  * 2. Aggregation over made-up matches: win rates per nation, ability (also drafted ones) and turn
- *    position, humans only vs. all seats, the filters, techs and wonders, winners vs. the others;
+ *    position, which seats count (people, player-bots, both, the KI, all – player-bots marked
+ *    from the match record), the filters, techs and wonders, winners vs. the others;
  *    normal, 1 gegen 1 and Marathon each on their own (also matches from a match record), or all.
  * 3. A real Rundenspiel played to the end by the KI (finish-async.js in the container): its facts
  *    are computed from the replay and GET /api/stats counts it; filters are sanitised; the admin
  *    variant needs a login.
- * 4. The game page: menu button "Statistiken", the overlay with its tables, a filter, English.
+ * 4. The game page: menu button "Statistiken", the overlay with its tables, a filter, sorting by
+ *    a column head, English.
  * 5. The account page: the admin tab "Statistiken" with the admin detail and the export.
  *
  * Test accounts and games are deleted afterwards. Uses an installed Chrome or Edge (no browser
@@ -146,6 +148,18 @@ function aggregate() {
         'aggregate: versions and names (German, English, the Singularity)');
     const d = aggregate(rows, {}, true);
     ok(d.detail && d.detail.levels.length && d.detail.sources.replay === 5 && d.detail.sources.record === 2, 'aggregate: admin detail', JSON.stringify(d.detail && d.detail.sources));
+
+    // player-bots play human seats; the match record marks them (participants[].botAccount)
+    const { markPlayerBots } = require('../../utils/facts');
+    const f = g(4, 'normal', 'v96', [P('england', 'human', 1, true), P('russland', 'human', 2, false, { ab: 'taiga' }),
+        P('russland', 'human', 3, false), P('wikinger', 'ki', 4, false)]).f;
+    const marked = markPlayerBots(f, [{ civ: 'england' }, { civ: 'russland', ability: 'basis', botAccount: true }, { civ: 'russland', ability: 'taiga' }, { civ: 'wikinger', isBot: true }]);
+    ok(marked.p.map(p => !!p.pb).join() === 'false,false,true,false' && !f.p.some(p => p.pb) && markPlayerBots(f, []) === f,
+        'markPlayerBots: the seat of the bot account (a nation twice: by ability), the facts themselves untouched', marked.p.map(p => !!p.pb).join());
+    const one = [{ id: 'pb', ver: 'v96', f: marked }];
+    const count = seats => { const x = aggregate(one, { seats }); return `${x.query.seats}:${x.seats}:${civ(x, 'england').games}`; };
+    ok(count('humans') === 'humans:2:1' && count('bots') === 'bots:1:0' && count('players') === 'players:3:1' && count('ki') === 'ki:1:0' && count('all') === 'all:4:1' && count('x') === 'humans:2:1',
+        'aggregate: people only, player-bots only, both, the KI only, all seats; unknown → people', ['humans', 'bots', 'players', 'ki', 'all'].map(count).join(' '));
 }
 
 async function rundenspiel() {
@@ -196,6 +210,18 @@ async function page(browser, errors) {
     }));
     ok(v.h3.includes('Siegquote je Nation') && v.h3.includes('Siegquote je Startplatz') && v.h3.includes('Technologien') && v.civs >= 1,
         'overlay: sections with tables', v.h3.join(' · '));
+    // sorting by a column head: numbers start high, a second click turns it round
+    const col = async () => p.$$eval('#hcg-body .hcg-table', ts => [...ts[1].querySelectorAll('tbody tr')].map(r => +r.cells[1].textContent));
+    await p.click('#hcg-body .hcg-table >> nth=1 >> thead th >> nth=1 >> button');
+    const down = await col();
+    await p.click('#hcg-body .hcg-table >> nth=1 >> thead th >> nth=1 >> button');
+    const up = await col();
+    const sorted = (a, s) => a.every((x, i) => !i || s * (x - a[i - 1]) >= 0);
+    ok(down.length && sorted(down, -1) && sorted(up, 1)
+        && await p.evaluate(() => document.querySelectorAll('#hcg-body .hcg-table')[1].querySelector('th[aria-sort]').getAttribute('aria-sort')) === 'ascending',
+        'overlay: a column head sorts the table, a second click the other way', `${down.join(',')} / ${up.join(',')}`);
+    const seatOpts = await p.$$eval('[data-hcg-q="seats"] option', os => os.map(o => o.value).join());
+    ok(seatOpts === 'humans,bots,players,ki,all', 'overlay: the seat filter has people, player-bots, both, KI, all', seatOpts);
     await p.selectOption('[data-hcg-sort]', 'tree');
     ok(await p.$eval('[data-hcg-techs] tbody tr td', td => td.textContent.length > 0), 'overlay: the tech table re-sorts');
     await p.keyboard.press('Escape');

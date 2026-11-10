@@ -99,6 +99,25 @@ function fromStates(states, version) {
     };
 }
 
+/**
+ * Seats played by a player-bot account (utils/bots.js) get `pb: true`. Such a bot plays a human
+ * seat, so the facts – from the replay – can't tell it from a person; the match record can
+ * (participants[].botAccount). Matched by nation (and ability, for a nation played twice) among
+ * the human seats. Done when the statistics are read (utils/gamestats.js), so every stored match
+ * counts right without recomputing its facts.
+ */
+function markPlayerBots(f, participants) {
+    const bots = (Array.isArray(participants) ? participants : []).filter(x => x && x.botAccount);
+    if (!bots.length || !f || !Array.isArray(f.p)) return f;
+    const p = f.p.map(s => Object.assign({}, s));
+    for (const b of bots) {
+        const free = s => s.kind === 'human' && !s.pb && s.civ === b.civ;
+        const s = p.find(s => free(s) && !Array.isArray(s.ab) && s.ab === (b.ability || 'basis')) || p.find(free);
+        if (s) s.pb = true;
+    }
+    return Object.assign({}, f, { p });
+}
+
 /** Facts from the match record alone (no replay): no techs, no turn positions. */
 function fromRecord(game) {
     const parts = game.participants || [];
@@ -180,4 +199,4 @@ function startBackfill() {
     setTimeout(() => backfill().catch(err => console.error('[Facts] Backfill failed:', err)), 30 * 1000).unref();
 }
 
-module.exports = { fromStates, fromRecord, victoryOf, store, storeLater, backfill, startBackfill, setOnChange };
+module.exports = { fromStates, fromRecord, markPlayerBots, victoryOf, store, storeLater, backfill, startBackfill, setOnChange };
