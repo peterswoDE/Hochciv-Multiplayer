@@ -98,7 +98,9 @@ app.use(compression());
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
 // Changing requests only from this site's pages (utils/origin.js): staging is the same site
 app.use(checkOrigin);
-app.use(express.json({ limit: '20kb' }));
+// JSON bodies up to 20 KB – a finished single-player game (routes/solo.js, F28) up to 2 MB
+const jsonSmall = express.json({ limit: '20kb' }), jsonSolo = express.json({ limit: '2mb' });
+app.use((req, res, next) => (req.path.startsWith('/api/solo/') ? jsonSolo : jsonSmall)(req, res, next));
 app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.set({
@@ -249,6 +251,8 @@ app.use('/api/friends', require('./routes/friends'));
 app.use('/api/seasons', require('./routes/seasons'));
 // Weekly challenge (utils/challenge.js)
 app.use('/api/challenge', require('./routes/challenge'));
+// Single-player games for the statistics (F28, utils/solo.js)
+app.use('/api/solo', require('./routes/solo'));
 // Discord Activity (Embedded App SDK)
 app.use('/api/activity', require('./routes/activity'));
 

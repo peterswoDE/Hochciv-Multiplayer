@@ -209,7 +209,7 @@
         const D = d.detail || {};
         const src = D.sources || {};
         return `<h3>${tx('Admin')}</h3>
-            <p class="hcg-note">${tx('Quelle der Daten: %s aus Wiederholungen (vollständig), %s aus dem Spielbericht (ohne Technologien und Startplatz), %s ohne Daten.', src.replay || 0, src.record || 0, src.none || 0)}</p>
+            <p class="hcg-note">${tx('Quelle der Daten: %s aus Wiederholungen (vollständig), %s aus dem Spielbericht (ohne Technologien und Startplatz), %s ohne Daten.', src.replay || 0, src.record || 0, src.none || 0)} ${tx('Einzelspiele: %s.', src.solo || 0)}</p>
             ${table([[tx('Version')], [tx('Partien'), 'num']], (D.byVersion || []).sort((a, b) => parseInt(b.ver.slice(1)) - parseInt(a.ver.slice(1)) || 0)
                 .map(v => `<tr><td>${esc(v.ver)}</td><td class="num">${v.games}</td></tr>`))}
             <p class="hcg-note" style="margin-top:10px"><b>${tx('KI und Bots nach Stufe')}</b> (${tx('in den gefilterten Partien')})</p>
@@ -253,11 +253,13 @@
         ['ki', 'Nur KI'], ['all', 'Alle Plätze']];
     // each game type on its own (their rules differ), or all together
     const MODES = [['all', 'Alle'], ['normal', 'Normal'], ['duel', '1 gegen 1'], ['marathon', 'Marathon']];
+    // where the games were played (F28): multiplayer, single-player games, or both
+    const ORIGINS = [['all', 'Alle'], ['online', 'Online'], ['solo', 'Einzelspiel']];
 
     async function render(el, opts) {
         style();
         opts = opts || {};
-        const q = el._hcgQuery || (el._hcgQuery = opts.user ? { mode: 'all', n: 'all', ver: 'all' } : { mode: 'all', seats: 'humans', n: 'all', ver: 'all' });
+        const q = el._hcgQuery || (el._hcgQuery = opts.user ? { mode: 'all', n: 'all', ver: 'all', origin: 'all' } : { mode: 'all', seats: 'humans', n: 'all', ver: 'all', origin: 'all' });
         el.classList.add('hcg');
         el.innerHTML = `<p class="hcg-empty">${tx('Lädt...')}</p>`;
         let d;
@@ -275,6 +277,7 @@
         const filters = `<div class="hcg-filters">
             ${sel('mode', tx('Spielart'), MODES.map(([v, t]) => [v, tx(t)]))}
             ${opts.user ? '' : sel('seats', tx('Gezählt'), SEATS.map(([v, t]) => [v, tx(t)]))}
+            ${sel('origin', tx('Herkunft'), ORIGINS.map(([v, t]) => [v, tx(t)]))}
             ${q.mode !== 'duel' ? sel('n', tx('Reiche'), NS.filter(([v]) => q.mode !== 'normal' || v !== '2').map(([v, t]) => [v, tx(t)])) : ''}
             ${sel('ver', tx('Version'), [['all', tx('Alle')], ...d.filters.versions.map(v => [v, v + (v === d.filters.current ? ' ' + tx('(aktuell)') : '')])])}
         </div>`;

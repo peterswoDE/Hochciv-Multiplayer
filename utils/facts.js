@@ -5,7 +5,7 @@
  * account ids, so account deletion and merging don't touch them.
  *
  *   facts = {
- *     v: 1, src: 'replay' | 'record', ver, r: rounds, n: empires, mode: 'normal' | 'duel' | 'marathon',
+ *     v: 1, src: 'replay' | 'record' | 'solo' (a single-player game, utils/solo.js), ver, r: rounds, n: empires, mode: 'normal' | 'duel' | 'marathon',
  *     map, ev, wo,                                   // map name, events / wonders on
  *     win: 'military' | 'science' | 'economy' | 'culture' | 'other' | null, shared,
  *     p: [{ civ, ab, kind, lvl, pos, won, dead, s, c, pop, a,
@@ -208,6 +208,8 @@ function storeLater(gameId) {
 let onChange = null;
 /** utils/gamestats.js drops its cache when facts change. */
 function setOnChange(fn) { onChange = fn; }
+/** Facts were stored elsewhere (a single-player game, utils/solo.js). */
+function changed() { if (typeof onChange === 'function') onChange(); }
 
 /** All matches without facts (older ones, or after "recompute"), one after another. */
 async function backfill() {
@@ -224,4 +226,4 @@ function startBackfill() {
     setTimeout(() => backfill().catch(err => console.error('[Facts] Backfill failed:', err)), 30 * 1000).unref();
 }
 
-module.exports = { fromStates, fromRecord, markPlayerBots, markAccounts, victoryOf, store, storeLater, backfill, startBackfill, setOnChange };
+module.exports = { fromStates, fromRecord, markPlayerBots, markAccounts, victoryOf, store, storeLater, backfill, startBackfill, setOnChange, changed };

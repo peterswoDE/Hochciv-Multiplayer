@@ -1,7 +1,7 @@
 /**
  * Overall statistics (F13) – public, like the profiles and match pages.
  *
- *   GET /api/stats?seats=humans|bots|players|ki|all&n=all|2|3|4|5+&mode=all|normal|duel|marathon&ver=all|vNN
+ *   GET /api/stats?seats=humans|bots|players|ki|all&n=all|2|3|4|5+&mode=all|normal|duel|marathon&ver=all|vNN&origin=all|online|solo
  *   GET /api/stats/player/:userId?n=…&mode=…&ver=…   – the same over one account's seats (F23),
  *                                                   public like its profile (routes/profile.js)
  *
@@ -34,6 +34,7 @@ function query(q) {
         n: pick(q.n, /^(2|3|4|5\+)$/),
         mode: pick(q.mode, /^(normal|duel|marathon)$/),
         ver: pick(q.ver, /^v\d{1,4}$/),
+        origin: pick(q.origin, /^(online|solo)$/),       // F28: online games, single-player games, or all
     };
 }
 
