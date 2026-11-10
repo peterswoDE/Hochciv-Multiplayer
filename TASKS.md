@@ -30,8 +30,13 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 20 | F10 | [Seasons, leaderboard, badges](#f10-seasons-leaderboard-and-badges) | ✔ | ✔ | ✅ |
 | 21 | F21 | [Weekly challenge](#f21-weekly-challenge) | – | ✔ (solo vs. KI) | ✅ |
 | 22 | F22 | [Team mode](#f22-team-mode) | ✔ | ✔ | removed |
+| 23 | F23 | [Personal statistics](#f23-personal-statistics) | ✔ | ✔ | ⬜ |
+| 24 | F24 | [Replay link to a turn](#f24-replay-link-to-a-turn) | ✔ | ✔ | ⬜ |
+| 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ⬜ |
+| 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ⬜ |
+| 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ⬜ |
 
-The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
 F1–F14 are in production. Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
@@ -514,3 +519,53 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Planned:** the host splits the empires into teams in the lobby; a team wins together, and teammates have a team chat. The details depend on what the engine allows without changing the game files (alliances, victory check).
 
 **Status:** built (PRs #90, #91), then removed before it reached `main`: it does not fit the game for now. It may come back; the code is in the history of `development` (commits 56152c0 and 7bf2a65).
+
+---
+
+## F23 Personal statistics
+
+**Goal:** the overall statistics (F13), but only over one's own matches: win rate per nation, ability and turn position, how one wins, which techs one wins with.
+
+**Planned:** a *Meine Statistiken* view on the account page and in one's player profile, built from the stored facts per match with a filter on the account's seat.
+
+**Status:** ⬜ planned.
+
+---
+
+## F24 Replay link to a turn
+
+**Goal:** share a moment of a game.
+
+**Planned:** `/?replay=<id>&turn=<n>` opens the replay at that turn; the replay timeline gets *Link zu diesem Zug*.
+
+**Status:** ⬜ planned.
+
+---
+
+## F25 Lobby presets
+
+**Goal:** start the usual game in one click.
+
+**Planned:** a host saves the lobby settings (map, empires, KI seats and level, nations, events, wonders, timer, player-bots) under a name, kept with the account; live lobbies and the Rundenspiel form load them.
+
+**Status:** ⬜ planned.
+
+---
+
+## F26 Challenge: compare with the best attempt
+
+**Goal:** see where one fell behind in the weekly challenge.
+
+**Planned:** after an attempt (and from the leaderboard), a chart of one's points per round next to the week's best attempt, from the statistics stored with each match.
+
+**Status:** ⬜ planned.
+
+---
+
+## F27 Pause a live game, or continue it as a Rundenspiel
+
+**Goal:** a live game is not lost when players have to leave.
+
+**Planned:** the host can pause a live game (the turn timer stops, nobody can act, everyone sees it) and resume it, or turn the running game into a Rundenspiel with the same players, seats and state, which then goes on with the Rundenspiel rules (turn deadline, notifications). Guests can't play Rundenspiele, so their seats would go to the KI (to be decided when building it).
+
+**Status:** ⬜ planned.
