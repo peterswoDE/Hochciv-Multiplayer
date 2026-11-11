@@ -170,6 +170,10 @@ function aggregate() {
     ok(matches('humans') === 1 && matches('bots') === 1 && matches('players') === 1 && matches('ki') === 2 && matches('all') === 2
         && aggregate(rows, { seats: 'bots' }).games === 0 && aggregate(rows, { seats: 'humans' }).games === every.games,
         'aggregate: matches counted only where a seat of the filter played', ['humans', 'bots', 'players', 'ki', 'all'].map(matches).join(' '));
+    // victory types: only the matches the selected group won (england, a person, won `one`; the KI won kiOnly)
+    const wins = seats => Object.values(aggregate([...one, kiOnly], { seats }).victory).reduce((a, b) => a + b, 0);
+    ok(wins('humans') === 1 && wins('bots') === 0 && wins('players') === 1 && wins('ki') === 1 && wins('all') === 2,
+        'aggregate: victory types count the wins of the selected group', ['humans', 'bots', 'players', 'ki', 'all'].map(wins).join(' '));
 
     // personal statistics (F23): the account of each seat, from the match record
     const { markAccounts } = require('../../utils/facts');

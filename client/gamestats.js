@@ -127,7 +127,7 @@
         // victory types
         const vt = Object.entries(d.victory).sort((a, b) => b[1] - a[1]);
         const vtSum = vt.reduce((n, x) => n + x[1], 0);
-        out.push(`<h3>${tx(me ? 'Siege nach Siegart' : 'Wie gewonnen wird')}</h3>` + table([[tx('Siegart')], [tx('Partien'), 'num'], [tx('Anteil')]],
+        out.push(`<h3>${tx('Siege nach Siegart')}</h3>` + table([[tx('Siegart')], [tx('Partien'), 'num'], [tx('Anteil')]],
             vt.map(([k, n]) => `<tr><td>${tx(VICTORY[k] || k)}</td><td class="num">${n}</td><td>${bar(pct(n, vtSum))}</td></tr>`)));
 
         // nations
