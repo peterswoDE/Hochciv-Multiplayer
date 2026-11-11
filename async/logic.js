@@ -24,6 +24,7 @@
  * config.difficulty) and takes over a human seat after 7 days of inactivity (`replaced`).
  * 'bot' only appears in games created before KI fill-ins.
  */
+const appConfig = require('../config');
 const engine = require('../engine-adapter');
 const { renameInState } = require('../utils/rename');
 const Summary = require('../utils/summary');
@@ -146,6 +147,8 @@ function create(host, opts) {
     const lim = limitsOf(null, config.mapKey, config.customMap);
     const cErr = countError(lim, total);
     if (cErr) return { error: cErr };
+    if (config.ranked && total > appConfig.MAX_RANKED_EMPIRES)
+        return { error: `Gewertete Spiele haben höchstens ${appConfig.MAX_RANKED_EMPIRES} Reiche.` };
     // the weekly challenge (utils/challenge.js) is played alone; only the server creates it
     const challenge = opts && typeof opts.challenge === 'string' ? opts.challenge : null;
     if (total - ki < 2 && !challenge) return { error: 'Ein Rundenspiel braucht mindestens zwei Menschen.' };

@@ -30,6 +30,7 @@ const MP = {
     lastTurnKey: null,
     WIN_FACTOR: 2,          // the winner's victoryScore is multiplied by this – same as utils/score.js
     TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
+    MAX_RANKED_EMPIRES: 3,                      // ranked games: at most three empires (config.js)
     turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
     spectator: false,       // watching without a seat (live game or public Rundenspiel)
     spectatorCount: 0,      // live game: how many are watching
@@ -640,6 +641,7 @@ const MP = {
                 if (typeof closeSheet === 'function') closeSheet();
                 if (typeof ui !== 'undefined' && ui) { ui.army = null; ui.sel = null; ui.mode = null; }
                 toast(data && data.afk ? TX('Die Zeit ist abgelaufen. Du hast dreimal nicht gezogen – die KI spielt jetzt für dich.')
+                    : data && data.asIs ? TX('Die Zeit ist abgelaufen – dein Zug wurde so beendet, wie er war.')
                     : TX('Die Zeit ist abgelaufen – die KI hat deinen Zug beendet.'));
             });
 
@@ -1159,14 +1161,14 @@ const MP = {
                   ${this.TURN_TIMES.map(s => `<option value="${s}" ${(this.gameConfig.turnTime || 0) === s ? 'selected' : ''}>${s ? TX('%s Min.', s / 60) : TX('Unbegrenzt')}</option>`).join('')}
                 </select>
               </label>
-              ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, beendet die KI den Zug. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
+              ${this.gameConfig.turnTime ? `<p class="hint" style="margin:4px 0 8px">${TX('Ist die Zeit um, endet der Zug so, wie er ist – die KI ändert nichts. Nur wer nicht verbunden ist, dessen Zug spielt die KI. Nach drei verpassten Zügen in Folge spielt sie den Platz weiter, bis der Spieler zurück ist.')}</p>` : ''}
               ${this.playerBotRows(cnt.total - cnt.ki)}
               <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span>
                 <input type="checkbox" id="mp-set-public" onchange="MP.updateLobbyConfig()" ${this.gameConfig.isPublic ? 'checked' : ''}>
               </label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
-                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('min 2 H-Spieler, KI auf schwer')})</small></span>
-                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked ? 'checked' : ''} ${!this.user ? 'disabled' : ''}>
+                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('2–3 Reiche, min 2 H-Spieler, KI auf schwer')})</small></span>
+                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked && cnt.total <= this.MAX_RANKED_EMPIRES ? 'checked' : ''} ${!this.user || cnt.total > this.MAX_RANKED_EMPIRES ? 'disabled' : ''}>
               </label>
           </div>
 
@@ -1516,6 +1518,8 @@ const MP = {
         this.gameConfig = old;
         newConfig.playerCount = cnt.total;
         newConfig.kiCount = cnt.ki;
+        // ranked games have at most three empires (sockets/game.js checks it at the start)
+        if (cnt.total > this.MAX_RANKED_EMPIRES) newConfig.ranked = false;
         // Switching to "Eigene Karte" without a map yet: take the newest one from the library
         if (mapKey === 'eigene' && !this.gameConfig.customMap && typeof myMaps !== 'undefined' && myMaps[0])
             newConfig.customMap = myMaps[0];
@@ -2553,8 +2557,8 @@ const ASYNC = {
               ${note(TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.'))}` : ''}
               <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
-                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('KI auf schwerster Stufe')})</small></span>
-                <input type="checkbox" id="mpa-ranked" ${f.ranked ? 'checked' : ''}>
+                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('2–3 Reiche, KI auf schwerster Stufe')})</small></span>
+                <input type="checkbox" id="mpa-ranked" ${f.ranked && f.playerCount <= this.MAX_RANKED_EMPIRES ? 'checked' : ''} ${f.playerCount > this.MAX_RANKED_EMPIRES ? 'disabled' : ''}>
               </label>
             </div>
           </div>

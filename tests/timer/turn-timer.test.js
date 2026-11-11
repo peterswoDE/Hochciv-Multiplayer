@@ -10,7 +10,8 @@
  * Two browser pages play a live game through the real game page: A hosts and sets "Zeit pro
  * Zug" to 1 minute (3 s here), B joins and never moves (large map, two easy KI empires).
  * Checked: the lobby setting (an invalid value is refused), the countdown in the HUD, B's turns
- * end when the time is up, after TURN_TIMER_AFK_AFTER of them the KI keeps B's seat (banner,
+ * end when the time is up – as they are, the KI does nothing for a connected B (its empire stays
+ * the same) –, after TURN_TIMER_AFK_AFTER of them the KI keeps B's seat (banner,
  * player list) and B's turn no longer waits, "Ich bin zurück" hands the seat back and the clock
  * runs for B again. Should the KI still end a game before all checks have run, a new game is
  * played (up to three). Without a limit there is no clock.
@@ -95,7 +96,7 @@ async function attempt(newPage) {
 
         await a.selectOption('#mp-set-turntime', '60');
         await a.waitForFunction(() => MP.gameConfig.turnTime === 60);
-        check(await a.isVisible('text=Ist die Zeit um, beendet die KI den Zug.'), 'lobby: the hint explains what happens');
+        check(await a.isVisible('text=Ist die Zeit um, endet der Zug so, wie er ist'), 'lobby: the hint explains what happens');
         await a.selectOption('#mp-p-civ-0', 'griechenland');
         const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password }));
 
@@ -142,6 +143,15 @@ async function attempt(newPage) {
         // when whose turn began, as A sees it
         await a.evaluate(() => { window.__turns = []; MP.socket.on('state:update', d => window.__turns.push([Date.now(), d.state.round, d.state.cur])); });
         const t0 = Date.now();
+        // B is connected: its timed-out turns end as they are – the KI does nothing for B
+        const bi0 = await b.evaluate(() => MP.playerIndex);
+        const empire = () => a.evaluate(i => { const p = S.players[i]; return JSON.stringify({ t: Object.keys(p.techs || {}).filter(k => p.techs[k]).sort(),
+            c: S.cities.filter(c => c.owner === i).map(c => c.id + ':' + c.pop).sort(), a: S.armies.filter(x => x.owner === i).length, w: (S.wonders || []).filter(w => w.owner === i).length }); }, bi0);
+        const before = await empire();
+        await until(() => timeouts.length >= AFK - 1, 30000);
+        const after = await empire();
+        check(timeouts.slice(0, AFK - 1).every(t => t.asIs === true), 'B connected: the timer ends the turn as it is (no KI)', JSON.stringify(timeouts.slice(0, AFK - 1)));
+        check(before === after, 'B connected: nothing of the empire of B changed over its timed-out turns', after);
         await until(() => timeouts.length >= AFK, 30000);
         check(timeouts.length >= AFK, `B: ${AFK} turns ended by the timer`, `${timeouts.length} in ${Math.round((Date.now() - t0) / 1000)} s`);
         check(timeouts.slice(0, AFK - 1).every(t => t.afk === false) && timeouts[AFK - 1] && timeouts[AFK - 1].afk === true,
