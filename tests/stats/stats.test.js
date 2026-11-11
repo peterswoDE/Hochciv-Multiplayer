@@ -10,10 +10,11 @@
  *    every turn – one point per round, the scores are victoryScore, events point at empires.
  * 2. Live game in the browser (a logged-in test account hosts, three KI empires, the host only
  *    ends turns): the end screen's "Statistik" with chart, legend, tooltip, key moments and
- *    table; the value selector (cities, techs, income and stock of science, food and coins …);
+ *    table; the value selector (cities, techs, income of science, food and coins …; no stock –
+ *    resources don't carry over between turns);
  *    the match record and GET /api/games/:id carry the same statistics; the player's profile and
  *    the match history on the account page draw the chart when the match is opened.
- * 4. Older statistics without income and stock get them from the replay (Stats.enrich).
+ * 4. Older statistics without income get it from the replay (Stats.enrich).
  * 3. Rundenspiel (finish-async.js in the container): the KI plays a real game to its end through
  *    the service – statistics stored with the game, in the finished view and the match record.
  *
@@ -77,8 +78,8 @@ function recording() {
         'record: the last point has the final scores and cities', last.p.map(x => x.s).join(','));
     ok(st.events.length > 0 && st.events.every(e => e.r >= 1 && e.r <= S.round && st.players[e.pi]), 'record: events with rounds and empires', st.events.map(e => e.k).join(','));
     ok(st.players.every((p, i) => p.name === 'P' + i && p.civ === S.players[i].civ), 'record: players with names and nations');
-    ok(last.p.every((x, i) => S.players[i].dead || (x.ys === E.income(S, i).sci && x.yc === E.income(S, i).coins && x.rf === S.players[i].res.food)),
-        'record: income per round and stock of every empire', last.p.map(x => `${x.ys}/${x.yf}/${x.yc}`).join(' '));
+    ok(last.p.every((x, i) => S.players[i].dead || (x.ys === E.income(S, i).sci && x.yc === E.income(S, i).coins && !('rf' in x) && !('rs' in x))),
+        'record: income per round of every empire, no stock', last.p.map(x => `${x.ys}/${x.yf}/${x.yc}`).join(' '));
     // enrich: points recorded without income and stock get them from the states (one per turn)
     const states = [];
     const S2 = engine.createGame(session);
@@ -91,9 +92,9 @@ function recording() {
         states.push(JSON.parse(JSON.stringify(S2)));
     }
     const want = JSON.stringify(st2.rounds);
-    st2.rounds.forEach(rd => rd.p.forEach(x => { for (const k of ['ys', 'yf', 'yc', 'rs', 'rf', 'rc']) delete x[k]; }));
+    st2.rounds.forEach(rd => rd.p.forEach(x => { for (const k of ['ys', 'yf', 'yc']) delete x[k]; }));
     const en = Stats.enrich(st2, E, states);
-    ok(en && JSON.stringify(en.rounds) === want, 'enrich: income and stock from the replay states, same as recorded');
+    ok(en && JSON.stringify(en.rounds) === want, 'enrich: income from the replay states, same as recorded');
     ok(Stats.enrich(en, E, states) === null, 'enrich: nothing to do a second time');
     const pub = Stats.publicStats(st);
     ok(!pub.owners && !pub.wonders && pub.rounds.length === st.rounds.length, 'publicStats: without the bookkeeping');
@@ -147,7 +148,7 @@ async function live(browser, errors) {
         ok(rows === view.rounds + 1, 'live: the table has a row per round', String(rows));
         // the value selector: every recorded value, the chart and the table follow it
         const metrics = await page.$$eval('#mp-stats-box .hcs-metric option', os => os.map(o => o.value));
-        ok(['s', 'c', 'pop', 't', 'a', 'w', 'ys', 'yf', 'yc', 'rs', 'rf', 'rc'].every(k => metrics.includes(k)), 'live: values to choose from', metrics.join(','));
+        ok(['s', 'c', 'pop', 't', 'a', 'w', 'ys', 'yf', 'yc'].every(k => metrics.includes(k)) && !metrics.some(k => /^r[sfc]$/.test(k)), 'live: values to choose from (no stock)', metrics.join(','));
         await page.selectOption('#mp-stats-box .hcs-metric select', 'yc');
         const coins = await page.evaluate(() => ({
             title: document.querySelector('#mp-stats-box .hcs-title').textContent,
@@ -190,7 +191,7 @@ async function live(browser, errors) {
             colours: [...document.querySelectorAll('#hm-stats svg path[stroke-width="2"]')].map(p => p.getAttribute('stroke')),
             options: document.querySelectorAll('#hm-stats .hcs-metric option').length,
         }));
-        ok(hist.lines === 4 && hist.options >= 12, 'history: the clicked match shows the chart with the value selector', JSON.stringify({ lines: hist.lines, options: hist.options }));
+        ok(hist.lines === 4 && hist.options === 9, 'history: the clicked match shows the chart with the value selector', JSON.stringify({ lines: hist.lines, options: hist.options }));
         ok(hist.legend.some(l => l.startsWith('Gastgeber (')) && hist.legend.every(l => !/\((griechenland|england|russland|wikinger)\)/.test(l)) && !hist.colours.includes('#888'),
             'history: nation names and colours without the game', hist.legend.join(' | '));
         await acc.selectOption('#hm-stats .hcs-metric select', 't');

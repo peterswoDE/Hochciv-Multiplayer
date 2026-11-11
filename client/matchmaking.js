@@ -104,7 +104,7 @@ const MATCH = {
             h = `<p>${TX('Suche Mitspieler mit ähnlicher Wertung …')}</p>
                 <div class="mpm-box"><div class="mpm-spinner" aria-hidden="true"></div>
                   <div><b id="mpm-wait">0:00</b><br><small id="mpm-info"></small></div></div>
-                <p class="sub">${TX('Gespielt wird auf der Originalkarte, mit zufälligen Nationen, 3 Minuten pro Zug und der KI auf der schwersten Stufe für freie Plätze. Deine Wertung: %s MMR.', escHtml(mmr))}</p>
+                <p class="sub">${TX('Gespielt wird zu zweit oder zu dritt auf der Plättchenkarte, mit zufälligen Nationen und 3 Minuten pro Zug. Deine Wertung: %s MMR.', escHtml(mmr))}</p>
                 <button class="btn wide ghost" onclick="MATCH.stop()">${TX('Suche abbrechen')}</button>`;
         } else {
             const f = this.found, p = this.progress || { accepted: 0, total: f.players.length };

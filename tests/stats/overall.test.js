@@ -164,6 +164,16 @@ function aggregate() {
     const count = seats => { const x = aggregate(one, { seats }); return `${x.query.seats}:${x.seats}:${civ(x, 'england').games}`; };
     ok(count('humans') === 'humans:2:1' && count('bots') === 'bots:1:0' && count('players') === 'players:3:1' && count('ki') === 'ki:1:0' && count('all') === 'all:4:1' && count('x') === 'humans:2:1',
         'aggregate: people only, player-bots only, both, the KI only, all seats; unknown → people', ['humans', 'bots', 'players', 'ki', 'all'].map(count).join(' '));
+    // the number of matches follows the seat filter: only matches a counted seat played in
+    const kiOnly = { id: 'ki', ver: 'v96', f: g(2, 'duel', 'v96', [P('england', 'ki', 1, true), P('russland', 'ki', 2, false)]).f };
+    const matches = seats => aggregate([...one, kiOnly], { seats }).games;
+    ok(matches('humans') === 1 && matches('bots') === 1 && matches('players') === 1 && matches('ki') === 2 && matches('all') === 2
+        && aggregate(rows, { seats: 'bots' }).games === 0 && aggregate(rows, { seats: 'humans' }).games === every.games,
+        'aggregate: matches counted only where a seat of the filter played', ['humans', 'bots', 'players', 'ki', 'all'].map(matches).join(' '));
+    // victory types: only the matches the selected group won (england, a person, won `one`; the KI won kiOnly)
+    const wins = seats => Object.values(aggregate([...one, kiOnly], { seats }).victory).reduce((a, b) => a + b, 0);
+    ok(wins('humans') === 1 && wins('bots') === 0 && wins('players') === 1 && wins('ki') === 1 && wins('all') === 2,
+        'aggregate: victory types count the wins of the selected group', ['humans', 'bots', 'players', 'ki', 'all'].map(wins).join(' '));
 
     // personal statistics (F23): the account of each seat, from the match record
     const { markAccounts } = require('../../utils/facts');

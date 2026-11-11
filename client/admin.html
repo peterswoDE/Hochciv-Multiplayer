@@ -33,6 +33,8 @@
         </nav>
 
         <main class="acc-main">
+            <!-- review admin (routes/admin.js readOnly): sees everything, changes nothing -->
+            <p id="admin-readonly-note" class="acc-readonly-note" hidden>Review-Admin: Du siehst alles, kannst aber nichts ändern.</p>
             <!-- Overview: server status, global switches, open lobbies -->
             <section id="tab-admin-dashboard" class="tab-content">
                 <h1 class="acc-h">Übersicht</h1>
@@ -60,11 +62,11 @@
                             <strong>Wartungsmodus</strong>
                             <small>Verhindert das Erstellen neuer Lobbys.</small>
                         </div>
-                        <button id="btn-toggle-maintenance" class="btn" onclick="toggleMaintenance()">Laden...</button>
+                        <button id="btn-toggle-maintenance" class="btn w-lock" onclick="toggleMaintenance()">Laden...</button>
                     </div>
                     <div class="acc-setting">
                         <label class="acc-check">
-                            <input type="checkbox" id="admin-registration" onchange="toggleConfig('registrationEnabled', this.checked)">
+                            <input type="checkbox" id="admin-registration" class="w-lock" onchange="toggleConfig('registrationEnabled', this.checked)">
                             Registrierung erlauben
                         </label>
                     </div>
@@ -238,7 +240,7 @@
                 <div class="acc-card">
                     <h2>Wortfilter</h2>
                     <p class="acc-desc">Chat-Texte mit unangemessener Sprache werden nicht gesendet, sondern automatisch gemeldet; der Absender kann 5 Minuten lang keine Texte schreiben, nach einem zweiten Mal bis zum Ende des Spiels. Grundlage sind eingebaute Listen (Englisch, Deutsch). Hier kommen eigene Wörter dazu, oder Wörter, die nie als unangemessen gelten.</p>
-                    <form id="form-admin-word" class="acc-row">
+                    <form id="form-admin-word" class="acc-row w">
                         <input type="text" id="admin-word" maxlength="60" required placeholder="Wort">
                         <select id="admin-word-kind">
                             <option value="ban">Sperren</option>
@@ -278,16 +280,16 @@
                         <h2>Google OAuth</h2>
                         <div class="form-group" style="margin-top:12px;">
                             <label>Client ID</label>
-                            <input type="text" id="oauth-google-clientid" placeholder="xxxxxx.apps.googleusercontent.com">
+                            <input type="text" id="oauth-google-clientid" class="w-lock" placeholder="xxxxxx.apps.googleusercontent.com">
                         </div>
                         <div class="form-group">
                             <label>Client Secret</label>
-                            <input type="password" id="oauth-google-secret" placeholder="GOCSPX-xxxxxxxx">
+                            <input type="password" id="oauth-google-secret" class="w-lock" placeholder="GOCSPX-xxxxxxxx">
                         </div>
                         <label class="acc-check" style="margin-bottom:14px;">
-                            <input type="checkbox" id="oauth-google-enabled"> Aktiviert
+                            <input type="checkbox" id="oauth-google-enabled" class="w-lock"> Aktiviert
                         </label>
-                        <button class="btn btn-primary" onclick="saveOAuthConfig('google')">Google speichern</button>
+                        <button class="btn btn-primary w" onclick="saveOAuthConfig('google')">Google speichern</button>
                         <p id="oauth-google-msg" class="acc-msg"></p>
                     </div>
 
@@ -295,21 +297,25 @@
                         <h2>Discord OAuth</h2>
                         <div class="form-group" style="margin-top:12px;">
                             <label>Client ID</label>
-                            <input type="text" id="oauth-discord-clientid" placeholder="123456789012345678">
+                            <input type="text" id="oauth-discord-clientid" class="w-lock" placeholder="123456789012345678">
                         </div>
                         <div class="form-group">
                             <label>Client Secret</label>
-                            <input type="password" id="oauth-discord-secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                            <input type="password" id="oauth-discord-secret" class="w-lock" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
                         </div>
                         <div class="form-group">
                             <label>Bot-Token (Discord Activity, optional)</label>
-                            <input type="password" id="oauth-discord-bottoken" placeholder="Developer Portal → Bot → Token">
+                            <input type="password" id="oauth-discord-bottoken" class="w-lock" placeholder="Developer Portal → Bot → Token">
                             <small style="color:var(--ink-soft);">Damit prüft der Server, dass nur Spieler aus dem Anruf der Lobby ihrer Activity beitreten.</small>
+                            <label class="acc-check" style="margin-top:6px;" hidden>
+                                <input type="checkbox" id="oauth-discord-clear-bottoken" class="w-lock"> Bot-Token entfernen
+                            </label>
                         </div>
+                        <p class="acc-desc" style="margin:0 0 10px;">Gespeicherte Secrets werden nie angezeigt. Leer lassen behält sie, ein neuer Wert ersetzt sie.</p>
                         <label class="acc-check" style="margin-bottom:14px;">
-                            <input type="checkbox" id="oauth-discord-enabled"> Aktiviert (Website-Login)
+                            <input type="checkbox" id="oauth-discord-enabled" class="w-lock"> Aktiviert (Website-Login)
                         </label>
-                        <button class="btn btn-primary" onclick="saveOAuthConfig('discord')">Discord speichern</button>
+                        <button class="btn btn-primary w" onclick="saveOAuthConfig('discord')">Discord speichern</button>
                         <p id="oauth-discord-msg" class="acc-msg"></p>
                     </div>
                 </div>

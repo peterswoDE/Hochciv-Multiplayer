@@ -108,7 +108,9 @@ function aggregate(all, q, detail) {
         && (mode === 'all' || modeOf(x.f) === mode)
         && (!q.ver || q.ver === 'all' || (x.f.ver || x.ver) === q.ver);
     const keepSeat = user ? p => p.uid === user : SEATS[seatsMode];
-    const games = all.filter(keepGame);
+    // a match counts only if a counted seat played in it – otherwise "Nur Menschen" and
+    // "Spieler-Bots" showed the same number of games (and rounds, victory types)
+    const games = all.filter(x => keepGame(x) && x.f.p.some(keepSeat));
 
     const civs = {}, abil = {}, pos = {}, win = {}, wonders = {}, techs = {};
     const sums = { won: { n: 0 }, lost: { n: 0 } };
@@ -123,7 +125,8 @@ function aggregate(all, q, detail) {
         const m = modeOf(f);
         roundsByMode[m] = roundsByMode[m] || { games: 0, rounds: 0 };
         roundsByMode[m].games++; roundsByMode[m].rounds += f.r || 0;
-        if (f.win && (!user || f.p.some(p => p.uid === user && p.won))) win[f.win] = (win[f.win] || 0) + 1;
+        // victory types: the matches the selected group won (with `user`: that account's wins)
+        if (f.win && f.p.some(p => keepSeat(p) && p.won)) win[f.win] = (win[f.win] || 0) + 1;
         for (const p of f.p) {
             if (!keepSeat(p)) continue;
             seats++;
@@ -190,7 +193,7 @@ function aggregate(all, q, detail) {
             byVer[v] = (byVer[v] || 0) + 1;
             src[x.f.src] = (src[x.f.src] || 0) + 1;
         }
-        // KI and bot seats by level, in the matches of the current filter (ignores `seats`)
+        // KI and bot seats by level, in the matches of the current filter (any of their seats, not just counted ones)
         for (const g of games) for (const p of g.f.p) {
             if (p.kind === 'human') continue;
             const k = p.kind + ':' + (p.lvl || '?');

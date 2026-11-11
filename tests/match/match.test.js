@@ -9,7 +9,8 @@
  * Four test accounts in browser pages, through the game page's own menu: A (1000 MMR) and
  * B (1050) find each other, C (1600) does not; B declines – A goes back to the queue, B leaves
  * it; both search again and accept – the server's lobby fills and the ranked game starts by
- * itself (original map, random nations, 3 minutes per turn, four empires). C and D (1620) let
+ * itself (tile map, random nations, 3 minutes per turn, one empire per player; nobody places a
+ * start tile, so the KI places them when the turn time is up – run with TURN_TIMER_SCALE=0.05). C and D (1620) let
  * the confirmation run out – both leave the queue. Without login there is no queue. The MMR
  * window is checked directly. Test accounts are deleted afterwards.
  *
@@ -61,7 +62,15 @@ function windowRule() {
     ok(windowOf({ since: now }, now) === 100 && windowOf({ since: now - 15000 }, now) === 150 && windowOf({ since: now - 3600000 }, now) === 1000,
         'window: ±100, +50 every 15 s, at most ±1000');
     const c = matchConfig();
-    ok(c.mapKey === '0' && c.randomCivs && c.ranked && c.turnTime === 180 && c.playerCount === 4 && c.difficulty === 'schwer', 'settings of a matched game', JSON.stringify(c));
+    ok(c.mapKey === 'random' && c.randomCivs && c.ranked && c.turnTime === 180 && c.playerCount === 2 && c.kiCount === 0 && matchConfig(false, 3).playerCount === 3 && matchConfig(false, 4).playerCount === 3, 'settings of a matched game: tile map, one empire per player, at most 3', JSON.stringify(c));
+    // ranked games have at most three empires – Rundenspiele too (live lobbies: sockets/game.js at the start)
+    const Async = require('../../async/logic');
+    const host = { id: crypto.randomUUID(), username: 'rankcheck' };
+    const four = Async.create(host, { config: { mapKey: 'plaettchen', ranked: true, playerCount: 4, kiCount: 2 }, civ: 'england' });
+    const three = Async.create(host, { config: { mapKey: 'plaettchen', ranked: true, playerCount: 3, kiCount: 1 }, civ: 'england' });
+    ok(/höchstens 3 Reiche/.test(four.error || '') && !three.error, 'Rundenspiel: ranked with 4 empires refused, with 3 allowed', `${four.error} / ${three.error || 'ok'}`);
+    const original = Async.create(host, { config: { mapKey: '0', ranked: true, playerCount: 2, kiCount: 0 }, civ: 'england' });
+    ok(/Plättchenkarte/.test(original.error || ''), 'Rundenspiel: ranked on the original map refused', original.error);
 }
 
 (async () => {
@@ -111,10 +120,12 @@ function windowRule() {
         await A.click('text=Annehmen');
         ok(!!(await until(() => A.evaluate(() => /1 von 2 haben bestätigt/.test(document.getElementById('mpm-progress').textContent)))), 'progress: 1 of 2 confirmed');
         await B.click('text=Annehmen');
-        const inGame = p => until(() => p.evaluate(() => typeof S !== 'undefined' && S && document.getElementById('screen-game').classList.contains('show') && MP.playerIndex != null), 20000);
-        ok(!!(await inGame(A)) && !!(await inGame(B)), 'both confirmed: the game starts by itself');
+        // the tile map begins with placing start tiles; nobody places here – when the turn time is
+        // up (180 s × TURN_TIMER_SCALE) the KI places them and the game begins
+        const inGame = p => until(() => p.evaluate(() => typeof S !== 'undefined' && S && document.getElementById('screen-game').classList.contains('show') && MP.playerIndex != null), 60000);
+        ok(!!(await inGame(A)) && !!(await inGame(B)), 'both confirmed: the game starts by itself (start tiles placed by the KI when the time is up)');
         const g = await A.evaluate(() => ({ ranked: MP.gameConfig.ranked, turnTime: MP.gameConfig.turnTime, map: MP.gameConfig.mapKey, random: MP.gameConfig.randomCivs, empires: S.players.length, humans: S.players.filter(p => p.kind === 'human').length, clock: !!MP.turnClock }));
-        ok(g.ranked && g.turnTime === 180 && g.map === '0' && g.random && g.empires === 4 && g.humans === 2 && g.clock, 'ranked, original map, random nations, 3 min per turn, 2 humans + 2 KI', JSON.stringify(g));
+        ok(g.ranked && g.turnTime === 180 && g.map === 'random' && g.random && g.empires === 2 && g.humans === 2 && g.clock, 'ranked, tile map, random nations, 3 min per turn, 2 humans, no KI', JSON.stringify(g));
 
         // closing the dialog keeps searching; the menu button brings it back
         await C.evaluate(() => closeModal());

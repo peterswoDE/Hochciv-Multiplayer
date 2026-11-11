@@ -15,8 +15,9 @@ const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
-   the KI plays the rest of the turn; after AFK_AFTER such turns in a row it keeps the seat
-   until the player hands it back ('turn:reclaim'). */
+   the turn ends as the player left it (player feedback: the KI must not change what they did in
+   time); a player who isn't connected has the KI play the turn. After AFK_AFTER such turns in a
+   row the KI keeps the seat until the player hands it back ('turn:reclaim'). */
 const TURN_TIMES = [0, 60, 120, 180, 300, 600];
 const AFK_AFTER = config.TURN_TIMER_AFK_AFTER;        // 3 (tests may shorten it)
 const AFK_KI_LEVEL = { ranked: 'schwer', normal: 'mittel' };
@@ -335,17 +336,7 @@ module.exports = function registerHandlers(io) {
             st.placedCount++;
             ack({ ok: true });
 
-            if (st.placedCount >= st.humanSeats.length) {
-                // All players have placed! Generate map!
-                session.gameConfig.map = engine.getEngine().tileMap(st.plan);
-                try {
-                    session.state = engine.createGame(session);
-                    session.status = 'playing';
-                    emitGameStart(io, session);
-                } catch (e) {
-                    console.error('Error starting game after placement', e);
-                }
-            }
+            if (st.placedCount >= st.humanSeats.length) finishPlacement(io, session);
         });
 
         // ── Chat: text, emotes, map pings (utils/chat.js) ────────────────────
@@ -593,6 +584,11 @@ module.exports = function registerHandlers(io) {
         io.__turnInterval = setInterval(() => {
             const now = Date.now();
             for (const session of sessions.getAllSessions().values()) {
+                const ps = session.status === 'placement' && session.placementState;
+                if (ps && ps.deadline && now >= ps.deadline) {
+                    try { placementTimeout(io, session); } catch (err) { console.error(`[Turn timer] Placement timeout in session ${session.id}:`, err); }
+                    continue;
+                }
                 const tc = session.turnClock;
                 if (!tc || !tc.deadline || now < tc.deadline) continue;
                 try {
@@ -646,6 +642,9 @@ function startGame(io, session) {
         return lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.`;
     if (humans > total - kiSeats)
         return `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.`;
+    if (gc.ranked && !isPlaettchen) return 'Gewertete Spiele werden auf der Plättchenkarte gespielt.';
+    if (gc.ranked && total > config.MAX_RANKED_EMPIRES)
+        return `Gewertete Spiele haben höchstens ${config.MAX_RANKED_EMPIRES} Reiche.`;
     gc.playerCount = total;
     gc.duel = total === 2;
 
@@ -733,10 +732,13 @@ function startGame(io, session) {
             });
 
             session.status = 'placement';
+            // with a turn timer, placing has that much time too (placementTimeout)
+            const ms = turnTimeMs(session);
             session.placementState = {
                 plan, seed, rnd,
                 humanSeats,
-                placedCount: 0
+                placedCount: 0,
+                deadline: ms ? Date.now() + ms : null,
             };
 
             const { setup: _setup, ...publicCfg } = session.gameConfig;
@@ -935,6 +937,40 @@ function newScenes(session) {
 
 // ── Turn timer ────────────────────────────────────────────────────────────────
 
+/** Everyone has a start tile: the map is made and the game begins. */
+function finishPlacement(io, session) {
+    const st = session.placementState;
+    session.gameConfig.map = engine.getEngine().tileMap(st.plan);
+    try {
+        session.state = engine.createGame(session);
+        session.status = 'playing';
+        emitGameStart(io, session);
+    } catch (e) {
+        console.error('Error starting game after placement', e);
+    }
+}
+
+/**
+ * The time for placing start tiles is up (games with a turn timer, e.g. ranked matchmaking on
+ * the tile map): the KI places the tiles still missing – as for its own seats – and the game
+ * begins. Without it one player who doesn't place would hold up everyone.
+ */
+function placementTimeout(io, session) {
+    const st = session.placementState;
+    st.deadline = null;                              // once
+    const E = engine.getEngine();
+    for (const seat of st.humanSeats) {
+        if (seat.cell != null) continue;
+        const lp = session.players[seat.idx] || {};
+        const err = typeof E.kiPlaceSeat === 'function'
+            ? E.kiPlaceSeat(st.plan, seat, { civ: lp.civ, ability: lp.ability }, session.gameConfig.setup) : 'no ki';
+        if (err) E.botPlaceSeat(st.plan, seat, st.rnd);
+        st.placedCount++;
+        console.log(`[Turn timer] Session ${session.id}: placing time up, the KI placed the start tile of ${lp.name || seat.idx}`);
+    }
+    finishPlacement(io, session);
+}
+
 const turnTimeMs = session => {
     const t = session.gameConfig && session.gameConfig.turnTime;
     return TURN_TIMES.includes(t) && t > 0 ? t * 1000 * config.TURN_TIMER_SCALE : 0;
@@ -967,9 +1003,10 @@ function turnInfo(session) {
 }
 
 /**
- * The current player's time is up: the KI plays the rest of the turn and ends it. After
- * AFK_AFTER such turns in a row the KI keeps the seat – unless nobody else would be left to
- * play, then only this turn is played for them.
+ * The current player's time is up. Connected: the turn ends as they left it, the KI does
+ * nothing for them (engine.endTurnAsIs). Not connected: the KI plays the rest of the turn.
+ * After AFK_AFTER such turns in a row the KI keeps the seat – unless nobody else would be left
+ * to play, then only this turn is played for them.
  */
 function timeOutTurn(io, session) {
     const S = session.state;
@@ -987,12 +1024,15 @@ function timeOutTurn(io, session) {
     console.log(`[Turn timer] Session ${session.id}: time up for ${lp.name} (${lp.missedTurns} in a row${lp.afk ? ', KI keeps the seat' : ''})`);
 
     sessions.recordActivity(session.id);
-    if (lp.socketId) io.to(lp.socketId).emit('turn:timeout', { afk: lp.afk });
+    const asIs = !lp.afk && lp.connected && !!lp.socketId;
+    if (lp.socketId) io.to(lp.socketId).emit('turn:timeout', { afk: lp.afk, asIs });
     engine.attachScenes(S, session);
-    engine.finishTurnForAbsent(S, level, lp.afk, () => {
+    const changed = () => {
         broadcastState(io, session);
         checkGameOver(io, session);
-    });
+    };
+    if (asIs) engine.endTurnAsIs(S, changed);
+    else engine.finishTurnForAbsent(S, level, lp.afk, changed);
     if (lp.afk) io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
     broadcastState(io, session);
     checkGameOver(io, session);

@@ -7,7 +7,7 @@
  *   node tests/resign/resign.test.js [http://localhost:3000]
  *
  * Unit: when a resign ends the game (one human left in a game without KI, nobody human left).
- * Live, ranked duel of two accounts: B resigns from the game menu → A wins at once, B is out
+ * Live, ranked duel of two accounts on the tile map: B resigns from the game menu → A wins at once, B is out
  * of the rating with −15 MMR and a played game, the match record says so. Live, two guests and
  * one KI: B resigns on B's turn → the KI plays it, B's actions are refused, A sees "Aufgegeben";
  * then A resigns → the game ends on points. Rundenspiele: a duel ends with the other's win; a
@@ -113,17 +113,27 @@ function unit() {
         await p.waitForSelector(`#mp-p-civ-${idx}`);
         await p.selectOption(`#mp-p-civ-${idx}`, civ);
     };
-    const inGame = p => p.waitForFunction(() => typeof S !== 'undefined' && S && MP.playerIndex != null
-        && document.getElementById('screen-game').classList.contains('show'), null, { timeout: 20000 });
+    const inGame = (p, timeout = 20000) => p.waitForFunction(() => typeof S !== 'undefined' && S && MP.playerIndex != null
+        && document.getElementById('screen-game').classList.contains('show'), null, { timeout });
     try {
         // ── Live, ranked duel of two accounts ──────────────────────────────────────
         const ua = makeUser(), ub = makeUser();
         const a = await page('A', ua), b = await page('B', ub);
-        const cred = await host(a, ua.name, { playerCount: 2, kiCount: 0, mapKey: '0', ranked: true });
+        // ranked is played on the tile map: nobody places a start tile here, the KI places them
+        // when the turn time is up (60 s, or 3 s with TURN_TIMER_SCALE=0.05)
+        const cred = await host(a, ua.name, { playerCount: 2, kiCount: 0, mapKey: 'random', ranked: true, turnTime: 60 });
         await join(b, cred, ub.name, 1, 'russland');
         await a.waitForFunction(() => MP.players.length === 2 && MP.players[1].civ === 'russland');
+        // ranked on the original map: refused at the start
+        const refused = await a.evaluate(() => new Promise(r => {
+            MP.socket.emit('lobby:config', Object.assign({}, MP.gameConfig, { mapKey: '0' }));
+            setTimeout(() => MP.socket.emit('game:start', {}, r), 500);
+        }));
+        ok(refused && refused.error === 'Gewertete Spiele werden auf der Plättchenkarte gespielt.', 'ranked on the original map: the start is refused', refused && refused.error);
+        await a.evaluate(() => MP.socket.emit('lobby:config', Object.assign({}, MP.gameConfig, { mapKey: 'random' })));
+        await a.waitForFunction(() => MP.gameConfig.mapKey === 'random' && MP.gameConfig.ranked);
         await a.evaluate(() => MP.startGame());
-        await Promise.all([inGame(a), inGame(b)]);
+        await Promise.all([inGame(a, 90000), inGame(b, 90000)]);
         const aIdx = await a.evaluate(() => MP.playerIndex);
 
         // B resigns from the game menu

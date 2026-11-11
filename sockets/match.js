@@ -1,8 +1,9 @@
 /**
  * Ranked matchmaking (F9): "Gewertetes Spiel suchen" puts a logged-in player in a queue. The
  * queue pairs players by MMR – the allowed gap starts at ±100 and grows by 50 every 15 seconds.
- * Four players who fit form a game at once; two or three once the one waiting longest has
- * waited GROUP_WAIT_MS. Everyone confirms within CONFIRM_MS, then the server creates a lobby
+ * Three players who fit form a game at once; two once the one waiting longest has waited
+ * GROUP_WAIT_MS. They play on the tile map with as many empires as players, no KI
+ * (config.MAX_RANKED_EMPIRES: ranked games have at most three). Everyone confirms within CONFIRM_MS, then the server creates a lobby
  * with the ranked settings, everyone joins it and the game starts as soon as they are there.
  *
  *   client → server   match:join, match:leave, match:accept { matchId }, match:decline { matchId }
@@ -23,10 +24,10 @@ const sessions = require('../sessions');
 const engine = require('../engine-adapter');
 const serverState = require('../utils/serverState');
 const game = require('./game');
+const config = require('../config');
 
 const MIN_HUMANS = 2;
-const MAX_HUMANS = 4;
-const EMPIRES = 4;                         // free seats up to four empires are KI
+const MAX_HUMANS = config.MAX_RANKED_EMPIRES;   // 3: one empire per player, no KI
 const WINDOW_START = 100, WINDOW_STEP = 50, WINDOW_EVERY_MS = 15000, WINDOW_MAX = 1000;
 const GROUP_WAIT_MS = Number(process.env.MATCH_GROUP_WAIT_MS) || 20000;
 const CONFIRM_MS = Number(process.env.MATCH_CONFIRM_MS) || 20000;
@@ -36,11 +37,15 @@ const TICK_MS = 2000;
 const queue = new Map();                   // userId → { userId, name, mmr, socketId, since }
 const matches = new Map();                 // matchId → { id, users, accepted, timer }
 
-/** The lobby settings of a matched game: original map, random nations, KI at its hardest, 3 minutes per turn. */
-function matchConfig(withBots = false) {
+/**
+ * The lobby settings of a matched game: the tile map with one empire per player (2 or 3),
+ * random nations, 3 minutes per turn. The KI level only matters for a seat it takes over.
+ */
+function matchConfig(withBots = false, players = MIN_HUMANS) {
     const levels = engine.engineConst('KI_LEVELS') || [{ k: 'schwer' }];
+    const empires = Math.max(MIN_HUMANS, Math.min(MAX_HUMANS, players));
     return {
-        mapKey: '0', playerCount: EMPIRES, kiCount: 0, randomCivs: true, ranked: true,
+        mapKey: 'random', hexTiles: false, playerCount: empires, kiCount: 0, randomCivs: true, ranked: true,
         difficulty: levels[levels.length - 1].k, turnTime: 180,
         events: false, eventMode: 'hard', wonders: false, isPublic: false,
         seed: crypto.randomInt(2 ** 31), matchmaking: true,
@@ -114,7 +119,7 @@ module.exports = function registerMatchHandlers(io) {
         const [host, ...rest] = match.users;
         // a bot's seat is bound to its account, as when it joins a lobby (sessions.js)
         const info = u => ({ name: u.name, clientId: ids.get(u.userId), botUserId: u.isBot ? u.userId : undefined });
-        const r = sessions.createSession(matchConfig(match.users.some(u => u.isBot)), info(host));
+        const r = sessions.createSession(matchConfig(match.users.some(u => u.isBot), match.users.length), info(host));
         if (typeof r === 'string') {
             match.users.forEach(u => { queue.set(u.userId, u); emitTo(u.socketId, 'match:cancelled', { reason: r, requeued: true }); });
             return;
