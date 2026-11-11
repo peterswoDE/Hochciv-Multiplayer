@@ -6,9 +6,14 @@
  *   stats = {
  *     players: [{ civ, slot, name, roman, color, kind }],         // by state index
  *     rounds:  [{ r, p: [{ s, c, pop, t, a, w, d,                // score, cities, population,
- *                          ys, yf, yc, rs, rf, rc }] }],         //   techs, armies, wonders, out (1),
+ *                          ys, yf, yc }] }],                     //   techs, armies, wonders, out (1),
  *                                                                //   income per round (science, food,
- *                                                                //   coins) and the stock of each
+ *                                                                //   coins). No stock: resources don't
+ *                                                                //   carry over – each turn starts with
+ *                                                                //   its income – so a stock at the round
+ *                                                                //   start was income for one empire and
+ *                                                                //   leftovers for the others (older
+ *                                                                //   matches still have rs, rf, rc)
  *     events:  [{ r, k: 'wonder' | 'capture' | 'out' | 'lead', pi, from?, w? }],
  *     owners:  { cityId: owner },  wonders: [key]                // to find the events
  *   }
@@ -27,7 +32,6 @@ function snapshot(E, S) {
             try { score = E.victoryScore ? E.victoryScore(S, i) : null; } catch (_) { /* engine without it */ }
             try { inc = typeof E.income === 'function' && !p.dead ? E.income(S, i) : null; } catch (_) { /* engine without it */ }
             const cities = S.cities.filter(c => c.owner === i);
-            const res = p.res || {};
             return {
                 s: score ? score.total : null,
                 c: cities.length,
@@ -37,7 +41,6 @@ function snapshot(E, S) {
                 w: (S.wonders || []).filter(w => w.owner === i).length,
                 d: p.dead ? 1 : 0,
                 ys: inc ? inc.sci : null, yf: inc ? inc.food : null, yc: inc ? inc.coins : null,
-                rs: res.sci != null ? res.sci : null, rf: res.food != null ? res.food : null, rc: res.coins != null ? res.coins : null,
             };
         }),
     };
@@ -112,7 +115,7 @@ function enrich(stats, E, states) {
         if (!S || S.players.length !== rd.p.length) return;
         const snap = snapshot(E, S);
         rd.p.forEach((x, i) => {
-            for (const key of ['ys', 'yf', 'yc', 'rs', 'rf', 'rc']) x[key] = snap.p[i][key];
+            for (const key of ['ys', 'yf', 'yc']) x[key] = snap.p[i][key];
         });
         changed = true;
     });

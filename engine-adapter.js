@@ -628,6 +628,33 @@ function makeAdapter(engineDir, label) {
      * rest of the turn at `kiLevel`, the turn ends and the bots / KI after it move. With `keepKi`
      * the seat stays a KI seat (absent player) until it is handed back.
      */
+    /**
+     * Live turn timer, the player is there: the turn ends as they left it – nothing of what they
+     * did is changed, the KI makes no moves for them. Only what the engine won't end a turn with
+     * (v80+ blockingIssues: an army that could still leave a city) is solved: such an army steps
+     * out onto the first free field it can reach.
+     */
+    function endTurnAsIs(state, onStateChanged) {
+        if (!ensureEngineLoaded() || state.over) return;
+        const pi = state.cur;
+        try {
+            if (typeof E.blockingIssues === 'function' && E.blockingIssues(state, pi).length
+                && typeof E.armyReach === 'function' && typeof E.cityAt === 'function') {
+                for (const a of state.armies.filter(x => x.owner === pi && E.cityAt(state, x.r, x.c))) {
+                    const fields = [...E.armyReach(state, a).keys()].map(k => k.split(',').map(Number))
+                        .filter(([r, c]) => !(r === a.r && c === a.c) && !E.cityAt(state, r, c)
+                            && (typeof E.canStop !== 'function' || E.canStop(state, pi, r, c)));
+                    // the first field the engine accepts (moveArmy returns an error text otherwise)
+                    for (const [r, c] of fields) if (!E.moveArmy(state, a, r, c)) break;
+                }
+            }
+        } catch (err) {
+            console.error(`[Engine Adapter] Moving armies out of cities for player ${pi} failed:`, err);
+        }
+        endTurn(state);
+        runBots(state, onStateChanged);
+    }
+
     function finishTurnForAbsent(state, kiLevel, keepKi, onStateChanged) {
         if (!ensureEngineLoaded() || state.over) return;
         const p = state.players[state.cur];
@@ -689,7 +716,7 @@ function makeAdapter(engineDir, label) {
         marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
         advanceDraft, assignDoubles, isAutoPlayer, kiLevelFor, randomAbility, checkCustomMap,
         engineConst, turnOrderSlots, peekNext, advanceWithoutBegin, applyLateAbility, autoTurn,
-        finishTurnForAbsent, ensureEngineLoaded, attachScenes, finishTurn,
+        finishTurnForAbsent, endTurnAsIs, ensureEngineLoaded, attachScenes, finishTurn,
         getEngine: () => E,
         version: () => engineConst('APP_VERSION') || label,
     };

@@ -29,6 +29,8 @@ module.exports = {
     JOIN_CODE_LENGTH: 6,
     PASSWORD_LENGTH: 6,        // 6-digit numeric password
     MAX_PLAYERS: 8,              // empires per game (the tile map and custom maps go up to 8)
+    // Ranked games: at most this many empires (player feedback: 4+ empires aren't fair yet)
+    MAX_RANKED_EMPIRES: 3,
     MAX_SESSIONS: 500,         // in-memory lobbies/games at once
     MAX_NAME_LENGTH: 30,
     MAX_SPECTATORS: 20,        // watching a live game without a seat

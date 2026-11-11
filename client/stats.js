@@ -19,7 +19,7 @@ const STATS = {
         ['s', 'Punkte je Runde'], ['c', 'Städte'], ['pop', 'Bevölkerung'], ['t', 'Technologien'],
         ['a', 'Armeen'], ['w', 'Weltwunder'],
         ['ys', 'Wissenschaft je Runde'], ['yf', 'Nahrung je Runde'], ['yc', 'Münzen je Runde'],
-        ['rs', 'Wissenschaft im Vorrat'], ['rf', 'Nahrung im Vorrat'], ['rc', 'Münzen im Vorrat'],
+        // no "im Vorrat": resources don't carry over between turns (utils/stats.js)
     ],
     names: null,             // { civ: { k: [de, en, colour] }, wonder: { k: [de, en] } } – from GET /api/games/:id
 
