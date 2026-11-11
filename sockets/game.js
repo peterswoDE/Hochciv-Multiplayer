@@ -642,6 +642,7 @@ function startGame(io, session) {
         return lim.min === lim.max ? `Auf dieser Karte spielen genau ${lim.min} Reiche.` : `Auf dieser Karte spielen ${lim.min} bis ${lim.max} Reiche.`;
     if (humans > total - kiSeats)
         return `Es sind ${humans} Spieler in der Lobby – eingestellt sind ${total} Reiche, davon ${kiSeats} für die KI.`;
+    if (gc.ranked && !isPlaettchen) return 'Gewertete Spiele werden auf der Plättchenkarte gespielt.';
     if (gc.ranked && total > config.MAX_RANKED_EMPIRES)
         return `Gewertete Spiele haben höchstens ${config.MAX_RANKED_EMPIRES} Reiche.`;
     gc.playerCount = total;
