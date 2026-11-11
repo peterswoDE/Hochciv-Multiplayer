@@ -125,7 +125,8 @@ function aggregate(all, q, detail) {
         const m = modeOf(f);
         roundsByMode[m] = roundsByMode[m] || { games: 0, rounds: 0 };
         roundsByMode[m].games++; roundsByMode[m].rounds += f.r || 0;
-        if (f.win && (!user || f.p.some(p => p.uid === user && p.won))) win[f.win] = (win[f.win] || 0) + 1;
+        // victory types: the matches the selected group won (with `user`: that account's wins)
+        if (f.win && f.p.some(p => keepSeat(p) && p.won)) win[f.win] = (win[f.win] || 0) + 1;
         for (const p of f.p) {
             if (!keepSeat(p)) continue;
             seats++;

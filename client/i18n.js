@@ -1428,7 +1428,6 @@
         'Menschliche Plätze': 'Human seats',
         'Ø Runden': 'Avg. rounds',
         'Für diese Auswahl gibt es noch keine beendeten Partien.': 'There are no finished matches for this selection yet.',
-        'Wie gewonnen wird': 'How games are won',
         'Siegart': 'Victory type',
         'Anteil': 'Share',
         'Militärsieg': 'Military victory',
