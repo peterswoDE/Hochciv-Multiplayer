@@ -31,6 +31,10 @@ const MP = {
     WIN_FACTOR: 2,          // the winner's victoryScore is multiplied by this – same as utils/score.js
     TURN_TIMES: [0, 60, 120, 180, 300, 600],    // turn timer choices in seconds (sockets/game.js)
     MAX_RANKED_EMPIRES: 3,                      // ranked games: at most three empires (config.js)
+    /** Ranked is possible: the tile map with at most three empires (sockets/game.js, async/logic.js). */
+    rankedOk: function (mapKey, total) {
+        return (mapKey === 'plaettchen' || mapKey === 'random') && total <= this.MAX_RANKED_EMPIRES;
+    },
     turnClock: null,        // live games with a turn timer: { total, deadline (local ms) | null }
     spectator: false,       // watching without a seat (live game or public Rundenspiel)
     spectatorCount: 0,      // live game: how many are watching
@@ -1167,8 +1171,8 @@ const MP = {
                 <input type="checkbox" id="mp-set-public" onchange="MP.updateLobbyConfig()" ${this.gameConfig.isPublic ? 'checked' : ''}>
               </label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
-                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('2–3 Reiche, min 2 H-Spieler, KI auf schwer')})</small></span>
-                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked && cnt.total <= this.MAX_RANKED_EMPIRES ? 'checked' : ''} ${!this.user || cnt.total > this.MAX_RANKED_EMPIRES ? 'disabled' : ''}>
+                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('Plättchenkarte, 2–3 Reiche, min 2 H-Spieler, KI auf schwer')})</small></span>
+                <input type="checkbox" id="mp-set-ranked" onchange="MP.updateLobbyConfig()" ${this.gameConfig.ranked && this.rankedOk(this.gameConfig.mapKey, cnt.total) ? 'checked' : ''} ${!this.user || !this.rankedOk(this.gameConfig.mapKey, cnt.total) ? 'disabled' : ''}>
               </label>
           </div>
 
@@ -1518,8 +1522,8 @@ const MP = {
         this.gameConfig = old;
         newConfig.playerCount = cnt.total;
         newConfig.kiCount = cnt.ki;
-        // ranked games have at most three empires (sockets/game.js checks it at the start)
-        if (cnt.total > this.MAX_RANKED_EMPIRES) newConfig.ranked = false;
+        // ranked games: tile map, at most three empires (sockets/game.js checks it at the start)
+        if (!this.rankedOk(mapKey, cnt.total)) newConfig.ranked = false;
         // Switching to "Eigene Karte" without a map yet: take the newest one from the library
         if (mapKey === 'eigene' && !this.gameConfig.customMap && typeof myMaps !== 'undefined' && myMaps[0])
             newConfig.customMap = myMaps[0];
@@ -2557,8 +2561,8 @@ const ASYNC = {
               ${note(TX('Spieler-Bots sind Bot-Konten: Programme, die wie Spieler spielen. Sie nehmen freie Plätze für Menschen – wer zuerst kommt –, nie die Plätze der KI.'))}` : ''}
               <label class="row"><span>${TX('Öffentlich')} <small style="font-size:10px;color:#777">(${TX('in der Liste offener Spiele')})</small></span><input type="checkbox" id="mpa-public" ${f.isPublic ? 'checked' : ''}></label>
               <label class="row" style="margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
-                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('2–3 Reiche, KI auf schwerster Stufe')})</small></span>
-                <input type="checkbox" id="mpa-ranked" ${f.ranked && f.playerCount <= this.MAX_RANKED_EMPIRES ? 'checked' : ''} ${f.playerCount > this.MAX_RANKED_EMPIRES ? 'disabled' : ''}>
+                <span><b>🔥 ${TX('Gewertetes Spiel')}</b> <br><small style="font-size:10px;color:#777">(${TX('Plättchenkarte, 2–3 Reiche, KI auf schwerster Stufe')})</small></span>
+                <input type="checkbox" id="mpa-ranked" ${f.ranked && MP.rankedOk(f.mapKey, f.playerCount) ? 'checked' : ''} ${!MP.rankedOk(f.mapKey, f.playerCount) ? 'disabled' : ''}>
               </label>
             </div>
           </div>
@@ -2639,7 +2643,7 @@ const ASYNC = {
             const r = await this.api('', {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
-                    wonders: f.wonders, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked, isPublic: f.isPublic, turnDays: f.turnDays || 7,
+                    wonders: f.wonders, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked && MP.rankedOk(f.mapKey, f.playerCount), isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },

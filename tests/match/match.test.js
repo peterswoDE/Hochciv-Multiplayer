@@ -69,6 +69,8 @@ function windowRule() {
     const four = Async.create(host, { config: { mapKey: 'plaettchen', ranked: true, playerCount: 4, kiCount: 2 }, civ: 'england' });
     const three = Async.create(host, { config: { mapKey: 'plaettchen', ranked: true, playerCount: 3, kiCount: 1 }, civ: 'england' });
     ok(/höchstens 3 Reiche/.test(four.error || '') && !three.error, 'Rundenspiel: ranked with 4 empires refused, with 3 allowed', `${four.error} / ${three.error || 'ok'}`);
+    const original = Async.create(host, { config: { mapKey: '0', ranked: true, playerCount: 2, kiCount: 0 }, civ: 'england' });
+    ok(/Plättchenkarte/.test(original.error || ''), 'Rundenspiel: ranked on the original map refused', original.error);
 }
 
 (async () => {

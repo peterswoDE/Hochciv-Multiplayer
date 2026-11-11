@@ -147,6 +147,7 @@ function create(host, opts) {
     const lim = limitsOf(null, config.mapKey, config.customMap);
     const cErr = countError(lim, total);
     if (cErr) return { error: cErr };
+    if (config.ranked && config.mapKey !== 'plaettchen') return { error: 'Gewertete Spiele werden auf der Plättchenkarte gespielt.' };
     if (config.ranked && total > appConfig.MAX_RANKED_EMPIRES)
         return { error: `Gewertete Spiele haben höchstens ${appConfig.MAX_RANKED_EMPIRES} Reiche.` };
     // the weekly challenge (utils/challenge.js) is played alone; only the server creates it
