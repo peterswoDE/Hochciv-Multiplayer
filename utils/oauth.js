@@ -53,8 +53,9 @@ async function linkProvider(user, { idField, value, avatar }) {
 /**
  * Logging in with a linked provider account needs no second factor. A new link does, as it is a
  * new way in: done(null, user, { link }) has the login wait for the factor, nothing is saved yet.
+ * `opts.create === false`: no new account, done(null, false, { message: 'noaccount' }) instead.
  */
-async function handleOAuthProfile(req, provider, idField, profile, done) {
+async function handleOAuthProfile(req, provider, idField, profile, done, opts = {}) {
     try {
         const providerIdValue = String(profile.id);
         const email = verifiedEmail(provider, profile);
@@ -110,7 +111,9 @@ async function handleOAuthProfile(req, provider, idField, profile, done) {
             }
         }
 
-        // 3. Create new user with a unique, plain username
+        // 3. Create new user with a unique, plain username – unless the login wasn't asked for
+        //    (the app's automatic Play Games login only signs in to accounts that exist)
+        if (opts.create === false) return done(null, false, { message: 'noaccount' });
         const displayName = profile.displayName || profile.username || (email ? email.split('@')[0] : '');
         let base = displayName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 24);
         if (base.length < 3) base = `${provider}_${providerIdValue.slice(0, 6)}`;

@@ -1,6 +1,6 @@
 /**
  * Tests of the Android app's Google sign-in (GET /api/auth/google/app-config,
- * POST /api/auth/google/idtoken) against the local docker setup.
+ * POST /api/auth/google/idtoken, POST /api/auth/google/playgames) against the local docker setup.
  *
  * Real Google ID tokens can only come from Google, so the server runs with a test stub for the
  * signature check (google-id-token-stub.js); everything after it is the production code.
@@ -227,6 +227,49 @@ const sql = q => execFileSync('docker', ['exec', 'hochciv-db', 'psql', '-U', 'ho
     r = await google2(c12, sub3, `other.${email2}`);
     r = await c12('/api/account/recent-auth');
     ok(r.status === 200, 'no second factor: the Google login counts as recent, as before', `${r.status}`);
+
+    // ---- Play Games sign-in (POST /api/auth/google/playgames): existing accounts only
+    const pgCode = extra => 'test-code.' + Buffer.from(JSON.stringify(claims(undefined, extra))).toString('base64url');
+    const pg = (c2, body, headers) => c2('/api/auth/google/playgames', {
+        method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, headers),
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    r = await pg(client(), 'code=x', { 'content-type': 'application/x-www-form-urlencoded' });
+    ok(r.status === 415, 'Play Games: form posts are refused (login CSRF)', r.status);
+    r = await pg(client(), { code: 'not-a-code' });
+    ok(r.status === 401 && r.body.reason === 'failed', 'Play Games: a code Google refuses → failed', `${r.status} ${r.body && r.body.reason}`);
+    r = await pg(client(), { code: pgCode({ aud: 'someone-else.apps.googleusercontent.com' }) });
+    ok(r.status === 401 && r.body.reason === 'failed', 'Play Games: ID token for another app → failed', `${r.status}`);
+
+    const newMail = `pg.${crypto.randomBytes(4).toString('hex')}@example.com`;
+    const cp1 = client();
+    r = await pg(cp1, { code: pgCode({ email: newMail }) });
+    ok(r.status === 403 && r.body.reason === 'noaccount', 'Play Games: unknown Google account → noaccount', `${r.status} ${r.body && r.body.reason}`);
+    ok(sql(`SELECT count(*) FROM users WHERE email = '${newMail}'`) === '0', 'and no account is created');
+    ok((await cp1('/api/auth/me')).status === 401, 'and there is no login');
+
+    const cp2 = client();
+    r = await pg(cp2, { code: pgCode({ sub: first.sub, email: first.email }) });
+    const mp2 = await cp2('/api/auth/me');
+    ok(r.body && r.body.ok === true && mp2.body && mp2.body.id === me.body.id, 'Play Games: linked Google account logs in, without a nonce',
+        JSON.stringify(r.body));
+    r = await pg(cp2, { code: pgCode({ sub: first.sub, email: first.email }) });
+    ok(r.status === 409, 'Play Games: only a login, not a link while logged in', `${r.status}`);
+
+    const uname3 = 'apptest_' + crypto.randomBytes(3).toString('hex');
+    await client()('/api/auth/register', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: uname3, email: `${uname3}@example.com`, password: 'Sehr-geheim-123!' }),
+    });
+    const cp3 = client();
+    r = await pg(cp3, { code: pgCode({ email: `${uname3}@example.com` }) });
+    const mp3 = await cp3('/api/auth/me');
+    ok(r.body && r.body.ok && mp3.body && mp3.body.username === uname3 && mp3.body.googleLinked,
+        'Play Games: verified e-mail of an existing account logs in and links', mp3.body && mp3.body.username);
+    r = await pg(client(), { code: pgCode({ email: `${uname3}@example.com`, email_verified: false }) });
+    ok(r.status === 403 && r.body.reason === 'noaccount', 'Play Games: unverified e-mail → no takeover, no new account', `${r.status} ${r.body && r.body.reason}`);
+    r = await pg(client(), { code: pgCode({ email }) });
+    ok(r.status === 403 && r.body.reason === 'banned', 'Play Games: banned user is refused', `${r.status} ${r.body && r.body.reason}`);
 
     console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
     process.exit(failed ? 1 : 0);

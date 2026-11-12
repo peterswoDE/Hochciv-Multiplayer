@@ -19,6 +19,7 @@ const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
 const Bots = require('../utils/bots');
 const terms = require('../utils/terms');
+const playGames = require('../utils/playGames');
 
 const rateLimitLib = require('express-rate-limit');
 
@@ -464,6 +465,7 @@ function oauthFailureReason(info) {
     const msg = String((info && info.message) || '');
     return msg === 'banned' ? 'banned'
         : msg === 'reauth' ? 'reauth'
+        : msg === 'noaccount' ? 'noaccount'
         : msg.includes('bereits mit einem anderen') ? 'taken'
             : msg.includes('laufende Rundenspiele') ? 'merge_async'
             : /state/i.test(msg) ? 'state'
@@ -522,40 +524,81 @@ router.post('/google/idtoken', rateLimit, async (req, res) => {
         if (!payload || !payload.sub || payload.nonce !== expected.value) {
             return res.status(401).json({ ok: false, reason: 'state' });
         }
-        // the profile passport-google-oauth20 would deliver
-        const profile = {
-            id: payload.sub,
-            displayName: payload.name || '',
-            emails: payload.email ? [{ value: payload.email, verified: payload.email_verified === true }] : [],
-            photos: payload.picture ? [{ value: payload.picture }] : [],
-        };
         if (Bots.isBot(req.user)) return res.status(403).json({ ok: false, reason: 'failed' });
-        const linking = req.isAuthenticated();
-        oauth.handleOAuthProfile(req, 'google', 'googleId', profile, async (err, user, info) => {
-            if (err) {
-                console.error('[OAuth] Google app login error:', err);
-                return res.status(500).json({ ok: false, reason: 'error' });
-            }
-            if (!user) return res.status(403).json({ ok: false, reason: oauthFailureReason(info) });
-            try {
-                const methods = await secondFactors(user);
-                // the app opens /?oauth=mfa, where the dialog asks for it (as after the web callback)
-                if (needsSecondFactor(req, user, info, methods, linking)) return res.json({ ok: false, reason: 'mfa' });
-                req.login(user, (loginErr) => {
-                    if (loginErr) {
-                        console.error('[OAuth] Google app login error:', loginErr);
-                        return res.status(500).json({ ok: false, reason: 'error' });
-                    }
-                    if (!methods) markAuthenticated(req);
-                    res.json({ ok: true, linked: linking });
-                });
-            } catch (factorErr) {
-                console.error('[OAuth] Google app login error:', factorErr);
-                res.status(500).json({ ok: false, reason: 'error' });
-            }
-        });
+        googleAppLogin(req, res, payload);
     } catch (err) {
         console.error('[OAuth] Google app login error:', err);
+        res.status(500).json({ ok: false, reason: 'error' });
+    }
+});
+
+/**
+ * A verified Google ID token's payload → login (or link, when logged in) with the account logic
+ * of the web login. Answers { ok: true, linked } or { ok: false, reason }. `opts` goes to
+ * handleOAuthProfile ({ create: false }: existing accounts only).
+ */
+function googleAppLogin(req, res, payload, opts) {
+    // the profile passport-google-oauth20 would deliver
+    const profile = {
+        id: payload.sub,
+        displayName: payload.name || '',
+        emails: payload.email ? [{ value: payload.email, verified: payload.email_verified === true }] : [],
+        photos: payload.picture ? [{ value: payload.picture }] : [],
+    };
+    const linking = req.isAuthenticated();
+    oauth.handleOAuthProfile(req, 'google', 'googleId', profile, async (err, user, info) => {
+        if (err) {
+            console.error('[OAuth] Google app login error:', err);
+            return res.status(500).json({ ok: false, reason: 'error' });
+        }
+        if (!user) return res.status(403).json({ ok: false, reason: oauthFailureReason(info) });
+        try {
+            const methods = await secondFactors(user);
+            // the app opens /?oauth=mfa, where the dialog asks for it (as after the web callback)
+            if (needsSecondFactor(req, user, info, methods, linking)) return res.json({ ok: false, reason: 'mfa' });
+            req.login(user, (loginErr) => {
+                if (loginErr) {
+                    console.error('[OAuth] Google app login error:', loginErr);
+                    return res.status(500).json({ ok: false, reason: 'error' });
+                }
+                if (!methods) markAuthenticated(req);
+                res.json({ ok: true, linked: linking });
+            });
+        } catch (factorErr) {
+            console.error('[OAuth] Google app login error:', factorErr);
+            res.status(500).json({ ok: false, reason: 'error' });
+        }
+    }, opts);
+}
+
+// --- Google Play Games sign-in of the Android app (utils/playGames.js) ---
+// The app starts it by itself when Play Games has signed the player in and nobody is logged in.
+// So it only logs in to an existing account (linked to that Google account, or with its verified
+// e-mail) and never creates one: a new player taps "Google" once, from then on it's automatic.
+// No nonce is needed: the code is single-use and only Google can exchange it, with our secret.
+// { code } → { ok: true } or { ok: false, reason } (reasons as in ?oauth=<reason>, plus 'noaccount')
+router.post('/google/playgames', rateLimit, async (req, res) => {
+    // JSON only: a form on another site can't send it without a CORS preflight (login CSRF)
+    if (!req.is('application/json')) return res.status(415).json({ ok: false, reason: 'failed' });
+    const code = req.body && req.body.code;
+    if (typeof code !== 'string' || !code || code.length > 2048) return res.status(400).json({ ok: false, reason: 'failed' });
+    // a login only – linking stays with the "Google" button on the account page
+    if (req.isAuthenticated()) return res.status(409).json({ ok: false, reason: 'failed' });
+    try {
+        const p = await OAuthProvider.findOne({ where: { provider: 'google' } });
+        if (!p || !p.enabled || !p.clientId || !p.clientSecret) return res.status(404).json({ ok: false, reason: 'error' });
+        let payload;
+        try {
+            const tokens = await playGames.exchangeCode(p.clientId, p.clientSecret, code);
+            payload = (await googleVerifier.verifyIdToken({ idToken: tokens.id_token, audience: p.clientId })).getPayload();
+        } catch (err) {
+            console.warn('[OAuth] Play Games code rejected:', String(err.message).split(':')[0].slice(0, 80));
+            return res.status(401).json({ ok: false, reason: 'failed' });
+        }
+        if (!payload || !payload.sub) return res.status(401).json({ ok: false, reason: 'failed' });
+        googleAppLogin(req, res, payload, { create: false });
+    } catch (err) {
+        console.error('[OAuth] Play Games login error:', err);
         res.status(500).json({ ok: false, reason: 'error' });
     }
 });
