@@ -17,3 +17,12 @@ OAuth2Client.prototype.verifyIdToken = async function ({ idToken, audience }) {
 };
 
 console.warn('[TEST] Google ID token stub active – signatures are NOT checked. Never use this in production.');
+
+// Play Games sign-in (utils/playGames.js): a code "test-code.<base64url JSON payload>" stands for
+// what Google's token endpoint would answer – an ID token with that payload.
+const playGames = require('../../utils/playGames');
+playGames.exchangeCode = async (clientId, clientSecret, code) => {
+    const m = /^test-code\.([A-Za-z0-9_-]+)$/.exec(code || '');
+    if (!m || !clientSecret) throw new Error('stub: invalid_grant');
+    return { id_token: 'test.' + m[1], access_token: 'stub' };
+};

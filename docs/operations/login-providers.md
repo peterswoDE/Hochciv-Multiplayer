@@ -28,4 +28,12 @@ Google refuses its login page inside the app's WebView, so the app signs in nati
 
 In the Google Cloud Console, the app also needs an **Android** OAuth client (package `de.hochciv.app`, the SHA-1 of the app's signing keys); its ID isn't entered here.
 
+### Play Games login
+
+If the player is signed in to Google Play Games on the phone, the app logs in by itself at start, with no tap. Play Games gives the app a one-time code (scopes `openid`, `email`, `profile`), the page sends it to `POST /api/auth/google/playgames`, and the server exchanges it at Google with the client ID **and secret** entered above (`utils/playGames.js`). The ID token it gets back carries the same Google account ID as the Google button, so both lead to the same HochCiv account.
+
+This automatic login **only logs in to accounts that exist**: one linked to that Google account, or one with its verified e-mail (linked on the way, as above). It never creates an account – a new player taps "Google" once, after that it's automatic. It isn't used for linking while logged in, and the app stops trying after the player logs out, until the next manual login.
+
+Setup in the Play Console (*Play Games-Dienste → Konfiguration → Anmeldedaten*): besides the Android credential, add a **Game server** credential with the same web OAuth client that is entered above. Play Games issues codes for that client only, and only if it is in the Play Games project's Google Cloud project.
+
 Tests: `tests/auth/google-app-login.test.js` (instructions in the file).
