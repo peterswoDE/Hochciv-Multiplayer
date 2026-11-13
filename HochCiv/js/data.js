@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v106';
+const APP_VERSION = 'v107';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -106,7 +106,7 @@ const TECHS = [
   { k: 'gewehre', n: 'Gewehre', f: 2, c: 11, e: '3 Münzen = 1 Macht' },
   { k: 'panzerschiff', n: 'Panzerschiff', f: 2, c: 13, e: 'Bewegung = 6, Bewegung auf und über Meer' },
   { k: 'dynamit', n: 'Dynamit', f: 2, c: 14, e: 'Armeen haben doppelten Angriff gegen Städte' },
-  { k: 'maschinengewehr', n: 'Maschinengewehr', f: 2, c: 15, e: 'Städte: +2 Verteidigung je Bevölkerung' },
+  { k: 'maschinengewehr', n: 'Maschinengewehr', f: 2, c: 15, e: 'Städte: +3 Verteidigung je Bevölkerung' },
   { k: 'panzer', n: 'Panzer', f: 2, c: 16, e: 'Machtverlust = 1/4' },
   { k: 'luftwaffe', n: 'Luftwaffe', f: 2, c: 17, e: 'Bewegung = 9, Hindernisse ignorieren' },
   { k: 'raketentechnik', n: 'Raketentechnik', f: 2, c: 19, e: 'Armeen haben einen Ring mehr Reichweite' },
@@ -145,6 +145,8 @@ TECHS.forEach(t => { t.age = ageOfCost(t.c); });
 const SINGULARITY_BASE = 120;
 // Belagerungsmaschinen: Angriff je Armee gegen Städte (bis v87: 5). Der Techtext nennt die Zahl.
 const SIEGE_BONUS = 3;
+// Maschinengewehr: Verteidigung je Bevölkerung einer Stadt zusätzlich (bis v106: 2). Der Techtext nennt die Zahl.
+const MG_DEFENSE = 3;
 const KREML_SURCHARGE = 50;        // Weltwunder "Der Kreml": Singularität teurer, für alle
 // Englands „Seemacht": Zuschlag je Stadt am Meer auf jeden der drei Erträge (v53: 1)
 const SEA_CITY_BONUS = 1;
@@ -341,6 +343,11 @@ function techsIn(field, age, S) {
 /* Die Zivilisationen stehen nicht hier, sondern in js/civs.js – erzeugt aus
    data/civs.json (siehe README). Neues Reich: JSON ändern, `node tools_civs.js` laufen
    lassen. Dort steht auch ORDER, die Zugreihenfolge, und BARB_CIV. */
+/* Was einer Zivilisation immer verfügbar ist, was der Würfel auch zeigt (v107, Anweisung des
+   Autors): den Wikingern die Navigation. Gewürfelt wird wie für alle, danach kommt sie dazu
+   (civTechAfterRoll, js/engine.js) – so gilt dasselbe, wenn das Reich erst nach dem Würfeln
+   feststeht (Fähigkeitswahl der Plättchenkarte). */
+const CIV_TECH = { wikinger: 'navigation' };
 
 
 /* Die feste Karte: aus dem gedruckten Bogen ausgemessen. Bis v98 stand daneben eine große

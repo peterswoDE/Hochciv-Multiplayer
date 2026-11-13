@@ -182,6 +182,7 @@ function mapLimits(pick, custom) {
   if (custom) return { min: MIN_PLAYERS, max: custom.maxPlayers || (custom.spawns || []).length || 4, marathon: !!custom.marathon };
   if (pick === 'plaettchen' || pick === 'random') return { min: MIN_PLAYERS, max: MAX_PLAYERS, marathon: false };
   if (pick === 'marathon') return { min: 4, max: 4, marathon: true };
+  if (pick === 'plaettchen14') return { min: 4, max: 4, marathon: false };   // 14 Dreiecke (v107)
   return { min: MIN_PLAYERS, max: 4, marathon: false };
 }
 /* Die Spielkarte einer eigenen Karte für n Reiche: die Startpunkte als Hauptstädte nach Platz
@@ -380,6 +381,7 @@ function newGame(cfg) {
     const vorab = cfg.avail && cfg.avail[p.slot];
     if (vorab) {
       p.avail = Object.assign({}, vorab);
+      civTechAfterRoll(p, null, 0);
       log(S, 'info', T('%s: verfügbar (vor dem Legen ausgewürfelt):', civOf(p).n) + ' ' +
         (TECHS.filter(t => p.avail[t.k]).map(t => t.n).join(', ') || '—'));
     } else {
@@ -439,8 +441,16 @@ function rollAvailability(S, pi, field, age) {
     do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length), { pi, pick: list.map(t => t.k), fixed: `pick:${p.slot}:${field}:${age}:${n++}` }); } while (idx > list.length);
     p.avail[list[idx - 1].k] = true;
   }
+  civTechAfterRoll(p, field, age);
   log(S, 'info', T('%s: verfügbar in %s (%s):', civOf(p).n, FIELDS[field], AGES[age]) +
     (list.filter(t => p.avail[t.k]).map(t => t.n).join(', ') || '—'));
+}
+/* CIV_TECH (v107): nach dem Wurf kommt dazu, was der Zivilisation immer verfügbar ist – den
+   Wikingern die Navigation. `field` null heißt alle Felder: vorab gewürfelt (newGame) und in
+   laufenden Partien (migrateState). */
+function civTechAfterRoll(p, field, age) {
+  const t = TECH_BY_KEY[CIV_TECH[p.civ]];
+  if (t && t.age === age && (field == null || t.f === field)) p.avail[t.k] = true;
 }
 /* Aufbau 3 und die Wunderstapel VORZIEHEN (v66).
    Was am Anfang verfügbar ist, hängt allein an den Würfeln, nicht an der Karte. Im
@@ -469,6 +479,8 @@ function migrateState(S) {
     if (p.freeTechsUsed === undefined && typeof p.freeTechUsed === 'number') p.freeTechsUsed = 1;
   // Gründungen je Zug (v84–v99, für die Grenze im Marathon) – seit v100 ohne Grenze, ungenutzt
   for (const p of S.players || []) { delete p.foundRound; delete p.foundCount; }
+  // Wikinger (v107): Navigation immer verfügbar – auch in Partien, die vorher begonnen haben
+  for (const p of S.players || []) if (p.avail) civTechAfterRoll(p, null, 0);
   // Kopieren (v105): je Weg die Runde der letzten Kopie – bis v104 nur das Internet
   for (const p of S.players || []) if (p.internetUsed !== undefined) {
     (p.copied = p.copied || {}).internet = p.internetUsed;
@@ -2074,7 +2086,7 @@ function defenseValue(S, city, pow, helpersIn) {
   const macht = pow != null ? pow : powerOf(S, oi);      // v94: in der Kampfphase festgehalten
   // Die Große Mauer rechnet die Verteidigung mit der Gesamtbevölkerung des Reiches.
   const base = hasWonder(S, oi, 'mauer') ? popOf(S, oi) : city.pop;
-  let d = base * (has(o, 'maschinengewehr') ? 3 : 1);
+  let d = base * (1 + (has(o, 'maschinengewehr') ? MG_DEFENSE : 0));   // v107: +3 je Bevölkerung (bis v106 +2)
   if (has(o, 'stadtmauern')) d += 5;
   if (has(o, 'burgenbau')) d += macht;                   // virtuelle Armee in der Stadt
   let helpers = helpersIn;

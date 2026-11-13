@@ -36,6 +36,9 @@ const E = () => engine.getEngine();
    runs them on the current engine. New games get the current one. */
 const engineVersionOf = g => (g && g.engine) || engine.LEGACY_VERSION;
 const ENG = g => engine.forVersion(engineVersionOf(g));
+// Experimental tile mode: hexagons up to v106 (`hex`), since v107 the 14-triangle map for four empires (`shape`).
+// Each engine reads only its own option, so both are passed.
+const tileOpts = on => on ? { hex: true, shape: 'tri14' } : {};
 
 const MAP_KEYS = ['0', 'plaettchen', 'marathon', 'eigene'];
 const KI_TAKEOVER_LEVEL = { ranked: 'schwer', normal: 'mittel' };
@@ -405,7 +408,7 @@ function startPrephase(g) {
     ENG(g).assignDoubles(g.seats);
     if (isTile(g)) {
         const seed = g.config.seed;
-        const plan = ENG(g).getEngine().tilePlan(g.seats.map(s => s.civ), seed, { hex: !!g.config.hexTiles });
+        const plan = ENG(g).getEngine().tilePlan(g.seats.map(s => s.civ), seed, tileOpts(g.config.hexTiles));
         if (!plan) throw new Error('Für diese Spielerzahl gibt es keine Plättchenkarte.');
         g.config.setup = ENG(g).rollSetup(lobbyOf(g), seed);
         const rnd = ENG(g).getEngine().mapRng(seed + 12345);
@@ -753,7 +756,7 @@ function summary(g, userId) {
     const S = g.state;
     return {
         id: g.id,
-        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v100/, /v98/)
+        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v106/, /v100/, /v98/)
         joinCode: g.joinCode,
         status: g.status,
         isHost: g.hostUserId === userId,
