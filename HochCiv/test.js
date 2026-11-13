@@ -347,6 +347,15 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const spot = neighbors(eng.r, eng.c).find(([r, c]) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c));
   S.armies.push({ id: 501, owner: 1, r: spot[0], c: spot[1], mp: 0, born: 0 });
   eq(defenseValue(S, eng), 5, 'Verteidigung 2 Bevölkerung + Armee mit Machtwert 3');
+  // Maschinengewehr (v107, Anweisung des Autors): +3 je Bevölkerung, bis v106 +2
+  S.players[1].kind = 'human'; S.players[1].power = 0;
+  S.armies = S.armies.filter(a => a.id !== 501);
+  eq(defenseValue(S, eng), 2, 'ohne Armee: 2 Bevölkerung');
+  S.players[1].techs.maschinengewehr = true;
+  eq([defenseValue(S, eng), MG_DEFENSE], [8, 3], 'Maschinengewehr: 2 Bevölkerung + 3 je Bevölkerung = 8');
+  eq([DATA_DE ? DATA_DE.tech.maschinengewehr[1] : TECH_BY_KEY.maschinengewehr.e, DATA_EN.tech.maschinengewehr[1]],
+    [`Städte: +${MG_DEFENSE} Verteidigung je Bevölkerung`, `Cities: +${MG_DEFENSE} defence per population`],
+    'Techtext nennt den Zuschlag, deutsch und englisch');
 }
 
 /* --- Bürokratie: verdoppelt Bevölkerung UND Umland der Hauptstadt */
@@ -3985,6 +3994,39 @@ const spielArt = mode => mode === 'duell'
   eq(armyCost(B, 0), 5, 'Alternative: normale Armeekosten');
 }
 
+/* Wikinger: Navigation immer verfügbar, was der Würfel auch zeigt (v107, Anweisung des Autors) –
+   jede Fähigkeit, jede Sitzart, auch doppelt am Tisch. Gewürfelt wird wie für alle, danach kommt
+   sie dazu: auch zu vorab gewürfelten Verfügbarkeiten (Plättchenkarte) und in laufenden Partien. */
+{
+  const vier = seed => newGame({ seed, players: [
+    { civ: 'wikinger', kind: 'human', ability: 'basis' }, { civ: 'wikinger', kind: 'ki', ability: 'armeemacht' },
+    { civ: 'england', kind: 'human' }, { civ: 'griechenland', kind: 'ki' }], seatOrder: true });
+  let wiki = 0, ohne = 0, andere = 0, mitNav = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const S = vier(seed);
+    S.players.forEach(p => {
+      if (p.civ === 'wikinger') { wiki++; if (!p.avail.navigation) ohne++; }
+      else { andere++; if (p.avail.navigation) mitNav++; }
+    });
+  }
+  eq(ohne, 0, `Wikinger haben die Navigation immer verfügbar (${wiki} Reiche, 60 Partien)`);
+  eq(mitNav > 0.3 * andere && mitNav < 0.8 * andere, true, `die anderen würfeln weiter (${mitNav} von ${andere} mit Navigation)`);
+  eq(CIV_TECH, { wikinger: 'navigation' }, 'nur die Wikinger, nur die Navigation');
+  // vorab gewürfelt (Plättchenkarte, Fähigkeitswahl): das Reich steht erst danach fest
+  const V = newGame({ seed: 4, players: [{ civ: 'wikinger', kind: 'human' }, { civ: 'england', kind: 'human' }],
+    seatOrder: true, avail: [{ rad: true }, { rad: true }] });
+  eq([V.players[0].avail, V.players[1].avail], [{ rad: true, navigation: true }, { rad: true }],
+    'vorab gewürfelt: die Wikinger bekommen die Navigation dazu, die anderen nichts');
+  // der Würfel fällt trotzdem – für die Wikinger zählt er nur nicht
+  const W = newGame({ seed: 9, players: [{ civ: 'wikinger', kind: 'human' }, { civ: 'england', kind: 'bot' }], seatOrder: true });
+  eq(W.log.some(l => /Verfügbarkeit Navigation/.test(l.m)), true, 'die Navigation wird für alle gewürfelt');
+  // laufende Partie von vor v107
+  const alt = JSON.parse(JSON.stringify(W));
+  alt.players.forEach(p => { delete p.avail.navigation; });
+  migrateState(alt);
+  eq(alt.players.map(p => !!p.avail.navigation), [true, false], 'Spielstand von vor v107: die Wikinger bekommen sie beim Laden');
+}
+
 /* Wikinger "Kriegerkultur": +1 Macht je Armee (seit v97, Anweisung des Autors; bis v96 +2),
    Zuschlag geht nicht verloren */
 {
@@ -6501,184 +6543,140 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   }
 }
 
-/* ==================================================== Experimenteller Plättchenmodus (v99)
-   Vier Reiche, zehn Sechsecke mit Seitenlänge 3 (19 Felder) aus einem Vorrat von 20, schräg in
-   Reihen zu 3/4/3; Startplättchen an den Enden der beiden Dreierreihen (Anweisung des Autors). */
+/* ==================================================== Experimenteller Plättchenmodus (v107)
+   Vier Reiche, 14 Dreiecke (Anweisung des Autors; v99–v106 zehn Sechsecke): die zehn der Form zu
+   viert liegen offen, die vier Startdreiecke außen an jeder zweiten Außenkante, je zwei
+   benachbarte gleich weit auseinander. */
 {
   const K = c => c.join(',');
   const nbCube = c => CUBE_DIRS.map(d => [c[0] + d[0], c[1] + d[1], c[2] + d[2]]);
-  // --- Geometrie eines Plättchens
-  eq(HEX_DXYZ.length, HEX_TILE_CELLS, 'ein Sechseck hat 19 Felder');
-  eq([-2, -1, 0, 1, 2].map(dz => HEX_DXYZ.filter(d => d[2] === dz).length).join(), '3,4,5,4,3',
-    'notiert in Zeilen zu 3/4/5/4/3');
-  eq(HEX_DXYZ.every(d => d[0] + d[1] + d[2] === 0 && Math.max(...d.map(Math.abs)) <= 2), true,
-    'alle Felder höchstens 2 von der Mitte');
-  eq(HEX_ROT.length, 6, 'sechs Lagen je Plättchen');
-  eq(HEX_ROT.every(r => new Set(r).size === HEX_TILE_CELLS), true, 'jede Lage ist eine Umordnung');
-  const sechsmal = HEX_ROT[0].map(n => { let m = n; for (let i = 0; i < 6; i++) m = HEX_ROT[1][m]; return m; });
-  eq(sechsmal.join(), HEX_ROT[0].join(), 'sechsmal gedreht ist wieder die Ausgangslage');
-  eq(HEX_ROT.every((r, o) => r.every((m, n) => hexRing(m) === hexRing(n))), true, 'Drehen lässt jedes Feld in seinem Ring');
-  eq(HEX_MIDDLE.length, 7, 'Mitte und erster Ring: sieben Felder (dort setzen Bots)');
-  eq(HEX_MIDDLE.every(n => nbCube(HEX_DXYZ[n]).every(c => HEX_INDEX[K(c)] != null)), true,
-    'die Nachbarn der mittigen Felder liegen alle auf dem Plättchen');
-
-  // --- Vorrat: die Entwurfsregeln aus js/tiles.js
-  const face = t => tileTerrain(t);
-  const nbIdx = n => nbCube(HEX_DXYZ[n]).map(c => HEX_INDEX[K(c)]);
-  const spot = (f, n) => {              // Hauptstadt mit 1 Bevölkerung: Stadt [1,−1,1] + sechs Nachbarn
-    let y = [1, -1, 1];
-    nbIdx(n).forEach(m => { y = y.map((v, i) => v + TERRAIN[f[m]].yield[i]); });
-    return { food: y[1] + Math.floor(y[2] / 2), wert: Math.round((y[0] + 1.1 * y[1] + 0.8 * y[2]) * 10) / 10 };
-  };
-  eq(HEX_POOL.length, 20, 'der Sechseck-Vorrat hat 20 Plättchen');
-  eq(new Set(HEX_POOL.map(t => t.n)).size, 20, 'die Namen sind verschieden');
-  eq(HEX_POOL.every(t => t.a.map(r => r.length).join() === '3,4,5,4,3' && face(t).length === 19), true,
-    'jedes Plättchen: 19 Felder in Zeilen zu 3/4/5/4/3');
-  eq(HEX_POOL.every(t => face(t).every(c => 'GWBFMI'.includes(c))), true, 'nur bespielbares Gelände');
-  eq(HEX_POOL.filter(t => HEX_MIDDLE.some(n => !'GWBF'.includes(face(t)[n]))).map(t => t.n), [],
-    'innen (Mitte und erster Ring) nur Grasland, Wald, Gebirge oder Fluss');
-  eq(HEX_POOL.every(t => face(t).every((c, n) => !'MI'.includes(c) || hexRing(n) === 2)), true,
-    'Meer und Inseln nur im äußeren Ring');
-  eq(Math.max(...HEX_POOL.map(t => face(t).filter(c => c === 'I').length)) <= 2, true, 'höchstens zwei Inseln je Plättchen');
-  eq(HEX_POOL.filter(t => HEX_MIDDLE.some(n => nbIdx(n).filter(m => face(t)[m] === 'I').length > 1)).map(t => t.n), [],
-    'kein inneres Feld grenzt an zwei Inseln');
-  eq(HEX_POOL.filter(t => HEX_MIDDLE.some(n => spot(face(t), n).food < 4)).map(t => t.n), [],
-    'jedes innere Feld bringt als Hauptstadt mindestens 4 Nahrung (Münzen 2:1)');
-  const beste = HEX_POOL.map(t => Math.max(...HEX_MIDDLE.map(n => spot(face(t), n).wert)));
-  eq(beste.every(b => b >= 8.8 && b <= 9.7), true,
-    `beste innere Hauptstadt je Plättchen zwischen 8,8 und 9,7 (${Math.min(...beste)}–${Math.max(...beste)})`);
-  const triBeste = TILE_POOL.map(t => Math.max(...TRI_MIDDLE.map(n => {
-    let y = [1, -1, 1];
-    const [i, j, k] = TRI_IJK[n];
-    [[i + 1, j - 1, k], [i - 1, j + 1, k], [i + 1, j, k - 1], [i - 1, j, k + 1], [i, j + 1, k - 1], [i, j - 1, k + 1]]
-      .forEach(c => { y = y.map((v, x) => v + TERRAIN[tileTerrain(t)[TRI_INDEX[c.join(',')]]].yield[x]); });
-    return y[0] + 1.1 * y[1] + 0.8 * y[2];
-  })));
-  console.log(`       Startgüte (bestes mittiges Feld): Sechsecke ${Math.min(...beste)}–${Math.max(...beste)}, ` +
-    `Dreiecke ${Math.min(...triBeste).toFixed(1)}–${Math.max(...triBeste).toFixed(1)}`);
-  const alle = HEX_POOL.flatMap(face), meer = alle.filter(c => c === 'M').length;
-  eq(meer > alle.length * 0.15 && meer < alle.length * 0.30, true,
-    `Meeranteil im Vorrat zwischen 15 und 30 % (${(100 * meer / alle.length).toFixed(0)} %)`);
-  eq(HEX_POOL.filter(t => face(t).includes('M')).length >= 15, true, 'Meer liegt auf den meisten Plättchen');
-  const arten = HEX_POOL.map(t => new Set(face(t)).size);
-  eq(Math.min(...arten) >= 3 && arten.filter(a => a >= 4).length >= 15, true,
-    `mindestens 3 Geländearten je Plättchen, meist 4 oder mehr (${arten.filter(a => a >= 4).length} von 20)`);
-
-  // --- Form: zehn Plätze, schräg 3/4/3
-  const sh = TILE_SHAPES.hex4;
+  const sh = TILE_SHAPES.tri14, vier = TILE_SHAPES[4];
   const zellen = sh.slots.flatMap(slotCells);
-  eq([sh.slots.length, zellen.length, new Set(zellen.map(K)).size], [10, 190, 190], 'zehn Sechsecke, 190 Felder, keines doppelt');
+  eq([sh.slots.length, zellen.length, new Set(zellen.map(K)).size, sh.holes.length], [14, 210, 210, 0],
+    '14 Dreiecke, 210 Felder, keines doppelt, keine Löcher');
+  eq(sh.slots.slice(0, 10).map(sl => sl.t + K([sl.a[0], sl.a[1] + 1, sl.a[2] - 1])), vier.slots.map(sl => sl.t + K(sl.a)),
+    'Platz 0–9: die Form zu viert, eine Zeile tiefer');
   const echt = new Set(zellen.map(K));
   const gesehen = new Set([K(zellen[0])]), offen = [zellen[0]];
   while (offen.length) for (const n of nbCube(offen.pop())) if (echt.has(K(n)) && !gesehen.has(K(n))) { gesehen.add(K(n)); offen.push(n); }
-  eq(gesehen.size, 190, 'die Form hängt zusammen');
+  eq(gesehen.size, 210, 'die Form hängt zusammen');
   eq(Math.min(...zellen.map(c => c[2])) % 2, 0, 'die Form beginnt in einer geraden Zeile');
-  const nachbar = (i, j) => slotCells(sh.slots[i]).some(a => slotCells(sh.slots[j]).some(b => cubeDist(a, b) === 1));
-  const grad = sh.slots.map((_, i) => sh.slots.filter((_, j) => j !== i && nachbar(i, j)).length);
-  eq(grad.join(), '3,4,3,3,6,6,3,3,4,3', 'Reihen zu 3/4/3: Ecken grenzen an drei Plättchen, die beiden mittleren an sechs');
-  // Nachbarmitten auf dem schrägen Gitter (5, −2), (2, 3), (−3, 5) – axial (x, z)
-  const ax = i => [sh.slots[i].a[0], sh.slots[i].a[2]];
-  const schritt = (i, j) => K([ax(j)[0] - ax(i)[0], ax(j)[1] - ax(i)[1]]);
-  eq([schritt(0, 1), schritt(1, 2), schritt(0, 3), schritt(3, 4), schritt(4, 5), schritt(5, 6), schritt(3, 7), schritt(7, 8), schritt(8, 9)],
-    ['5,-2', '5,-2', '-3,5', '5,-2', '5,-2', '5,-2', '2,3', '5,-2', '5,-2'], 'Reihen entlang (5, −2), versetzt um (−3, 5) und (2, 3)');
+  const karte0 = tileMap(tilePlan(['russland', 'griechenland', 'england', 'wikinger'], 1, { shape: 'tri14' }), { show: [] });
+  eq([karte0.rows.length, karte0.rows[0].length], [20, 23], 'Karte 20 × 23');
+  // Startdreiecke: je eines an einer Kante der Innenform (5 Felder Kante an Kante), sonst frei
+  const innen = new Set(sh.slots.slice(0, 10).flatMap(slotCells).map(K));
   const set = sh.seatSets[0];
-  eq([sh.seatSets.length, set.join()], [1, '0,2,7,9'], 'gesessen wird an den Enden der Dreierreihen (0, 2 oben, 7, 9 unten)');
-  eq(set.every((a, i) => set.every((b, j) => i === j || !nachbar(a, b))), true, 'zwischen zwei Startplättchen liegt immer ein offenes');
+  eq([sh.seatSets.length, set.join()], [1, '10,11,12,13'], 'gesessen wird auf den vier äußeren Plätzen');
+  eq(set.map(s => slotCells(sh.slots[s]).filter(c => nbCube(c).some(n => innen.has(K(n)))).length), [5, 5, 5, 5],
+    'jedes Startdreieck liegt mit 5 Feldern an der Innenform');
+  const kontakt = (i, j) => slotCells(sh.slots[i]).filter(a => slotCells(sh.slots[j]).some(b => cubeDist(a, b) === 1)).length;
+  eq(set.map(s => sh.slots.map((_, j) => j).filter(j => j !== s && kontakt(s, j) === 5).length), [1, 1, 1, 1],
+    '… Kante an Kante mit genau einem offenen Dreieck (oben und unten dazu ein Eckfeld am Nachbarn)');
+  // jede zweite Außenkante: zwischen zwei benachbarten Startdreiecken bleibt eine Kante frei,
+  // und alle benachbarten liegen gleich weit auseinander (die gespiegelte Wahl gäbe 6 und 9)
+  const abstand = (i, j) => Math.min(...slotCells(sh.slots[i]).flatMap(a => slotCells(sh.slots[j]).map(b => cubeDist(a, b))));
+  eq([0, 1, 2, 3].map(k => abstand(set[k], set[(k + 1) % 4])), [8, 8, 8, 8], 'benachbarte Startdreiecke: alle 8 Felder auseinander');
+  eq([abstand(set[0], set[2]), abstand(set[1], set[3])], [11, 19], 'gegenüberliegende: 11 und 19');
   const frei = set.map((_, i) => seatFreeCells(sh, set, i));
-  eq(frei.map(f => f.filter(Boolean).length).join(), '19,19,19,19', 'jedes Feld eines Startplättchens ist als Hauptstadt erlaubt');
-  let aufVerdecktem = 0;
-  set.forEach((s, i) => {
-    const fremd = new Set(set.filter((_, j) => j !== i).flatMap(t => slotCells(sh.slots[t])).map(K));
-    slotCells(sh.slots[s]).forEach(x => { if (nbCube(x).some(y => fremd.has(K(y)))) aufVerdecktem++; });
-  });
-  eq(aufVerdecktem, 0, 'kein Umland einer möglichen Hauptstadt liegt auf einem fremden Startplättchen');
+  eq(frei.map(f => f.filter(Boolean).length).join(), '15,15,15,15', 'jedes Feld eines Startdreiecks ist als Hauptstadt erlaubt');
 
   // --- Plan, Legen, Karte
   const civs4 = ['russland', 'griechenland', 'england', 'wikinger'];
-  const plan = tilePlan(civs4, 7071, { hex: true });
-  eq([plan.hex, plan.shapeKey, planRotations(plan), plan.tiles.length, new Set(plan.tiles).size],
-    [true, 'hex10', 6, 10, 10], 'Plan: Sechsecke, sechs Lagen, zehn verschiedene Plättchen');
-  eq(plan.tiles.every(t => t >= 0 && t < 20) && plan.ori.every(o => o >= 0 && o < 6), true, 'aus dem Vorrat von 20, Lagen 0–5');
-  eq(tilePlan(civs4, 7071).hex, false, 'ohne den Schalter die Dreiecke');
-  const seat0 = plan.seats[0];
-  eq(placeYieldTable(plan, seat0, { civ: 'russland', ability: 'basis' }).length, 6, 'Ertragstafel: sechs Lagen');
-  eq([placeSeat(plan, seat0, 6, 9), placeSeat(plan, seat0, -1, 9)], ['Ungültige Lage.', 'Ungültige Lage.'], 'Lage 7 gibt es nicht');
-  const landMitte = o => placeOptions(plan, seat0, o).findIndex((v, n) => v && HEX_MIDDLE.includes(n));
-  const o5 = 5, c5 = landMitte(o5);
-  eq(placeSeat(plan, seat0, o5, c5), null, 'Lage 6 geht');
+  const plan = tilePlan(civs4, 7071, { shape: 'tri14' });
+  eq([plan.shapeKey, plan.tiles.length, new Set(plan.tiles).size, plan.tiles.every(t => t >= 0 && t < TILE_POOL.length)],
+    ['tri14', 14, 14, true], 'Plan: 14 verschiedene Dreiecke aus dem Vorrat');
+  eq(plan.ori.every(o => o >= 0 && o < 3), true, 'drei Lagen je Plättchen');
+  eq([tilePlan(civs4.slice(0, 3), 7071, { shape: 'tri14' }).shapeKey, tilePlan(civs4, 7071).shapeKey], ['tri9', 'strip10'],
+    'nur für vier Reiche, ohne den Wunsch die übliche Form');
   const rnd = mapRng(3);
   const setup = rollSetup({ players: civs4.map(c => ({ civ: c, kind: 'ki' })), seed: 7071 });
-  eq(kiPlaceSeat(plan, plan.seats[1], { civ: 'griechenland', kind: 'ki', ability: 'basis' }, setup), null, 'die KI legt ein Sechseck');
+  eq([0, 1].map(i => kiPlaceSeat(plan, plan.seats[i], { civ: civs4[i], kind: 'ki', ability: 'basis' }, setup)), [null, null], 'die KI legt');
   [2, 3].forEach(i => botPlaceSeat(plan, plan.seats[i], rnd));
-  eq(plan.seats.slice(2).every(s => HEX_MIDDLE.includes(s.cell) && s.o >= 0 && s.o < 6), true, 'Bots: Hauptstadt auf einem mittigen Feld');
+  eq(plan.seats.slice(2).every(s => TRI_MIDDLE.includes(s.cell)), true, 'Bots: Hauptstadt auf einem mittigen Feld');
   const karte = tileMap(plan);
   const felder = karte.rows.join('').split('').filter(c => c !== 'X').length;
-  eq([felder, karte.capitals.filter(Boolean).length, karte.tiles], [190, 4, 'hex10'], 'Karte: 190 Felder, vier Hauptstädte');
-  // die Lage zeigt wirklich das gedrehte Plättchen
-  eq(hexFaceTerrain(plan.tiles[0], o5).join(''), HEX_ROT[o5].map(k => tileTerrain(HEX_POOL[plan.tiles[0]])[k]).join(''),
-    'Gelände in Lage o: der Text an HEX_ROT[o]');
-  const R = slotRC(plan, seat0.slot), cap = karte.capitals[0];
-  eq([R[c5][0], R[c5][1]], [cap.r, cap.c], 'die Hauptstadt steht auf dem gewählten Feld');
+  eq([felder, karte.capitals.filter(Boolean).length, karte.tiles], [210, 4, 'tri14'], 'Karte: 210 Felder, vier Hauptstädte');
+  // die Ertragsvorschau sieht nur Offenes und das eigene: das Umland liegt nie auf einem fremden Startdreieck
+  const seat0 = plan.seats[0], tafel = placeYieldTable(plan, seat0, { civ: 'russland', ability: 'basis' });
+  eq([tafel.length, tafel[0].length], [3, 15], 'Ertragstafel: drei Lagen × 15 Felder');
   const S = newGame({ seed: 7071, map: karte, seatOrder: true, startPlayer: 0, avail: setup.avail, wpool: setup.wpool,
     players: civs4.map(c => ({ civ: c, kind: 'ki', kiLevel: 'mittel', ability: 'basis' })) });
   eq(S.cities.length, 4, 'die Partie beginnt mit vier Hauptstädten');
   let runden = 0;
   while (!S.over && runden++ < 400) { kiTurn(S, S.cur); if (S.over) break; endTurn(S); }
-  eq(!!S.over, true, `eine KI-Partie auf der Sechseckkarte endet regulär (${S.over ? S.over.how : 'offen'}, Runde ${S.round})`);
+  eq(!!S.over, true, `eine KI-Partie auf 14 Dreiecken endet regulär (${S.over ? S.over.how : 'offen'}, Runde ${S.round})`);
 }
 
-/* ==================== Sechsecke bei jeder Zahl von Reichen (Mehrspieler-Erweiterung)
-   Dieselben Regeln wie zu viert: Plättchen lückenlos und ohne Überschneidung, zwischen zwei
-   Startplättchen ein offenes, überall ein Platz für die Hauptstadt, und die Partie läuft. */
+/* ==================================================== Fähigkeitswahl der Plättchenkarte (v107)
+   Anweisung des Autors: sind alle Reiche ausgelost, wählt vor dem Legen jedes eine Fähigkeit –
+   rückwärts in der Zugfolge, aus genau so vielen, wie gewählt wird; der Startspieler bekommt die
+   letzte. Mit der Fähigkeit kommt die Zivilisation, die Starttechnologien sind schon gewürfelt. */
 {
-  const K = c => c.join(',');
-  const mitte = sl => [sl.a[0], sl.a[2]];
-  const benachbart = (a, b) => {
-    const m = mitte(a), o = mitte(b), d = [m[0] - o[0], m[1] - o[1]];
-    return [[5, -2], [2, 3], [-3, 5], [-5, 2], [-2, -3], [3, -5]].some(v => v[0] === d[0] && v[1] === d[1]);
-  };
-  const FORM = { 2: ['hex5', 5], 3: ['hex7', 7], 4: ['hex10', 10], 5: ['hex14', 14], 6: ['hex14', 14], 7: ['hex20', 20], 8: ['hex20', 20] };
-  const CIV = ['russland', 'griechenland', 'england', 'wikinger'];
-  for (const n of [2, 3, 4, 5, 6, 7, 8]) {
-    const sh = TILE_SHAPES['hex' + n], [key, zahl] = FORM[n];
-    eq([sh.key, sh.slots.length, sh.hex], [key, zahl, true], `${n} Reiche: ${zahl} Sechsecke`);
-    const zellen = sh.slots.flatMap(slotCells);
-    eq(new Set(zellen.map(K)).size, zahl * HEX_TILE_CELLS, `${n} Reiche: kein Feld doppelt`);
-    eq((-Math.max(...zellen.map(c => -c[2]))) & 1, 0, `${n} Reiche: die oberste Feldzeile ist gerade`);
-    const erreicht = new Set([0]);
-    for (let w = 0; w < zahl; w++) sh.slots.forEach((sl, i) => {
-      if (sh.slots.some((o, j) => erreicht.has(j) && benachbart(sl, o))) erreicht.add(i);
-    });
-    eq(erreicht.size, zahl, `${n} Reiche: die Plättchen hängen zusammen`);
-    for (const set of sh.seatSets) {
-      eq([set.length, new Set(set).size, set.every(s => s >= 0)], [n, n, true], `${n} Reiche: ${n} verschiedene Startplätze`);
-      eq(set.some((a, i) => set.some((b, j) => i < j && benachbart(sh.slots[a], sh.slots[b]))), false,
-        `${n} Reiche: kein Startplättchen grenzt an ein anderes`);
-      eq(set.every((_, i) => seatFreeCells(sh, set, i).filter(Boolean).length >= 7), true,
-        `${n} Reiche: jedes Startplättchen hat mindestens die sieben mittigen Felder frei`);
-    }
-    eq(Math.floor(zahl * HEX_TILE_CELLS / n) >= 44, true, `${n} Reiche: mindestens 44 Felder je Reich`);
-    const civs = Array.from({ length: n }, (_, i) => CIV[i % 4]);
-    for (let seed = 1; seed <= 25; seed++) {
-      const plan = tilePlan(civs, seed, { hex: true });
-      eq([plan.hex, planShape(plan) === sh, new Set(plan.tiles).size], [true, true, zahl], `${n} Reiche, Plan ${seed}`);
-      const setup = rollSetup({ players: civs.map(c => ({ civ: c, kind: 'ki', ability: 'basis' })), wonders: true, seed });
-      const rnd = mapRng(seed + 12345);
-      plan.seats.forEach(st => {
-        if (kiPlaceSeat(plan, st, { civ: st.civ, kind: 'ki', ability: 'basis' }, setup)) botPlaceSeat(plan, st, rnd);
-      });
-      eq(plan.seats.every(st => st.cell != null), true, `${n} Reiche, Plan ${seed}: alle Hauptstädte gesetzt`);
-      if (seed > 1) continue;
-      const karte = tileMap(plan);
-      eq(karte.rows.join('').split('').filter(c => c !== 'X').length, zahl * HEX_TILE_CELLS, `${n} Reiche: die ganze Karte liegt`);
-      const S = newGame({ seed, map: karte, seatOrder: true, startPlayer: 0, duel: n === 2, avail: setup.avail, wpool: setup.wpool,
-        players: civs.map(c => ({ civ: c, kind: 'ki', kiLevel: 'leicht', ability: 'basis' })) });
-      eq(S.cities.length, n, `${n} Reiche: die Partie beginnt mit ${n} Hauptstädten`);
-      let z = 0;
-      while (!S.over && z++ < 60 * n) { kiTurn(S, S.cur); if (S.over) break; endTurn(S); }
-      eq(S.round > 1, true, `${n} Reiche: die KI spielt (${S.over ? S.over.how : 'offen'}, Runde ${S.round})`);
-    }
+  const z = (kind) => ({ civ: 'zufall', kind, ability: 'zufall' });
+  eq([pickWanted([z('human'), z('ki'), z('ki'), z('bot')]), pickWanted([z('human'), z('ki')]),
+    pickWanted([z('human'), z('bot'), z('bot')]), pickWanted([z('human'), { civ: 'russland', kind: 'ki', ability: 'basis' }])],
+    [true, true, false, false], 'gewählt wird, wenn alle Reiche ausgelost sind und mindestens zwei wählen (Bots wählen nicht)');
+  // Zugfolge 2, 3, 0 (Platz 1 ist ein Bot): gewählt wird 0, 3, 2 – der Startspieler zuletzt
+  const D = pickNew([2, 3, 0], 77);
+  eq([D.pool.length, new Set(D.pool).size, D.pool.every(id => ALL_ABILITIES.includes(id)), D.order],
+    [3, 3, true, [0, 3, 2]], 'Vorrat: so viele verschiedene Fähigkeiten, wie gewählt wird; rückwärts in der Zugfolge');
+  eq(draftCurrent(D), 0, 'zuerst wählt, wer in der Zugfolge zuletzt kommt');
+  eq(draftPick(D, 3, D.pool[0]), T('Nicht am Zug.'), 'außer der Reihe geht nichts');
+  const erste = D.pool[1];
+  eq([draftPick(D, 0, erste), draftOptions(D, 3).length, draftOptions(D, 3).includes(erste)], [null, 2, false], 'eine gewählte ist weg');
+  const ki = kiPickAbility(D, 3);
+  eq(draftOptions(D, 3).every(id => (KI_DRAFT_BASE[id] || 0) <= KI_DRAFT_BASE[ki]), true, 'die KI nimmt den höchsten Grundwert');
+  draftPick(D, 3, ki);
+  eq([draftOptions(D, 2).length, draftDone(D)], [1, false], 'dem Startspieler bleibt eine');
+  draftPick(D, 2, draftOptions(D, 2)[0]);
+  eq(draftDone(D), true, 'alle haben gewählt');
+  // Zivilisation und Fähigkeit kommen in die Plätze
+  const players = [z('human'), { civ: 'england', kind: 'bot', ability: 'basis' }, z('ki'), z('ki')];
+  players.forEach(p => { if (p.kind !== 'bot') p.pick = true; });
+  pickApply(players, D);
+  eq(players.map((p, i) => i === 1 ? p.civ : p.civ + ':' + p.ability), [D.picks[0][0], 'england', D.picks[2][0], D.picks[3][0]],
+    'jeder Platz bekommt die Zivilisation seiner Fähigkeit');
+  eq(players.some(p => p.pick), false, 'danach wählt niemand mehr');
+  // viele Vorräte: alle zwölf kommen vor, keine doppelt, auch zwei aus einem Reich
+  const zaehl = {}; let zweiAusEinem = 0;
+  for (let s = 1; s <= 300; s++) {
+    const P = pickNew([0, 1, 2, 3], s).pool;
+    P.forEach(id => { zaehl[id] = (zaehl[id] || 0) + 1; });
+    if (new Set(P.map(id => id.split(':')[0])).size < 4) zweiAusEinem++;
   }
+  eq([Object.keys(zaehl).length, Math.min(...Object.values(zaehl)) > 60, zweiAusEinem > 150], [12, true, true],
+    `300 Vorräte zu viert: alle zwölf, jede etwa gleich oft, ${zweiAusEinem}-mal zwei aus einem Reich`);
+  // vorab gewürfelt, dann gewählt: wer die Wikinger wählt, hat die Navigation
+  const roh = [z('human'), z('ki')];
+  const vorab = rollSetup({ seed: 1, seatOrder: true, players: roh });      // Platz 1 würfelt sie nicht
+  const S = newGame({ seed: 1, seatOrder: true, avail: vorab.avail, players: [
+    { civ: 'wikinger', kind: 'human', ability: 'armeemacht' }, { civ: 'england', kind: 'ki', ability: 'basis' }] });
+  eq([!!vorab.avail[0].navigation, S.players[0].avail.navigation, S.players[1].avail.navigation === vorab.avail[1].navigation],
+    [false, true, true], 'gewählt nach dem Würfeln: die Wikinger bekommen die Navigation dazu, England behält seinen Wurf');
+}
+
+/* ==================== Dreiecksstreifen für 5–8 Reiche unter v107 (Mehrspieler-Erweiterung)
+   Seit v107 steht im Plan nur der Schlüssel der Form (plan.shapeKey). 5 und 6 bzw. 7 und 8 Reiche
+   teilen sich Schlüssel und Plätze, nicht aber die Sitze – planShape muss die Form der Spielerzahl
+   liefern. Die Sechsecke (v99–v106) sind entfernt; 'tri14' gilt nur zu viert. */
+{
+  const CIV = ['russland', 'griechenland', 'england', 'wikinger'];
+  for (const n of [5, 6, 7, 8]) {
+    const civs = Array.from({ length: n }, (_, i) => CIV[i % 4]);
+    const plan = tilePlan(civs, 3, { shape: 'tri14' });
+    eq([plan.shapeKey, planShape(plan) === TILE_SHAPES[n], plan.seats.length], [n <= 6 ? 'strip14' : 'strip18', true, n],
+      `${n} Reiche: Streifen, die Form der Spielerzahl, ${n} Sitze`);
+    const setup = rollSetup({ players: civs.map(c => ({ civ: c, kind: 'ki', ability: 'basis' })), wonders: true, seed: 3 });
+    const rnd = mapRng(3 + 12345);
+    plan.seats.forEach(st => {
+      if (kiPlaceSeat(plan, st, { civ: st.civ, kind: 'ki', ability: 'basis' }, setup)) botPlaceSeat(plan, st, rnd);
+    });
+    eq(plan.seats.every(st => st.cell != null), true, `${n} Reiche: alle Hauptstädte gesetzt`);
+    const S = newGame({ seed: 3, map: tileMap(plan), seatOrder: true, startPlayer: 0, avail: setup.avail, wpool: setup.wpool,
+      players: civs.map(c => ({ civ: c, kind: 'ki', kiLevel: 'leicht', ability: 'basis' })) });
+    eq(S.cities.length, n, `${n} Reiche: die Partie beginnt mit ${n} Hauptstädten`);
+  }
+  eq([typeof HEX_POOL, mapLimits('plaettchen14')], ['undefined', { min: 4, max: 4, marathon: false }], 'keine Sechsecke mehr; 14 Dreiecke nur zu viert');
 }
 
 /* ==================== baseIncome lässt den Spielstand, wie er war
@@ -7868,7 +7866,7 @@ function kiAbwehrLage(popKI, gross) {
   const v = lage(false), e = lage(true);
   const bonus = (x, k) => kiTechBonus(x.S, 0, k, x.K, baseIncome(x.S, 0));
   eq([bonus(e, 'stadtmauern') - bonus(v, 'stadtmauern'), bonus(e, 'maschinengewehr') - bonus(v, 'maschinengewehr')],
-    [5 * KI_W.defPerm, 2 * e.hs.pop * KI_W.defPerm], 'im Ernstfall zählt jeder bleibende Punkt Verteidigung extra (Mauern +5, Maschinengewehr +2 je Bevölkerung)');
+    [5 * KI_W.defPerm, MG_DEFENSE * e.hs.pop * KI_W.defPerm], 'im Ernstfall zählt jeder bleibende Punkt Verteidigung extra (Mauern +5, Maschinengewehr +3 je Bevölkerung)');
   kiTurn(e.S, 0);
   eq(!!e.S.players[0].techs.stadtmauern, true, '… und die belagerte KI erforscht die verfügbaren Stadtmauern');
 }

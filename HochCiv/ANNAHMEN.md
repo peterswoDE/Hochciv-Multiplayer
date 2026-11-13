@@ -6657,3 +6657,145 @@ Cache, weicht eine ab, keine. Von Hand mit Chromium und einem Server wie GitHub 
 hochgeladen → „copyRate is not defined", auch nachdem der Rest da ist; v106 hochgeladen → geht; eine
 Fassung halb hochgeladen → abgelehnt, die alte läuft weiter; vollständig → übernommen und im Menü
 von selbst neu geladen; während einer Partie übernommen → kein Neuladen, beim nächsten Start da.
+
+## Wikinger mit Navigation · Maschinengewehr +3 · Forschung aller vor dem Legen · Fähigkeitswahl · 14 Dreiecke (v107)
+
+Anweisungen des Autors (11.11.), wörtlich: „all vikings civ should always have navigation available
+for research, with any roll" – „for tile mode games, all players ancient techs should be in the
+pre-game research view" – „for tile mode games, when all the civs are random, there should be a phase
+before placing the tiles where players pick their civ abilities, in reverse player order, from a pool
+with exactly the amount of random civ abilities as players. (=the first player has no choice left)" –
+„machine gun tech should provide +3 defense per population" – „change the experimental 4p tile mode
+again: instead of using hexagonal tiles, it should use the normal triangle ones, but 14 of them. 10 are
+placed before the game, as usual, but the 4 starting tiles are to be placed outside them. The four slots
+for them should be one edge apart, so they are similarly distant to each other." Dazu der Grundsatz von
+v102 (einfacher Zweck, einfache Architektur, einfache Gestaltung; keine Unterzeilen und Hilfstexte).
+
+Vor dem Bauen gefragt, drei Antworten:
+1. Bestimmt die gewählte Fähigkeit auch die Zivilisation? **Ja, die Zivilisation kommt mit** (statt:
+   jede Zivilisation höchstens einmal im Vorrat; oder: die Zivilisation bleibt ausgelost, die Fähigkeit
+   darf fremd sein wie im Marathon).
+2. Starttechnologien vor oder nach der Wahl würfeln? **Vorher**, alle sehen sie beim Wählen – wie im
+   Draft des Marathons.
+3. Welche vier der acht Außenkanten? **Oben links, rechts oben, unten rechts, links unten** (Skizze in
+   der Frage). Benachbarte Startdreiecke liegen damit alle 8 Felder auseinander; die gespiegelte Wahl
+   gäbe auf dem Sechseckgitter abwechselnd 6 und 9, weil die Dreiecke aus Feldern verzahnt liegen.
+
+### Regeln
+
+* **Wikinger:** Navigation ist immer verfügbar. Gewürfelt wird für alle wie bisher, samt Ersatzwurf,
+  wenn im Feld nichts verfügbar wurde; danach kommt die Navigation dazu (`CIV_TECH`). Auslegung, weil
+  bei der Fähigkeitswahl gewürfelt wird, bevor die Zivilisation feststeht: So ist das Ergebnis dasselbe,
+  ob das Reich beim Würfeln schon Wikinger ist oder es erst danach wird – sonst verschwände beim Wählen
+  der Wikinger eine schon gezeigte Technologie. Folge: Würfeln die Wikinger in Spezial (Antike) nichts,
+  bekommen sie zum Ersatz die Navigation dazu, haben dort also zwei (etwa in 1 von 12 Partien: 1/8
+  nichts, davon 2/3 nicht die Navigation). Der Würfel der Navigation fällt auch für sie und steht im
+  Protokoll. Gilt für jedes Wikingerreich: jede Fähigkeit, Mensch, KI und Bot (Bots forschen frei, ihnen
+  nützt es nichts), Doppelgänger, Marathon, und beim Laden auch in Partien, die vor v107 begannen.
+* **Maschinengewehr:** +3 Verteidigung je Bevölkerung (bis v106 +2), eine Stadt verteidigt also mit dem
+  Vierfachen ihrer Bevölkerung, mit der Großen Mauer mit dem Vierfachen der Gesamtbevölkerung
+  (`MG_DEFENSE`). Die KI rechnet mit derselben Zahl. Gilt auch in laufenden Partien – sie steht nicht
+  im Spielstand.
+* **Fähigkeitswahl:** auf jeder Plättchenkarte (2, 3 und 4 Reiche, auch 14 Dreiecke), wenn im Aufbau
+  **alle** Reiche „Zufall" sind und mindestens zwei wählen. Gewählt wird **rückwärts in der Zugfolge**,
+  der Startspieler zuletzt; er bekommt die letzte. Vorrat: genau so viele **verschiedene** Fähigkeiten,
+  wie gewählt wird, ohne Zurücklegen aus allen zwölf gezogen (Auslegung von „random civ abilities": eine
+  Wahl zwischen Gleichem wäre keine). Zwei aus einer Zivilisation sind möglich – zu viert in gut 80 % der
+  Vorräte – und ergeben Doppelgänger mit Ziffern und eigener Farbe, wie zwei ausgeloste Reiche. Die
+  Fähigkeit bringt ihre Zivilisation mit: Grundfähigkeit oder Alternative, wie im Aufbau gewählt.
+  **Bots wählen nicht** (sie haben keine Fähigkeit), ihr Reich bleibt ausgelost; sitzt nur ein Mensch
+  oder eine KI am Tisch, gibt es nichts zu wählen – dann wird wie bisher ausgelost (gleich verteilt
+  über die zwölf). Die **KI** nimmt den höchsten Grundwert des Marathon-Drafts (`KI_DRAFT_BASE`) –
+  geschätzt, auf der Plättchenkarte nicht gemessen. Ohne Hauptstadt fehlt der Kartenteil, Taiga steht
+  dort bei 0: die KI nimmt sie nur, wenn nichts anderes bleibt.
+* **14 Dreiecke** (experimenteller Plättchenmodus, nur vier Reiche): die zehn Dreiecke der Form zu viert
+  liegen alle **offen**, gezogen und gedreht wie die offenen sonst; die vier **Startdreiecke liegen außen**
+  an jeder zweiten der acht Außenkanten, Kante an Kante mit je einem offenen Dreieck (oben und unten
+  berühren sie dazu den Nachbarn mit einem Eckfeld). Benachbarte Startdreiecke 8 Felder auseinander,
+  gegenüberliegende 11 (oben–unten) und 19 (rechts–links). 14 von 20 Plättchen aus dem Dreiecksvorrat,
+  drei Lagen, Karte 20 × 23 mit 210 Feldern. Zugfolge nach Plätzen **im Uhrzeigersinn**: oben, rechts,
+  unten, links (Auslegung; auf den 10 Dreiecken bleibt sie oben links, oben rechts, unten links, unten
+  rechts). Jedes Feld eines Startdreiecks ist als Hauptstadt erlaubt (die Legeregel sperrt hier nichts).
+  Die Sechsecke (v99–v106) sind ganz entfernt: Vorrat `HEX_POOL`, Geometrie, sechs Lagen. Partien, die
+  auf ihnen laufen, spielen weiter – die Karte steht im Spielstand.
+
+### Oberfläche – wie ausgelegt
+
+* **Forschung vor dem Legen:** der Bogen des legenden Platzes wie bisher, dazu an jeder Kachel die Marken
+  der anderen Reiche, wie im Spiel: leer mit „?" = könnte sie erforschen (`ownerMarks`). Vor dem Spiel
+  ist nur die Antike gewürfelt – die Marken zeigen also genau die antiken Technologien aller. Menschen und
+  KI, keine Bots (sie würfeln ihre Forschung frei, im Spiel ebenso). Die Zeile „Vor dem Legen
+  ausgewürfelt – im Spiel steht genau das hier." ist weg (Grundsatz).
+* **Fähigkeitswahl** auf dem Bildschirm des Marathon-Drafts, Titel „Fähigkeiten wählen": links die
+  offenen Plättchen, rechts der Vorrat (Fähigkeit, Wirkung, Zivilisation) und darunter die Plätze **in der
+  Reihenfolge des Aufbaus** – so findet im Hotseat jede*r den eigenen, auch mit ausgelostem Startspieler.
+  Vorn steht der Platz in der Zugfolge (wie in „Welt"), dann bis zur Wahl 🎲 mit Mensch oder KI, danach
+  Zeichen und Name der Zivilisation; darunter die gewählte Fähigkeit und die antiken Technologien (mit der
+  Navigation, sobald jemand die Wikinger nimmt). Wer wählt, ist hervorgehoben. Keine Überschriften, kein
+  Hinweis, kein „Spiel beginnen": nach der letzten Wahl wird gelegt. Die KI wählt sofort; wer nur noch
+  eine hat, bekommt sie ohne Tipp – hat kein Mensch eine Wahl (er ist Startspieler), erscheint der
+  Bildschirm gar nicht. Verworfen: die Plätze in Zugfolge (mit zwei Menschen weiß dann keiner, welcher
+  „Mensch" er ist); die Wahl als Blatt in der Legephase (Karte und Technologien lägen dahinter).
+* **14 Dreiecke** stehen als eigene Karte in der Kartenliste (bei vier Reichen: „Plättchenkarte (14
+  Dreiecke)") statt als Häkchen („Sechseck-Plättchen", v99–v106) – eine Zeile weniger im Aufbau, gemerkt
+  wie jede Karte. Rezepte mit `hexTiles` legen bei „Nochmal spielen" 14 Dreiecke.
+
+### Umsetzung
+
+* `js/data.js`: `CIV_TECH = { wikinger: 'navigation' }`, `MG_DEFENSE = 3`, Techtext (deutsch, englisch
+  in `DATA_EN`). `js/engine.js`: `civTechAfterRoll(p, field, age)` – nach dem Wurf in `rollAvailability`,
+  für vorab Gewürfeltes in `newGame`, für alte Spielstände in `migrateState`; `defenseValue` mit
+  `1 + MG_DEFENSE`. `js/ki.js`: beide Stellen des Maschinengewehrs lesen `MG_DEFENSE`.
+* `js/marathon.js`: `pickWanted`, `pickNew(order, seed)` (Vorrat, Reihenfolge; Wahl über `draftCurrent`,
+  `draftOptions`, `draftPick` wie im Draft), `kiPickAbility`, `pickApply`. `js/ui/setup.js`:
+  `resolveRandom` lässt wählenden Plätzen den Zufall (`p.pick`), `nameDoubles` übergeht sie und lässt
+  sich nach der Wahl noch einmal rufen. `js/ui/place.js`: `startPlacement` würfelt und wählt dann
+  (`startPick`) oder legt (`placeBegin`); die Forschungsseite rechnet eine Wegwerf-Partie mit allen
+  Plätzen. `js/ui/draft.js`: `startPick`, `pickAdvance`, `drawPick`, die Karte des Vorrats für Draft und
+  Wahl (`abilCardHTML`); Titel und Hinweis des Bildschirms setzt jetzt, wer ihn öffnet.
+* `js/tiles.js`: `TILE_SHAPES.tri14`, `SHAPE_BY_KEY`, `tilePlan(civs, seed, { shape })`; ohne Sechsecke
+  entfallen `planRotations`, `planMiddle`, `planFace` (überall drei Lagen, `TRI_ROT`, `TRI_MIDDLE`).
+  `js/ui/setup.js`: Kartenwahl `plaettchen14`, `isTilePick`, `tileShapeOf`; `cfg.tileShape` statt
+  `cfg.hexTiles`; `recipeNow` übersetzt alte Rezepte. `tools_ki.js`: Schalter `dreiecke14` statt
+  `sechsecke`, `selbst` druckt die Siege nach Platz in der Zugfolge.
+
+### Gemessen (v107)
+
+KI gegen KI (Schwer), je 400 Partien zu viert mit den Regeln von v107: `node tools_ki.js selbst 400
+reiche=4 dreiecke14`, zum Vergleich ohne den Schalter (10 Dreiecke). Fähigkeiten nach dem Muster des
+Werkzeugs, nicht gewählt; die Zugfolge geht dort nach Zivilisation, nicht im Uhrzeigersinn.
+
+* **Siege nach Platz in der Zugfolge:** 14 Dreiecke **30,3 / 36,1 / 21,6 / 12,0 %**, 10 Dreiecke
+  40,5 / 32,9 / 21,5 / 5,1 %. Der Vorteil des Startspielers ist um gut 10 Punkte kleiner (etwa drei
+  Standardfehler des Unterschieds), der Vierte gewinnt mehr als doppelt so oft.
+* **Siege je Startdreieck** (oben, rechts, unten, links): 95 / 102,5 / 100 / 102,5 von 400 – so gleich,
+  wie der Zufall bei dieser Zahl erlaubt (gleiche Chance 100).
+* **Siegarten:** 14 Dreiecke 175 Militär-, 193 Forschungs-, 32 Wirtschaftssiege, Median Runde 6;
+  10 Dreiecke 311 / 50 / 39, Median Runde 5. Mit 8 Feldern zwischen den Startdreiecken kommt der
+  frühe Angriff seltener an, und die Partie wird öfter über die Singularität entschieden.
+* Was das nicht sagt: wie Menschen dort legen und spielen, und wie die Fähigkeitswahl wirkt – sie ist
+  nicht mitgemessen.
+
+### Abgesichert (v107)
+
+`test.js`: Wikinger – in 60 Partien zu viert (zwei Wikinger, Mensch und KI) haben alle die Navigation,
+die anderen würfeln weiter (gut die Hälfte); vorab Gewürfeltes bekommt sie dazu, andere nichts; der
+Würfel fällt trotzdem; ein Spielstand von vor v107 bekommt sie beim Laden. Maschinengewehr – Stadt
+mit 2 Bevölkerung verteidigt mit 8, die Texte nennen `MG_DEFENSE` (deutsch, englisch), die KI rechnet im
+Ernstfall mit 3 je Bevölkerung. 14 Dreiecke – 210 Felder ohne Doppel, Platz 0–9 gleich der Vierer-Form
+eine Zeile tiefer, zusammenhängend, gerader Beginn, 20 × 23; jedes Startdreieck mit 5 Feldern Kante an
+Kante mit genau einem offenen; Abstände 8/8/8/8 und 11/19; alle 15 Felder erlaubt; Plan mit 14
+verschiedenen Plättchen, drei Lagen, ohne Wunsch und bei drei Reichen die übliche Form; KI und Bots
+legen; Ertragstafel 3 × 15; eine KI-Partie endet regulär. Fähigkeitswahl – Bedingung (alle Zufall,
+mindestens zwei Wählende, Bots zählen nicht), Vorrat und Reihenfolge, außer der Reihe abgelehnt, die
+KI nimmt den höchsten Grundwert, der Startspieler hat eine, `pickApply`; 300 Vorräte: alle zwölf etwa
+gleich oft, oft zwei aus einem Reich; gewählt nach dem Würfeln bekommen die Wikinger die Navigation.
+`smoke.js`: Kartenliste zu viert mit 14 Dreiecken, bei drei und zwei Reichen nicht, die Wahl bleibt
+beim Moduswechsel; Legen auf 14 Dreiecken (drei Lagen, Welt, Bogen mit den Schwellen zu viert, das
+Spiel beginnt, Rezept); Fähigkeitswahl mit zwei Menschen und zwei KI (Titel, kein Hinweis, vier
+verschiedene, Plätze in Aufbaureihenfolge 4/1/2/3, die KI wählt sofort, dann der zweite Mensch aus
+zweien, der Startspieler bekommt die letzte, danach wird gelegt, Doppelgänger mit Ziffern, die
+Forschung zeigt die Marken der anderen ohne Hilfszeile, gewählte Wikinger mit Navigation); keine Wahl
+mit einem Menschen gegen Bots oder einem festen Reich; „Nochmal spielen" wählt wieder; danach hat der
+Marathon-Draft Titel und Hinweis. Von Hand (Chromium): Wahl deutsch und englisch, Telefon hochkant wie
+der Draft gedreht, Karte aus 14 Dreiecken beim Legen und im Spiel.

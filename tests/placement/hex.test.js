@@ -1,14 +1,16 @@
 /**
- * Hexagonal tiles in multiplayer (sockets/game.js, async/logic.js, mp.js) against the local docker
- * setup:
+ * The experimental tile mode (hexTiles) in multiplayer (sockets/game.js, async/logic.js, mp.js)
+ * against the local docker setup. Since game v107 it is the tile map of 14 triangles with four
+ * empires and the usual tile map with any other number (v99–v106: hexagons for every number):
  *
  *   docker compose -f docker-compose.local.yml up -d --build
  *   npm i --no-save playwright-core
  *   node tests/placement/hex.test.js [http://localhost:3000]
  *
  * Live: the option shows on the tile map only, and a game of 2, 3, 4, 6 and 8 empires (one human,
- * the rest KI) places a hexagon in six rotations and starts on the hexagon map. Rundenspiel: the
- * same through the form's config, and a fixed map ignores the option.
+ * the rest KI) places a triangle in three rotations and starts on its map – 14 triangles with four.
+ * Rundenspiel: four empires through the form's config get the 14-triangle plan, and a fixed map
+ * ignores the option.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -41,7 +43,7 @@ function makeUser() {
             .then(u => { console.log(u.id); process.exit(0); })`);
     return { name, id };
 }
-const FORM = { 2: 'hex5', 3: 'hex7', 4: 'hex10', 6: 'hex14', 8: 'hex20' };
+const FORM = { 2: 'hex6', 3: 'tri9', 4: 'tri14', 6: 'strip14', 8: 'strip18' };
 
 // the first allowed capital in the current rotation, as a tap on the map
 const place = () => {
@@ -73,9 +75,9 @@ async function live(browser, errors, n) {
     await page.evaluate(() => MP.startGame());
     await page.waitForFunction(() => document.getElementById('screen-place').classList.contains('show') && placeState);
     const st = await page.evaluate(() => ({
-        hex: placeState.plan.hex, turns: planRotations(placeState.plan), note: document.getElementById('pl-note').textContent,
+        shape: placeState.plan.shapeKey, hex: !!placeState.plan.hex, note: document.getElementById('pl-note').textContent,
     }));
-    ok(st.hex && st.turns === 6 && /von 6/.test(st.note), `${n} empires: placing a hexagon, six rotations`, JSON.stringify(st));
+    ok(st.shape === FORM[n] && !st.hex && /von 3/.test(st.note), `${n} empires: placing a triangle of ${FORM[n]}, three rotations`, JSON.stringify(st));
     await page.evaluate(place);
     await page.click('#pl-ok');
     await page.waitForFunction(() => typeof S !== 'undefined' && S && document.getElementById('screen-game').classList.contains('show'), null, { timeout: 30000 });
@@ -104,17 +106,17 @@ async function rundenspiel(browser, errors, user, second, ids) {
     await page.waitForSelector('#mpa-hex');
     await page.evaluate(() => closeModal());
 
-    const r = await rest({ config: { mapKey: 'plaettchen', hexTiles: true, civMode: 'random', playerCount: 6, kiCount: 4, difficulty: 'leicht', isPublic: true } });
+    const r = await rest({ config: { mapKey: 'plaettchen', hexTiles: true, civMode: 'random', playerCount: 4, kiCount: 2, difficulty: 'leicht', isPublic: true } });
     const id = r.id || (r.game && r.game.id);
-    ok(!!id, 'Rundenspiel with hexagons created', JSON.stringify(r).slice(0, 200));
+    ok(!!id, 'Rundenspiel in the experimental tile mode created', JSON.stringify(r).slice(0, 200));
     ids.push(id);
     ok(sql(`SELECT data->'config'->>'hexTiles' FROM async_games WHERE id = '${id}'`) === 'true', 'Rundenspiel: the option is stored');
     const ctx2 = await browser.newContext({ locale: 'de-DE' });
     await ctx2.request.post(BASE + '/api/auth/login', { data: { username: second.name, password: PASSWORD } });
     const joined = await ctx2.request.post(`${BASE}/api/async/${id}/join`, { data: {} });
     ok(joined.ok(), 'Rundenspiel: the second player joins', await joined.text());
-    const plan = sql(`SELECT status, data->'pre'->'plan'->>'hex', data->'pre'->'plan'->>'shapeKey' FROM async_games WHERE id = '${id}'`);
-    ok(plan === 'placement|true|hex14', 'Rundenspiel: a hexagon plan for six empires', plan);
+    const plan = sql(`SELECT data->'pre'->'plan'->>'shapeKey' FROM async_games WHERE id = '${id}'`);
+    ok(plan === 'tri14', 'Rundenspiel: the 14-triangle plan for four empires', plan);
 
     const fixed = await rest({ config: { mapKey: '0', hexTiles: true, civMode: 'random', playerCount: 2, kiCount: 0, difficulty: 'leicht' } });
     const fid = fixed.id || (fixed.game && fixed.game.id);

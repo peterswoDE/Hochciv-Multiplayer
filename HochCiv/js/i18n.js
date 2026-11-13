@@ -42,9 +42,7 @@ const DATA_EN = {
   shapes: {
     hex6: 'Tile map (6 triangles)', tri9: 'Tile map (9 triangles)',
     strip10: 'Tile map (10 triangles)', strip14: 'Tile map (14 triangles)',
-    strip18: 'Tile map (18 triangles)',
-    hex5: 'Tile map (5 hexagons)', hex7: 'Tile map (7 hexagons)', hex10: 'Tile map (10 hexagons)',
-    hex14: 'Tile map (14 hexagons)', hex20: 'Tile map (20 hexagons)',
+    strip18: 'Tile map (18 triangles)', tri14: 'Tile map (14 triangles)',
   },
   civ: {
     griechenland: 'Greece', england: 'England', russland: 'Russia',
@@ -119,7 +117,7 @@ const DATA_EN = {
     gewehre: ['Rifles', '3 coins = 1 power'],
     panzerschiff: ['Ironclad', 'Movement = 6, movement on and across sea'],
     dynamit: ['Dynamite', 'Armies have double attack against cities'],
-    maschinengewehr: ['Machine gun', 'Cities: +2 defence per population'],
+    maschinengewehr: ['Machine gun', 'Cities: +3 defence per population'],
     panzer: ['Tanks', 'Power loss = 1/4'],
     luftwaffe: ['Air force', 'Movement = 9, ignores obstacles'],
     raketentechnik: ['Rocketry', 'Armies have one more ring of range'],
@@ -331,6 +329,7 @@ const UI_EN = {
   'Ereignisstärke': 'Event strength',
   'Marathon': 'Marathon',
   'Marathon · Fähigkeiten draften': 'Marathon · draft abilities',
+  'Fähigkeiten wählen': 'Choose abilities',
   'Marathonkarte (%s × %s)': 'Marathon map (%s × %s)',
   'Nicht am Zug.': 'Not your turn.',
   'Diese Fähigkeit liegt nicht zur Wahl.': 'This ability is not available.',
@@ -365,9 +364,8 @@ const UI_EN = {
   'Spiel beginnen': 'Start game',
   'Plättchenkarte: die offenen Dreiecke liegen gleich, das eigene legt jede*r selbst – Lage wählen, Hauptstadt setzen, verdeckt.':
     'Tile map: the open triangles are placed right away, your own one you place yourself – choose an orientation, set the capital, face down.',
-  'Experimenteller Plättchenmodus': 'Experimental tile mode',
-  'Experimentell: zehn sechseckige Plättchen zu je 19 Feldern, schräg in Reihen zu 3, 4 und 3 gelegt. Die Startplättchen liegen an den Enden der beiden Dreierreihen; das eigene legt jede*r selbst – Lage wählen (sechs Drehungen), Hauptstadt setzen, verdeckt.':
-    'Experimental: ten hexagonal tiles of 19 hexes each, laid at a slant in rows of 3, 4 and 3. The start tiles sit at the ends of the two rows of three; everyone places their own – choose a rotation (six), set the capital, face down.',
+  'Experimentell, vier Reiche: alle zehn Dreiecke liegen offen, die vier Startdreiecke außen an jeder zweiten Kante.':
+    'Experimental, four empires: all ten triangles lie open, the four start triangles outside them on every other edge.',
   'Zufall': 'Random',
   'Zufällig': 'Random',
   'Zufällige Zivilisation': 'Random civilisation',
@@ -594,8 +592,6 @@ const UI_EN = {
   'stürmt die belagerte Hauptstadt': 'storms the besieged capital',
   '%s · Forschung vor dem Legen': '%s · research before placing',
   '%s: verfügbar (vor dem Legen ausgewürfelt):': '%s: available (rolled before placing):',
-  'Vor dem Legen ausgewürfelt – im Spiel steht genau das hier.':
-    'Rolled before placing – the game will show exactly this.',
   '%s: %s %s versorgen %s Bevölkerung – Nahrung %s':
     '%s: %s %s feed %s population – food %s',
 
@@ -766,6 +762,8 @@ const UI_EN = {
     '%s – up to 4 empires',
   'Plättchenkarte – 2 bis 8 Reiche':
     'Tile map – 2 to 8 empires',
+  '%s – 4 Reiche, experimentell':
+    '%s – 4 empires, experimental',
   'Marathon – Zufallskarte, 4 Reiche':
     'Marathon – random map, 4 empires',
   '%s (eigene Karte, bis %s Reiche, Marathon)':
@@ -1500,7 +1498,6 @@ const UI_EN = {
   'Beginnt': 'Starts',
   'Ereignisse': 'Events',
   'Weltwunder': 'World wonders',
-  'Sechseck-Plättchen': 'Hex tiles',
   'Noch %s von %s': '%s of %s left',
   'Nochmal spielen · %s': 'Play again · %s',
   '%s gewinnt': '%s wins',

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Hochzeivilization</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#e4dbbe">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Hochzeiv.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ------------------------------------------------------------------ Menü -->
+<section id="screen-menu" class="screen show">
+  <div class="menu-wrap">
+    <h1 class="title">Hochzeivilization</h1>
+    <div class="menu-actions">
+      <button class="btn" id="m-continue" hidden>Spiel fortsetzen</button>
+      <button class="btn primary" id="m-first">Erstes Spiel</button>
+      <button class="btn" id="m-new">Neues Spiel</button>
+    </div>
+    <nav class="menu-links">
+      <button id="m-rules">Regeln</button>
+      <button id="m-editor">Karte bearbeiten</button>
+      <button id="m-load">Spielstand laden</button>
+    </nav>
+    <div class="lang-row" id="m-lang"></div>
+    <p class="menu-version" id="m-version"></p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ Aufbau -->
+<section id="screen-setup" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-back>‹</button>
+    <h2>Aufbau</h2>
+  </header>
+  <div class="pad">
+    <div class="setup-opts">
+      <label class="row" id="setup-map-row"><span>Karte</span>
+        <select id="setup-map"></select></label>
+      <label class="row" id="setup-count-row"><span>Reiche</span>
+        <select id="setup-count"></select></label>
+      <label class="row" id="setup-random-row"><span>Zufällige Nationen</span>
+        <input type="checkbox" id="setup-random"></label>
+    </div>
+    <div id="setup-list"></div>
+    <div class="setup-opts">
+      <label class="row" id="setup-kilevel-row"><span>KI</span>
+        <select id="setup-kilevel"></select></label>
+      <label class="row" id="setup-start-row"><span>Beginnt</span>
+        <select id="setup-start"></select></label>
+      <label class="row" id="setup-events-row"><span>Ereignisse</span>
+        <input type="checkbox" id="setup-events"></label>
+      <label class="row" id="setup-evmode-row" hidden><span>Ereignisstärke</span>
+        <select id="setup-evmode"></select></label>
+      <label class="row" id="setup-wonders-row"><span>Weltwunder</span>
+        <input type="checkbox" id="setup-wonders"></label>
+      <label class="row" id="setup-hex-row" hidden><span>Sechseck-Plättchen</span>
+        <input type="checkbox" id="setup-hex"></label>
+    </div>
+  </div>
+  <div class="setup-go"><button class="btn primary wide" id="setup-go">Spiel beginnen</button></div>
+</section>
+
+<!-- ------------------------------------------------------------------ Spiel -->
+<section id="screen-game" class="screen">
+  <header class="hud">
+    <button class="icon-btn" id="g-menu">☰</button>
+    <button class="hud-civ" id="hud-civ" title="Welt"><span id="hud-sym" class="civ-chip"></span>
+      <span class="hud-who"><strong id="hud-name">—</strong><small id="hud-round">Runde 1</small></span></button>
+    <div class="hud-res">
+      <button class="res pop" id="hud-pop" title="Bevölkerung"><i>👥</i><b id="hud-popn">0</b><span class="pm"><span class="pf" id="hud-popf"></span><span class="pk" id="hud-popk"></span></span></button>
+      <span class="res sci" title="Wissenschaft"><i>🔬</i><b id="hud-sci">0</b></span>
+      <button class="res food" id="hud-feed" title="Nahrung"><i>🌾</i><b id="hud-food">0</b></button>
+      <span class="res coin" title="Münzen"><i>🪙</i><b id="hud-coins">0</b></span>
+      <span class="res pow" title="Macht"><i>⚔︎</i><b id="hud-power">0</b></span>
+    </div>
+  </header>
+
+  <div id="stage">
+    <div id="map-host"><svg id="map" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+    <section id="tut-panel" hidden>
+      <div class="tut-bar"><div class="tut-bar-fill" id="tut-bar-fill"></div></div>
+      <div class="tut-head">
+        <span class="tut-sub"></span>
+        <button class="btn small ghost" id="tut-quit">Beenden</button>
+      </div>
+      <div class="tut-scroll">
+        <h3 class="tut-h" id="tut-title"></h3>
+        <div id="tut-body"></div>
+      </div>
+      <p class="tut-task" id="tut-task" hidden></p>
+      <div class="tut-nav">
+        <span class="tut-count" id="tut-count"></span>
+        <button class="btn small primary" id="tut-next">Weiter ›</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="sheet" class="sheet">
+    <button class="sheet-close" id="sheet-close" aria-label="Schließen">✕</button>
+    <div class="sheet-grip" id="sheet-grip"></div>
+    <div id="sheet-body"></div>
+  </div>
+
+  <nav class="actionbar">
+    <button class="btn small" id="a-tech">Forschen</button>
+    <button class="btn small" id="a-found">Stadt gründen</button>
+    <button class="btn small" id="a-power">Macht</button>
+    <button class="btn small" id="a-abil">Fähigkeiten<span class="bar-count" id="a-abil-n" hidden></span></button>
+    <button class="btn small primary" id="a-end">Zug beenden</button>
+  </nav>
+</section>
+
+<!-- ------------------------------------------------- Startplättchen legen -->
+<section id="screen-place" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-back>‹</button>
+    <h2 id="pl-title">Startplättchen</h2>
+  </header>
+  <div id="pl-host"><svg id="pl-map" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div class="ed-tools place-tools">
+    <p class="hint" id="pl-note"></p>
+    <button class="btn small" id="pl-tech">Forschung</button>
+    <button class="btn small" id="pl-world">Welt</button>
+    <button class="btn small" id="pl-rot">Drehen</button>
+    <button class="btn small primary" id="pl-ok">Fertig</button>
+  </div>
+</section>
+
+<!-- ------------------------------------------------- Marathon: Fähigkeiten draften -->
+<section id="screen-draft" class="screen">
+  <header class="bar">
+    <button class="icon-btn" data-back>‹</button>
+    <h2 id="dr-title">Marathon · Fähigkeiten draften</h2>
+  </header>
+  <div class="draft-layout">
+    <div id="dr-host"><svg id="dr-map" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <aside class="draft-side">
+      <p class="hint" id="dr-note"></p>
+      <div id="dr-pool"></div>
+      <div id="dr-players"></div>
+      <button class="btn primary wide" id="dr-go" hidden>Spiel beginnen</button>
+    </aside>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ Karteneditor -->
+<section id="screen-editor" class="screen">
+  <header class="bar ed-bar">
+    <button class="icon-btn" id="ed-back">‹</button>
+    <input id="ed-name" class="ed-name" maxlength="40" placeholder="Name der Karte" autocomplete="off">
+    <button class="icon-btn" id="ed-undo" disabled>↶</button>
+    <button class="icon-btn" id="ed-redo" disabled>↷</button>
+    <button class="btn small primary" id="ed-save">Speichern</button>
+    <button class="icon-btn ed-more-btn" id="ed-more">⋯</button>
+  </header>
+  <p class="ed-status" id="ed-status"></p>
+  <div class="ed-body">
+    <aside class="ed-side">
+      <div class="ed-group ed-g-tools">
+        <h4>Werkzeug</h4>
+        <div class="ed-modes" id="ed-modes"></div>
+        <div class="ed-brush" id="ed-brush"></div>
+      </div>
+      <div class="ed-group ed-g-palette">
+        <div class="palette" id="ed-palette"></div>
+      </div>
+      <details class="ed-group ed-settings" id="ed-settings" open>
+        <summary>Karte</summary>
+        <label class="row"><span>Max. Reiche (Startpunkte)</span>
+          <select id="ed-max"></select></label>
+        <label class="row"><span>Marathonregeln</span>
+          <input type="checkbox" id="ed-marathon"></label>
+        <div class="row ed-size"><span>Größe (Zeilen × Spalten)</span>
+          <span><input id="ed-rows" type="number" min="4" max="48"> × <input id="ed-cols" type="number" min="4" max="48">
+          <button class="btn small" id="ed-size">Übernehmen</button></span></div>
+      </details>
+      <div class="ed-group ed-files">
+        <h4>Datei</h4>
+        <div class="ed-filebtns">
+          <button class="btn small" id="ed-maps">Meine Karten</button>
+          <button class="btn small" id="ed-new">Neue Karte</button>
+          <button class="btn small" id="ed-publish">Veröffentlichen</button>
+          <button class="btn small" id="ed-browse" hidden>Karten entdecken</button>
+          <button class="btn small ghost" id="ed-import">Importieren</button>
+          <button class="btn small ghost" id="ed-export">Exportieren</button>
+        </div>
+      </div>
+    </aside>
+    <div id="ed-host"><svg id="ed-map" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ Overlay -->
+<div id="overlay" class="overlay"><div class="modal"><header><h3 id="ov-title"></h3>
+  <button class="icon-btn" id="ov-close">✕</button></header><div id="ov-body"></div></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="js/data.js"></script>
+<script src="js/civs.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/hex.js"></script>
+<script src="js/tiles.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/expansion.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/ki.js"></script>
+<script src="js/marathon.js"></script>
+<script src="js/anim.js"></script>
+<script src="js/firstgame.js"></script>
+<script src="js/ui/base.js"></script>
+<script src="js/ui/map.js"></script>
+<script src="js/ui/game.js"></script>
+<script src="js/ui/sheets.js"></script>
+<script src="js/ui/turns.js"></script>
+<script src="js/ui/end.js"></script>
+<script src="js/ui/world.js"></script>
+<script src="js/ui/setup.js"></script>
+<script src="js/ui/place.js"></script>
+<script src="js/ui/draft.js"></script>
+<script src="js/ui/editor.js"></script>
+<script src="js/ui/boot.js"></script>
+</body>
+</html>

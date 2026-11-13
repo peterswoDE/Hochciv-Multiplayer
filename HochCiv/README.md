@@ -42,16 +42,18 @@ Ausliefern umschreibt (etwa verkleinert), verhindert jede Aktualisierung.
 | Techtree (v82) | Seit v82 gibt es einen Techtree – den früheren „alternativen": Mathematik 1, Astronomie 2, Philosophie 3, Schrift 4 · Bewässerung 1, Landwirtschaft 5 · in der Forschung der Industrialisierung Chemie 11, Biologie 12, Wissenschaftliche Methode 15. Das Häkchen im Aufbau ist weg. Der alte (Schrift 1, Mathematik 2 … Landwirtschaft 1, Bewässerung 5, Wiss. Methode 11, Chemie 12, Biologie 15) gilt nur noch in Partien, die vor v82 mit ihm begonnen wurden – dort nennen Weltblatt und Regelbogen ihn. Seit v84 im Militär der Antike: **Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5** (vorher 5, 2, 4 – der alte Techtree behält sie). Quelle: die Kosten in `TECHS`, die alten in `OLD_TECH_COSTS` (`js/data.js`) |
 | Technologiekosten (v105) | Getauscht bzw. gedreht, jeweils im selben Zeitalter: **Theologie 8, Bürokratie 10** (vorher 10, 8) · **Militärgericht 11, Nationalismus 13** (13, 11) · **Stahl 7, Burgenbau 8** (8, 7) · **Kunstdünger 11, Dampfmaschine 13, Eisenbahn 14** (14, 11, 13). Die Leitern im Bogen folgen den Kosten. Der alte Techtree (Spielstände von vor v82) behält die alten |
 | Ertragstechnologien (v88, v103) | Technologien, die einem Gelände oder jeder Bevölkerung etwas bringen, **zählen nicht zusammen – es gilt die beste**: Mit Mathematik bringt Wald 1 Wissenschaft, mit Elektrizität 2, mit Künstlicher Intelligenz 3, auch mit allen dreien (bis v87 brachte jede +1, zusammen also auch 3). Ebenso Papier → Biologie (Grasland), Fischerei → Segeln → Containerlogistik (Meer: zuletzt 2 Nahrung und 2 Münzen), Landwirtschaft → Grüne Revolution (Grasland: 2 Nahrung, 1 Münze), Schrift → Universitätswesen und Fließband → Robotik (Bevölkerung: je 3). Ketten verschiedener Felder betreffen verschiedene Erträge (auf Grasland Papier die Wissenschaft, Landwirtschaft die Nahrung); dazu kommt der Große Leuchtturm; Russlands Taiga ist seit v95 eine Untergrenze (siehe Taiga). **Die Techtexte nennen seit v103, was das Feld damit insgesamt bringt**, samt Grundertrag: „Wald bringt 2 Wissenschaft", „Grasland bringt 2 Nahrung", „Bevölkerung bringt je 2 Wissenschaft" (v88–v102 „Wald: +2 Wissenschaft" – das las sich, als stapelten sie). Der Regelbogen sagt die Regel unter der Geländetabelle |
+| Maschinengewehr (v107) | **+3** Verteidigung je Bevölkerung (bis v106 +2): eine Stadt verteidigt mit dem Vierfachen ihrer Bevölkerung. Zahl in `MG_DEFENSE` (`js/data.js`) |
 | Belagerungsmaschinen / Singularität (v88) | **Belagerungsmaschinen** geben seit v88 **+3** Angriff je Armee gegen Städte (vorher +5; Dynamit verdoppelt danach). Die **Singularität** kostet **120** Wissenschaft (vorher 100; Griechenland −5, Wissenschaftliche Methode −10, Kreml +50 wie bisher), im Marathon weiter 300 |
 | Reiche | Erst die Karte, dann **2 bis 8 Reiche** – so viele, wie die Karte zulässt: Originalkarte 2–4, Plättchenkarte 2–8, **Marathon** (Zufallskarte 24 × 36, teurere Technologien, Fähigkeiten im Draft) genau 4, eigene Karten so viele, wie sie Startpunkte haben. Zu zweit ist es ein Duell (Wirtschaftssieg erst über 3/4), zu viert seit v101 schon über 4/7 – siehe Spielende. Ab fünf Reichen sitzen Zivilisationen mehrfach („England II“, eigene Farbe). **Zufällige Nationen für alle** lost jedem Platz Zivilisation und Fähigkeit aus |
 | Mensch / KI | Je Platz im Aufbau (Bots stehen nicht mehr zur Wahl; laufende Partien spielen sie weiter). Die **KI** spielt nach den Regeln für Menschen: sie bezahlt alles, hat ihre Zivilisationsfähigkeit, Ereignisse treffen sie, und sie legt ihr Startplättchen verdeckt selbst. Stufe Leicht/Mittel/Schwer für alle KI gemeinsam – gleiche Regeln, nur übersieht und verrechnet sich die leichtere Stufe öfter; im Duell gemessen Leicht zwischen den Bots Prinz und König, Mittel etwas über König, Schwer etwas über David. Seit v96 erforscht die KI die **Wissenschaftliche Methode vor den übrigen Technologien eines Zugs** (sie verbilligt alles danach) und plant neu, sobald eine Forschung sie verfügbar macht. **Bots** spielen nach den Bot-Regeln (Würfelproben, Macht = Bevölkerung) und haben ihre eigene Schwierigkeit. Ab Werk sind die Gegner KI |
 | Zivilisationen | Auf der Plättchenkarte und auf eigenen Karten darf jeder Platz frei wählen, auch mehrmals dieselbe (Doppelgänger bekommen Ziffern und eine eigene Farbe – erst eine freie Zivilisationsfarbe, ab fünf Reichen eine von vier weiteren). Auf den festen Karten und dem Standard-Marathon sitzt jede genau einmal. Zivilisation und Fähigkeit lassen sich auch auslosen. Bei ausgelostem Reich steht die Fähigkeit zwangsläufig ebenfalls auf Zufall |
+| **Fähigkeiten wählen** (v107) | Sind auf der Plättchenkarte **alle** Reiche ausgelost, wählt vor dem Legen jedes seine Fähigkeit – und mit ihr die Zivilisation – **rückwärts in der Zugfolge** aus einem Vorrat mit genau so vielen verschiedenen Fähigkeiten, wie gewählt wird; der Startspieler bekommt die letzte. Die Starttechnologien sind dann schon gewürfelt und stehen bei jedem Platz, links liegen die offenen Plättchen. Die Plätze stehen in der Reihenfolge des Aufbaus, vorn ihr Platz in der Zugfolge. Die KI wählt sofort, Bots wählen nicht (ihr Reich bleibt ausgelost); zwei Fähigkeiten eines Reichs ergeben Doppelgänger. Hat kein Mensch eine Wahl, geht es gleich ans Legen |
 | Startspieler | frei wählbar oder zufällig – **„Zufällig“ ist seit v99 immer die Vorgabe**, bis man etwas anderes wählt. **Startausgleich** (seit v85, Werte seit v98): im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge **2, 4 bzw. 6 Münzen** dazu – zu zweit der Zweite **4**, zu dritt 2 und 4 (bis v97 1/2/3, zu zweit 1); ab fünf Reichen weiter bis 14 für den Achten. Gezählt ab dem Startspieler; Bots bekommen nichts (sie zahlen nichts). Zahlen in `START_BONUS_COINS` und `START_BONUS_DUEL` (`js/data.js`) |
 | Fähigkeit sehen | Im Blatt **Fähigkeiten** (Name, Wirkung, bei der Freien Forschung je kostenloser Forschung ein Punkt, gefüllt solange offen) und in der Welt, die alle Reiche mit Fähigkeit und Wirkung listet – seit v99 **in Zugfolge**, durchnummeriert ab dem Startspieler. Im Marathon stehen dort beide gedrafteten. In der Kopfzeile steht sie seit v102 nicht mehr |
-| Karte | Originalkarte, **Plättchenkarte** (die Zufallskarte), Marathon oder eine eigene aus „Meine Karten“. Die **große Karte** (15 × 24) ist seit v99 entfernt; laufende Partien darauf spielen weiter |
+| Karte | Originalkarte, **Plättchenkarte** (die Zufallskarte), seit v107 die experimentelle **Plättchenkarte (14 Dreiecke)** (nur vier Reiche), Marathon oder eine eigene aus „Meine Karten“. Die **große Karte** (15 × 24) ist seit v99 entfernt; laufende Partien darauf spielen weiter |
 | Karteneditor | Werkzeuge **Malen** (im Ziehen, Pinsel 1/7/19 Felder), **Füllen**, **Verschieben**; **Rückgängig/Wiederholen**; neue Karte aus einer Vorlage oder leer. Einstellungen der Karte: Name, **Max. Reiche** (= Zahl der Startpunkte, 2–8), **Marathonregeln**, Größe bis 48 × 48. Gelände malen, Startpunkte 1…N setzen; unten steht laufend, ob die Karte spielbar ist und was fehlt. **Speichern** legt sie in „Meine Karten“ (mit Anmeldung im Spielerkonto), **Veröffentlichen** gibt ihr einen 6-stelligen Code, mit dem jeder sie laden kann. Spielen weniger Reiche, als die Karte Startpunkte hat, beginnen sie an denen, die am weitesten auseinanderliegen |
 | Plättchenkarte | Zufallskarte aus Dreiecken zu 15 Feldern. Vor dem Spiel legt jedes Reich verdeckt sein eigenes Startdreieck: Lage wählen (drei), Hauptstadt setzen. Nach dem letzten beginnt gleich das Spiel (bis v98 kam dazwischen ein eigener Schritt mit „Spiel beginnen“). Beim Legen stehen **Forschung** und seit v99 **Welt** zur Ansicht. **Rötlich umrandet** sind Startfelder, bei denen ein anderes Feld – auch in einer anderen Lage – von einem Ertrag mehr und von keinem weniger bringt |
-| **Experimenteller Plättchenmodus** (v99) | Häkchen im Aufbau auf der Plättchenkarte, bei 2 bis 8 Reichen (5, 7, 10, 14 oder 20 Sechsecke, je nach Zahl der Reiche; zu viert wie folgt): **zehn sechseckige Plättchen** zu 19 Feldern (Seitenlänge 3) aus einem eigenen Vorrat von 20, **schräg in Reihen zu 3, 4 und 3** gelegt (Sechsecke dieser Größe schließen nur auf einem um gut 23° geneigten Gitter lückenlos). Die Startplättchen liegen an den Enden der beiden Dreierreihen; jedes Reich dreht seines in **sechs Lagen** und setzt die Hauptstadt. Der Vorrat hat höchstens zwei Inseln je Plättchen und eng beieinanderliegende beste Startplätze (siehe Karten) |
+| **Experimenteller Plättchenmodus** (v107) | Bei vier Reichen die Karte **Plättchenkarte (14 Dreiecke)**: die zehn Dreiecke der Vierer-Karte liegen alle offen, die **vier Startdreiecke außen** an jeder zweiten Außenkante – oben, rechts, unten, links, benachbarte je 8 Felder auseinander (siehe Karten). v99–v106 war es ein Häkchen mit zehn Sechsecken; sie sind entfernt |
 | **Welt** (Reichsname ▾ in der Kopfzeile) | Die Reiche in Zugfolge mit ihren Fähigkeiten, Ereignis dieser Runde, eigene und fremde Weltwunder, verfügbarer Wunder-Pool |
 | 🌾 in der Kopfzeile | Städte füttern (nur mit Gentechnik oder Massenmedien) |
 | Weltwunder bauen | im Stadtblatt, wenn die Erweiterung an ist |
@@ -167,6 +169,7 @@ gezogen und zu einer Form zusammengelegt:
 | 2 | Sechseck aus 6 Dreiecken, 4 offen, 2 verdeckt | 11 × 11, 90 Felder |
 | 3 | großes Dreieck aus 9 Dreiecken, 6 offen | 16 × 16, 135 Felder |
 | 4 | gestrecktes Sechseck aus 10 Dreiecken, 6 offen (Startplätze: die zwei oberen und die zwei unteren) | 10 × 18, 150 Felder |
+| 4, experimentell | dieselben 10 Dreiecke, alle offen, dazu 4 Startdreiecke außen | 20 × 23, 210 Felder |
 
 Bei zwei und drei Reichen bleibt **genau in der Mitte ein Feld frei** – dort ist kein
 Feld, da führt kein Weg durch. Das ist rechnerisch unvermeidlich (6 · 15 = 91 − 1) und
@@ -195,28 +198,32 @@ Neue Plättchen kommen in `js/tiles.js`, `TILE_POOL` – fünf Zeilen zu 5/4/3/2
 Meer nur am Rand liegt und dass die drei mittigen Felder Land sind und jedes davon im
 ersten Zug mindestens 4 Nahrung bringt.
 
-### Experimenteller Plättchenmodus: Sechsecke (v99)
+### Experimenteller Plättchenmodus: 14 Dreiecke (v107)
 
-Nur bei vier Reichen, als Häkchen im Aufbau. Statt Dreiecken liegen **zehn Sechsecke** zu
-19 Feldern (Seitenlänge 3: Mitte, erster Ring mit 6, zweiter mit 12), gezogen aus einem
-eigenen Vorrat von 20 (`HEX_POOL`), in Reihen zu **3, 4 und 3**. Sechsecke dieser Größe
-schließen nur auf einem schrägen Gitter lückenlos aneinander – die Nachbarmitten liegen um
-(5, −2), (2, 3) und (−3, 5) versetzt –, deshalb steigen die Reihen um gut 23° nach rechts
-an (vom Autor so gewählt; die Alternative waren waagrechte Reihen mit Meer in den Lücken).
-Die Karte ist 17 × 17 groß und hat 190 Felder.
+Nur bei vier Reichen, als eigene Karte im Aufbau. Die zehn Dreiecke der Vierer-Karte liegen **alle
+offen** – gezogen und gedreht wie die offenen sonst –, die **vier Startdreiecke** legen die Reiche
+**außen** an, an jede zweite der acht Außenkanten, Kante an Kante mit je einem offenen Dreieck:
+
+```
+    ▲
+  △ ▽ △ ▽ △ ▼          ▲▼ Startdreiecke (verdeckt gelegt)
+▲ ▽ △ ▽ △ ▽            △▽ zehn offene
+        ▼
+```
 
 | | |
 |---|---|
-| Startplätze | die Enden der beiden Dreierreihen, also die vier äußeren Ecken (`seatSets` `[0, 2, 7, 9]`). Zwischen zwei Startplättchen liegt immer ein offenes; jedes Feld eines Startplättchens ist als Hauptstadt erlaubt |
-| Legen | wie bei den Dreiecken, nur mit **sechs Lagen**; Bots setzen auf die Mitte oder den ersten Ring, die KI rechnet alle 6 × 19 Möglichkeiten |
-| Vorrat | innen nur Grasland, Wald, Gebirge, Fluss; Meer und Inseln nur im äußeren Ring; **höchstens zwei Inseln** je Plättchen, kein inneres Feld an zwei Inseln; jedes innere Feld bringt als Hauptstadt mindestens 4 Nahrung; die **beste innere Hauptstadt** jedes Plättchens liegt zwischen 8,8 und 9,7 (1·🔬 + 1,1·🌾 + 0,8·🪙, so wägt die KI) – im Dreiecksvorrat reicht das von 6,7 bis 12,8. Flüsse hängen meist zusammen und münden ins Meer |
+| Startplätze | oben links, rechts oben, unten rechts, links unten (`seatSets` `[10, 11, 12, 13]`); gezogen wird im Uhrzeigersinn. Benachbarte Startdreiecke liegen alle **8 Felder** auseinander, gegenüberliegende 11 und 19 – die gespiegelte Wahl gäbe auf dem Sechseckgitter abwechselnd 6 und 9. Jedes Feld eines Startdreiecks ist als Hauptstadt erlaubt |
+| Karte | 14 von 20 Plättchen, 20 × 23, 210 Felder; alles eine Zeile tiefer als die Vierer-Karte, damit die oberste Feldzeile gerade bleibt |
+| Legen | wie auf jeder Plättchenkarte: drei Lagen, Hauptstadt setzen, verdeckt |
 
-Notiert wird ein Sechseck in fünf Zeilen zu 3/4/5/4/3 Feldern, so wie es in Lage 0 liegt.
+Gemessen (KI gegen KI, je 400 Partien, Regeln von v107): Der Startspieler gewinnt auf den 14 Dreiecken
+30 % der Partien, auf den 10 Dreiecken 41 % (der Vierte 12 % gegen 5 %); die vier Startdreiecke
+gewinnen je 24–26 %. Mehr Partien enden mit der Singularität. Einzelheiten in `ANNAHMEN.md`,
+Abschnitt v107.
 
-Gemessen (KI gegen KI, je 400 Partien, Regeln von v99): Der Startspieler gewinnt auf den Sechsecken
-35 % der Partien, auf den Dreiecken zu viert 48 % (der Vierte 16 % gegen 12 %). Die Siegquoten der
-Startplättchen streuen kaum mehr als der Zufall (Karst 13 % bis Taiga 36 %, gleiche Chance 25 %).
-Einzelheiten in `ANNAHMEN.md`, Abschnitt v99.
+Bis v106 bestand der Modus aus zehn Sechsecken zu 19 Feldern (schräg 3/4/3, Häkchen
+„Sechseck-Plättchen"); sie sind seit v107 entfernt. Laufende Partien darauf spielen weiter.
 
 ### Flüsse und Inseln auf der Karte (v99)
 
@@ -339,9 +346,10 @@ node smoke.js    # Oberfläche in jsdom durchspielen (braucht: npm install jsdom
 python3 build_single.py && node check_single.js   # Einzeldatei bauen und in jsdom prüfen
 node tools_ki.js duell 40 diff=david   # Messreihen mit der KI (siehe Kopf der Datei)
 node tools_ki.js methode 200           # v96: Methode zuerst gegen die Reihenfolge bis v95, gepaart
+node tools_ki.js selbst 400 reiche=4 dreiecke14   # v107: KI gegen KI auf 14 Dreiecken, Siege nach Platz in der Zugfolge
 ```
 
-Grün schreibt jeder Lauf **eine Zeile** (`test   2008 passed`, `smoke  169 passed`, `single  ok`),
+Grün schreibt jeder Lauf **eine Zeile** (`test   2004 passed`, `smoke  172 passed`, `single  ok`),
 rot jede FAIL-Zeile; alles andere – „ok"-Zeilen und Messwerte – mit `--verbose` (v102).
 `smoke.js` würfelt mit festem Startwert (`SMOKE_SEED=…` probiert einen anderen).
 
@@ -359,12 +367,12 @@ js/data.js            Technologien, Zivilisationen, Erträge, Karte, Siegschwell
 js/civs.js            Zivilisationen, erzeugt aus data/civs.json (node tools_civs.js)
 js/i18n.js            Englisch: Spielinhalte und Oberflächensätze
 js/hex.js             Hexraster, Distanzen, Wegsuche
-js/tiles.js           Dreiecksplättchen: Vorrat, Formen, Legephase, Kartenbau
+js/tiles.js           Dreiecksplättchen: Vorrat, Formen (auch 14 Dreiecke), Legephase, Kartenbau
 js/engine.js          Regeln: Einkommen, Aktionen, Kampf, Sieg
 js/expansion.js       Erweiterungen: Ereignisse, Weltwunder, Barbaren
 js/bots.js            Bot-Züge nach den Bot-Regeln
 js/ki.js              KI-Züge nach den Regeln für Menschen
-js/marathon.js        Marathon: Kartengenerator, Hauptstädte, Draft, Draftwahl der KI
+js/marathon.js        Marathon: Kartengenerator, Hauptstädte, Draft, Draftwahl der KI; Fähigkeitswahl der Plättchenkarte (v107)
 js/anim.js            Züge von KI und Bots aufnehmen und in Szenen teilen
 js/firstgame.js       Erstes Spiel: Seite vor der Partie, Karte, Würfel, Englands Drehbuch, Ziele, Tipps, Schienen, Panel
 js/ui/base.js         Oberfläche (seit v102 je Bildschirm eine Datei): Fenster, Blätter, Leiste, Drehung, Speichern
@@ -376,7 +384,7 @@ js/ui/end.js          Spielende, Nochmal spielen
 js/ui/world.js        Welt, Ereignis, Wunder, Nahrung, Zugbeginn
 js/ui/setup.js        Aufbau und die eine Vorliebe (Animationen)
 js/ui/place.js        Legephase der Plättchenkarte
-js/ui/draft.js        Marathon: Fähigkeiten draften
+js/ui/draft.js        Fähigkeiten wählen: Draft des Marathons, Fähigkeitswahl der Plättchenkarte
 js/ui/editor.js       Karteneditor
 js/ui/boot.js         Start: Sprache, Menü, Verdrahtung, Regeln, Laden und Speichern
 sw.js                 Offline-Cache

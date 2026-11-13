@@ -16,7 +16,8 @@
    so sieht es in einem A-Platz in Lage 0 auch auf der Karte aus (in einem B-Platz um
    180° gedreht, also weiterhin dasselbe Plättchen, nur andersherum gelegt).
 
-   Seit v99 gibt es den experimentellen Plättchenmodus mit SECHSECKIGEN Plättchen (Seitenlänge 3, 19 Felder; Abschnitt „Sechseck-Plättchen“ weiter unten).    */
+   Für vier Reiche gibt es seit v107 den experimentellen Plättchenmodus aus 14 Dreiecken
+   (TILE_SHAPES.tri14); v99–v106 bestand er aus zehn Sechsecken.                         */
 
 const TILE_CELLS = 15;
 const TILE_SIDE = 5;
@@ -77,76 +78,6 @@ const TILE_POOL = [
 // Plättchentext → 15 Gelände in TRI_IJK-Reihenfolge
 function tileTerrain(tile) { return tile.a.join('').split(''); }
 
-/* ---------------------------------------------------------------- Sechseck-Plättchen (v99)
-   Experimenteller Plättchenmodus (Anweisung des Autors): sechseckige Plättchen mit der Seitenlänge 3 – 19 Felder: die Mitte, sechs im ersten und zwölf im
-   zweiten Ring. Ein solches Plättchen ist oben und unten gerade und läuft links und rechts
-   spitz zu; notiert wird es in fünf Zeilen von 3/4/5/4/3 Feldern, so wie es in Lage 0 auf der
-   Karte liegt:
-        A0 A1 A2
-      B0 B1 B2 B3          innen (Mitte und erster Ring): B1 B2 · C1 C2 C3 · D1 D2
-     C0 C1 C2 C3 C4        außen (zweiter Ring): die übrigen zwölf
-      D0 D1 D2 D3
-        E0 E1 E2
-   Gerechnet wird in Würfelkoordinaten relativ zur Mitte, (dx, dy, dz), dz ist die Zeile.  */
-const HEX_TILE_CELLS = 19;
-const HEX_DXYZ = [];
-for (let dz = -2; dz <= 2; dz++)
-  for (let dx = Math.max(-2, -2 - dz); dx <= Math.min(2, 2 - dz); dx++) HEX_DXYZ.push([dx, -dx - dz, dz]);
-const HEX_INDEX = {};
-HEX_DXYZ.forEach((d, n) => { HEX_INDEX[d.join(',')] = n; });
-const hexRing = n => Math.max(...HEX_DXYZ[n].map(Math.abs));
-/* Drehung um 60° um die Mitte: (x, y, z) → (−z, −x, −y). Sechs Lagen; HEX_ROT[o][n] sagt wie
-   TRI_ROT, welches Feld des Plättchentextes auf Feld n liegt, wenn das Plättchen o-mal gedreht
-   wird. Gespiegelt wird auch hier nie. */
-function hexRotOnce(n) { const [x, y, z] = HEX_DXYZ[n]; return HEX_INDEX[[-z, -x, -y].join(',')]; }
-const HEX_ROT = [HEX_DXYZ.map((_, n) => n)];
-for (let o = 1; o < 6; o++) HEX_ROT.push(HEX_ROT[o - 1].map(hexRotOnce));
-// Mitte und erster Ring: ihre sechs Nachbarn liegen alle auf demselben Plättchen – dort setzen
-// Bots ihre Hauptstadt (wie TRI_MIDDLE bei den Dreiecken)
-const HEX_MIDDLE = HEX_DXYZ.map((_, n) => n).filter(n => hexRing(n) <= 1);
-
-/* Vorrat: 20 Plättchen, von Hand entworfen; je Partie werden zehn gezogen. Entwurfsregeln, die
-   `node test.js` prüft (dazu die des Dreiecksvorrats, soweit sie passen):
-   • innen (Mitte und erster Ring) nur Grasland, Wald, Gebirge oder Fluss – Meer und Inseln
-     liegen im äußeren Ring, nur dort verbinden sie sich mit dem Nachbarplättchen;
-   • höchstens zwei Inseln je Plättchen, und kein inneres Feld grenzt an zwei – Inseln bringen
-     1/1/1 und machten sonst einzelne Startplätze übermächtig (Anweisung des Autors: keine zu
-     starken Startplätze). Die sieben Inseln des Vorrats liegen fast alle an Ecken: dort
-     grenzen sie an nur ein inneres Feld;
-   • jedes innere Feld bringt als Hauptstadt im ersten Zug mindestens 4 Nahrung (Münzen 2:1);
-   • Flussfelder hängen meist zusammen und laufen zum Meer – so zeichnet die Karte seit v99
-     Flüsse als Wasserlauf (riverLines in js/ui/map.js);
-   • die BESTE innere Hauptstadt jedes Plättchens liegt eng beieinander: Wert 1·🔬 + 1,1·🌾 +
-     0,8·🪙 (so wägt die KI beim Legen ab) zwischen 8,8 und 9,7. Im Dreiecksvorrat reicht das
-     von 6,7 (Küste) bis 12,8 (Ferne Riffe) – dort machen Inseln den Unterschied.
-   Gelände wie dort: G Grasland · W Wald · B Gebirge · F Fluss · M Meer · I Insel.             */
-const HEX_POOL = [
-  // Binnenland
-  { n: 'Weite Ebene', a: ['GWG', 'GGFG', 'BGFGW', 'GFGG', 'WGB'] },
-  { n: 'Kornkammer', a: ['FGG', 'GFGW', 'GFGGG', 'WFGG', 'GGB'] },
-  { n: 'Hochebene', a: ['GGB', 'WGBG', 'GBGGF', 'BGWF', 'GGF'] },
-  // Land mit Meer an einzelnen Ecken und Kanten
-  { n: 'Flusstal', a: ['GFG', 'GGFG', 'BGFGW', 'GFGG', 'MGB'] },
-  { n: 'Hügelland', a: ['BMM', 'GBGG', 'WGGFB', 'GGFG', 'MGB'] },
-  { n: 'Steppe', a: ['MMG', 'GGBG', 'GGGFM', 'BGFG', 'GWG'] },
-  { n: 'Taiga', a: ['WMW', 'MWGG', 'WGFGB', 'GFWW', 'BFM'] },
-  { n: 'Karst', a: ['GGM', 'GFGB', 'MGBGG', 'GGFW', 'BGM'] },
-  { n: 'Gebirgskette', a: ['BMB', 'GBGG', 'BGFGB', 'GGBG', 'BMG'] },
-  { n: 'Waldland', a: ['MWG', 'WGFG', 'GWGGM', 'GFFG', 'WGM'] },
-  { n: 'Bergsee', a: ['MMB', 'MFFG', 'BGGFG', 'GWGG', 'BGW'] },
-  // Küsten: Meer in Zügen entlang einer Seite, Flüsse münden dort
-  { n: 'Küste', a: ['MGG', 'MGGW', 'IFGGB', 'MFGG', 'MWG'] },
-  { n: 'Bucht', a: ['MMM', 'GGFM', 'WGFGB', 'GFGW', 'BGG'] },
-  { n: 'Fjorde', a: ['MWI', 'MGFG', 'WGFGM', 'MFGG', 'BWM'] },
-  { n: 'Halbinsel', a: ['MMG', 'MGFG', 'MGFGW', 'MGGG', 'GMI'] },
-  { n: 'Marschland', a: ['MGG', 'FGFG', 'MFGGW', 'GGFG', 'MFM'] },
-  { n: 'Delta', a: ['GGG', 'BGFG', 'GGFGM', 'GGFM', 'WMM'] },
-  // Inseln: mehr Meer, je ein oder zwei Inseln, nie zwei an einem Startplatz
-  { n: 'Inselkette', a: ['MIM', 'MGGW', 'MFGGG', 'IGWG', 'MGB'] },
-  { n: 'Riff', a: ['GGM', 'WGGM', 'GFGBI', 'GGFM', 'BGM'] },
-  { n: 'Lagune', a: ['MMI', 'GGFM', 'WGGGM', 'GBGG', 'MGW'] },
-];
-
 /* ---------------------------------------------------------------- Plätze und Formen
    Jede Form nennt ihre Plätze (Reihenfolge = Zeichenreihenfolge), die Löcher – Felder
    der Karte, die zu keinem Plättchen gehören – und die Sitzplätze der Spieler.
@@ -162,10 +93,10 @@ const HEX_POOL = [
    4 Spieler: zwei Reihen zu fünf Dreiecken, zusammen ein gestrecktes Sechseck ohne
      jedes Loch. Die Spieler sitzen auf den vier Dreiecken, die mit ihrer breiten Seite
      an der Ober- bzw. Unterkante liegen (je zwei oben und unten) – das sind die vier
-     Ecken der gestreckten Form. Die übrigen sechs liegen offen.                                     */
+     Ecken der gestreckten Form. Die übrigen sechs liegen offen.
+   4 Spieler, experimentell (tri14): dieselben zehn Dreiecke, alle offen, die vier
+     Startdreiecke außen daran.                                                         */
 const SL = (t, x, y, z) => ({ t, a: [x, y, z] });
-/* Sechseck-Platz (v99): Mitte in axialen Koordinaten (q = x, r = z) – Würfel (q, −q−r, r). */
-const SLH = (q, r) => ({ t: 'H', a: [q, -q - r, r] });
 const TILE_SHAPES = {
   2: {
     key: 'hex6', name: 'Plättchenkarte (6 Dreiecke)',
@@ -198,24 +129,22 @@ const TILE_SHAPES = {
     // Fünferzeile an der Oberkante, 6 und 8 an der Unterkante
     seatSets: [[1, 3, 6, 8]],
   },
-  /* Experimenteller Plättchenmodus (v99, Anweisung des Autors): zehn Sechsecke in Reihen zu
-     3, 4 und 3. Sechsecke aus 19 Feldern schließen nur auf einem schrägen Gitter lückenlos
-     aneinander: die Nachbarmitten liegen um (5, −2), (2, 3) und (−3, 5) versetzt (axial), also
-     steigt jede Reihe um gut 23° nach rechts an (vom Autor so gewählt – die Alternative waren
-     waagrechte Reihen mit Meer in den Lücken). Reihe 1 entlang (5, −2), Reihe 2 um (−3, 5)
-     darunter und einen halben Schritt nach links, Reihe 3 wieder eingerückt.
-     Gesessen wird an den Enden der beiden Dreierreihen (Wahl des Autors): 0 und 2 oben, 7 und 9
-     unten. Zwischen zwei Startplättchen liegt immer mindestens ein offenes Plättchen. Die
-     oberste Feldzeile ist gerade (−6), sonst kehrte sich der Versatz der Zeilen um. */
-  hex4: {
-    key: 'hex10', name: 'Plättchenkarte (10 Sechsecke)', hex: true,
+  /* Experimenteller Plättchenmodus (v107, Anweisung des Autors; v99–v106 zehn Sechsecke): die
+     zehn Dreiecke der Form zu viert liegen alle offen (Platz 0–9, dieselben Plätze eine Zeile
+     tiefer, damit die oberste Feldzeile gerade bleibt). Die vier Startdreiecke liegen außen an
+     jeder zweiten ihrer acht Außenkanten, im Uhrzeigersinn: oben links (10), rechts oben (11),
+     unten rechts (12), links unten (13). Benachbarte Startdreiecke liegen damit alle 8 Felder
+     auseinander, gegenüberliegende 11 und 19 (die gespiegelte Wahl gäbe 6 und 9 – Wahl des
+     Autors). Karte 20 × 23, 210 Felder. */
+  tri14: {
+    key: 'tri14', name: 'Plättchenkarte (14 Dreiecke)',
     slots: [
-      SLH(0, 0), SLH(5, -2), SLH(10, -4),
-      SLH(-3, 5), SLH(2, 3), SLH(7, 1), SLH(12, -1),
-      SLH(-1, 8), SLH(4, 6), SLH(9, 4),
+      SL('B', 5, -2, 1), SL('A', 6, -7, -3), SL('B', 11, -8, 1), SL('A', 12, -13, -3), SL('B', 17, -14, 1),
+      SL('A', 0, -6, 2), SL('B', 5, -7, 6), SL('A', 6, -12, 2), SL('B', 11, -13, 6), SL('A', 12, -18, 2),
+      SL('B', 11, -3, -4), SL('A', 18, -19, -3), SL('A', 6, -17, 7), SL('B', -1, -1, 6),
     ],
     holes: [],
-    seatSets: [[0, 2, 7, 9]],
+    seatSets: [[10, 11, 12, 13]],
   },
 };
 /* 5–8 Spieler (Mehrspieler-Erweiterung): der Streifen der Vierer-Form, nur länger – zwei Reihen zu 7 (5 und 6
@@ -227,7 +156,8 @@ const TILE_SHAPES = {
    Abstandsregeln (seatFreeCells) gelten unverändert. Bei ungerader Zahl bleibt auf einer
    Kante ein Sitz frei; gelost wird, ob oben oder unten, und es bleibt die Mitte offen
    (die äußeren Sitze werden genommen), damit niemand eingeklemmt sitzt. Der Vorrat hat 20
-   Plättchen, auch 18 werden also ohne Zurücklegen gezogen. */
+   Plättchen, auch 18 werden also ohne Zurücklegen gezogen.
+   Seit v107 (keine Sechsecke mehr) gibt es den experimentellen Modus nur noch zu viert (tri14). */
 function stripShape(n) {
   const L = n <= 6 ? 7 : 9;                       // Dreiecke je Reihe
   const slots = [];
@@ -248,45 +178,13 @@ function stripShape(n) {
   return { key: 'strip' + 2 * L, name: `Plättchenkarte (${2 * L} Dreiecke)`, slots, holes: [], seatSets };
 }
 for (let n = 5; n <= 8; n++) TILE_SHAPES[n] = stripShape(n);
-/* Sechsecke für jede Zahl von Reichen (Mehrspieler-Erweiterung, zu vier Reichen siehe hex4): dasselbe
-   schräge Gitter, geschrieben als i·(5, −2) + j·(2, 3) – die Lage (i, j) grenzt an (i ± 1, j),
-   (i, j ± 1), (i + 1, j − 1) und (i − 1, j + 1). Wie dort liegt zwischen zwei Startplättchen immer
-   ein offenes, und jedes Reich hat 44 bis 54 Felder (zu viert 47,5):
-     zwei Reiche    5 Sechsecke   die beiden Enden einer Dreierreihe, je eines darüber und darunter
-     drei Reiche    7 Sechsecke   eine Blüte, gesessen wird auf jedem zweiten Blatt
-     fünf, sechs   14 Sechsecke   Reihen zu 5, 4 und 5, gesessen an der Ober- und Unterkante
-     sieben, acht  20 Sechsecke   Reihen zu 7, 6 und 7 – so viele hat der Vorrat
-   Bei ungerader Zahl bleibt wie im Dreiecksstreifen auf einer Kante die Mitte frei. Gelegt wird
-   so, dass die oberste Feldzeile gerade ist (siehe hex4). */
-function hexForm(n, lage, seatSets) {
-  const mitten = lage.map(([i, j]) => [5 * i + 2 * j, -2 * i + 3 * j]);
-  const dz = (Math.min(...mitten.map(m => m[1])) - 2) & 1;
-  const platz = ([i, j]) => lage.findIndex(l => l[0] === i && l[1] === j);
-  TILE_SHAPES['hex' + n] = {
-    key: 'hex' + lage.length, name: `Plättchenkarte (${lage.length} Sechsecke)`, hex: true,
-    slots: mitten.map(([q, r]) => SLH(q, r + dz)), holes: [],
-    seatSets: seatSets.map(s => s.map(platz)),
-  };
-}
-const hexReihe = (j, von, bis) => Array.from({ length: bis - von + 1 }, (_, k) => [von + k, j]);
-hexForm(2, [[0, -1], ...hexReihe(0, -1, 1), [0, 1]], [[[-1, 0], [1, 0]]]);
-hexForm(3, [[0, -1], [1, -1], ...hexReihe(0, -1, 1), [-1, 1], [0, 1]],
-  [[[1, 0], [-1, 1], [0, -1]], [[0, 1], [-1, 0], [1, -1]]]);
-function hexStreifen(n) {
-  const L = n <= 6 ? 5 : 7;                       // Sechsecke in der oberen und unteren Reihe
-  const oben = hexReihe(0, 0, L - 1).filter(l => l[0] % 2 === 0);
-  const unten = hexReihe(2, -1, L - 2).filter(l => l[0] % 2 !== 0);
-  const drop = list => list.filter((_, i) => i !== Math.floor(list.length / 2));
-  hexForm(n, [...hexReihe(0, 0, L - 1), ...hexReihe(1, 0, L - 2), ...hexReihe(2, -1, L - 2)],
-    oben.length + unten.length === n ? [oben.concat(unten)] : [oben.concat(drop(unten)), drop(oben).concat(unten)]);
-}
-for (let n = 5; n <= 8; n++) hexStreifen(n);
+// Formen nach Schlüssel – so steht eine Form im Plan (plan.shapeKey) und auf der Karte (map.tiles)
+const SHAPE_BY_KEY = Object.fromEntries(Object.values(TILE_SHAPES).map(s => [s.key, s]));
 /* Mindestabstand einer Hauptstadt zu jedem Feld der fremden Startplättchen – eine der
    beiden Bedingungen in seatFreeCells. Bis v72 war es 3 und die einzige Bedingung. */
 const PLACE_MIN_GAP = 2;
 
 function slotCells(sl) {
-  if (sl.t === 'H') return HEX_DXYZ.map(([x, y, z]) => [sl.a[0] + x, sl.a[1] + y, sl.a[2] + z]);
   return TRI_IJK.map(([i, j, k]) => sl.t === 'A'
     ? [sl.a[0] + i, sl.a[1] + j, sl.a[2] + k]
     : [sl.a[0] - i, sl.a[1] - j, sl.a[2] - k]);
@@ -341,21 +239,21 @@ function seatFreeCells(shape, seats, seatIdx) {
    eigenes Plättchen (Lage + Hauptstadt); die offenen liegen sofort fest.            */
 function tilePlan(civs, seed, opts) {
   const n = civs.length;
-  // experimenteller Plättchenmodus (v99): Sechsecke statt Dreiecke
-  const hex = !!(opts && opts.hex) && !!TILE_SHAPES['hex' + n];
-  const shape = TILE_SHAPES[hex ? 'hex' + n : n];
+  // `opts.shape`: eine andere Form für diese Spielerzahl (v107: 'tri14' bei vier Reichen)
+  const wahl = SHAPE_BY_KEY[opts && opts.shape];
+  const shape = wahl && wahl.seatSets[0].length === n ? wahl : TILE_SHAPES[n];
   if (!shape) return null;
   const rnd = mapRng(seed);
-  const pool = (hex ? HEX_POOL : TILE_POOL).map((_, i) => i);
+  const pool = TILE_POOL.map((_, i) => i);
   for (let i = pool.length - 1; i > 0; i--) {          // mischen
     const j = Math.floor(rnd() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   const seats = shape.seatSets[Math.floor(rnd() * shape.seatSets.length)].slice();
   const plan = {
-    n, hex, shapeKey: shape.key, name: shape.name,
+    n, shapeKey: shape.key, name: shape.name,
     tiles: shape.slots.map((_, i) => pool[i]),
-    ori: shape.slots.map(() => Math.floor(rnd() * (hex ? 6 : 3))),
+    ori: shape.slots.map(() => Math.floor(rnd() * TRI_ROT.length)),
     // idx = Platz im Aufbau. Auf Plättchenkarten darf dieselbe Zivilisation mehrfach
     // vorkommen, deshalb wird alles über idx geführt und nicht über civ.
     seats: seats.map((slot, i) => ({
@@ -366,10 +264,8 @@ function tilePlan(civs, seed, opts) {
   };
   return plan;
 }
-const planShape = plan => TILE_SHAPES[plan.hex ? 'hex' + plan.n : plan.n];
-// Lagen je Plättchen (Dreieck 3, Sechseck 6) und die Felder, auf die Bots ihre Hauptstadt setzen
-const planRotations = plan => plan.hex ? 6 : 3;
-const planMiddle = plan => plan.hex ? HEX_MIDDLE : TRI_MIDDLE;
+// 5 und 6 bzw. 7 und 8 Reiche teilen sich Schlüssel und Plätze, nicht aber die Sitze – daher zuerst die Form der Spielerzahl
+const planShape = plan => TILE_SHAPES[plan.n] && TILE_SHAPES[plan.n].key === plan.shapeKey ? TILE_SHAPES[plan.n] : SHAPE_BY_KEY[plan.shapeKey];
 const isSeatSlot = (plan, slot) => plan.seats.some(s => s.slot === slot);
 
 /* Gelände eines Plättchens in einer Lage: Feld n zeigt den Text an Position TRI_ROT[o][n] */
@@ -377,31 +273,23 @@ function tileFaceTerrain(tileIdx, o) {
   const art = tileTerrain(TILE_POOL[tileIdx]);
   return TRI_ROT[o].map(k => art[k]);
 }
-// dasselbe für ein Sechseck (v99): HEX_ROT, Text aus HEX_POOL
-function hexFaceTerrain(tileIdx, o) {
-  const art = tileTerrain(HEX_POOL[tileIdx]);
-  return HEX_ROT[o].map(k => art[k]);
-}
-// Gelände des Plättchens auf Platz `slot` in Lage o – Dreieck oder Sechseck je nach Plan
-const planFace = (plan, slot, o) => (plan.hex ? hexFaceTerrain : tileFaceTerrain)(plan.tiles[slot], o);
 /* Felder, auf die die Hauptstadt dieses Sitzes gesetzt werden darf: Land, kein Meer,
    und weit genug von den anderen Startplättchen weg. */
 function placeOptions(plan, seat, o) {
-  const face = planFace(plan, seat.slot, o);
+  const face = tileFaceTerrain(plan.tiles[seat.slot], o);
   return face.map((t, i) => seat.free[i] && TERRAIN[t].land && !TERRAIN[t].block);
 }
 function placeSeat(plan, seat, o, cell) {
-  if (!(o >= 0 && o < planRotations(plan))) return 'Ungültige Lage.';
+  if (!(o >= 0 && o < TRI_ROT.length)) return 'Ungültige Lage.';
   if (!placeOptions(plan, seat, o)[cell]) return 'Hier ist kein Platz für die Hauptstadt.';
   seat.o = o; seat.cell = cell;
   return null;
 }
-/* Bots: zufällige Lage, Hauptstadt auf einem der mittigen Felder (Dreieck: drei, Sechseck:
-   Mitte und erster Ring). */
+/* Bots: zufällige Lage, Hauptstadt auf einem der drei mittigen Felder. */
 function botPlaceSeat(plan, seat, rnd) {
-  const o = Math.floor(rnd() * planRotations(plan));
+  const o = Math.floor(rnd() * TRI_ROT.length);
   const ok = placeOptions(plan, seat, o);
-  const mid = planMiddle(plan).filter(i => ok[i]);
+  const mid = TRI_MIDDLE.filter(i => ok[i]);
   const list = mid.length ? mid : ok.map((v, i) => v ? i : -1).filter(i => i >= 0);
   return placeSeat(plan, seat, o, list[Math.floor(rnd() * list.length)]);
 }
@@ -427,11 +315,10 @@ function placeYieldAt(plan, seat, o, cell, player) {
   return T0.cities.length ? income(T0, 0) : null;
 }
 /* Alle Wahlmöglichkeiten eines Sitzes: table[o][n] = Ertrag der Hauptstadt auf Feld n in
-   Lage o, oder null, wo sie nicht stehen darf. Lagen × Felder Wegwerf-Partien (Dreieck 3 × 15,
-   Sechseck 6 × 19 – v99), also einmal je
+   Lage o, oder null, wo sie nicht stehen darf. 3 × 15 Wegwerf-Partien, also einmal je
    Sitz rechnen und merken – die Lage der offenen Plättchen ändert sich beim Legen nicht. */
 function placeYieldTable(plan, seat, player) {
-  return Array.from({ length: planRotations(plan) }, (_, o) => o).map(o => placeOptions(plan, seat, o)
+  return TRI_ROT.map((_, o) => placeOptions(plan, seat, o)
     .map((ok, n) => ok ? placeYieldAt(plan, seat, o, n, player) : null));
 }
 /* „a ist rundum besser als b": in allen drei Erträgen mindestens so viel, in einem mehr. */
@@ -475,7 +362,7 @@ function tileMap(plan, opts) {
     const seat = plan.seats.find(s => s.slot === slot);
     const o = seat ? (opts.o != null && opts.seat === seat ? opts.o : seat.o) : plan.ori[slot];
     if (o == null) return;
-    const face = planFace(plan, slot, o);
+    const face = tileFaceTerrain(plan.tiles[slot], o);
     slotCells(sl).forEach((cube, i) => put(cube, face[i]));
   });
   // Hauptstädte als Liste nach Platz: dieselbe Zivilisation kann mehrfach dabei sein.

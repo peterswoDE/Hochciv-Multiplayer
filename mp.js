@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v100', 'v98'];
+const OLD_VERSIONS = ['v106', 'v100', 'v98'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -1124,7 +1124,7 @@ const MP = {
               ${this.gameConfig.mapKey === 'random' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span>
                 <input type="checkbox" id="mp-set-hex" onchange="MP.updateLobbyConfig()" ${this.gameConfig.hexTiles ? 'checked' : ''}>
               </label>
-              ${this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Sechseckige Plättchen statt Dreiecke, bei jeder Zahl von Reichen.')}</p>` : ''}` : ''}
+              ${this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')}</p>` : ''}` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
@@ -1429,7 +1429,7 @@ const MP = {
             t.civs === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')];
         if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
         if (t.wonders === 'on') parts.push(TX('Weltwunder'));
-        if (t.hexTiles) parts.push(TX('Sechsecke'));
+        if (t.hexTiles) parts.push(TX('Experimenteller Plättchenmodus'));
         if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
         if (t.turnDays) parts.push(t.turnDays === 1 ? TX('1 Tag pro Zug') : TX('%s Tage pro Zug', t.turnDays));
         if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
@@ -2539,7 +2539,7 @@ const ASYNC = {
                 : typeof MAPBROWSER !== 'undefined' ? note(`${TX('Oder eine Karte anderer Spieler:')} ${MP.browseLink('ASYNC.browseMaps()').replace(/ · $/, '')}`) : ''}
               ${marathon ? note(TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')) : ''}
               ${f.mapKey === 'plaettchen' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span><input type="checkbox" id="mpa-hex" ${f.hexTiles ? 'checked' : ''}></label>
-              ${f.hexTiles ? note(TX('Sechseckige Plättchen statt Dreiecke, bei jeder Zahl von Reichen.')) : ''}` : ''}
+              ${f.hexTiles ? note(TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')) : ''}` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
               ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
                 ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}

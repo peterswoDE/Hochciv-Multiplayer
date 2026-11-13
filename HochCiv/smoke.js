@@ -4917,7 +4917,7 @@ step('v97: Siedlertrecks wachsen zum Preis der kleineren Stadt, Fruchtbarkeit zw
 
 /* --- v99 (Anweisungen des Autors): experimenteller Plättchenmodus, Welt in Zugfolge und in der
    Legephase, kein Schritt „Spiel beginnen“ mehr, Flüsse und Inseln neu gezeichnet. */
-step('v99: Aufbau – keine große Karte, „Zufällig“ als Startspieler, Häkchen für Sechsecke auf der Plättchenkarte', () => {
+step('v99/v107: Aufbau – keine große Karte, „Zufällig“ als Startspieler, 14 Dreiecke als eigene Karte (vier Reiche)', () => {
   G('show')('screen-menu');
   $('m-new').onclick();
   G('setupSetMode')('vier');
@@ -4926,35 +4926,29 @@ step('v99: Aufbau – keine große Karte, „Zufällig“ als Startspieler, Häk
   if (karten.includes('1') || [...$('setup-map').options].some(o => /Große|Large/.test(o.text)))
     throw new Error('die große Karte steht noch im Menü: ' + karten.join(','));
   if ($('setup-start').value !== 'zufall') throw new Error('Startspieler nicht „Zufällig“: ' + $('setup-start').value);
-  $('setup-map').value = '0'; $('setup-map').onchange();
-  if (!$('setup-hex-row').hidden) throw new Error('Häkchen auf der festen Karte sichtbar');
-  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
-  if ($('setup-hex-row').hidden) throw new Error('kein Häkchen „Experimenteller Plättchenmodus“ auf der Plättchenkarte');
-  $('setup-hex').checked = true; $('setup-hex').onchange();
-  // auf der Plättchenkarte bei jeder Zahl von Reichen (Mehrspieler-Erweiterung)
-  for (const n of ['2', '3', '6', '8']) {
-    $('setup-count').value = n; $('setup-count').onchange();
-    if ($('setup-hex-row').hidden) throw new Error('kein Häkchen bei ' + n + ' Reichen');
-  }
-  $('setup-count').value = '4'; $('setup-count').onchange();
-  $('setup-map').value = 'marathon'; $('setup-map').onchange();
-  if (!$('setup-hex-row').hidden) throw new Error('Häkchen beim Marathon sichtbar');
-  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
-  if (!$('setup-hex').checked || $('setup-hex-row').hidden) throw new Error('die Wahl ging beim Moduswechsel verloren');
-  console.log('       Karten: ' + [...$('setup-map').options].map(o => o.text).join(' · ') + ' · Startspieler Zufällig · Häkchen auf der Plättchenkarte');
+  // v107: der experimentelle Plättchenmodus ist eine Karte der Liste (bis v106 ein Häkchen)
+  if (!karten.includes('plaettchen14')) throw new Error('keine 14 Dreiecke in der Kartenliste: ' + karten.join(','));
+  if ($('setup-hex-row')) throw new Error('das Häkchen „Sechseck-Plättchen“ steht noch im Aufbau');
+  const opt14 = [...$('setup-map').options].find(o => o.value === 'plaettchen14');
+  if (!/14 (Dreiecke|triangles)/.test(opt14.text)) throw new Error('Name: ' + opt14.text);
+  $('setup-map').value = 'plaettchen14'; $('setup-map').onchange();
+  // nur zu viert: die Zahl der Reiche steht fest
+  if ($('setup-count').value !== '4' || !$('setup-count').disabled) throw new Error('14 Dreiecke nicht auf vier Reiche festgelegt');
+  if (!$('setup-list').querySelector('[data-civpick]')) throw new Error('keine freie Zivilisationswahl auf 14 Dreiecken');
+  console.log('       Karten: ' + [...$('setup-map').options].map(o => o.text).join(' · ') + ' · Startspieler Zufällig');
 });
-step('v99: Sechsecke legen – sechs Lagen, Welt in Zugfolge, Bogen mit den Schwellen zu viert (v101), danach gleich das Spiel', () => {
+step('v107: 14 Dreiecke legen – drei Lagen, Welt in Zugfolge, Bogen mit den Schwellen zu viert (v101), danach gleich das Spiel', () => {
   // Platz 1 Mensch, die übrigen KI; Startspieler bleibt „Zufällig“
   [...$('setup-list').children].forEach((x, i) => x.querySelector(i ? '[data-kind="ki"]' : '[data-kind="human"]').onclick());
   $('setup-go').onclick();
   const st = G('placeState');
-  if (!st || !st.plan.hex) throw new Error('kein Sechseckplan');
-  if (st.plan.tiles.length !== 10 || st.queue.length !== 1) throw new Error('nicht zehn Plättchen / ein Mensch');
+  if (!st || st.plan.shapeKey !== 'tri14') throw new Error('kein Plan aus 14 Dreiecken');
+  if (st.plan.tiles.length !== 14 || st.queue.length !== 1) throw new Error('nicht 14 Plättchen / ein Mensch');
   if (st.plan.seats.filter(x => x.cell != null).length !== 3) throw new Error('die KI hat nicht schon gelegt');
-  if (!/Lage 1 von 6/.test($('pl-note').textContent)) throw new Error('Lagenanzeige: ' + $('pl-note').textContent.slice(0, 80));
+  if (!/Lage 1 von 3/.test($('pl-note').textContent)) throw new Error('Lagenanzeige: ' + $('pl-note').textContent.slice(0, 80));
   const lagen = new Set();
-  for (let i = 0; i < 6; i++) { lagen.add(G('tileMap')(st.plan, { show: [G('placeSeatNow')().slot], seat: G('placeSeatNow')(), o: st.o }).rows.join('')); G('placeRotate')(); }
-  if (st.o !== 0) throw new Error('nach sechs Drehungen nicht wieder Lage 1');
+  for (let i = 0; i < 3; i++) { lagen.add(G('tileMap')(st.plan, { show: [G('placeSeatNow')().slot], seat: G('placeSeatNow')(), o: st.o }).rows.join('')); G('placeRotate')(); }
+  if (st.o !== 0) throw new Error('nach drei Drehungen nicht wieder Lage 1');
   if (lagen.size < 2) throw new Error('Drehen ändert das Plättchen nicht');
   // Welt in der Legephase: die Reiche in Zugfolge, der legende Platz hervorgehoben
   $('pl-world').onclick();
@@ -4977,14 +4971,110 @@ step('v99: Sechsecke legen – sechs Lagen, Welt in Zugfolge, Bogen mit den Schw
   G('placeConfirm')();
   const S = G('S');
   if (G('placeState') !== null || !$('screen-game').classList.contains('show')) throw new Error('das Spiel beginnt nicht gleich');
-  if (S.map.tiles !== 'hex10' || S.cities.length !== 4) throw new Error('keine Sechseckpartie mit vier Hauptstädten');
-  if (!S.recipe.hexTiles) throw new Error('„Nochmal spielen“ wüsste nichts vom Sechseckmodus');
+  if (S.map.tiles !== 'tri14' || S.cities.length !== 4) throw new Error('keine Partie auf 14 Dreiecken mit vier Hauptstädten');
+  if (S.recipe.mapPick !== 'plaettchen14') throw new Error('„Nochmal spielen“ wüsste nichts von den 14 Dreiecken');
   // dieselbe Reihenfolge im Spiel
   G('worldModal')();
   const imSpiel = [...$('ov-body').querySelectorAll('.civ-n')].map(e => e.textContent.trim().split(' · ')[0]);
   if (imSpiel.join('|') !== soll.join('|')) throw new Error('Welt im Spiel: ' + imSpiel.join(', '));
   G('closeModal')();
   console.log('       ' + S.map.name + ' · Zugfolge ' + imSpiel.join(', '));
+});
+/* --- v107 (Anweisung des Autors): sind auf der Plättchenkarte alle Reiche ausgelost, wählen sie vor
+   dem Legen ihre Fähigkeit samt Zivilisation – rückwärts in der Zugfolge; die Forschung der
+   Legephase zeigt, was alle anderen erforschen könnten. */
+const aufbauZufall = (arten, start) => {
+  G('show')('screen-menu');
+  $('m-new').onclick();
+  G('setupSetMode')('vier');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  [...$('setup-list').children].forEach(x => { const s = x.querySelector('[data-civpick]'); s.value = 'zufall'; s.onchange(); });
+  [...$('setup-list').children].forEach((x, i) => x.querySelector(`[data-kind="${arten[i]}"]`).onclick());
+  $('setup-start').value = String(start); $('setup-start').onchange();
+  $('setup-go').onclick();
+};
+step('v107: alle Reiche ausgelost – Fähigkeiten wählen, rückwärts in der Zugfolge, dann legen', () => {
+  // Platz 2 beginnt: Zugfolge 2, 3, 4, 1 – gewählt wird 1 (Mensch), 4 (KI), 3 (Mensch), 2 (KI, bekommt die letzte)
+  aufbauZufall(['human', 'ki', 'human', 'ki'], 1);
+  if (!$('screen-draft').classList.contains('show')) throw new Error('keine Fähigkeitswahl vor dem Legen');
+  if (!/Fähigkeiten wählen|Choose abilities/.test($('dr-title').textContent)) throw new Error('Titel: ' + $('dr-title').textContent);
+  if (!$('dr-note').hidden || !$('dr-go').hidden) throw new Error('Hinweis oder „Spiel beginnen“ in der Fähigkeitswahl');
+  const karten = () => [...$('dr-pool').querySelectorAll('[data-ab]')];
+  if (karten().length !== 4 || new Set(karten().map(b => b.dataset.ab)).size !== 4) throw new Error('kein Vorrat aus vier verschiedenen');
+  const plaetze = [...$('dr-players').querySelectorAll('.dr-pl')];
+  const nummern = plaetze.map(x => x.querySelector('h4').textContent.trim().split('.')[0]);
+  if (nummern.join() !== '4,1,2,3') throw new Error('Plätze nicht in der Reihenfolge des Aufbaus mit ihrem Platz in der Zugfolge: ' + nummern.join());
+  if (!plaetze[0].classList.contains('now')) throw new Error('Platz 1 (Zugfolge 4) wählt nicht zuerst');
+  if (plaetze.some(x => !x.querySelectorAll('p').length)) throw new Error('ein Platz ohne Starttechnologien');
+  if ([...$('screen-draft').querySelectorAll('.sub, .hint')].some(x => !x.hidden && x.textContent.trim())) throw new Error('Hilfstexte in der Fähigkeitswahl');
+  const erste = karten()[0].dataset.ab;
+  karten()[0].click();
+  // die KI auf Platz 4 hat sofort gewählt, jetzt Platz 3
+  const D = G('placeState').D;
+  if (D.picks[0][0] !== erste || D.picks[3].length !== 1) throw new Error('Wahl oder KI-Wahl fehlt: ' + JSON.stringify(D.picks));
+  if (karten().length !== 2) throw new Error('Platz 3 hat nicht zwei zur Wahl, sondern ' + karten().length);
+  if (!$('dr-players').querySelectorAll('.dr-pl')[2].classList.contains('now')) throw new Error('Platz 3 ist nicht dran');
+  const wikinger = G('abilById')(erste).civ === 'wikinger';
+  karten()[1].click();
+  // der Startspieler (KI) bekommt die letzte, dann wird gelegt
+  const st = G('placeState');
+  if (!$('screen-place').classList.contains('show') || st.D) throw new Error('nach der Wahl geht es nicht ans Legen');
+  const pl = st.cfg.players;
+  if (pl.some(p => p.pick || !G('CIV_BY_KEY')[p.civ] || !G('CIV_BY_KEY')[p.civ].abilities.some(a => a.k === p.ability)))
+    throw new Error('Plätze ohne gültige Zivilisation und Fähigkeit: ' + pl.map(p => p.civ + ':' + p.ability).join(', '));
+  if (G('abilById')(pl[0].civ + ':' + pl[0].ability).id !== erste) throw new Error('Platz 1 hat nicht, was er gewählt hat');
+  if (st.plan.seats.some(s => s.civ !== pl[s.idx].civ)) throw new Error('der Plan kennt die gewählten Zivilisationen nicht');
+  const doppelt = pl.filter(p => p.roman).length, gleiche = pl.length - new Set(pl.map(p => p.civ)).size;
+  if (gleiche && doppelt < gleiche + 1) throw new Error('Doppelgänger ohne Ziffern');
+  G('closeModal')();
+  // Forschung vor dem Legen: die anderen drei als Marken, keine Hilfszeile (v107)
+  $('pl-tech').onclick();
+  const marken = [...$('ov-body').querySelectorAll('.owner-mark.can')];
+  const farben = new Set(marken.map(m => m.style.borderColor));
+  if (!marken.length || farben.size > 3) throw new Error(`Marken anderer Reiche: ${marken.length}, ${farben.size} Farben`);
+  if ($('ov-body').querySelector('.owner-mark.self')) throw new Error('eigene Marke im eigenen Bogen');
+  if (/Vor dem Legen ausgewürfelt|Rolled before placing/.test($('ov-body').textContent)) throw new Error('Hilfszeile noch da');
+  const nav = $('ov-body').querySelector('.tech.avail b') && [...$('ov-body').querySelectorAll('.tech.avail b')].some(b => /Navigation/.test(b.textContent));
+  G('closeModal')();
+  if (wikinger && !nav) throw new Error('die gewählten Wikinger haben keine Navigation');
+  console.log(`       gewählt: ${pl.map(p => G('civOf')(p).n + ' · ' + G('abilInfo')(p).n).join(' | ')} · ${marken.length} Marken`);
+});
+step('v107: keine Fähigkeitswahl mit festen Reichen oder nur einem, der wählt', () => {
+  // Bots stehen im Aufbau der Mehrspieler-Erweiterung nicht zur Wahl – die Regel direkt geprüft
+  const z = kind => ({ civ: 'zufall', ability: 'zufall', kind });
+  if (G('pickWanted')([z('human'), z('bot'), z('bot'), z('bot')])) throw new Error('ein Mensch gegen Bots wählt');
+  // ein Reich fest, die anderen ausgelost – Startspieler Platz 2, der Mensch käme also zum Wählen
+  G('show')('screen-menu');
+  $('m-new').onclick();
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  ['zufall', 'zufall', 'zufall', 'wikinger'].forEach((k, i) => {
+    const el = $('setup-list').children[i].querySelector('[data-civpick]'); el.value = k; el.onchange();
+  });
+  [...$('setup-list').children].forEach((x, i) => x.querySelector(i ? '[data-kind="ki"]' : '[data-kind="human"]').onclick());
+  $('setup-start').value = '1'; $('setup-start').onchange();
+  $('setup-go').onclick();
+  if (!$('screen-place').classList.contains('show')) throw new Error('nicht alle ausgelost: nicht gleich ans Legen');
+  const ps = G('placeState').cfg.players;
+  if (ps.some(p => p.pick || p.civ === 'zufall') || ps[3].civ !== 'wikinger') throw new Error('Zufall nicht wie bisher aufgelöst: ' + ps.map(p => p.civ).join(','));
+  G('closeModal')();
+});
+step('v107: „Nochmal spielen“ nach einer Fähigkeitswahl wählt wieder', () => {
+  aufbauZufall(['human', 'ki', 'ki', 'ki'], 0);
+  // der Startspieler wählt zuletzt – der einzige Mensch hat keine Wahl, also gleich ans Legen
+  if (!$('screen-place').classList.contains('show')) throw new Error('ohne Wahl für den Menschen nicht gleich ans Legen');
+  const rec = G('placeState').cfg.recipe;
+  if (!rec.players.every(p => p.civ === 'zufall')) throw new Error('das Rezept vergisst den Zufall');
+  G('closeModal')();
+  const kopie = JSON.parse(JSON.stringify(rec));
+  kopie.start = '1';
+  G('startFromRecipe')(kopie);
+  if (!$('screen-draft').classList.contains('show')) throw new Error('„Nochmal spielen“ wählt nicht wieder');
+  // Marathon danach: derselbe Bildschirm hat wieder Titel und Hinweis des Drafts
+  G('show')('screen-menu');
+  marathonAufbau(['human', 'ki', 'ki', 'ki']);
+  $('setup-go').onclick();
+  if (!/Marathon/.test($('dr-title').textContent) || $('dr-note').hidden) throw new Error('Marathon nach der Fähigkeitswahl: ' + $('dr-title').textContent);
+  G('show')('screen-menu');
 });
 step('v99: Flüsse als Wasserlauf, Inseln mit Wasser rundum', () => {
   // die Originalkarte hat Flüsse und Inseln – gezeichnet in ein eigenes SVG, wie im Editor
