@@ -706,7 +706,9 @@ function startGame(io, session) {
     try {
         if (isPlaettchen) {
             const seed = Number.isInteger(session.gameConfig.seed) ? session.gameConfig.seed : Math.floor(Math.random() * 2 ** 31);
-            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed, { hex: !!session.gameConfig.hexTiles });
+            const plan = engineApi.tilePlan(session.players.map(p => p.civ), seed,
+                // experimental tile mode: v107 reads `shape` (14 triangles, four empires), older engines `hex`
+                session.gameConfig.hexTiles ? { hex: true, shape: 'tri14' } : {});
             if (!plan) return 'Für diese Spielerzahl gibt es keine Plättchenkarte.';
 
             // v66+: starting techs and wonder pools are rolled before placement
@@ -743,7 +745,8 @@ function startGame(io, session) {
 
             const { setup: _setup, ...publicCfg } = session.gameConfig;
             io.to(session.id).emit('placement:start', {
-                cfg: publicCfg,
+                // the game rebuilds the plan from cfg: v107+ reads tileShape (14 triangles), older games hexTiles
+                cfg: { ...publicCfg, tileShape: session.gameConfig.hexTiles ? 'tri14' : null },
                 seed,
                 queue: humanSeats,
                 at: 0,

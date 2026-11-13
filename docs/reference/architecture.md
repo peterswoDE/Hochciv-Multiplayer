@@ -52,7 +52,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 
 | Path | Purpose |
 |---|---|
-| `HochCiv/`, `HochCiv-v100/`, `HochCiv-v98/` | The game (current version, and the old versions for Rundenspiele started on them) |
+| `HochCiv/`, `HochCiv-v106/`, `HochCiv-v100/`, `HochCiv-v98/` | The game (current version, and the old versions for Rundenspiele started on them) |
 | `mp.js` | Multiplayer client injected into the game: hooks the game's actions, lobby, login, Rundenspiele, HUD, spectators, end screen |
 | `client/i18n.js` | English texts of everything the server adds ([Languages](../development/languages.md)) |
 | `client/chat.js` | In-game chat panel |
@@ -79,7 +79,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | Path | Served from |
 |---|---|
 | `/` | `public/` (current game with the injected scripts) |
-| `/v100/`, `/v98/` | `public/<version>/` |
+| `/v106/`, `/v100/`, `/v98/` | `public/<version>/` |
 | `/client/…` | `client/` |
 | `/api/…` | `routes/` |
 | `/socket.io/…` | Socket.IO (also serves its client script) |

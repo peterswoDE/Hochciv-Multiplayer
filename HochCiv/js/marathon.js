@@ -325,3 +325,35 @@ function kiDraftPick(V, D, pi) {
   }
   return best;
 }
+
+/* ------------------------------------------------------------------ Fähigkeitswahl (v107)
+   Anweisung des Autors: sind auf der Plättchenkarte alle Zivilisationen ausgelost, wählt vor dem
+   Legen jedes Reich eine Fähigkeit – rückwärts in der Zugfolge, aus einem Vorrat mit genau so
+   vielen Fähigkeiten, wie gewählt wird; der Startspieler bekommt die letzte. Mit der Fähigkeit
+   kommt ihre Zivilisation (Wahl des Autors), zwei aus einem Reich ergeben also Doppelgänger wie
+   zwei ausgeloste. Gezogen ohne Zurücklegen aus allen zwölf. Die Starttechnologien sind dann schon
+   gewürfelt (Wahl des Autors). Bots wählen nicht – sie haben keine Fähigkeit, ihr Reich bleibt
+   ausgelost; wählt nur einer, gibt es nichts zu wählen. Reihenfolge und Wahl wie beim Draft
+   (draftCurrent, draftOptions, draftPick), `order` sind die Wählenden in Zugfolge. */
+const pickWanted = players => players.every(p => p.civ === 'zufall') && players.filter(p => p.kind !== 'bot').length > 1;
+function pickNew(order, seed) {
+  const rnd = mapRng(seed), pool = ALL_ABILITIES.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return { pool: pool.slice(0, order.length), order: order.slice().reverse(), at: 0,
+    picks: Object.fromEntries(order.map(i => [i, []])) };
+}
+// Die KI nimmt den höchsten Grundwert des Drafts – ohne Hauptstadt zählt keine Karte (geschätzt)
+const kiPickAbility = (D, pi) => draftOptions(D, pi)
+  .reduce((a, b) => (KI_DRAFT_BASE[b] || 0) > (KI_DRAFT_BASE[a] || 0) ? b : a);
+// Die Wahl in die Plätze schreiben: Zivilisation und Fähigkeit
+function pickApply(players, D) {
+  for (const [i, ids] of Object.entries(D.picks)) {
+    const a = ids.length && abilById(ids[0]);
+    if (!a) continue;
+    Object.assign(players[i], { civ: a.civ, ability: a.k });
+    delete players[i].pick;
+  }
+  return players;
+}

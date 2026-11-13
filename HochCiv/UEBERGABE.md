@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 9.11., `sw.js` v106)
+# Hochzeivilization — Projekt-Übergabe (Stand 13.11., `sw.js` v107)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v106)
+## Letzte Sitzungen auf einen Blick (v61 → v107)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -61,6 +61,12 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v104 | Gemeldet vom Autor: man konnte **neben (und auf) einem fremden beanspruchten Feld gründen** – das Feld gehörte danach beiden Reichen. Jetzt gesperrt wie neben einer gegnerischen Armee (`foreignClaimNear`, auch Bots und KI); **ein eigenes Feld daneben wird ein gewöhnliches Feld der neuen Stadt** (verlässt `S.bought`, `claimsApart`; `settleGain` rechnet es mit; alte Spielstände beim Laden ebenso). Damit ist der offene Punkt 3 (Nachbarschaftsverbot der Territoriumsklausel) erledigt | Fehler + Regel |
 | v105 | **Neun Kosten** getauscht bzw. gedreht (Theologie 8/Bürokratie 10, Militärgericht 11/Nationalismus 13, Stahl 7/Burgenbau 8, Kunstdünger 11/Dampfmaschine 13/Eisenbahn 14; jede im selben Zeitalter; der alte Techtree behält die alten über `OLD_TECH_COSTS`). **Kopieren:** Internet, Spionage und Kundschafterei je eine Kopie je Runde, unabhängig (`COPY_WAYS`, `copyWaysOpen`, `copyTech(…, way)`, `p.copied`) – Rückfrage beim Autor: wer beide bezahlten hat, kopiert zweimal. Im Blatt eine Zeile je Technologie mit den Preisen als Knöpfen | Regel + Oberfläche + KI |
 | v106 | Gemeldet vom Autor: In der App auf dem Home-Bildschirm ging **„Fähigkeiten" in keiner Partie auf**, im Browser schon. Ursache, nachgestellt: Ihr Offline-Cache hielt neue Dateien neben alten (`copyRate is not defined`) – `sw.js` war schon neu, während der Upload lief, und gefüllt wird ein Cache nur einmal je `VERSION`. **Der Service Worker übernimmt eine Fassung jetzt ganz oder gar nicht:** jede Datei frisch (`cache: 'reload'`), Inhalt gegen `BUILD_HASH` geprüft, sonst bleibt die alte. Ist das Menü offen, lädt die App eine übernommene Fassung gleich neu (`swStart`) | Fehler + Auslieferung |
+| v107 | Fünf Anweisungen des Autors, drei Rückfragen vorab: **Wikinger haben die Navigation immer verfügbar** (nach dem Wurf dazu, `CIV_TECH`, `civTechAfterRoll`; auch in laufenden Partien); **Maschinengewehr +3** Verteidigung je Bevölkerung (`MG_DEFENSE`); **Forschung vor dem Legen mit allen Reichen** (Marken wie im Spiel, ohne Hilfszeile); **Fähigkeitswahl** auf der Plättchenkarte, wenn alle Reiche ausgelost sind – rückwärts in der Zugfolge, Vorrat so groß wie die Zahl der Wählenden, die Zivilisation kommt mit, gewürfelt ist schon (`pickNew`, `pickApply`, `kiPickAbility`; Bildschirm des Drafts, `startPick`); **experimenteller Plättchenmodus aus 14 Dreiecken** statt zehn Sechsecken: die zehn der Vierer-Karte offen, vier Startdreiecke außen an jeder zweiten Kante, je 8 Felder auseinander (`TILE_SHAPES.tri14`), als eigene Karte statt Häkchen; die Sechsecke sind entfernt | Regel + Modus + Oberfläche |
+
+Neu in v107: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Wikinger mit Navigation · Maschinengewehr +3 · Forschung aller vor dem Legen ·
+Fähigkeitswahl · 14 Dreiecke (v107)"), die Fragilität zur Sechseckform ersetzt, zwei neu, die offenen
+Punkte 67 und 68 (Punkt 58 überholt).
 
 Neu in v106: der erste Punkt unter „Was das Spiel heute kann", die Bug-Historie und `ANNAHMEN.md`
 (Abschnitt „Aktualisierung ganz oder gar nicht (v106)"), Punkt 66.
@@ -205,7 +211,8 @@ Schritt unbekannt), seit v98 Punkt 55 (Auslegungen zum Startausgleich zu zweit),
 dritt unverändert, alte Spielstände) und 61 (was die Messung zu v101 sagt und was nicht), seit v103
 Punkt 62 (Auslegungen zu v103) und 63 (Kolonialismus kostenlos: Balance und KI-Forschungswert nicht
 gemessen), seit v104 Punkt 64 (Auslegungen zu v104), seit v105 Punkt 65 (Kopieren und Kosten: Auslegungen,
-nicht gemessen), seit v106 Punkt 66 (Auslieferung: Auslegungen). Punkt 3 (Nachbarschaftsverbot der
+nicht gemessen), seit v106 Punkt 66 (Auslieferung: Auslegungen), seit v107 Punkt 67 (Auslegungen zu v107) und 68 (Wahl der KI
+geschätzt, 14 Dreiecke nur von der KI gemessen). Punkt 3 (Nachbarschaftsverbot der
 Territoriumsklausel) hat der Autor in v104 entschieden.
 
 ## Wo alles liegt
@@ -234,38 +241,38 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1387 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1384 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 552 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), CIVS mit je 3 Fähigkeiten, feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/data.js` | 559 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 157 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
-| `js/tiles.js` | 444 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4), Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2322 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/tiles.js` | 360 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4, seit v107 `tri14`), `SHAPE_BY_KEY`, Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
+| `js/engine.js` | 2333 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 487 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
 | `js/ki.js` | 1946 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
-| `js/marathon.js` | 328 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`) |
+| `js/marathon.js` | 360 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`); **Fähigkeitswahl der Plättchenkarte** (v107: `pickWanted`, `pickNew`, `kiPickAbility`, `pickApply`) |
 | `js/ui/base.js` | 181 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
 | `js/ui/map.js` | 555 | SVG-Karte (`drawMap`), Geländezeichen, Erträge im Gründungsmodus, Machtringe, Flüsse, Kampfbilder, `attachTaps` |
 | `js/ui/game.js` | 425 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
 | `js/ui/sheets.js` | 317 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
 | `js/ui/turns.js` | 378 | Zugende, KI- und Bot-Züge, Kampf- und Zug-Nachspiel (Szenen, Satz, laufender Vorrat), Bot-Blatt |
-| `js/ui/end.js` | 175 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
+| `js/ui/end.js` | 178 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
 | `js/ui/world.js` | 223 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
 | `js/ui/setup.js` | 335 | die eine Vorliebe (`prefs.anim`, `setAnim`); Aufbau: Spielart, Plätze (eine Zeile, Fähigkeitswahl mit Wirkung), Karte, Startspieler, Rezept, Doppelte |
-| `js/ui/place.js` | 238 | Legephase der Plättchenkarte |
-| `js/ui/draft.js` | 89 | Marathon: Fähigkeiten draften |
+| `js/ui/place.js` | 241 | Legephase der Plättchenkarte: würfeln, wählen lassen (`startPick`) oder legen (`placeBegin`), Forschung mit allen Reichen, Welt |
+| `js/ui/draft.js` | 150 | Fähigkeiten wählen: Draft des Marathons, seit v107 die Fähigkeitswahl der Plättchenkarte (`startPick`, `pickAdvance`, `drawPick`) auf demselben Bildschirm |
 | `js/ui/editor.js` | 34 | Karteneditor |
 | `js/ui/boot.js` | 297 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
 | `js/firstgame.js` | 1459 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 7986 | **2008 Assertions**, `node test.js` |
-| `smoke.js` | 4654 | **169 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `test.js` | 8013 | **2004 Assertions**, `node test.js` |
+| `smoke.js` | 4751 | **172 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 75 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
 | `tools_civs.js` | 82 | `data/civs.json` → `js/civs.js` |
-| `tools_ki.js` | 482 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase); seit v101 die Modi `freie` (Freie Forschung: Regel von v100 und vier Arten zu wählen, gepaart) und `wirtschaft` (Siegschwellen zu viert v100 gegen v101, gepaart) |
+| `tools_ki.js` | 493 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase); seit v101 die Modi `freie` (Freie Forschung: Regel von v100 und vier Arten zu wählen, gepaart) und `wirtschaft` (Siegschwellen zu viert v100 gegen v101, gepaart); seit v107 der Schalter `dreiecke14` (bis v106 `sechsecke`) und in `selbst` die Siege nach Platz in der Zugfolge |
 | `tools_startplaettchen_dump.js` / `tools_startplaettchen_pdf.py` | 34 / 176 | Druckbogen `Startplaettchen.pdf` aus `js/tiles.js` (A4 quer, 3 Seiten, Spieloptik, verzahnt mit 4 mm Luft, ohne Umriss) |
 | `ANNAHMEN.md` | — | **Alle Regelauslegungen und Entscheidungen.** Bei Regelfragen zuerst hier nachsehen. |
 
@@ -288,6 +295,36 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v107 auf einen Blick.** Fünf Anweisungen des Autors; vorab gefragt und beantwortet: die gewählte
+  Fähigkeit bringt ihre Zivilisation mit, gewürfelt wird vor der Wahl, die Startdreiecke liegen oben
+  links, rechts oben, unten rechts und links unten.
+  · **Wikinger:** Navigation immer verfügbar (`CIV_TECH`). Gewürfelt wird für alle wie bisher, danach
+    kommt sie dazu (`civTechAfterRoll` in `rollAvailability`, für vorab Gewürfeltes in `newGame`, beim
+    Laden in `migrateState`) – so ist es gleich, ob das Reich beim Würfeln schon feststeht.
+  · **Maschinengewehr:** +3 Verteidigung je Bevölkerung (`MG_DEFENSE`, bis v106 +2); `defenseValue` und
+    die beiden Schätzungen der KI lesen die Zahl, der Techtext nennt sie (deutsch, englisch).
+  · **Forschung vor dem Legen:** `placeTechView` rechnet die Wegwerf-Partie mit allen Plätzen
+    (`seatOrder`), die Kacheln tragen die Marken der anderen wie im Spiel (`ownerMarks`: Menschen und
+    KI). Die Hilfszeile „Vor dem Legen ausgewürfelt …" ist weg.
+  · **Fähigkeitswahl:** sind auf der Plättchenkarte alle Reiche ausgelost und wählen mindestens zwei
+    (`pickWanted`), behalten Menschen und KI ihren Zufall (`resolveRandom` setzt `p.pick`), Bots werden
+    ausgelost. `startPlacement` würfelt, dann `startPick` (Bildschirm des Drafts): `pickNew` zieht so
+    viele verschiedene Fähigkeiten, wie gewählt wird, die Reihenfolge ist die Zugfolge rückwärts; KI
+    `kiPickAbility` (Grundwert des Drafts), der Letzte bekommt den Rest. `pickApply` schreibt
+    Zivilisation und Fähigkeit in die Plätze, `nameDoubles` läuft noch einmal, dann `placeBegin`. Plätze
+    in der Reihenfolge des Aufbaus mit ihrem Platz in der Zugfolge, Technologien und Wahl; keine
+    Überschriften, kein Hinweis.
+  · **14 Dreiecke:** `TILE_SHAPES.tri14` (Vierer-Form eine Zeile tiefer, Plätze 10–13 außen),
+    `tilePlan(…, { shape })`, `SHAPE_BY_KEY`; Kartenwahl `plaettchen14` statt des Häkchens
+    `setup-hex` (`isTilePick`, `tileShapeOf`, `cfg.tileShape`; `recipeNow` übersetzt `hexTiles`).
+    Entfernt: `HEX_POOL` und alle Sechseckgeometrie, `planRotations`, `planMiddle`, `planFace`,
+    `hexFaceTerrain`.
+  · **Tests:** `test.js` Navigation (60 Partien, vorab gewürfelt, alter Spielstand), Maschinengewehr
+    (Verteidigung 8 bei 2 Bevölkerung, Texte), die Form aus 14 Dreiecken (Geometrie, Abstände, Plan,
+    KI und Bots legen, eine KI-Partie), die Fähigkeitswahl (Bedingung, Vorrat, Reihenfolge, KI,
+    Zuweisung, 300 Vorräte, Navigation nach der Wahl). `smoke.js`: Kartenliste, Legen auf 14 Dreiecken,
+    Wahl mit zwei Menschen und zwei KI samt Forschung mit Marken, keine Wahl ohne lauter Zufall oder mit
+    einem Menschen gegen Bots, „Nochmal spielen" wählt wieder, danach der Marathon mit seinem Titel.
 - **v106 auf einen Blick.** Fehler gemeldet vom Autor: „Fähigkeiten" ging in der App auf dem
   Home-Bildschirm nicht auf, in jeder Partie; im Browser schon. Im Code von v105 nicht zu finden
   (Chromium: neue Partien, alte Spielstände, alle Kopierwege, beide Sprachen, Erstes Spiel). Nachgestellt
@@ -1233,10 +1270,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 2008 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2004 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (169 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (172 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -1313,11 +1350,18 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   kein Eintrag auf oder neben einer Stadt (`foundCity`, `settleGain`, `migrateState`); wer einen neuen
   Weg baut, eine Stadt entstehen zu lassen, nimmt eigene Ansprüche dort heraus (`claimsApart`) und prüft
   fremde (`foreignClaimNear`) – Bots gründen ohne `foundCity`, ihr `settleable` prüft eigens.
-- **Sechseckform (seit v99)**: `TILE_SHAPES.hex4` muss in einer geraden Zeile beginnen (oberste
-  Feldzeile −6), sonst kippt der Versatz der Zeilen (`cubeToRC`, odd-r) und die Karte verzerrt sich.
-  Wer Plätze verschiebt, verschiebt um ganze Gitterschritte ((5, −2), (2, 3), (−3, 5) axial) – nur so
-  schließen die Sechsecke lückenlos. `test.js` „Experimenteller Plättchenmodus" prüft Überlappung,
-  Zusammenhang, Zeilenbeginn und die Gitterschritte.
+- **Form aus 14 Dreiecken (seit v107)**: `TILE_SHAPES.tri14` ist die Vierer-Form eine Zeile tiefer
+  (sonst begänne sie in der ungeraden Zeile −9 und der Versatz der Zeilen kippte, `cubeToRC`) plus vier
+  Plätze außen. Wer die Vierer-Form ändert, ändert beide; `test.js` prüft „Platz 0–9 = Vierer-Form, eine
+  Zeile tiefer", Zusammenhang, geraden Beginn und die Abstände der Startdreiecke (8/8/8/8).
+- **Fähigkeitswahl zwischen Würfeln und Legen (seit v107)**: wählende Plätze tragen bis zur Wahl
+  `civ: 'zufall'` und `pick: true` – `rollSetup` (und damit `newGame`) muss eine unbekannte
+  Zivilisation vertragen, `nameDoubles` übergeht sie und läuft nach der Wahl noch einmal (es setzt
+  dafür Name, Ziffer und Farbe erst zurück). Der Zustand der Wahl hängt an `placeState` (`D`, `zug`),
+  nicht an `draftState` – der Bildschirm ist derselbe, Titel und Hinweis setzt, wer ihn öffnet.
+- **`CIV_TECH` an drei Stellen (seit v107)**: nach dem Wurf (`rollAvailability`), für vorab Gewürfeltes
+  (`newGame`) und beim Laden (`migrateState`) – immer über `civTechAfterRoll`. Wer Verfügbarkeiten
+  anders setzt (etwa das Erste Spiel), geht über eine dieser Stellen oder ruft es selbst.
 - **Zugfolge an einer Stelle (seit v99)**: `seatingOrder(cfg)` rechnet sie für `newGame` und für die
   Weltansicht der Legephase. Wer die Zugfolge ändert, ändert sie dort – sonst zeigt „Welt" beim Legen
   eine andere Reihenfolge als im Spiel (`smoke.js` vergleicht beide).
@@ -2430,7 +2474,7 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
 57. **Freie Forschung (v99) nur zu viert gemessen.** Einmal je Runde ohne Grenze und samt Singularität:
    KI gegen KI zu viert 25,0 % auf den Dreiecken, 31,2 % auf den Sechsecken (gleiche Chance 25 %). Duell,
    drei Reiche, Originalkarte und Marathon nicht gemessen; der Draftwert im Marathon (12) ist geschätzt.
-58. **Sechseckmodus: Balance nur von der KI gemessen** (400 Partien, `ANNAHMEN.md` Abschnitt v99):
+58. **Überholt (v107: die Sechsecke sind entfernt).** Sechseckmodus: Balance nur von der KI gemessen (400 Partien, `ANNAHMEN.md` Abschnitt v99):
    Startspieler 35,4 % (Dreiecke 47,9 %), Startplättchen von Karst 13,4 % bis Taiga 35,7 % – kaum mehr
    Streuung als Zufall. Karst und Taiga sind die Kandidaten, falls sich das im Spiel bestätigt; wie
    Menschen dort legen, zeigt erst das Spielen.
@@ -2494,6 +2538,23 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    ohne Hinweis – bei einem Upload in Etappen gewollt, bei einem Host, der Dateien umschreibt, ein
    Dauerzustand (Fragilitäten). (c) Der Übergang von v105: Die gemischte Seite kennt `swStart` nicht,
    dort braucht es einmal einen Neustart der App von Hand.
+
+67. **Getroffene Auslegungen (v107) – zum Ändern angeboten.** (a) Wikinger: die Navigation kommt nach
+   dem Wurf dazu, der Ersatzwurf (nichts verfügbar) fällt wie für alle – würfeln sie in Spezial (Antike)
+   nichts, haben sie dort zwei (etwa 1 von 12 Partien). (b) Sie gilt für jedes Wikingerreich, auch Bots
+   und den Marathon, und beim Laden auch in Partien von vor v107. (c) Fähigkeitswahl auf jeder
+   Plättchenkarte (Duell, drei, vier Reiche, 14 Dreiecke), nur wenn **alle** Reiche „Zufall" sind;
+   Bots wählen nicht; Vorrat ohne Zurücklegen (zwei Fähigkeiten eines Reichs möglich, nie dieselbe
+   zweimal). (d) Hat kein Mensch eine Wahl, erscheint der Bildschirm nicht. (e) Plätze in der
+   Reihenfolge des Aufbaus, nicht der Zugfolge – sonst wüsste im Hotseat niemand, welcher er ist.
+   (f) 14 Dreiecke: Zugfolge im Uhrzeigersinn (oben, rechts, unten, links); als Karte in der Liste statt
+   als Häkchen. (g) Maschinengewehr gilt auch in laufenden Partien.
+68. **Nicht gemessen bzw. nur von der KI.** Die KI wählt ihre Fähigkeit nach den Grundwerten des
+   Marathon-Drafts (`KI_DRAFT_BASE`) – auf der Plättchenkarte nicht gemessen, Taiga steht dort bei 0.
+   Messbar mit `tools_ki.js`, etwa mit Siegquoten je Fähigkeit zu viert. Die 14 Dreiecke: nur KI gegen KI gemessen (je 400 Partien,
+   `ANNAHMEN.md` v107): Startspieler 30,3 % gegen 40,5 % auf 10 Dreiecken, die vier Startdreiecke je
+   23,8–25,6 %, viel mehr Forschungssiege (193 gegen 50), Median Runde 6 statt 5. Wie Menschen dort
+   spielen, zeigt erst das Spielen.
 
 ## Arbeitsweise, die der Autor schätzt
 

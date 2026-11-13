@@ -10,7 +10,7 @@ docker compose -f docker-compose.local.yml up -d --build
 
 * Game: <http://localhost:3000>, database: `localhost:5432` (only from this machine; user/password `hochciv` / `password123`).
 * Containers: `hochciv-multiplayer-local` (server) and `hochciv-db`.
-* The server code and the game (`HochCiv/`, `HochCiv-v100/`, `HochCiv-v98/`) are mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local` (`public/` is rebuilt at start). Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
+* The server code and the game (`HochCiv/`, `HochCiv-v106/`, `HochCiv-v100/`, `HochCiv-v98/`) are mounted into the container – after changes run `docker compose -f docker-compose.local.yml restart hochciv-local` (`public/` is rebuilt at start). Changes to `package.json`, `Dockerfile`, `entrypoint.sh` or `activity/bridge.js` need `--build`.
 * Runs without `NODE_ENV=production`: e-mails (activation codes, reset codes) are printed to the log (`docker logs hochciv-multiplayer-local`).
 * Optional SMTP settings can go into `secrets.env` (gitignored).
 * Make yourself admin: `docker exec hochciv-multiplayer-local node elevate.js <username> superadmin`.

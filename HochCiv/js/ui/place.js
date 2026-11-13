@@ -12,8 +12,7 @@ let placeState = null;
 
 function startPlacement(cfg) {
   const seed = Math.floor(Math.random() * 2 ** 31);
-  // experimenteller Plättchenmodus (v99): Sechsecke statt Dreiecke
-  const plan = tilePlan(cfg.players.map(p => p.civ), seed, { hex: !!cfg.hexTiles });
+  const plan = tilePlan(cfg.players.map(p => p.civ), seed, { shape: cfg.tileShape });
   if (!plan) return toast(T('Für diese Spielerzahl gibt es keine Plättchenkarte.'));
   /* Erst würfeln, dann legen (v66): Was jedes Reich zu Beginn erforschen kann und welche
      Wunder im Stapel liegen, hängt nicht an der Karte – also steht es schon fest, bevor
@@ -23,12 +22,18 @@ function startPlacement(cfg) {
   const setup = rollSetup(cfg);
   const rnd = mapRng(seed + 12345);
   placeState = { cfg, plan, rnd, setup, queue: [], at: 0, o: 0, cell: null, done: false };
+  // Fähigkeitswahl (v107): alle Reiche ausgelost – erst wählen, dann legen (js/ui/draft.js)
+  if (cfg.players.some(p => p.pick)) return startPick();
+  placeBegin();
+}
+function placeBegin() {
+  const st = placeState, { plan, cfg, setup, rnd } = st;
   plan.seats.forEach(seat => {
     const pl = cfg.players[seat.idx];        // nach Platz, nicht nach Zivilisation
     if (pl && pl.kind === 'bot') botPlaceSeat(plan, seat, rnd);
     // Die KI legt wie ein Mensch – verdeckt, sie sieht nur die offenen und ihr Plättchen
     else if (pl && pl.kind === 'ki') { if (kiPlaceSeat(plan, seat, pl, setup)) botPlaceSeat(plan, seat, rnd); }
-    else placeState.queue.push(seat);
+    else st.queue.push(seat);
   });
   show('screen-place');
   placeStep();
@@ -110,7 +115,7 @@ function drawPlace() {
   const civ = seatCiv(seat), abil = seatAbil(seat);
   note.innerHTML = `<b>${SYM[civ.sym]} ${esc(civ.n)}</b>` +
     (abil ? ` · <span class="pl-abil" title="${esc(abil.e)}">${esc(abil.n)}</span>` : '') +
-    ' · ' + T('Lage %s von %s', st.o + 1, planRotations(plan)) + ' · ' +
+    ' · ' + T('Lage %s von %s', st.o + 1, TRI_ROT.length) + ' · ' +
     (st.cell == null ? T('Hauptstadt auf ein markiertes Feld tippen')
       : T('Hauptstadt gesetzt – „Fertig", wenn es passt')) +
     // Legende nur, wenn überhaupt ein Feld rot umrandet ist
@@ -123,22 +128,20 @@ function drawPlace() {
    Legen – damit man die Hauptstadt mit dieser Kenntnis wählt.
    Gerechnet wird auf einer Wegwerf-Partie mit genau diesen Verfügbarkeiten, damit Liste,
    Kosten und Wunderstapel aus der Regelmaschine kommen und nicht hier nachgebaut werden.
-   Fremde Verfügbarkeiten stehen nicht darin: im Hotseat wird verdeckt gelegt. */
+   Seit v107 (Anweisung des Autors) sitzen alle Reiche darin: was die anderen erforschen könnten,
+   tragen die Kacheln als Marken wie im Spiel (ownerMarks) – verdeckt bleiben nur die Plättchen. */
 function placeTechView() {
   const st = placeState, seat = placeSeatNow();
   if (!st) return;
   if (!seat) return toast(T('Alle Plättchen liegen schon.'));
-  const pl = st.cfg.players[seat.idx] || {};
   const V = newGame({
-    seed: 1, map: DEFAULT_MAP, wonders: st.cfg.wonders,
-    players: [{ civ: seat.civ, kind: 'human', ability: pl.ability }],
-    avail: [st.setup.avail[seat.idx]], wpool: st.setup.wpool,
+    seed: 1, map: DEFAULT_MAP, wonders: st.cfg.wonders, seatOrder: true,
+    players: st.cfg.players, avail: st.setup.avail, wpool: st.setup.wpool,
   });
-  // Siegschwellen der Partie, die gelegt wird (v101) – V selbst hat nur ein Reich
+  // Siegschwellen der Partie, die gelegt wird (v101) – V liegt auf der Standardkarte
   V.victoryMode = victoryMode(st.cfg);
   const civ = seatCiv(seat);
-  let h = `<p class="sub">${T('Vor dem Legen ausgewürfelt – im Spiel steht genau das hier.')}</p>`;
-  h += techBoardHTML(V, 0, { plain: true });
+  let h = techBoardHTML(V, seat.idx, { plain: true });
   if (st.cfg.wonders) {
     h += `<p class="sub" style="margin-top:14px">${T('Weltwunder im Stapel')}</p>`;
     [1, 2].forEach(lvl => {
@@ -201,7 +204,7 @@ function plTap(r, c) {
 function placeRotate() {
   const st = placeState, seat = placeSeatNow();
   if (!seat) return;
-  st.o = (st.o + 1) % planRotations(st.plan);
+  st.o = (st.o + 1) % TRI_ROT.length;
   // Die Hauptstadt bleibt liegen, solange das Feld auch in der neuen Lage passt.
   if (st.cell != null && !placeOptions(st.plan, seat, st.o)[st.cell]) st.cell = null;
   drawPlace();

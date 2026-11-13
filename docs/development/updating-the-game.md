@@ -51,6 +51,7 @@ Running Rundenspiele are not affected by a new version only if their version is 
 | v98 | #59 | v96, v93, v83 (v88 dropped – no running games) |
 | v100 | #95 | v98 (v96, v93, v83 dropped – no running games) |
 | v106 | #114 | v100, v98 |
+| v107 | #PR | v106, v100, v98 |
 
 ## Removed maps
 

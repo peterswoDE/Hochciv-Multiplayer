@@ -28,7 +28,7 @@
         art=droh: er bleibt drei Züge lang einen Zug vor der Stadt stehen, hält seine Macht
         und greift nie an – was kostet die bloße Drohung?
 
-   node tools_ki.js freie [n] [arten=v100,eine,moderne,aufheben,ki] [stufe=schwer] [sechsecke]
+   node tools_ki.js freie [n] [arten=v100,eine,moderne,aufheben,ki] [stufe=schwer] [dreiecke14]
         v101: Griechenlands Freie Forschung (zweimal je Partie, höchstens einmal je Runde).
         Vier KI, eine davon Griechenland mit Freier Forschung, ihr Platz wandert; jede Partie
         einmal je Art, mit denselben Startwerten (gepaart gegen die letzte Art). Wie Griechenland
@@ -40,7 +40,7 @@
         moderne und aufheben gegen Ende alles (nicht mehr Runden übrig als Freie Forschungen
         offen). Dazu: Nutzungen je Partie, ihre Zeitalter, ihre Runde. Die Zahlen in ANNAHMEN.md
         (v101) stammen aus `freie 400 arten=v100,alles,eine` und `freie 400 arten=moderne,aufheben,eine`
-   node tools_ki.js wirtschaft [n] [stufe=schwer] [sechsecke]
+   node tools_ki.js wirtschaft [n] [stufe=schwer] [dreiecke14]
         v101: Siegschwellen zu viert 4/7 · 1/2 · 2/5 statt 2/3 · 3/5 · 1/2. Vier KI, jede
         Partie zweimal mit denselben Startwerten (gepaart), einmal mit den Schwellen von v100 –
         Siegarten, Endrunde, Startspieler, Wirtschaftssiege
@@ -49,8 +49,9 @@
    Startwerten reproduzierbar: gleiche Befehlszeile, gleiche Zahlen.
    alterbaum (v82): die Partien laufen im alten Techtree (bis v81 Standard, heute nur noch
    im Tutorial) – zum Vergleich mit Messungen von vor v82.
-   sechsecke (v99): bei vier Reichen der experimentelle Plättchenmodus (zehn Sechsecke statt
-   der Dreiecke), etwa `node tools_ki.js selbst 100 reiche=4 sechsecke`.
+   dreiecke14 (v107): bei vier Reichen der experimentelle Plättchenmodus (14 Dreiecke, die
+   Startplättchen außen; v99–v106 hieß der Schalter sechsecke und legte zehn Sechsecke), etwa
+   `node tools_ki.js selbst 100 reiche=4 dreiecke14`.
    reihenfolge, kampflaenge (v90): Messhaken zur Kampfphase, siehe unten.          */
 const fs = require('fs'), vm = require('vm');
 for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js',
@@ -138,7 +139,7 @@ function partie(players, seed, start, vorbereiten) {
     seed, players, duel: players.length === 2, events: flag('events'), eventMode: 'hard',
     wonders: flag('wonders'), startPlayer: start, oldTree: flag('alterbaum'),
   };
-  const plan = tilePlan(players.map(p => p.civ), seed, { hex: flag('sechsecke') });
+  const plan = tilePlan(players.map(p => p.civ), seed, { shape: flag('dreiecke14') ? 'tri14' : null });
   const setup = rollSetup(Object.assign({}, cfg));
   const rnd = mapRng(seed + 12345);
   plan.seats.forEach(seat => {
@@ -331,6 +332,16 @@ if (modus === 'duell') {
   bericht(`KI gegen KI (${stufe}), ${n} Reiche`, l, (S, i) => 'Platz ' + S.players[i].slot);
   console.log('   ' + Object.entries(nachRunde).sort((a, b) => +a[0].split('Runde ')[1] - +b[0].split('Runde ')[1])
     .map(([k, v]) => `${k}: ${v}`).join(' · '));
+  // Siege nach Platz in der Zugfolge (v107; so stehen die Zahlen von v99 in ANNAHMEN.md)
+  const zug = new Array(n).fill(0);
+  let ent = 0;
+  for (const { S } of l) {
+    if (!S.over) continue;
+    ent++;
+    const ws = S.over.winners || [S.over.winner];
+    ws.forEach(w => { zug[(w - S.startIdx + n) % n] += 1 / ws.length; });
+  }
+  console.log('   Siege nach Platz in der Zugfolge: ' + zug.map(x => (100 * x / Math.max(1, ent)).toFixed(1)).join(' / ') + ' %');
 } else if (modus === 'methode') {
   /* v96 (Anweisung des Autors): die KI erforscht die Wissenschaftliche Methode vor den übrigen
      Technologien eines Zugs (kiMethodeZuerst, dazu neu planen, sobald eine Forschung sie verfügbar

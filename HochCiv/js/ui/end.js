@@ -48,10 +48,18 @@ const recipeOhneBots = rec => Object.assign({}, rec, {
     : Object.assign({}, p, { kind: 'ki', kiLevel: BOT_DIFF_KI[p.diff] || KI_DEFAULT_LEVEL })),
 });
 
+/* Rezepte von vor v107: das Häkchen „Sechseck-Plättchen" (v99–v106) – seit v107 die
+   Plättchenkarte aus 14 Dreiecken, die es nur zu viert gibt. */
+function recipeNow(rec) {
+  if (rec.hexTiles && rec.mapPick === 'plaettchen' && (rec.n || (rec.players || []).length) === 4) rec.mapPick = 'plaettchen14';
+  delete rec.hexTiles;
+  return rec;
+}
+// Plättchenkarten und eigene Karten: dort darf ein Reich doppelt sitzen
+const recipeFrei = rec => isTilePick(rec.mapPick) || (typeof rec.mapPick === 'string' && rec.mapPick.startsWith(MY_MAP_PICK));
 function rematch(harder) {
-  const rec = recipeOhneBots(JSON.parse(JSON.stringify(S.recipe)));
-  // dort darf ein Reich doppelt sitzen
-  const frei = rec.mapPick === 'plaettchen' || (typeof rec.mapPick === 'string' && rec.mapPick.startsWith(MY_MAP_PICK));
+  const rec = recipeOhneBots(recipeNow(JSON.parse(JSON.stringify(S.recipe))));
+  const frei = recipeFrei(rec);
   rec.players.forEach((p, i) => {
     if (harder) p.diff = nextDiff(p.diff);
     if (harder && p.kind === 'ki') p.kiLevel = nextKiLevel(p.kiLevel);
@@ -79,7 +87,7 @@ function rematch(harder) {
 function beginFromPick(cfg, pick) {
   const n = cfg.players.length;
   if (pick === 'marathon') return startMarathon(cfg);
-  if (pick === 'plaettchen') return startPlacement(cfg);
+  if (isTilePick(pick)) return startPlacement(cfg);
   const custom = mapForPick(pick);
   if (!custom) return toast(T('Diese Karte gibt es nicht mehr.'));
   if (custom.spawns) {
@@ -92,8 +100,8 @@ function beginFromPick(cfg, pick) {
   startGameScreen();
 }
 function startFromRecipe(rec) {
-  // Plättchenkarte und eigene Karten: dort darf ein Reich doppelt sitzen
-  const frei = rec.mapPick === 'plaettchen' || (typeof rec.mapPick === 'string' && rec.mapPick.startsWith(MY_MAP_PICK));
+  recipeNow(rec);
+  const frei = recipeFrei(rec);
   const players = nameDoubles(resolveRandom(JSON.parse(JSON.stringify(rec.players)), frei));
   const cfg = {
     players, duel: players.length === 2, recipe: rec,
@@ -101,7 +109,7 @@ function startFromRecipe(rec) {
       : Math.min(players.length - 1, Math.max(0, +rec.start || 0)),
     events: rec.events, eventMode: rec.eventMode, wonders: rec.wonders,
     seatOrder: platzNummern(rec.mapPick, players.length, rec.randomCivs),   // wie beim ersten Mal (v90)
-    hexTiles: !!rec.hexTiles && rec.mapPick === 'plaettchen',          // Sechseck-Plättchen (v99)
+    tileShape: tileShapeOf(rec.mapPick),                               // 14 Dreiecke (v107)
     // Ein Rezept aus v70–v81 kann noch altTree tragen – egal: jede neue Partie läuft seit
     // v82 im (einzigen) Techtree, auch „Nochmal spielen" nach einer alten Partie.
   };
@@ -113,7 +121,7 @@ function startFromRecipe(rec) {
   const schnipsel = $('confetti'); if (schnipsel) schnipsel.remove();
   // Marathon (ältere Rezepte haben keine Kartenwahl dafür), Plättchenkarte, eigene oder feste Karte
   const pick = rec.mode === 'marathon' && !(typeof rec.mapPick === 'string' && rec.mapPick.startsWith(MY_MAP_PICK))
-    ? 'marathon' : (mapForPick(rec.mapPick) || rec.mapPick === 'plaettchen' ? rec.mapPick : '0');
+    ? 'marathon' : (mapForPick(rec.mapPick) || isTilePick(rec.mapPick) ? rec.mapPick : '0');
   beginFromPick(cfg, pick);
 }
 
