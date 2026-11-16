@@ -6,7 +6,8 @@
  *     game), suggestions from recent games ("Zuletzt gespielt mit")
  *   • in a live lobby: "👥 Freunde einladen" – online friends get an invitation card
  *   • friend names to pick when inviting to a Rundenspiel (create form, invite dialog)
- *   • the player profile (client/profile.js): add, accept, or "Freund"
+ *   • the player profile (client/profile.js): add, accept, or "Freund" – bots too; a bot's
+ *     program accepts the request, and a bot friend can be invited like any other
  *
  * A logged-in page keeps a socket open (MP.connect), so friends see it online. Server side:
  * utils/friends.js, routes/friends.js, sockets/friends.js.
@@ -86,7 +87,7 @@
             if (a && a.joinCode && a.status === 'playing') btns.push(`<button class="btn small" data-code="${esc(a.joinCode)}" data-pw="${esc(a.password)}" onclick="MP.watch(this.dataset.code, this.dataset.pw, MP.user.username)">${T('Zuschauen')}</button>`);
             btns.push(`<button class="btn small ghost" title="${esc(T('Aus der Freundesliste entfernen'))}" onclick="FRIENDS.remove('${esc(f.id)}', '${esc(f.username)}', true)">✕</button>`);
             return `<div class="mpf-row" data-friend="${esc(f.id)}"><span class="mpf-dot${f.online ? ' on' : ''}"></span>
-                <span class="mpf-name">${MP.nameLink(f.username, f.id)} <small>${esc(f.mmr)} MMR</small><br><small class="mpf-status">${esc(this.statusText(f))}</small></span>
+                <span class="mpf-name">${MP.nameLink(f.username, f.id)}${f.bot ? ' ' + MP.botBadge() : ''} <small>${esc(f.mmr)} MMR</small><br><small class="mpf-status">${esc(this.statusText(f))}</small></span>
                 <span class="mpf-btns">${btns.join('')}</span></div>`;
         },
         drawHub: function () {
@@ -165,7 +166,7 @@
             if (!d.friends.length) return `<p class="sub">${T('Noch keine Freunde. Im Multiplayer-Menü unter „Freunde" kannst du welche hinzufügen.')}</p>`;
             return (on.length ? on.map(f => {
                 const done = this.invited.has(MP.joinCode + ':' + f.id);
-                return `<div class="mpf-row"><span class="mpf-dot on"></span><span class="mpf-name"><b>${esc(f.username)}</b> <small class="mpf-status">${esc(this.statusText(f))}</small></span>
+                return `<div class="mpf-row"><span class="mpf-dot on"></span><span class="mpf-name"><b>${esc(f.username)}</b>${f.bot ? ' ' + MP.botBadge() : ''} <small class="mpf-status">${esc(this.statusText(f))}</small></span>
                     <span class="mpf-btns"><button class="btn small ${done ? 'ghost' : 'primary'}" data-invite="${esc(f.id)}" ${done ? 'disabled' : ''} onclick="FRIENDS.inviteLive('${esc(f.id)}', '${esc(f.username)}')">${done ? '✓ ' + T('Eingeladen') : T('Einladen')}</button></span></div>`;
             }).join('') : `<p class="sub">${T('Gerade ist keiner deiner Freunde online.')}</p>`)
                 + (off ? `<p class="sub">${T('%s offline – schick ihnen den Einladungslink.', off)}</p>` : '');
@@ -230,7 +231,7 @@
 
         // ── Player profile (client/profile.js) ──────────────────────────────────────
         decorateProfile: async function (top, data) {
-            if (!top || !MP.user || MP.user.isBot || data.isBotAccount || data.id === MP.user.id) return;
+            if (!top || !MP.user || MP.user.isBot || data.id === MP.user.id) return;
             const d = this.data || await this.load();
             if (!d || !top.isConnected) return;
             const old = top.querySelector('.mpf-profile');

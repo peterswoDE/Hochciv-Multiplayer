@@ -13,6 +13,7 @@ const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
+const CivDraft = require('../utils/civdraft');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the turn ends as the player left it (player feedback: the KI must not change what they did in
@@ -21,6 +22,9 @@ const Resign = require('../utils/resign');
 const TURN_TIMES = [0, 60, 120, 180, 300, 600];
 const AFK_AFTER = config.TURN_TIMER_AFK_AFTER;        // 3 (tests may shorten it)
 const AFK_KI_LEVEL = { ranked: 'schwer', normal: 'mittel' };
+/* Nation draft (F34): a pick has the turn time – without a turn timer this much – and then
+   a random nation is picked for the player. */
+const CIVDRAFT_PICK_MS = 120000;
 
 /**
  * Register a socket event handler that cannot take the process down: the payload is
@@ -127,6 +131,8 @@ module.exports = function registerHandlers(io) {
             if (s.status === 'draft' && s.draft) {
                 socket.emit('draft:update', engine.draftPayload(s));
             }
+            // Nation draft (F34) in progress
+            if (s.status === 'civdraft' && s.civDraft) socket.emit('civdraft:update', civDraftPayload(s));
 
             if (s.status === 'finished' && s.stats) socket.emit('game:stats', { stats: Stats.publicStats(s.stats) });
             if (s.status === 'finished' && s.gameRecord) socket.emit('game:record', s.gameRecord);
@@ -157,6 +163,7 @@ module.exports = function registerHandlers(io) {
             socket.emit('chat:history', { list: s.chat || [] });
             io.to(sessionId).emit('spectators:update', { count: sessions.spectatorCount(s) });
             if (s.status === 'draft' && s.draft) socket.emit('draft:update', engine.draftPayload(s));
+            if (s.status === 'civdraft' && s.civDraft) socket.emit('civdraft:update', civDraftPayload(s));
             if (s.status === 'playing' && s.state) {
                 socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, turn: turnInfo(s), paused: s.paused || null });
             }
@@ -208,6 +215,14 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerCount !== undefined) newConfig.playerCount = int(newConfig.playerCount, 2, 8);
                 if (newConfig.kiCount !== undefined) newConfig.kiCount = int(newConfig.kiCount, 0, 7);
                 if (newConfig.randomCivs !== undefined) newConfig.randomCivs = !!newConfig.randomCivs;
+                // F34: nation mode and turn order; randomCivs stays in step for older readers
+                if (newConfig.civMode !== undefined) {
+                    if (!CivDraft.CIV_MODES.includes(newConfig.civMode)) delete newConfig.civMode;
+                    else newConfig.randomCivs = newConfig.civMode === 'random';
+                } else if (newConfig.randomCivs !== undefined) {
+                    newConfig.civMode = newConfig.randomCivs ? 'random' : 'fixed';
+                }
+                if (newConfig.turnOrder !== undefined && !CivDraft.TURN_ORDERS.includes(newConfig.turnOrder)) delete newConfig.turnOrder;
                 if (newConfig.turnTime !== undefined) newConfig.turnTime = TURN_TIMES.includes(newConfig.turnTime) ? newConfig.turnTime : 0;
                 // player-bots (sessions.js playerBotPolicy): on/off, at most so many (null = no limit)
                 if (newConfig.playerBots !== undefined) newConfig.playerBots = newConfig.playerBots === true;
@@ -240,6 +255,9 @@ module.exports = function registerHandlers(io) {
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
             if (session.status !== 'lobby') return ack({ error: 'Spiel läuft bereits.' });
             sessions.recordActivity(sessionId);
+            // Turn position (F34): one player per position
+            if (updates && Number.isInteger(updates.pos) && session.players.some(p => p !== me && p.pos === updates.pos))
+                return ack({ error: 'Diese Position ist schon vergeben.' });
 
             const updated = sessions.updatePlayer(sessionId, myIndex(), updates);
             if (updated) {
@@ -285,6 +303,18 @@ module.exports = function registerHandlers(io) {
             io.to(sessionId).emit('draft:update', engine.draftPayload(session));
         });
 
+        // ── Nation draft (F34): a human picks a nation (and its ability) ────────
+        on(socket, 'civdraft:pick', (data, ack) => {
+            if (!bound()) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'civdraft' || !session.civDraft) return ack({ error: 'Kein Draft aktiv.' });
+            sessions.recordActivity(sessionId);
+            const err = CivDraft.pick(session.civDraft.D, myIndex(), String(data.id),
+                data.ability == null ? null : String(data.ability), engine.getEngine().CIVS || [], Math.random);
+            if (err) return ack({ error: err });
+            ack({ ok: true });
+            advanceCivDraft(io, session);
+        });
+
         // ── Game action ──────────────────────────────────────────────────────
         on(socket, 'action', (data, ack) => {
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
@@ -308,7 +338,9 @@ module.exports = function registerHandlers(io) {
                 broadcastState(io, session);
                 checkGameOver(io, session);
             });
-            if (err) return ack({ error: err });
+            // Refused (F30): the client already played the move on its own copy, so it gets the
+            // authoritative state back with the reason and puts its board back.
+            if (err) return ack({ error: err, state: engine.stateForPlayer(session.state, finalIndex) });
 
             sessions.recordActivity(sessionId);
             me.missedTurns = 0;             // acting is being there (turn timer)
@@ -584,6 +616,11 @@ module.exports = function registerHandlers(io) {
         io.__turnInterval = setInterval(() => {
             const now = Date.now();
             for (const session of sessions.getAllSessions().values()) {
+                const cd = session.status === 'civdraft' && session.civDraft;
+                if (cd && cd.deadline && now >= cd.deadline) {
+                    try { civDraftTimeout(io, session); } catch (err) { console.error(`[Turn timer] Draft timeout in session ${session.id}:`, err); }
+                    continue;
+                }
                 const ps = session.status === 'placement' && session.placementState;
                 if (ps && ps.deadline && now >= ps.deadline) {
                     try { placementTimeout(io, session); } catch (err) { console.error(`[Turn timer] Placement timeout in session ${session.id}:`, err); }
@@ -651,8 +688,13 @@ function startGame(io, session) {
     // Each player's own lobby choice, for a rematch ("random" is resolved below)
     session.players.forEach(p => { p.choice = { civ: p.civ, ability: p.ability }; });
 
+    // Nation mode and turn order (F34); a draft needs positions, so it never has the classic order
+    const modes = CivDraft.modesOf(gc);
+    Object.assign(gc, modes, { randomCivs: modes.civMode === 'random' });
+    const drafting = CivDraft.isDraft(modes.civMode);
+
     // "Random nations for everyone": the host's setting overrides every player's choice
-    if (gc.randomCivs) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
+    if (gc.randomCivs || drafting) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
 
     // Check for duplicate civilizations (fixed maps: every nation once; "random" is
     // resolved below to a nation nobody else has)
@@ -678,6 +720,22 @@ function startGame(io, session) {
         });
     }
 
+    // Turn positions (F34): the seats in position order, position 1 moves first
+    if (modes.turnOrder !== 'classic') arrangeSeats(io, session, modes.turnOrder);
+
+    const opts = { freeCivs, isPlaettchen, isMarathon };
+    if (drafting) {
+        startCivDraft(io, session, opts);
+        return null;
+    }
+    return launch(io, session, opts);
+}
+
+/**
+ * The second half of the start, once every seat is there (and, with a draft, has its nation):
+ * deal what is random, then the tile placement, the Marathon draft or the game itself.
+ */
+function launch(io, session, { freeCivs, isPlaettchen, isMarathon }) {
     // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
     const engineApi = engine.getEngine();
     const CIVS = engineApi.CIVS || [];
@@ -746,7 +804,9 @@ function startGame(io, session) {
             const { setup: _setup, ...publicCfg } = session.gameConfig;
             io.to(session.id).emit('placement:start', {
                 // the game rebuilds the plan from cfg: v107+ reads tileShape (14 triangles), older games hexTiles
-                cfg: { ...publicCfg, tileShape: session.gameConfig.hexTiles ? 'tri14' : null },
+                cfg: { ...publicCfg, tileShape: session.gameConfig.hexTiles ? 'tri14' : null,
+                    // turn positions (F34): the placement's world view shows the turn order by seat
+                    seatOrder: CivDraft.modesOf(session.gameConfig).turnOrder !== 'classic' },
                 seed,
                 queue: humanSeats,
                 at: 0,
@@ -775,6 +835,87 @@ function startGame(io, session) {
     return null;
 }
 
+
+/**
+ * Turn positions (F34): arrange session.players in position order – wishes of the players
+ * with 'pick', everybody else (and everybody with 'random') at random. Lobby indices change,
+ * so every player gets their new one; position 1 moves first.
+ */
+function arrangeSeats(io, session, mode) {
+    const host = session.players[session.hostIndex];
+    const wishes = session.players.map(p => (p.kind === 'human' && Number.isInteger(p.pos) ? p.pos : null));
+    const perm = CivDraft.arrange(session.players.length, mode, wishes, Math.random);
+    const seated = perm.map(i => session.players[i]);
+    session.players.splice(0, session.players.length, ...seated);
+    session.players.forEach((p, i) => { p.index = i; });
+    session.hostIndex = Math.max(0, session.players.indexOf(host));
+    session.gameConfig.startPlayer = 0;
+    sendIndices(io, session);
+    io.to(session.id).emit('lobby:player:updated', publicPlayers(session));
+}
+
+/** Nation draft (F34): open it; KI seats pick on their own (advanceCivDraft). */
+function startCivDraft(io, session, opts) {
+    const gc = session.gameConfig;
+    const D = CivDraft.newDraft({
+        mode: gc.civMode, n: session.players.length, civs: engine.getEngine().CIVS || [],
+        // a fixed map has one start point per nation; Marathon drafts the abilities afterwards
+        uniqueCivs: !opts.freeCivs, noAbility: opts.isMarathon, rnd: Math.random,
+    });
+    session.civDraft = { D, opts, deadline: null };
+    session.status = 'civdraft';
+    advanceCivDraft(io, session);
+}
+
+/** After a pick: the KI and forced picks, then the next pick's clock – or the game. */
+function advanceCivDraft(io, session) {
+    const cd = session.civDraft;
+    const civs = engine.getEngine().CIVS || [];
+    CivDraft.settle(cd.D, civs, Math.random, seat => engine.isAutoPlayer(session.players[seat]));
+    if (CivDraft.done(cd.D)) return finishCivDraft(io, session);
+    cd.deadline = Date.now() + civDraftPickMs(session);
+    io.to(session.id).emit('civdraft:update', civDraftPayload(session));
+}
+
+const civDraftPickMs = session => turnTimeMs(session) || CIVDRAFT_PICK_MS * config.TURN_TIMER_SCALE;
+
+function civDraftTimeout(io, session) {
+    const cd = session.civDraft;
+    cd.deadline = null;                             // once
+    const seat = CivDraft.current(cd.D);
+    const p = session.players[seat] || {};
+    CivDraft.autoPick(cd.D, engine.getEngine().CIVS || [], Math.random);
+    console.log(`[Turn timer] Session ${session.id}: draft time up, a random nation for ${p.name || seat}`);
+    advanceCivDraft(io, session);
+}
+
+/** Everybody has a nation: hand the picks to the seats and go on with the start. */
+function finishCivDraft(io, session) {
+    const { D, opts } = session.civDraft;
+    session.players.forEach((p, i) => {
+        const pk = D.picks[i];
+        if (pk) { p.civ = pk.civ; p.ability = pk.ability || 'basis'; }
+    });
+    io.to(session.id).emit('civdraft:update', civDraftPayload(session));
+    session.civDraft = null;
+    const err = launch(io, session, opts);
+    if (err) {
+        console.error(`[Draft] Session ${session.id}: start after the draft failed: ${err}`);
+        session.status = 'lobby';
+        io.to(session.id).emit('game:startFailed', { error: err });
+    }
+}
+
+/** The nation draft for the clients: the draft, who sits where, and the pick's time. */
+function civDraftPayload(session) {
+    const cd = session.civDraft;
+    if (!cd) return null;
+    return {
+        ...CivDraft.payload(cd.D),
+        seats: session.players.map(p => ({ index: p.index, name: p.name, kind: p.kind, botAccount: !!p.playerBot })),
+        turn: { total: civDraftPickMs(session), left: cd.deadline ? Math.max(0, cd.deadline - Date.now()) : null },
+    };
+}
 
 /** A lobby player was removed at `removedIndex` – keep hostIndex pointing at the same player. */
 function fixHostAfterRemoval(session, removedIndex) {
@@ -848,6 +989,7 @@ function publicPlayers(session) {
         isBot: p.kind === 'bot' || p.kind === 'ki',     // computer seat (KI fill-in)
         afk: !!p.afk,                   // turn timer: the KI plays this absent player's seat
         resigned: !!p.resigned,         // gave up: the KI plays the seat to the end
+        pos: Number.isInteger(p.pos) ? p.pos : null,    // turn position asked for (F34, 0-based)
         ready: !!p.ready || !!p.playerBot,      // lobby ready check; player-bots are always ready
     }));
 }

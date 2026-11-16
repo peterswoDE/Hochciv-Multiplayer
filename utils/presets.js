@@ -4,7 +4,8 @@
  * users.lobbyPresets, read and written through GET/PUT /api/account/presets (routes/account.js).
  *
  *   preset = { name, s: { map: '0' | 'tiles' | 'marathon' | 'eigene', customName, hexTiles,
- *                         events, eventMode, wonders, total, ki, randomCivs, difficulty,
+ *                         events, eventMode, wonders, total, ki, randomCivs, civMode,
+ *                         turnOrder (F34), difficulty,
  *                         turnTime (live, seconds), turnDays (Rundenspiel), playerBots,
  *                         playerBotLimit, isPublic, ranked } }
  *
@@ -12,6 +13,8 @@
  * stays when the other saves over it. The settings are only stored here – a lobby still checks
  * them when they are applied (sockets/game.js lobby:config, async/logic.js create).
  */
+const CivDraft = require('./civdraft');
+
 const MAX = 10;
 const NAME_MAX = 40;
 const MAPS = ['0', 'tiles', 'marathon', 'eigene'];
@@ -35,6 +38,8 @@ function cleanSettings(s) {
         total: int(s.total, 2, 8),
         ki: int(s.ki, 0, 7),
         randomCivs: bool(s.randomCivs),
+        civMode: CivDraft.CIV_MODES.includes(s.civMode) ? s.civMode : undefined,
+        turnOrder: CivDraft.TURN_ORDERS.includes(s.turnOrder) ? s.turnOrder : undefined,
         difficulty: str(s.difficulty, 20, /^[a-z0-9_-]+$/i),
         turnTime: TURN_TIMES.includes(s.turnTime) ? s.turnTime : undefined,
         turnDays: TURN_DAYS.includes(s.turnDays) ? s.turnDays : undefined,

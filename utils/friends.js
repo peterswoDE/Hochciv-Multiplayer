@@ -6,6 +6,11 @@
  * Changes are pushed to the affected accounts' sockets as 'friends:changed'; an invitation as
  * 'friends:invited'. Live invitations are kept in memory for INVITE_TTL_MS and listed with the
  * friends until the lobby starts or closes.
+ *
+ * Bot accounts (utils/bots.js) can be friends: a person asks, the bot's program accepts or
+ * declines over the same API (bots never send requests). Inviting a bot friend into a live lobby
+ * needs a lobby that takes one more player-bot (sessions.playerBotPolicy); the bot finds the
+ * invitation in GET /api/friends or as 'friends:invited' and joins with POST /api/sessions/join.
  */
 const { Op } = require('sequelize');
 const { sequelize, User, Game, Friendship } = require('../models');
@@ -75,7 +80,7 @@ async function list(user) {
     for (const r of rows) {
         const u = byId.get(otherOf(r));
         if (!u) continue;
-        const base = { id: u.id, username: u.username, since: r.updatedAt };
+        const base = { id: u.id, username: u.username, since: r.updatedAt, bot: u.accountType === 'bot' };
         if (r.status === 'accepted') {
             const online = presence.isOnline(u.id);
             friends.push({ ...base, mmr: u.mmr, online, seen: online ? null : presence.seen(u.id), activity: online ? sessions.activityOf(u.id) : null });
@@ -96,7 +101,7 @@ async function list(user) {
 
 /** Ask `target` (username or { id }). Accepts right away when they asked us already. */
 async function request(user, target) {
-    if (user.accountType === 'bot') return { error: 'Bots haben keine Freundesliste.' };
+    if (user.accountType === 'bot') return { error: 'Bots schicken keine Freundschaftsanfragen.' };
     let other = null;
     if (target && target.id) other = await User.findByPk(String(target.id));
     else {
@@ -107,7 +112,6 @@ async function request(user, target) {
     }
     if (!other) return { error: 'Diesen Spieler gibt es nicht.' };
     if (other.id === user.id) return { error: 'Du kannst dich nicht selbst als Freund hinzufügen.' };
-    if (other.accountType === 'bot') return { error: 'Bots können keine Freunde sein.' };
     if (blocks(user, other.id) || blocks(other, user.id) || other.isBanned) return { error: 'Das geht bei diesem Spieler nicht.' };
 
     const row = await Friendship.findOne({ where: pairWhere(user.id, other.id) });
@@ -152,6 +156,13 @@ async function invite(user, otherId, joinCode) {
     if (!row) return { error: 'Ihr seid nicht befreundet.' };
     if (!presence.isOnline(otherId)) return { error: 'Dein Freund ist gerade nicht online.' };
     if (s.players.some(p => p.dbUserId === otherId)) return { error: 'Dein Freund ist schon in der Lobby.' };
+    const other = await User.findByPk(otherId, { attributes: ['id', 'accountType'] });
+    if (other && other.accountType === 'bot') {
+        // the same rule as joining (sessions.joinSession): the host decides about player-bots
+        const policy = sessions.playerBotPolicy(s);
+        if (!policy.allowed) return { error: 'In dieser Lobby sind keine Spieler-Bots erlaubt.' };
+        if (policy.free <= 0) return { error: 'In dieser Lobby ist kein Platz mehr für Spieler-Bots.' };
+    }
     const now = Date.now();
     const recent = (inviteCount.get(user.id) || []).filter(t => now - t < 60000);
     if (recent.length >= 10) return { error: 'Zu viele Einladungen. Bitte warte einen Moment.' };

@@ -398,7 +398,7 @@ router.post('/stats/recompute', isSuperAdmin, async (req, res) => {
    the game version it is played with. Live games always run the current version; a
    Rundenspiel keeps the version it was started on (engineVersionOf, async/logic.js), so the
    counts per version show when an old HochCiv-vNN/ folder is no longer needed. --- */
-const LIVE_RUNNING = ['placement', 'draft', 'playing'];
+const LIVE_RUNNING = ['civdraft', 'placement', 'draft', 'playing'];
 router.get('/running', async (req, res) => {
     try {
         const current = engine.version();

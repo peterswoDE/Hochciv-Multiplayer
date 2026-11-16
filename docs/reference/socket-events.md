@@ -18,13 +18,14 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 |---|---|---|---|
 | `session:connect` | `{ sessionId, password, clientId }` | player or spectator | Bind the socket to the seat whose `clientId` matches (or the spectator). Also used for reconnects. Ack: `playerIndex`, `status`, `players`, `gameConfig`, `hostIndex`, `spectators`. |
 | `session:kick` | `{ playerIndex }` | host | Remove a player from the lobby |
-| `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, public listing `isPublic`, …); a custom map is checked with `checkCustomMap` |
-| `lobby:player:update` | `{ civ, ability }` | player | Own nation and ability in the lobby |
+| `lobby:config` | game settings | host | Change the lobby settings (map, empires, KI, events, timer, ranked, player-bots `playerBots` / `playerBotLimit`, public listing `isPublic`, nation mode `civMode` `fixed` / `random` / `draft` / `randomDraft` and turn order `turnOrder` `classic` / `pick` / `random`, …); a custom map is checked with `checkCustomMap`. `randomCivs` still works and follows `civMode` |
+| `lobby:player:update` | `{ civ, ability, pos }` | player | Own nation and ability in the lobby; `pos` (0-based, `null` = none) is the turn position asked for with turn order `pick` – a taken one is refused (`Diese Position ist schon vergeben.`) |
 | `lobby:ready` | `{ ready }` | player | Ready check: tick or take back; new lobby settings clear every tick. The players in `lobby:player:updated` carry `ready` (player-bots always `true`) |
 | `game:start` | – | host | Start the game |
 | `draft:pick` | `{ id }` | player | Marathon draft: pick an ability |
+| `civdraft:pick` | `{ id, ability }` | player whose pick it is | Nation draft: pick the pool entry `id` (a nation in `draft`, a dealt nation with its ability in `randomDraft`); `ability` only in `draft` (none: a random one of that nation) |
 | `placement:action` | placement action | player | Tile map: place the start tile (all players at once) |
-| `action` | `{ type, params }` | player on turn | A game action, applied by the engine (`engine.applyAction`) |
+| `action` | `{ type, params }` | player on turn | A game action, applied by the engine (`engine.applyAction`). Answer `{ ok }`, or `{ error, state }` with the player's unchanged state |
 | `chat:send` | `{ kind: 'text' \| 'emote' \| 'ping', … }` | player | Chat message, emote or map ping (texts need an account) |
 | `chat:report` | `{ id, reason }` (message id) | player or spectator | Report a message ([chat moderation](../overview/features.md#during-and-after-a-game)) |
 | `session:rematch` | – | host | Back to the lobby after the game |
@@ -45,6 +46,8 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `spectators:update` | `{ count }` of spectators |
 | `placement:start` | Start-tile placement begins (tile map) |
 | `draft:update` | Marathon draft state |
+| `civdraft:update` | Nation draft state after every pick: `{ mode, order, at, cur, pool: [{ id, civ, ability, left }], picks: { seat: { civ, ability } }, noAbility, seats, turn: { total, left } }`. The seats sit in turn order already (lobby index = position); the last to move picks first. A pick has the turn time (2 minutes without a timer), then a random one is made. Then `placement:start`, `draft:update` or `game:start` |
+| `game:startFailed` | `{ error }` – the start after the nation draft failed, the lobby is back |
 | `game:start` | `{ state, yourIndex, turn }` – the game begins (or the state after a reconnect) |
 | `state:update` | New state after every action or KI turn, with turn/timer info and the scenes since the last update (`scenes`, `client/scenes.js`) |
 | `turn:timeout` | Your turn ran out; `{ afk }` when the KI keeps the seat |
@@ -70,6 +73,7 @@ Handled by `sockets/async.js`; login required. A client has one Rundenspiel open
 | `async:action` | → server | `{ id, type, params }` | A game action |
 | `async:place` | → server | `{ id, o, cell }` | Place the start tile |
 | `async:draft` | → server | `{ id, abilityId }` | Marathon draft pick |
+| `async:civdraft` | → server | `{ id, pick, ability }` | Nation draft pick (`view.status == "civdraft"`, `view.civdraft` as in `civdraft:update`, seats by slot) |
 | `async:chat` | → server | `{ id, kind, … }` | Chat message, emote or ping |
 | `async:report` | → server | `{ id, msgId, reason }` | Report a message |
 | `async:resign` | → server | `{ id }` | Resign (same as `POST /api/async/:id/resign`) |
@@ -100,10 +104,10 @@ A player who resigns (live `game:resign`, Rundenspiel `async:resign`) gives the 
 
 ## Friends
 
-A logged-in page keeps its socket open; while it is connected the account counts as online for its friends (`utils/presence.js`).
+A logged-in page keeps its socket open; while it is connected the account counts as online for its friends (`utils/presence.js`). A bot account's socket counts the same.
 
 | Event | Direction | Payload | Meaning |
 |---|---|---|---|
-| `friends:invite` | → server | `{ userId, joinCode }` | Invite an online friend into the live lobby one sits in (at most 10 a minute) |
+| `friends:invite` | → server | `{ userId, joinCode }` | Invite an online friend into the live lobby one sits in (at most 10 a minute); a bot friend only when the lobby takes one more player-bot |
 | `friends:invited` | ← server | `{ fromId, fromName, joinCode, password, hostName, at }` | An invitation; it is also listed in `GET /api/friends` for 15 minutes while the lobby waits |
 | `friends:changed` | ← server | `{ type: request | accepted | removed | self, from? }` | The friends list changed – reload it |

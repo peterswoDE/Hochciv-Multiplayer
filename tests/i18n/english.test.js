@@ -126,6 +126,12 @@ function makeAdmin() {
         await page.check('#mp-set-events');
         await page.waitForTimeout(600);
         await clean(page, 'lobby with events', '#ov-body');
+        // nation mode and turn order (F34): every mode's hint, the position select
+        for (const [sel, val] of [['#mp-set-civmode', 'random'], ['#mp-set-civmode', 'draft'], ['#mp-set-order', 'pick'], ['#mp-set-civmode', 'randomDraft']]) {
+            await page.selectOption(sel, val);
+            await page.waitForTimeout(600);
+            await clean(page, `lobby with ${sel.slice(8)} = ${val}`, '#ov-body');
+        }
 
         // ── logged in: turn-based games ──────────────────────────────────────────────────
         const login = await ctx.request.post(BASE + '/api/auth/login', { data: { username: admin.name, password: PASSWORD } });
@@ -139,8 +145,9 @@ function makeAdmin() {
         await clean(page, 'multiplayer menu with turn-based games', '#ov-body');
         await page.evaluate(() => ASYNC.showCreate());
         await clean(page, 'turn-based game form', '#ov-body');
-        for (const [sel, val] of [['#mpa-map', 'plaettchen'], ['#mpa-map', 'marathon'], ['#mpa-random', true]]) {
-            if (val === true) await page.check(sel); else await page.selectOption(sel, val);
+        for (const [sel, val] of [['#mpa-map', 'plaettchen'], ['#mpa-map', 'marathon'], ['#mpa-civmode', 'random'],
+            ['#mpa-civmode', 'draft'], ['#mpa-order', 'pick'], ['#mpa-civmode', 'randomDraft'], ['#mpa-order', 'random']]) {
+            await page.selectOption(sel, val);
             await page.waitForTimeout(400);
             await clean(page, `turn-based form, ${sel.slice(5)} = ${val}`, '#ov-body');
         }

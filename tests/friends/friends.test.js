@@ -8,7 +8,7 @@
  *
  * Four accounts A, B, C, D and a bot. Checked: a request by name from the menu's tab, the toast
  * and the tab's count for B, accepting; the online status; crossing requests accept each other;
- * the refusals (oneself, unknown, twice, a bot, a block); suggestions from a recent game; the
+ * the refusals (oneself, unknown, twice, a block), a request to a bot; suggestions from a recent game; the
  * profile's button; a live invitation from the lobby (card, invite dialog, B joins) and the
  * friend shown "In einer Lobby" with "Beitreten" for a public one; the friend names in the
  * Rundenspiel form; removing; offline after closing the page; deleting an account; English.
@@ -111,7 +111,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         const r3 = await api(a, '', 'POST', { username: B.name });
         const r4 = await api(a, '', 'POST', { username: bot.name });
         ok(r1.body.error === 'Du kannst dich nicht selbst als Freund hinzufügen.' && r2.body.error === 'Diesen Spieler gibt es nicht.'
-            && r3.body.error === 'Ihr seid schon befreundet.' && r4.body.error === 'Bots können keine Freunde sein.', 'refused: oneself, unknown, twice, a bot',
+            && r3.body.error === 'Ihr seid schon befreundet.' && r4.body.ok && r4.body.status === 'pending', 'refused: oneself, unknown, twice; a bot can be asked',
             [r1, r2, r3, r4].map(r => r.body.error).join(' | '));
         const c = await open('C', C);
         const r5 = await api(c, '', 'POST', { username: A.name });

@@ -95,7 +95,15 @@ const MP = {
                 if (cb) cb(res);
             });
         } else {
-            this.socket.emit('action', payload, cb);
+            // The move was already played on the local copy (see ACTIONS below). If the server
+            // refuses it, say why and put the board back to the server's state (F30).
+            this.socket.emit('action', payload, res => {
+                if (res && res.error && payload.type !== 'endTurn') {
+                    toast(TXS(res.error));
+                    if (res.state) MP.applyState(res.state);
+                }
+                if (cb) cb(res);
+            });
         }
     },
 
@@ -524,6 +532,7 @@ const MP = {
             });
             this.socket.on('session:rematch', data => {
                 if (MP.asyncId) return;
+                MP.civDraft = null;
                 MP.enterRematch(data);
             });
             this.socket.on('session:index', data => {
@@ -539,7 +548,23 @@ const MP = {
                 if (MP.renderLobby) MP.renderLobby(); // Re-render to update checkboxes if second player
             });
 
+            // Nation draft (F34): the server runs it; every pick comes back to everybody
+            this.socket.on('civdraft:update', data => {
+                if (MP.asyncId || !data) return;
+                MP.civDraft = data;
+                MP.civDraftAt = Date.now();
+                document.body.classList.remove('mp-waiting');
+                MP.drawCivDraft();
+            });
+            this.socket.on('game:startFailed', data => {
+                if (MP.asyncId) return;
+                MP.civDraft = null;
+                toast(TXS((data && data.error) || 'Fehler beim Spielstart.'));
+                if (MP.renderLobby) MP.renderLobby();
+            });
+
             this.socket.on('placement:start', data => {
+                MP.civDraft = null;
                 MP.renderLobby = null; closeModal();
                 // spectators see the map once every start tile lies (game:start)
                 if (MP.spectator) return modal(TX('Zuschauen'), `<p>${TX('Die Spieler legen ihre Startplättchen. Die Karte erscheint, sobald alle gelegt haben.')}</p>`);
@@ -593,6 +618,7 @@ const MP = {
             // screen from its preview state V and draft D (see drawDraft/draftChoose patches).
             this.socket.on('draft:update', data => {
                 if (!data || typeof drawDraft !== 'function') return;
+                MP.civDraft = null;
                 MP.renderLobby = null; closeModal();
                 document.body.classList.remove('mp-waiting');
                 draftState = { cfg: null, V: data.V, D: data.D };
@@ -616,6 +642,7 @@ const MP = {
 
                 if (typeof placeState !== 'undefined') placeState = null;
                 if (typeof draftState !== 'undefined') draftState = null;
+                MP.civDraft = null;
                 document.body.classList.remove('mp-waiting');
 
                 MP.syncTurnBlocker();
@@ -967,8 +994,20 @@ const MP = {
     /** The login dialog; `mfa`: only the second factor is missing (a new Google/Discord link, ?oauth=mfa). */
     showAuthModal: function (mfa) {
         if (typeof modal === 'function') {
-            modal(TX('Anmelden'), `<iframe src="/client/index.html?modal=true${mfa ? '&mfa=1' : ''}" style="width:100%; height:75vh; min-height:550px; border:none; background:transparent;"></iframe>`);
-            document.getElementById('overlay').classList.add('wide');
+            modal(TX('Anmelden'), `<iframe id="mp-auth-frame" src="/client/index.html?modal=true${mfa ? '&mfa=1' : ''}" style="display:block; width:100%; height:520px; border:none; background:transparent;"></iframe>`);
+            // The frame is as tall as its form (same origin), so the dialog scrolls, not a box
+            // inside it; switching tabs or showing an error resizes it.
+            const frame = document.getElementById('mp-auth-frame');
+            frame.addEventListener('load', () => {
+                try {
+                    const doc = frame.contentDocument, fit = () => {
+                        const box = doc.querySelector('.portal-container') || doc.body;
+                        frame.style.height = Math.ceil(box.getBoundingClientRect().height) + 'px';
+                    };
+                    fit();
+                    if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(doc.querySelector('.portal-container') || doc.body);
+                } catch (e) { frame.style.height = '75vh'; }
+            });
         }
     },
 
@@ -1063,16 +1102,21 @@ const MP = {
           </table>
           <button class="btn wide ghost" onclick="location.reload()">${TX('Zuschauen beenden')}</button>
         `;
+            } else if (mode === 'waiting' && this.civDraft) {
+                return this.drawCivDraft();          // F34: the nation draft runs – the lobby is closed
             } else if (mode === 'waiting') {
                 const isHost = this.lobbyIndex === this.hostIndex;
                 const cnt = this.lobbyCounts();
-                const randomAll = !!this.gameConfig.randomCivs;   // the host deals every nation
+                // F34: nation mode and turn order – with anything but "Standard" nobody picks a nation here
+                const modes = this.lobbyModes();
+                const randomAll = modes.civMode !== 'fixed';
+                const dealtLabel = { random: TX('Zufall (für alle)'), draft: TX('Draft vor dem Start'), randomDraft: TX('Zufallsdraft vor dem Start') }[modes.civMode];
                 // Marathon (v83): abilities are drafted before the first turn – no choice here
                 const isMarathon = this.lobbyLimits().marathon;
                 let trs = this.players.map(p => {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
-                    const civOpts = randomAll ? `<option value="random" selected>${TX('Zufall (für alle)')}</option>`
+                    const civOpts = randomAll ? `<option value="random" selected>${dealtLabel}</option>`
                         : '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>' + TX('Zufall') + '</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
                     const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
                     let abOpts = '';
@@ -1090,6 +1134,7 @@ const MP = {
                             <br/>
                             <select onchange="MP.updateLobbyPlayer()" id="mp-p-ab-${p.index}" ${isMe && !randomAll ? '' : 'disabled'} style="margin-top: 4px; font-size: 13px; ${isMarathon || randomAll ? 'display:none;' : ''} ${isMe ? '' : 'opacity: 0.5; filter: grayscale(100%);'}">${abOpts}</select>
                             ${isMarathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
+                            ${modes.turnOrder === 'pick' ? this.positionSelect(p, isMe, cnt.total) : ''}
                         </td>
                         <td>${this.readyCell(p, isMe, isPlayerHost)}</td>
                         <td style="text-align:right">${isHost && !isMe ? `<button class="btn small error" onclick="MP.kickPlayer(${p.index})">${TX('Kick')}</button>` : ''}</td>
@@ -1112,8 +1157,8 @@ const MP = {
           <div class="mp-settings" style="pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
               <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
-                  <option value="0" ${this.gameConfig.mapKey === '0' ? 'selected' : ''}>${TX('Originalkarte (12 × 18)')}</option>
-                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
+                  <option value="random" ${this.gameConfig.mapKey === 'random' && !this.gameConfig.hexTiles ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
+                  <option value="random-hex" ${this.gameConfig.mapKey === 'random' && this.gameConfig.hexTiles ? 'selected' : ''}>${TX('Plättchenkarte, experimentell (Dreiecke)')}</option>
                   ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>${TX('Marathon (24 × 36)')}</option>` : ''}
                   ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>${TX('Eigene Karte')}</option>` : ''}
                 </select>
@@ -1121,10 +1166,7 @@ const MP = {
               ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost)
                     : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP.browseMaps()').replace(/ · $/, '')}</p>` : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
-              ${this.gameConfig.mapKey === 'random' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span>
-                <input type="checkbox" id="mp-set-hex" onchange="MP.updateLobbyConfig()" ${this.gameConfig.hexTiles ? 'checked' : ''}>
-              </label>
-              ${this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')}</p>` : ''}` : ''}
+              ${this.gameConfig.mapKey === 'random' && this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')}</p>` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
@@ -1152,9 +1194,18 @@ const MP = {
                 ? '⚠ ' + TX('%s Spieler in der Lobby – Platz ist für %s Menschen.', cnt.humans, cnt.total - cnt.ki)
                 : TX('Bis zu %s Menschen.', cnt.total - cnt.ki) + ' ' + (cnt.total - cnt.humans > 1 ? TX('Beim Start spielt die KI %s Reiche.', cnt.total - cnt.humans)
                     : cnt.total - cnt.humans === 1 ? TX('Beim Start spielt die KI 1 Reich.') : TX('Ohne KI.'))}</p>
-              <label class="row"><span>${TX('Zufällige Nationen für alle')}</span>
-                <input type="checkbox" id="mp-set-random" onchange="MP.updateLobbyConfig()" ${this.gameConfig.randomCivs ? 'checked' : ''}>
+              <label class="row"><span>${TX('Nationen')}</span>
+                <select id="mp-set-civmode" onchange="MP.updateLobbyConfig()">
+                  ${[['fixed', TX('Jeder wählt')], ['random', TX('Zufall für alle')], ['draft', TX('Draft')], ['randomDraft', TX('Zufallsdraft')]]
+                    .map(([k, n]) => `<option value="${k}" ${modes.civMode === k ? 'selected' : ''}>${n}</option>`).join('')}
+                </select>
               </label>
+              <label class="row"><span>${TX('Zugreihenfolge')}</span>
+                <select id="mp-set-order" onchange="MP.updateLobbyConfig()">
+                  ${this.turnOrderOptions(modes).map(([k, n]) => `<option value="${k}" ${modes.turnOrder === k ? 'selected' : ''}>${n}</option>`).join('')}
+                </select>
+              </label>
+              <p class="hint" style="margin:4px 0 8px">${this.modesHint(modes)}</p>
               <label class="row"${cnt.total - cnt.humans > 0 ? '' : ' hidden'}><span>${TX('KI-Stufe')}</span>
                 <select id="mp-set-diff" onchange="MP.updateLobbyConfig()">
                   ${KI_LEVELS.map(d => `<option value="${d.k}" ${this.kiLevel(this.gameConfig.difficulty) === d.k ? 'selected' : ''}>${d.n}</option>`).join('')}
@@ -1235,7 +1286,7 @@ const MP = {
         // Laufend: own Rundenspiele, then public games to watch
         let run = '', mine = 0, turn = [];
         if (rs) {
-            const active = rs.mine.filter(g => ['setup', 'placement', 'draft', 'playing'].includes(g.status) && !g.replaced);
+            const active = rs.mine.filter(g => ['setup', 'civdraft', 'placement', 'draft', 'playing'].includes(g.status) && !g.replaced);
             turn = active.filter(g => g.yourTurn);
             const waiting = active.filter(g => !g.yourTurn);
             const takenOver = rs.mine.filter(g => !active.includes(g));
@@ -1294,7 +1345,7 @@ const MP = {
     FILTER_KEYS: ['kind', 'map', 'empires', 'ki', 'level', 'civs', 'events', 'wonders', 'ranked', 'turn', 'bots'],
 
     filterDefs: function () {
-        const maps = [['0', TX('Originalkarte')], ['plaettchen', TX('Plättchenkarte')]]
+        const maps = [['plaettchen', TX('Plättchenkarte')]]
             .concat(typeof marathonMap === 'function' ? [['marathon', TX('Marathon')]] : [])
             .concat(typeof checkCustomMap === 'function' ? [['eigene', TX('Eigene Karte')]] : []);
         return {
@@ -1303,7 +1354,7 @@ const MP = {
             empires: [TX('Reiche insgesamt'), [2, 3, 4, 5, 6, 7, 8].map(n => [String(n), String(n)])],
             ki: [TX('KI-Plätze'), [['none', TX('Ohne KI')], ['some', TX('Mit KI')]]],
             level: [TX('KI-Stufe'), KI_LEVELS.map(l => [l.k, l.n])],
-            civs: [TX('Nationen'), [['fixed', TX('Feste Nationen')], ['random', TX('Zufallsnationen')]]],
+            civs: [TX('Nationen'), [['fixed', TX('Feste Nationen')], ['random', TX('Zufallsnationen')], ['draft', TX('Draft')], ['randomDraft', TX('Zufallsdraft')]]],
             events: [TX('Ereignisse'), [['off', TX('Ohne')], ['easy', TX('Leicht (selten)')], ['hard', TX('Hart (jede Runde)')]]],
             wonders: [TX('Weltwunder'), [['on', TX('Mit')], ['off', TX('Ohne')]]],
             ranked: [TX('Gewertet'), [['yes', TX('Gewertet')], ['no', TX('Ungewertet')]]],
@@ -1384,7 +1435,7 @@ const MP = {
         if (live) return {
             kind: 'live', map: x.mapKey === 'random' ? 'plaettchen' : String(x.mapKey || '0'),
             customMapName: x.customMapName, empires: x.empires || x.maxPlayers, ki: x.kiCount || 0,
-            level: this.kiLevel(x.difficulty), civs: x.randomCivs ? 'random' : 'fixed',
+            level: this.kiLevel(x.difficulty), civs: this.lobbyModes(x).civMode,
             events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off', hexTiles: !!x.hexTiles,
             ranked: x.ranked ? 'yes' : 'no', turn: x.turnTime ? 'timed' : 'free', turnTime: x.turnTime || 0,
             bots: x.playerBots ? 'yes' : 'no', free: x.playersCount < x.maxPlayers,
@@ -1395,7 +1446,7 @@ const MP = {
         return {
             kind: 'async', map: c.mapKey === 'random' ? 'plaettchen' : String(c.mapKey || '0'),
             customMapName: c.customMapName, empires, ki: Math.max(0, empires - (c.humanCount || empires)),
-            level: this.kiLevel(c.difficulty), civs: c.civMode === 'random' ? 'random' : 'fixed',
+            level: this.kiLevel(c.difficulty), civs: this.lobbyModes(c).civMode,
             events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off', hexTiles: !!c.hexTiles,
             // Rundenspiele have days per turn (F19): fewer than 7 count as "with time limit"
             ranked: c.ranked ? 'yes' : 'no', turn: c.turnDays && c.turnDays < 7 ? 'timed' : 'free', turnTime: 0,
@@ -1426,7 +1477,7 @@ const MP = {
     traitsHtml: function (t) {
         const lvl = (KI_LEVELS.find(l => l.k === t.level) || {}).n || t.level;
         const parts = [TX('%s Reiche', t.empires) + (t.ki ? ` (${TX('%s KI', t.ki)}, ${lvl})` : ` (${TX('ohne KI')})`),
-            t.civs === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')];
+            { random: TX('Zufallsnationen'), draft: TX('Draft'), randomDraft: TX('Zufallsdraft') }[t.civs] || TX('Feste Nationen')];
         if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
         if (t.wonders === 'on') parts.push(TX('Weltwunder'));
         if (t.hexTiles) parts.push(TX('Experimenteller Plättchenmodus'));
@@ -1495,19 +1546,23 @@ const MP = {
             if ($('mp-set-diff')) $('mp-set-diff').value = diff;
         }
 
-        const mapKey = $('mp-set-map').value;
+        // the experimental tile mode is its own entry in the map picker: the tile map with hexTiles
+        const mapPick = $('mp-set-map').value, hexPick = mapPick === 'random-hex';
+        const mapKey = hexPick ? 'random' : mapPick;
         const newConfig = {
             mapKey,
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
-            hexTiles: $('mp-set-hex') ? $('mp-set-hex').checked : !!this.gameConfig.hexTiles,
+            hexTiles: hexPick,
             difficulty: diff,
             ranked: isRanked,
             // empires in all and KI seats; "noKi" of older lobbies is replaced by them
             playerCount: $('mp-set-total') ? +$('mp-set-total').value : undefined,
             kiCount: $('mp-set-ki') ? +$('mp-set-ki').value : undefined,
-            randomCivs: !!($('mp-set-random') && $('mp-set-random').checked),
+            // F34: nation mode and turn order (randomCivs stays for older readers)
+            civMode: $('mp-set-civmode') ? $('mp-set-civmode').value : undefined,
+            turnOrder: $('mp-set-order') ? $('mp-set-order').value : undefined,
             turnTime: $('mp-set-turntime') ? +$('mp-set-turntime').value : 0,
             noKi: false,
             // player-bots (bot accounts, sessions.js playerBotPolicy); null = no limit
@@ -1515,6 +1570,7 @@ const MP = {
             playerBotLimit: $('mp-set-botlimit') ? (+$('mp-set-botlimit').value || null) : undefined,
             isPublic: $('mp-set-public') ? $('mp-set-public').checked : undefined,
         };
+        if (newConfig.civMode) newConfig.randomCivs = newConfig.civMode === 'random';
         // a map with fewer empires: keep the numbers within what it allows
         const old = this.gameConfig;
         this.gameConfig = Object.assign({}, old, newConfig, { customMap: newConfig.customMap || old.customMap });
@@ -1736,7 +1792,7 @@ const MP = {
             eventMode: 'hard',
             wonders: false,
             difficulty: KI_DEFAULT_LEVEL,   // KI level of the computer seats
-            mapKey: '0'
+            mapKey: 'random'        // the classic map is a built-in custom map now (maps/builtin.js)
         };
 
         try {
@@ -1790,6 +1846,104 @@ const MP = {
         const c = this.readyCount();
         return c.of > 0 && c.ready === c.of;
     },
+    /** The turn orders the host can choose – a draft needs positions, so no classic order there. */
+    turnOrderOptions: function (modes) {
+        return [['classic', TX('Klassisch')], ['pick', TX('Positionen wählen')], ['random', TX('Zufällige Reihenfolge')]]
+            .filter(([k]) => k !== 'classic' || !['draft', 'randomDraft'].includes(modes.civMode));
+    },
+    civModeLabel: function (c) {
+        return { random: TX('Zufallsnationen'), draft: TX('Draft'), randomDraft: TX('Zufallsdraft') }[this.lobbyModes(c).civMode] || TX('Feste Nationen');
+    },
+    /** Nation mode and turn order of the lobby (F34) – as utils/civdraft.js modesOf. */
+    lobbyModes: function (gc) {
+        gc = gc || this.gameConfig || {};
+        const civMode = ['fixed', 'random', 'draft', 'randomDraft'].includes(gc.civMode) ? gc.civMode : (gc.randomCivs ? 'random' : 'fixed');
+        let turnOrder = ['classic', 'pick', 'random'].includes(gc.turnOrder) ? gc.turnOrder : 'classic';
+        if ((civMode === 'draft' || civMode === 'randomDraft') && turnOrder === 'classic') turnOrder = 'random';
+        return { civMode, turnOrder };
+    },
+    modesHint: function (m) {
+        const civ = {
+            fixed: '',
+            random: TX('Die Nationen werden beim Start ausgelost.'),
+            draft: TX('Draft: Vor dem Start wählt jeder eine Nation mit Fähigkeit – in umgekehrter Zugfolge: wer zuletzt zieht, wählt zuerst.'),
+            randomDraft: TX('Zufallsdraft: so viele zufällige Nationen wie Reiche (auch doppelt), die Fähigkeiten ausgelost. Gewählt wird in umgekehrter Zugfolge; wer zuerst zieht, bekommt, was übrig bleibt.'),
+        }[m.civMode];
+        const order = {
+            classic: TX('Der Host zieht zuerst, danach die Reihenfolge der Nationen.'),
+            pick: TX('Jeder wählt oben seine Position, Position 1 zieht zuerst. Freie Positionen werden beim Start ausgelost.'),
+            random: TX('Die Positionen werden beim Start ausgelost.'),
+        }[m.turnOrder];
+        const spawns = m.turnOrder !== 'classic' && this.gameConfig.mapKey === 'eigene' ? ' ' + TX('Auf einer eigenen Karte startet Position n auf Startpunkt n.') : '';
+        return [civ, order + spawns].filter(Boolean).join(' ');
+    },
+    /** Turn position of a lobby player (turn order "Positionen wählen"); the own one can be changed. */
+    positionSelect: function (p, isMe, total) {
+        const taken = new Set((this.players || []).filter(q => q.index !== p.index && Number.isInteger(q.pos)).map(q => q.pos));
+        const opts = `<option value="">${TX('Position: offen')}</option>` + Array.from({ length: total }, (_, k) =>
+            `<option value="${k}" ${p.pos === k ? 'selected' : ''} ${taken.has(k) ? 'disabled' : ''}>${TX('Position %s', k + 1)}</option>`).join('');
+        return `<br/><select id="mp-p-pos-${p.index}" onchange="MP.setPosition(this.value)" ${isMe ? '' : 'disabled'}
+            style="margin-top:4px; font-size:13px; ${isMe ? '' : 'opacity:0.5;'}">${opts}</select>`;
+    },
+    setPosition: function (v) {
+        this.socket.emit('lobby:player:update', { pos: v === '' ? null : +v }, res => {
+            if (res && res.error) { toast(TXS(res.error)); if (this.renderLobby) this.renderLobby(); }
+        });
+    },
+
+    /** Nation draft (F34): the server's draft as a dialog – positions, picks so far and what is left. */
+    drawCivDraft: function () {
+        const d = this.civDraft;
+        if (!d) return;
+        const civ = k => CIVS.find(c => c.k === k) || { n: k, abilities: [] };
+        const abName = (k, a) => (civ(k).abilities.find(x => x.k === a) || { n: a }).n;
+        const showAb = !d.noAbility;
+        // a Rundenspiel's seat is its slot; a live lobby's the lobby index
+        const me = this.asyncId ? (typeof ASYNC !== 'undefined' && ASYNC.view ? ASYNC.view.mySlot : null) : this.lobbyIndex;
+        const mine = !this.spectator && me != null && d.cur === me;
+        const left = d.turn && d.turn.left != null ? Math.max(0, Math.round((d.turn.left - (Date.now() - this.civDraftAt)) / 1000)) : null;
+        const rows = d.seats.map((s, i) => {
+            const pk = d.picks[i];
+            const who = escHtml(s.name || TX('KI')) + (i === me ? ` <small>(${TX('du')})</small>` : '') + (s.kind === 'ki' && s.name ? ` <small>(${TX('KI')})</small>` : '');
+            const got = pk ? `<b>${escHtml(civ(pk.civ).n)}</b>${showAb ? ' · ' + escHtml(abName(pk.civ, pk.ability)) : ''}` : i === d.cur ? `<i>${TX('wählt …')}</i>` : '';
+            return `<tr style="${i === d.cur ? 'background:rgba(255,200,0,.15)' : ''}"><td>${i + 1}.</td><td>${who}</td><td>${got}</td></tr>`;
+        }).join('');
+        const dis = mine ? '' : 'disabled';
+        const open = d.pool.filter(e => e.left > 0);
+        const pool = d.mode === 'randomDraft' || !showAb
+            ? open.map(e => `<button class="btn small" ${dis} onclick="MP.civDraftPick('${e.id}')">${escHtml(civ(e.civ).n)}${showAb && e.ability ? ' · ' + escHtml(abName(e.civ, e.ability)) : ''}${e.left > 1 ? ` (×${e.left})` : ''}</button>`).join(' ')
+            : open.map(e => `<div style="margin:6px 0"><b>${escHtml(civ(e.civ).n)}</b>${e.left > 1 ? ` <small>(${TX('noch %s×', e.left)})</small>` : ''}<br>`
+                + civ(e.civ).abilities.map(a => `<button class="btn small" ${dis} title="${escHtml(a.e || '')}" onclick="MP.civDraftPick('${e.id}', '${a.k}')">${escHtml(a.n)}</button>`).join(' ') + '</div>').join('');
+        const cur = d.cur != null ? d.seats[d.cur] : null;
+        const note = d.cur == null ? TX('Alle haben gewählt – das Spiel startet …')
+            : mine ? `<b>${TX('Du bist dran!')}</b> ${TX('Wähle deine Nation.')}`
+            : TX('Warte auf %s …', `<b>${escHtml(cur ? cur.name || TX('KI') : '?')}</b>`);
+        const h = `
+          <p class="sub">${d.mode === 'randomDraft' ? TX('Zufallsdraft: gewählt wird in umgekehrter Zugfolge, die Fähigkeiten sind ausgelost.')
+                : TX('Draft: gewählt wird in umgekehrter Zugfolge – wer zuletzt zieht, wählt zuerst.')}${d.noAbility ? ' ' + TX('Die Fähigkeiten folgen im Marathon-Draft.') : ''}</p>
+          <table style="width:100%; text-align:left; border-collapse:collapse; margin-bottom:10px">
+            <tr style="opacity:.7"><th>${TX('Pos.')}</th><th>${TX('Spieler')}</th><th>${TX('Nation')}</th></tr>${rows}
+          </table>
+          <p>${note}${left != null && d.cur != null ? ` <span class="sub" id="mp-cd-left">(${TX('%s s', left)})</span>` : ''}</p>
+          ${d.cur != null ? `<div id="mp-cd-pool">${pool}</div>` : ''}
+          ${this.asyncId ? `<button class="btn wide ghost" style="margin-top:10px" onclick="ASYNC.close(); show('screen-menu'); ASYNC.showList()">${TX('Zurück')}</button>` : ''}`;
+        modal(d.mode === 'randomDraft' ? TX('Zufallsdraft') : TX('Nationen-Draft'), h);
+        clearInterval(this._cdTimer);
+        if (left != null && d.cur != null) this._cdTimer = setInterval(() => {
+            const el = $('mp-cd-left');
+            if (!el || this.civDraft !== d) return clearInterval(this._cdTimer);
+            const s = Math.max(0, Math.round((d.turn.left - (Date.now() - this.civDraftAt)) / 1000));
+            el.textContent = `(${TX('%s s', s)})`;
+        }, 1000);
+    },
+    civDraftPick: function (id, ability) {
+        const pool = $('mp-cd-pool');
+        if (pool) pool.querySelectorAll('button').forEach(b => { b.disabled = true; });
+        const done = res => { if (res && res.error) { toast(TXS(res.error)); this.drawCivDraft(); } };
+        if (this.asyncId) this.socket.emit('async:civdraft', { id: this.asyncId, pick: id, ability: ability || null }, done);
+        else this.socket.emit('civdraft:pick', { id, ability: ability || null }, done);
+    },
+
     readyCell: function (p, isMe, isHost) {
         if (!p.connected) return TX('Wartet');
         if (isHost) return TX('Host');
@@ -2453,7 +2607,7 @@ const ASYNC = {
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
         return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
-            <div class="mpa-title"><span class="mph-kind">${c.challenge ? '📅 ' + TX('Wochen-Challenge') : TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
+            <div class="mpa-title"><span class="mph-kind">${c.challenge ? '📅 ' + TX('Wochen-Challenge') : TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${MP.civModeLabel(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
               <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
             ${joinable ? MP.traitsHtml(MP.lobbyTraits(g, false)) : ''}
             ${this.seatsHtml(g.seats, g.mySlot)}
@@ -2476,7 +2630,7 @@ const ASYNC = {
     // ── Create ───────────────────────────────────────────────────────────────
     showCreate: function () {
         const f = this.form = this.form || {
-            mapKey: '0', civMode: 'fixed', playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
+            mapKey: 'plaettchen', civMode: 'fixed', turnOrder: 'classic', pos: 0, playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
             events: false, eventMode: 'hard', wonders: false, hexTiles: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
             playerBots: false, playerBotLimit: '',
         };
@@ -2486,19 +2640,21 @@ const ASYNC = {
         const lim = typeof mapLimits === 'function' ? mapLimits(f.mapKey, custom) : { min: 2, max: 4, marathon: f.mapKey === 'marathon' };
         f.playerCount = Math.max(lim.min, Math.min(lim.max, f.playerCount || 4));
         f.kiCount = Math.max(0, Math.min(f.playerCount - 2, f.kiCount || 0));
-        const marathon = lim.marathon, random = f.civMode === 'random';
+        const marathon = lim.marathon, modes = MP.lobbyModes(f), random = modes.civMode !== 'fixed', positions = modes.turnOrder !== 'classic';
+        f.pos = Math.max(0, Math.min(f.playerCount - 1, f.pos || 0));
         const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
         let hint;
         // mirrors async/logic.js create(): when the host can play turn 1 right away
         const humans = f.playerCount - f.kiCount, noKi = f.kiCount === 0;
         const freeCivMap = f.mapKey === 'plaettchen' || f.mapKey === 'eigene';
-        const seatsFinal = random || (!freeCivMap && f.playerCount === 4);
+        const seatsFinal = !random && !positions && !freeCivMap && f.playerCount === 4;      // random: dealt at the start (F32); positions (F34) wait for everybody
         const atOnce = !(f.mapKey === 'plaettchen' || marathon) && !noKi && seatsFinal;
         if (f.mapKey === 'plaettchen' || marathon)
             hint = marathon ? TX('Erst wenn alle beigetreten sind, wird gedraftet – dann beginnt die Partie mit deinem Zug.')
                 : TX('Erst wenn alle beigetreten sind, legt jeder sein Startplättchen – dann beginnt die Partie mit deinem Zug.');
-        else if (atOnce) hint = random ? TX('Du spielst sofort deinen ersten Zug. Wer beitritt, bekommt den nächsten Platz in der Zugfolge.')
-            : TX('Du spielst sofort deinen ersten Zug. Kommt eine Nation an die Reihe, die noch niemand gewählt hat, wartet das Spiel auf sie.');
+        else if (atOnce) hint = TX('Du spielst sofort deinen ersten Zug. Kommt eine Nation an die Reihe, die noch niemand gewählt hat, wartet das Spiel auf sie.');
+        else if (positions) hint = TX('Die Partie beginnt, sobald alle beigetreten sind.');
+        else if (random) hint = TX('Sobald alle beigetreten sind, werden die Nationen zufällig verteilt – auch deine. Dann beginnt die Partie mit deinem Zug.');
         else hint = TX('Die Partie beginnt mit deinem Zug, sobald alle Mitspieler beigetreten sind.');
         hint = (f.kiCount ? TX('%s Reiche: %s Menschen, %s KI', f.playerCount, humans, f.kiCount) : TX('%s Reiche: %s Menschen, keine KI', f.playerCount, humans))
             + (f.playerCount === 2 ? ' – ' + TX('1 gegen 1 (höhere Siegschwellen)') : '') + '. ' + hint;
@@ -2511,11 +2667,13 @@ const ASYNC = {
               <tr>
                 <td><b>${this.esc(MP.user ? MP.user.username : '')}</b> (${TX('Host')})</td>
                 <td style="padding: 4px;">
-                  ${random ? `<select disabled><option>${TX('Zufall')}</option></select>` : `<select id="mpa-civ">
+                  ${random ? `<select disabled><option>${{ random: TX('Zufall'), draft: TX('Draft vor dem Start'), randomDraft: TX('Zufallsdraft vor dem Start') }[modes.civMode]}</option></select>` : `<select id="mpa-civ">
                     ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select>`}
                   ${random || marathon ? '' : `<br/><select id="mpa-ab" style="margin-top: 4px; font-size: 13px;">
                     ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select>`}
                   ${marathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
+                  ${modes.turnOrder === 'pick' ? `<br/><select id="mpa-pos" style="margin-top:4px; font-size:13px;">
+                    ${Array.from({ length: f.playerCount }, (_, k) => opt(k, f.pos, TX('Position %s', k + 1))).join('')}</select>` : ''}
                 </td>
               </tr>
             </table>
@@ -2526,8 +2684,8 @@ const ASYNC = {
             ${typeof PRESETS !== 'undefined' ? PRESETS.rowHtml('async') : ''}
             <div class="mp-settings">
               <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
-                ${opt('0', f.mapKey, TX('Originalkarte (12 × 18)'))}
-                ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
+                ${opt('plaettchen', f.mapKey === 'plaettchen' && f.hexTiles ? '' : f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
+                ${opt('plaettchen-hex', f.mapKey === 'plaettchen' && f.hexTiles ? 'plaettchen-hex' : '', TX('Plättchenkarte, experimentell (Dreiecke)'))}
                 ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36)')) : ''}
                 ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
               ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Karte wählen')}</span><select id="mpa-custom">
@@ -2538,8 +2696,7 @@ const ASYNC = {
                 <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}`)}`
                 : typeof MAPBROWSER !== 'undefined' ? note(`${TX('Oder eine Karte anderer Spieler:')} ${MP.browseLink('ASYNC.browseMaps()').replace(/ · $/, '')}`) : ''}
               ${marathon ? note(TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')) : ''}
-              ${f.mapKey === 'plaettchen' ? `<label class="row"><span>${TX('Experimenteller Plättchenmodus')}</span><input type="checkbox" id="mpa-hex" ${f.hexTiles ? 'checked' : ''}></label>
-              ${f.hexTiles ? note(TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')) : ''}` : ''}
+              ${f.mapKey === 'plaettchen' && f.hexTiles ? note(TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')) : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
               ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
                 ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
@@ -2549,7 +2706,12 @@ const ASYNC = {
               <label class="row"><span>${TX('davon KI (feste Plätze)')}</span><select id="mpa-ki">
                 ${Array.from({ length: f.playerCount - 1 }, (_, k) => k).map(k => opt(k, f.kiCount, k + (k === 0 ? ` (${TX('nur Menschen')})` : ''))).join('')}</select></label>
               ${note(hint)}
-              <label class="row"><span>${TX('Zufällige Nationen für alle')}</span><input type="checkbox" id="mpa-random" ${random ? 'checked' : ''}></label>
+              <label class="row"><span>${TX('Nationen')}</span><select id="mpa-civmode">
+                ${opt('fixed', modes.civMode, TX('Jeder wählt'))}${opt('random', modes.civMode, TX('Zufall für alle'))}${opt('draft', modes.civMode, TX('Draft'))}${opt('randomDraft', modes.civMode, TX('Zufallsdraft'))}</select></label>
+              <label class="row"><span>${TX('Zugreihenfolge')}</span><select id="mpa-order">
+                ${MP.turnOrderOptions(modes).map(([k, n]) => opt(k, modes.turnOrder, n)).join('')}</select></label>
+              ${note(MP.modesHint(modes).replace(TX('Jeder wählt oben seine Position, Position 1 zieht zuerst. Freie Positionen werden beim Start ausgelost.'),
+                    TX('Jeder wählt beim Beitreten eine freie Position, Position 1 zieht zuerst. Freie Positionen übernimmt die KI.')))}
               <label class="row"${noKi ? ' hidden' : ''}><span>${TX('KI-Stufe')}</span><select id="mpa-diff" ${f.ranked ? 'disabled' : ''}>
                 ${KI_LEVELS.map(d => opt(d.k, f.ranked ? hardest : f.difficulty, d.n)).join('')}</select></label>
               <label class="row"><span>${TX('Zeit pro Zug')}</span><select id="mpa-days">
@@ -2574,10 +2736,12 @@ const ASYNC = {
         const f = this.form, v = id => $(id) ? $(id).value : null, c = id => $(id) ? $(id).checked : false;
         const civBefore = f.civ;
         Object.assign(f, {
-            mapKey: v('mpa-map'), civMode: c('mpa-random') ? 'random' : 'fixed',
+            // 'plaettchen-hex': the experimental tile mode, its own entry in the map picker
+            mapKey: v('mpa-map') === 'plaettchen-hex' ? 'plaettchen' : v('mpa-map'), civMode: v('mpa-civmode') || f.civMode || 'fixed',
+            turnOrder: v('mpa-order') || f.turnOrder || 'classic', pos: v('mpa-pos') != null ? +v('mpa-pos') : f.pos,
             playerCount: +v('mpa-total') || f.playerCount, kiCount: v('mpa-ki') != null ? +v('mpa-ki') : f.kiCount,
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
-            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), hexTiles: c('mpa-hex'),
+            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), hexTiles: v('mpa-map') === 'plaettchen-hex',
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
             turnDays: +v('mpa-days') || f.turnDays || 7,
             customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
@@ -2642,12 +2806,12 @@ const ASYNC = {
             toast(TX('Erstelle Rundenspiel…'));
             const r = await this.api('', {
                 config: {
-                    mapKey: f.mapKey, civMode: f.civMode, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
+                    mapKey: f.mapKey, civMode: f.civMode, turnOrder: f.turnOrder, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
                     wonders: f.wonders, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked && MP.rankedOk(f.mapKey, f.playerCount), isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },
-                civ: f.civ, ability: f.ability,
+                civ: f.civ, ability: f.ability, pos: f.pos,
                 invite: f.invite.split(',').map(x => x.trim()).filter(Boolean),
             });
             if (r.inviteErrors && r.inviteErrors.length) toast(r.inviteErrors.map(TXS).join(' '));
@@ -2673,10 +2837,26 @@ const ASYNC = {
         this.joining = { id, code };
         const c = g.config;
         let pickHtml;
-        if (c.civMode === 'random') {
+        const modes = MP.lobbyModes(c);
+        if (modes.turnOrder !== 'classic') {
+            // F34: a free position ('pick') and, with civMode fixed, the nation
+            const slots = [...new Set(g.freeSeats.map(s => s.slot))];
+            const civs = [...new Set(g.freeSeats.map(s => s.civ).filter(Boolean))];
+            pickHtml = (modes.turnOrder === 'pick'
+                ? `<label class="row"><span>${TX('Position')}</span><select id="mpa-jpos">
+                    ${slots.map(k => `<option value="${k}">${TX('Position %s', k + 1)}</option>`).join('')}</select></label>`
+                : `<p>${TX('Die Positionen werden beim Start ausgelost.')}</p>`)
+                + (civs.length ? `<label class="row"><span>${TX('Nation')}</span><select id="mpa-jciv" onchange="ASYNC.joinAbilities()">
+                    ${civs.map(k => `<option value="${k}">${this.esc((this.civ(k) || {}).n || k)}</option>`).join('')}</select></label>
+                  ${c.mapKey === 'marathon' ? `<p class="sub">${TX('Fähigkeiten werden vor dem ersten Zug gedraftet.')}</p>`
+                    : `<label class="row"><span>${TX('Fähigkeit')}</span><select id="mpa-jab"></select></label>`}`
+                : `<p>${MP.modesHint({ civMode: modes.civMode, turnOrder: 'classic' }).replace(TX('Der Host zieht zuerst, danach die Reihenfolge der Nationen.'), '')}</p>`);
+        } else if (c.civMode === 'random') {
             const s = g.seats[g.freeSeats[0].slot];
             const ab = (this.civ(s.civ) || { abilities: [] }).abilities.find(a => a.k === s.ability);
-            pickHtml = `<p>${ab && c.mapKey !== 'marathon' ? TX('Du bekommst den nächsten Platz in der Zugfolge: %s mit „%s".', `<b>${this.civLabel(s.civ)}</b>`, this.esc(ab.n))
+            // F32: nations are dealt once every seat is taken – nobody knows theirs before
+            pickHtml = !s.civ ? `<p>${TX('Die Nationen werden zufällig verteilt, sobald alle Plätze besetzt sind – auch der Host kennt seine noch nicht.')}</p>`
+                : `<p>${ab && c.mapKey !== 'marathon' ? TX('Du bekommst den nächsten Platz in der Zugfolge: %s mit „%s".', `<b>${this.civLabel(s.civ)}</b>`, this.esc(ab.n))
                 : TX('Du bekommst den nächsten Platz in der Zugfolge: %s.', `<b>${this.civLabel(s.civ)}</b>`)}</p>`;
         } else {
             const civs = [...new Set(g.freeSeats.map(s => s.civ))];
@@ -2708,6 +2888,7 @@ const ASYNC = {
         try {
             await this.api(`/${j.id}/join`, {
                 code: j.code, civ: $('mpa-jciv') ? $('mpa-jciv').value : undefined,
+                pos: $('mpa-jpos') ? +$('mpa-jpos').value : undefined,
                 ability: $('mpa-jab') ? $('mpa-jab').value : undefined,
             });
             this.open(j.id);
@@ -2845,6 +3026,13 @@ const ASYNC = {
             if (!this.placing) this.startPlacement(view);
             return;
         }
+        if (view.status === 'civdraft') {
+            // F34: the nation draft – the live dialog with the Rundenspiel's seats (no clock: the turn deadline counts)
+            MP.civDraft = Object.assign({}, view.civdraft, { seats: view.seats.map(s => ({ index: s.slot, name: s.name, kind: s.kind })), turn: null });
+            MP.civDraftAt = Date.now();
+            return MP.drawCivDraft();
+        }
+        MP.civDraft = null;
         if (view.status === 'draft') {
             closeModal();
             draftState = { cfg: null, V: view.draft.V, D: view.draft.D };
@@ -2896,7 +3084,7 @@ const ASYNC = {
         const me = view.seats.find(s => s.slot === view.mySlot);
         const host = view.isHost;
         modal(TX('Rundenspiel'), `
-            <p><b>${this.mapName(c.mapKey, c)}</b> · ${c.civMode === 'random' ? TX('Zufallsnationen') : TX('Feste Nationen')} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${view.engine ? ' · ' + this.esc(view.engine) : ''}</p>
+            <p><b>${this.mapName(c.mapKey, c)}</b> · ${MP.civModeLabel(c)} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${view.engine ? ' · ' + this.esc(view.engine) : ''}</p>
             ${this.seatsHtml(view.seats, view.mySlot)}
             <p>${text}</p>
             ${view.waitingFor ? `<p class="sub">${TX('Wartet auf: %s', this.esc(TXS(view.waitingFor)))}</p>` : ''}

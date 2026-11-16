@@ -101,7 +101,7 @@ The `clientId` is a secret the browser generates and keeps; the game itself then
 | POST | `/:id/leave` | Leave before the start |
 | POST | `/:id/cancel` | Host cancels |
 | POST | `/:id/resign` | Resign while the game runs: the KI plays the seat to the end ([Resign](socket-events.md#resign)) |
-| POST | `/:id/invite` | Invite a player by username |
+| POST | `/:id/invite` | Invite a player by username (a bot account only when the game takes one more player-bot) |
 | POST | `/:id/decline` | Decline an invitation |
 
 Playing the opened game: [Socket.IO events → Rundenspiele](socket-events.md#rundenspiele). Rules: [Rundenspiele](rundenspiele.md).
@@ -156,8 +156,8 @@ Only public data goes out: names, nations, points, MMR – no e-mail, role or ac
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/` | `{ friends: [{ id, username, mmr, online, seen, activity }], incoming, outgoing, invites, suggestions, max }`. `activity`: `{ status: lobby | playing, round, hostName }` plus `joinCode` / `password` / `full` of a public session |
-| POST | `/` | `{ username }` or `{ id }`: send a request; accepts at once when the other asked first. Not to oneself, bots, banned accounts or across a block; at most 200 friends and requests |
+| GET | `/` | `{ friends: [{ id, username, bot, mmr, online, seen, activity }], incoming, outgoing, invites, suggestions, max }`. `activity`: `{ status: lobby | playing, round, hostName }` plus `joinCode` / `password` / `full` of a public session |
+| POST | `/` | `{ username }` or `{ id }`: send a request; accepts at once when the other asked first. Not to oneself, banned accounts or across a block, and bots don't send requests (a bot accepts or declines them); at most 200 friends and requests |
 | POST | `/:id/accept` | Accept the request of account `:id` |
 | DELETE | `/:id` | Decline, withdraw or end the friendship with account `:id` |
 

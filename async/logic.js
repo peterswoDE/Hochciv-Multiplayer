@@ -3,8 +3,8 @@
  * sockets. Everything works on a plain object `g`:
  *
  *   g = {
- *     id, joinCode, hostUserId, status, engine (version the game is played with, see ENG),      // setup → placement | draft → playing → finished | cancelled
- *     config: { mapKey, civMode, humanCount, events, eventMode, wonders, hexTiles, difficulty, ranked,
+ *     id, joinCode, hostUserId, status, engine (version the game is played with, see ENG),      // setup → [civdraft →] placement | draft → playing → finished | cancelled
+ *     config: { mapKey, civMode, turnOrder, humanCount, events, eventMode, wonders, hexTiles, difficulty, ranked,
  *               isPublic, noKi, duel, seed, startPlayer, order, map?, setup?, marathon? },
  *     seats:  [{ slot, civ, ability, kind, userId, name, roman, color, drafted, kiLevel,
  *                started, replaced, penalty, joinedAt }],   // index = slot = newGame() players index
@@ -13,7 +13,8 @@
  *     stats:  score and counts over the rounds, key moments (utils/stats.js),
  *     marks:  per state player the point of their last turn ("since your last turn", utils/summary.js),
  *     scenes: what happened as scenes for the clients, since the earliest mark (utils/scenes.js),
- *     pre:    null | { plan } (tile map placement) | { draft: { V, D } } (Marathon),
+ *     pre:    null | { plan } (tile map placement) | { draft: { V, D } } (Marathon)
+ *             | { civdraft: D } (nation draft, F34 – utils/civdraft.js),
  *     hold:   true while the game waits for an unclaimed seat (S.cur is that seat, its
  *             beginTurn has not run yet),
  *     state:  the engine state S, or null before the game itself starts,
@@ -23,6 +24,12 @@
  * (placeholder in the engine state); 'ki' fills seats beyond the player amount (level from
  * config.difficulty) and takes over a human seat after 7 days of inactivity (`replaced`).
  * 'bot' only appears in games created before KI fill-ins.
+ *
+ * Turn positions (F34, config.turnOrder 'pick' | 'random'): the seats are positions – slot 0 moves
+ * first (the engine runs with seatOrder). Players pick a free position on joining ('pick'), or the
+ * positions are shuffled once everybody is there ('random'); the KI takes the free ones. Then the
+ * nations: picked on joining (civMode fixed), dealt (random) or drafted in reverse position order
+ * (draft / randomDraft, status 'civdraft'). Games without turnOrder keep the classic rules.
  */
 const appConfig = require('../config');
 const engine = require('../engine-adapter');
@@ -30,6 +37,7 @@ const { renameInState } = require('../utils/rename');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
+const CivDraft = require('../utils/civdraft');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and count as v83, a label only by now: forVersion
@@ -73,6 +81,42 @@ const isFree = s => s.kind === 'human' && !s.userId;
 const claimedCount = g => g.seats.filter(s => s.userId).length;
 const seatOf = (g, userId) => g.seats.find(s => s.userId === userId && !s.replaced) || null;
 const civKeys = () => (E().CIVS || []).map(c => c.k);
+const blankSeat = slot => ({
+    slot, civ: null, ability: 'basis', kind: 'human', userId: null, name: null,
+    roman: null, color: null, started: false, replaced: false, penalty: 0, joinedAt: null,
+});
+const makeKiSeat = (g, s) => Object.assign(s, {
+    kind: 'ki', kiLevel: ENG(g).kiLevelFor(g.config.difficulty),
+    ability: isMarathon(g) || !s.civ ? 'basis' : resolveAbility(s.civ, 'random'),
+});
+/** Random nations, dealt at the start (F32) – and not dealt yet. */
+const awaitsDeal = g => !!(g.config.dealAtStart && !g.config.order);
+/** Turn positions (F34): the seats are positions, set before the nations. */
+const positional = g => CivDraft.modesOf(g.config).turnOrder !== 'classic';
+const drafting = g => CivDraft.isDraft(g.config.civMode);
+
+/**
+ * F32: the last human has joined a game with random nations – deal the nations now, as one
+ * shuffled hand for all seats. Turn positions as before: the host first, then the others in
+ * the order they joined, the last positions are the KI's.
+ */
+function dealRandom(g) {
+    const total = g.seats.length, civs = civKeys();
+    const dealt = freeCivs(g) ? dealCivs(civs, total) : shuffle(civs).slice(0, total);
+    const order = ENG(g).turnOrderSlots(dealt, 0);
+    const humans = g.seats.filter(s => s.userId)
+        .sort((a, b) => (b.userId === g.hostUserId) - (a.userId === g.hostUserId) || (a.joinedAt || 0) - (b.joinedAt || 0));
+    const seats = dealt.map((civ, slot) => Object.assign(blankSeat(slot), { civ }));
+    order.forEach((slot, pos) => {
+        const s = seats[slot], h = humans[pos];
+        if (!h) return makeKiSeat(g, s);
+        Object.assign(s, { userId: h.userId, name: h.name, joinedAt: h.joinedAt, botAccount: !!h.botAccount });
+        s.ability = isMarathon(g) ? 'basis' : resolveAbility(s.civ, 'random');
+    });
+    g.seats = seats;
+    g.config.order = order;
+    g.config.startPlayer = order[0];        // slot 0: the host
+}
 const civDef = k => (E().CIVS || []).find(c => c.k === k) || null;
 const pick = list => list[Math.floor(Math.random() * list.length)];
 const deepCopy = x => JSON.parse(JSON.stringify(x));
@@ -115,7 +159,8 @@ function create(host, opts) {
     const raw = (opts && opts.config) || {};
     const config = {
         mapKey: MAP_KEYS.includes(raw.mapKey) ? raw.mapKey : '0',
-        civMode: raw.civMode === 'random' ? 'random' : 'fixed',
+        civMode: CivDraft.CIV_MODES.includes(raw.civMode) ? raw.civMode : 'fixed',
+        turnOrder: CivDraft.TURN_ORDERS.includes(raw.turnOrder) ? raw.turnOrder : 'classic',
         events: !!raw.events,
         eventMode: raw.eventMode === 'easy' ? 'easy' : 'hard',
         wonders: !!raw.wonders,
@@ -160,6 +205,9 @@ function create(host, opts) {
     // it is played (the engine's fixed dice; engines before it ignore the field)
     if (challenge) Object.assign(config, { challenge, isPublic: false, ranked: false, seed: Number.isInteger(opts.seed) ? opts.seed : config.seed });
     if (challenge) config.fixedDice = config.seed;
+    // the weekly challenge keeps the classic rules; a draft never has the classic order
+    if (challenge) Object.assign(config, { civMode: 'fixed', turnOrder: 'classic' });
+    Object.assign(config, CivDraft.modesOf(config));
     Object.assign(config, { playerCount: total, humanCount: total - ki, noKi: ki === 0 });
     // Player-bots (bot accounts, utils/bots.js) take human seats like players, never the KI's;
     // the host allows them and may limit them (null = no limit). A bot as host always allows them.
@@ -172,30 +220,32 @@ function create(host, opts) {
         hostUserId: host.id, status: 'setup', config,
         seats: [], invites: [], pre: null, hold: false, state: null, result: null,
     };
-    const blank = slot => ({
-        slot, civ: null, ability: 'basis', kind: 'human', userId: null, name: null,
-        roman: null, color: null, started: false, replaced: false, penalty: 0, joinedAt: null,
-    });
+    const blank = blankSeat;
     const civs = civKeys();
     const kiSeats = total - config.humanCount;
-    const kiSeat = s => Object.assign(s, {
-        kind: 'ki', kiLevel: engine.kiLevelFor(config.difficulty),
-        ability: isMarathon(g) ? 'basis' : resolveAbility(s.civ, 'random'),
-    });
+    const kiSeat = s => makeKiSeat(g, s);
     let hostSlot = 0;
 
-    if (config.civMode === 'random') {
-        // Nations are dealt now (random for everyone); turn positions are taken in join order
-        // (host first), the last ones in turn order are the KI.
-        const dealt = freeCivs(g) ? dealCivs(civs, total) : shuffle(civs).slice(0, total);
-        g.seats = dealt.map((civ, slot) => Object.assign(blank(slot), { civ }));
-        const order = engine.turnOrderSlots(dealt, 0);
-        order.forEach((slot, pos) => {
-            const s = g.seats[slot];
-            if (pos >= config.humanCount) kiSeat(s);
-            else s.ability = isMarathon(g) ? 'basis' : resolveAbility(s.civ, 'random');
-        });
-        config.order = order;
+    if (positional(g)) {
+        // F34: the seats are positions. The host takes the one asked for ('pick'), the KI takes
+        // the free ones once everybody is there; the nation now only with civMode fixed.
+        g.seats = Array.from({ length: total }, (_, slot) => blank(slot));
+        const pos = parseInt(opts.pos, 10);
+        if (config.turnOrder === 'pick' && pos >= 0 && pos < total) hostSlot = pos;
+        if (config.civMode === 'fixed') {
+            const civ = resolveCiv(opts.civ, []);
+            if (!civ) return { error: 'Unbekannte Nation.' };
+            g.seats[hostSlot].civ = civ;
+            g.seats[hostSlot].ability = isMarathon(g) ? 'basis' : (resolveAbility(civ, opts.ability) || 'basis');
+        }
+    } else if (config.civMode === 'random') {
+        // F32: nothing is dealt yet. Seats without a nation – the humans', then the KI's – and
+        // once the last human has joined, dealRandom() deals nations and turn positions. So
+        // nobody (the host neither) knows their nation before, and can't pick it by skipping
+        // or recreating games.
+        config.dealAtStart = true;
+        g.seats = Array.from({ length: total }, (_, slot) => blank(slot));
+        g.seats.slice(config.humanCount).forEach(kiSeat);
     } else if (freeCivs(g)) {
         // Tile map / custom map: any nation, also twice – the host takes slot 0, the others
         // choose on joining; the KI seats (the last ones) get a nation now
@@ -221,15 +271,24 @@ function create(host, opts) {
     config.startPlayer = hostSlot;          // the host always moves first
 
     /* Start right away (the host plays turn 1 while the others join) when the seats are
-       final already: nations dealt at random, or all four nations of a fixed map. Otherwise –
-       and always without KI – the game starts once everybody is there. */
+       final already: all four nations of a fixed map. Otherwise – always without KI, and with
+       random nations since F32 (dealt once everybody is there) – the game starts then. */
     // the weekly challenge: the KI takes the other seats right away, all with the base ability –
     // the same opponents for everybody
     if (challenge) {
         fillBots(g);
-        g.seats.filter(s => s.kind === 'ki').forEach(s => { s.ability = 'basis'; });
+        // the same opponents in every attempt: on a free map the other nations in a fixed order
+        // (not dealt at random); the week's seed makes the tile map and its placement the same
+        const others = civKeys().filter(k => k !== g.seats[hostSlot].civ);
+        g.seats.filter(s => s.kind === 'ki').forEach((s, i) => {
+            if (freeCivs(g)) s.civ = others[i % others.length];
+            s.ability = 'basis';
+        });
+        // a tile map: the challenger places the start tile right away (the KI's lie already)
+        if (hasPrephase(g)) startPrephase(g);
     }
-    const seatsFinal = config.civMode === 'random' || (!freeCivs(g) && total === 4);
+    // with positions (F34) the game waits for everybody: positions and nations come then
+    const seatsFinal = positional(g) ? false : config.civMode === 'random' ? !awaitsDeal(g) : !freeCivs(g) && total === 4;
     if (!hasPrephase(g) && !config.noKi && seatsFinal) startGame(g);
     return { g };
 }
@@ -263,9 +322,24 @@ function playerBotRoom(g) {
 
 function freeSeats(g) {
     if (!['setup', 'playing'].includes(g.status) || claimedCount(g) >= g.config.humanCount) return [];
+    if (positional(g)) return positionalFreeSeats(g);
+    if (awaitsDeal(g)) return [g.seats.find(isFree)].filter(Boolean).map(s => ({ slot: s.slot, civ: null }));
     if (g.config.civMode === 'random') return [nextRandomSeat(g)].filter(Boolean).map(s => ({ slot: s.slot, civ: s.civ }));
     if (freeCivs(g)) return civKeys().map(civ => ({ slot: null, civ }));
     return g.seats.filter(isFree).map(s => ({ slot: s.slot, civ: s.civ }));
+}
+
+/**
+ * F34: what a joiner can take – { slot, civ } for every free position (slot null: positions are
+ * dealt at the start) and, with civMode fixed, every nation still to have (civ null otherwise).
+ */
+function positionalFreeSeats(g) {
+    const pick = g.config.turnOrder === 'pick';
+    const slots = pick ? g.seats.filter(isFree).map(s => s.slot) : [null];
+    if (g.config.civMode !== 'fixed') return slots.map(slot => ({ slot, civ: null }));
+    const taken = g.seats.filter(s => s.userId).map(s => s.civ);
+    const civs = civKeys().filter(k => freeCivs(g) || !taken.includes(k));
+    return slots.flatMap(slot => civs.map(civ => ({ slot, civ })));
 }
 
 function nextRandomSeat(g) {
@@ -287,7 +361,25 @@ function join(g, user, opts) {
     }
 
     let seat, ability;
-    if (g.config.civMode === 'random') {
+    if (positional(g)) {
+        // F34: a free position – the one asked for ('pick', else a random free one)
+        const free = g.seats.filter(isFree);
+        const pos = parseInt(opts.pos, 10);
+        seat = g.config.turnOrder === 'pick' && Number.isInteger(pos) ? free.find(s => s.slot === pos) : pick(free);
+        if (!seat && g.config.turnOrder === 'pick' && Number.isInteger(pos)) return 'Diese Position ist schon vergeben.';
+        ability = 'basis';
+        if (seat && g.config.civMode === 'fixed') {
+            const taken = g.seats.filter(s => s.userId).map(s => s.civ);
+            const civ = resolveCiv(opts.civ, freeCivs(g) ? [] : taken);
+            if (!civ) return 'Unbekannte Nation.';
+            if (!freeCivs(g) && taken.includes(civ)) return 'Diese Nation ist schon vergeben.';
+            ability = isMarathon(g) ? 'basis' : resolveAbility(civ, opts.ability);
+            if (ability) seat.civ = civ;
+        }
+    } else if (awaitsDeal(g)) {
+        seat = g.seats.find(isFree);            // nation and ability come with dealRandom()
+        ability = 'basis';
+    } else if (g.config.civMode === 'random') {
         seat = nextRandomSeat(g);
         ability = seat && seat.ability;
     } else if (freeCivs(g)) {
@@ -317,6 +409,11 @@ function join(g, user, opts) {
         // waits before an unclaimed seat's turn begins), so newGame's start effects are redone.
         if (g.config.civMode === 'fixed' && !seat.started) ENG(g).applyLateAbility(g.state, i, ability);
     }
+    if (positional(g)) {
+        if (claimedCount(g) >= g.config.humanCount) seatPositions(g);
+        return null;
+    }
+    if (claimedCount(g) >= g.config.humanCount && awaitsDeal(g)) dealRandom(g);
     if (claimedCount(g) >= g.config.humanCount) fillBots(g);
     if (g.status === 'setup' && claimedCount(g) >= g.config.humanCount) startPrephase(g);
     return null;
@@ -348,7 +445,8 @@ function leave(g, userId) {
     if (!free) return 'Nach deinem ersten Zug kannst du das Spiel nicht mehr verlassen.';
 
     Object.assign(seat, { userId: null, name: null, joinedAt: null });
-    if (g.config.civMode === 'fixed') {
+    if (positional(g)) Object.assign(seat, { civ: null, ability: 'basis' });
+    else if (g.config.civMode === 'fixed') {
         seat.ability = 'basis';
         if (freeCivs(g)) seat.civ = null;
     }
@@ -399,6 +497,74 @@ function makeKi(g, s) {
         Object.assign(g.state.players[i], { kind: 'ki', kiLevel: s.kiLevel, name: null });
         ENG(g).applyLateAbility(g.state, i, ability);
     }
+}
+
+// ── Turn positions and the nation draft (F34) ─────────────────────────────────
+
+/**
+ * Everybody is there (or the setup time is up): the KI takes the free positions (without KI
+ * they leave), 'random' shuffles the positions, then the nations – the KI's picked, dealt or
+ * drafted – and the pre-phase or the game.
+ */
+function seatPositions(g) {
+    fillBots(g);
+    if (g.config.turnOrder === 'random') {
+        g.seats = shuffle(g.seats);
+        g.seats.forEach((s, i) => { s.slot = i; });
+    }
+    const n = g.seats.length;
+    g.config.order = [...Array(n).keys()];
+    g.config.startPlayer = 0;
+    g.config.playerCount = n;
+    const marathon = isMarathon(g);
+    const ability = civ => (marathon ? 'basis' : resolveAbility(civ, 'random'));
+    if (g.config.civMode === 'fixed') {
+        // the KI takes nations nobody has (fixed maps), any nation on the free maps
+        const taken = g.seats.filter(s => s.kind !== 'ki').map(s => s.civ);
+        const rest = freeCivs(g) ? dealCivs(civKeys(), n) : shuffle(civKeys().filter(k => !taken.includes(k)));
+        g.seats.filter(s => s.kind === 'ki').forEach((s, i) => { s.civ = rest[i] || pick(civKeys()); s.ability = ability(s.civ); });
+    } else if (g.config.civMode === 'random') {
+        const dealt = freeCivs(g) ? dealCivs(civKeys(), n) : shuffle(civKeys()).slice(0, n);
+        g.seats.forEach((s, i) => { s.civ = dealt[i]; s.ability = ability(s.civ); });
+    } else {
+        g.seats.forEach(s => { s.civ = null; s.ability = 'basis'; });
+        const D = CivDraft.newDraft({
+            mode: g.config.civMode, n, civs: E().CIVS || [], uniqueCivs: !freeCivs(g), noAbility: marathon, rnd: Math.random,
+        });
+        g.pre = { civdraft: D };
+        g.status = 'civdraft';
+        return advanceCivDraft(g);
+    }
+    startPrephase(g);
+}
+
+/** KI seats and forced picks; the last pick starts the pre-phase or the game. */
+function advanceCivDraft(g) {
+    const D = g.pre.civdraft;
+    CivDraft.settle(D, E().CIVS || [], Math.random, slot => g.seats[slot].kind !== 'human');
+    if (CivDraft.done(D)) finishCivDraft(g);
+}
+
+/** A human picks a nation (and its ability) in the nation draft. */
+function civDraftPick(g, userId, id, ability) {
+    if (g.status !== 'civdraft') return 'Gerade wird nicht gedraftet.';
+    const seat = seatOf(g, userId);
+    if (!seat) return 'Du bist nicht in diesem Spiel.';
+    const err = CivDraft.pick(g.pre.civdraft, seat.slot, String(id), ability == null ? null : String(ability), E().CIVS || [], Math.random);
+    if (err) return err;
+    advanceCivDraft(g);
+    return null;
+}
+
+function finishCivDraft(g) {
+    const D = g.pre.civdraft;
+    g.seats.forEach(s => {
+        const pk = D.picks[s.slot];
+        if (pk) { s.civ = pk.civ; s.ability = pk.ability || 'basis'; }
+    });
+    g.pre = null;
+    g.status = 'setup';             // startPrephase moves on to placement, the Marathon draft or the game
+    startPrephase(g);
 }
 
 // ── Pre-phases: tile placement and Marathon draft ─────────────────────────────
@@ -565,6 +731,10 @@ function waitingOn(g) {
             g.pre.plan.seats.some(ps => ps.idx === s.slot && ps.cell == null));
         return { userIds: open.map(s => s.userId), label: open.map(name).join(', ') };
     }
+    if (g.status === 'civdraft') {
+        const seat = g.seats[CivDraft.current(g.pre.civdraft)];
+        return seat && seat.userId && !seat.replaced ? { userIds: [seat.userId], label: name(seat) } : { userIds: [], label: '' };
+    }
     if (g.status === 'draft') {
         const D = g.pre.draft.D;
         const cur = D.at < D.order.length ? D.order[D.at] : null;
@@ -599,7 +769,22 @@ function timeout(g) {
         const u = replaceSeat(g, seat);
         if (u) penalized.push(u);
     };
-    if (g.status === 'setup' && g.config.noKi) {
+    if (g.status === 'setup' && positional(g)) {
+        // F34: play with those who are there – without KI only if the map allows it
+        if (g.config.noKi && countError(limitsOf(g, g.config.mapKey, g.config.customMap), claimedCount(g))) {
+            g.status = 'cancelled';
+            g.cancelReason = 'Es sind nicht genug Mitspieler beigetreten.';
+        } else {
+            g.config.humanCount = Math.max(1, claimedCount(g));
+            if (g.config.humanCount < 2) g.config.ranked = false;
+            if (g.config.noKi) g.config.playerCount = claimedCount(g);
+            seatPositions(g);
+        }
+    } else if (g.status === 'civdraft') {
+        // nobody picked in time: a random nation for them – they keep their seat
+        CivDraft.autoPick(g.pre.civdraft, E().CIVS || [], Math.random);
+        advanceCivDraft(g);
+    } else if (g.status === 'setup' && g.config.noKi) {
         // Without KI: play with those who are there if the map allows it, otherwise cancel
         g.config.playerCount = claimedCount(g);
         if (countError(limitsOf(g, g.config.mapKey, g.config.customMap), claimedCount(g))) {
@@ -607,6 +792,13 @@ function timeout(g) {
             g.cancelReason = 'Es sind nicht genug Mitspieler beigetreten.';
         }
         else {
+            if (awaitsDeal(g)) {
+                // random nations (F32): only those who are there are dealt in
+                g.seats = g.seats.filter(s => s.userId);
+                g.seats.forEach((s, i) => { s.slot = i; });
+                g.config.humanCount = claimedCount(g);
+                dealRandom(g);
+            }
             fillBots(g);
             if (g.config.humanCount < 2) g.config.ranked = false;
             startPrephase(g);
@@ -615,6 +807,7 @@ function timeout(g) {
         // Nobody else joined in time: play with those who are there, the KI fills up
         g.config.humanCount = Math.max(1, claimedCount(g));
         if (g.config.humanCount < 2) g.config.ranked = false;
+        if (awaitsDeal(g)) dealRandom(g);       // F32: the free human seats are dealt to the KI
         fillBots(g);
         startPrephase(g);
     } else if (g.status === 'placement') {
@@ -694,7 +887,7 @@ const IN_PREPHASE = 'Ein Rundenspiel ist gerade in der Startphase (Plättchen le
  */
 function removeUser(g, userId) {
     const seats = g.seats.filter(s => s.userId === userId);
-    if (seats.length && (g.status === 'placement' || g.status === 'draft')) {
+    if (seats.length && (g.status === 'placement' || g.status === 'draft' || g.status === 'civdraft')) {
         return IN_PREPHASE;
     }
     g.invites = g.invites.filter(i => i.userId !== userId);
@@ -810,9 +1003,11 @@ function view(g, userId) {
             placed: !!(ps && ps.cell != null),
             players: g.seats.map(s => ({ civ: s.civ, kind: s.kind, ability: s.ability, name: s.name, roman: s.roman, color: s.color })),
             wonders: g.config.wonders, events: g.config.events, startPlayer: g.config.startPlayer,
+            seatOrder: positional(g),           // F34: the world view shows the turn order by position
         };
     }
     if (g.status === 'draft') out.draft = deepCopy(g.pre.draft);
+    if (g.status === 'civdraft') out.civdraft = CivDraft.payload(g.pre.civdraft);
     // the end screen's statistics (utils/stats.js), without their bookkeeping
     if (g.status === 'finished' && g.stats) {
         const { owners, wonders, ...stats } = g.stats;
@@ -840,6 +1035,6 @@ function view(g, userId) {
 
 module.exports = {
     create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, resign, DELETED_NAME, IN_PREPHASE,
-    waitingOn, summary, view, freeSeats, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
+    civDraftPick, waitingOn, summary, view, freeSeats, playerBotRoom, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
     MMR_PENALTY, TURN_DAYS,
 };

@@ -41,7 +41,7 @@ function duration(ms) {
     const hours = Math.max(1, Math.round(ms / 3600000));
     return hours === 1 ? '1 Stunde' : `${hours} Stunden`;
 }
-const ACTIVE = ['setup', 'placement', 'draft', 'playing'];
+const ACTIVE = ['setup', 'civdraft', 'placement', 'draft', 'playing'];
 const MAX_ACTIVE_PER_USER = 30;
 const MAX_PENDING_INVITES = 6;
 
@@ -92,7 +92,7 @@ function waitKey(g) {
     const w = L.waitingOn(g);
     const S = g.state;
     return JSON.stringify([g.status, w.userIds, w.label, S && S.cur, S && S.round, g.hold,
-        g.pre && g.pre.draft && g.pre.draft.D.at]);
+        g.pre && g.pre.draft && g.pre.draft.D.at, g.pre && g.pre.civdraft && g.pre.civdraft.at]);
 }
 
 async function getEntry(id) {
@@ -205,6 +205,7 @@ async function settle(g, before) {
         const absent = fresh.filter(u => !viewing.has(u));
         const text = g.status === 'placement' ? 'Lege dein Startplättchen in deinem Rundenspiel.'
             : g.status === 'draft' ? 'Du bist im Draft deines Rundenspiels dran.'
+            : g.status === 'civdraft' ? 'Du wählst jetzt deine Nation in deinem Rundenspiel.'
                 : `Du bist in deinem Rundenspiel am Zug (Runde ${g.state ? g.state.round : 1}).`;
         // each with what happened since their last turn (utils/summary.js)
         for (const u of absent) notify([u], { type: 'turn', gameId: g.id, subject: 'Du bist am Zug', text, ...L.summaryText(g, u) });
@@ -479,6 +480,10 @@ async function invite(user, id, username) {
         if (!g.seats.some(s => s.userId === user.id)) return { error: 'Nur Mitspieler können einladen.' };
         if (!L.freeSeats(g).length) return { error: 'Es ist kein Platz mehr frei.' };
         if (g.seats.some(s => s.userId === target.id)) return { error: `${target.username} spielt schon mit.` };
+        if (target.accountType === 'bot') {
+            const why = L.playerBotRoom(g);
+            if (why) return { error: why };
+        }
         // Every invitation sends an e-mail – keep the number per game small
         if (g.invites.filter(i => i.status === 'pending').length >= MAX_PENDING_INVITES) {
             return { error: 'Zu viele offene Einladungen für dieses Spiel.' };
@@ -642,6 +647,14 @@ function draftPick(user, id, abilityId) {
     });
 }
 
+/** Nation draft (F34): a human picks a nation (and its ability). */
+function civDraftPick(user, id, pickId, ability) {
+    return withGame(id, g => {
+        const err = L.civDraftPick(g, user.id, pickId, ability);
+        return err ? { error: err } : { ok: true };
+    });
+}
+
 /** Resign (F16): the KI plays the seat to the end; ranked games cost the takeover penalty. */
 async function resign(user, id) {
     let penalized = null;
@@ -748,7 +761,7 @@ async function removeUser(userId) {
         where: { [Op.or]: [{ participantIds: { [Op.contains]: [userId] } }, sequelize.literal(invited)] },
         attributes: ['id', 'status', 'participantIds'],
     });
-    if (rows.some(r => ['placement', 'draft'].includes(r.status) && r.participantIds.includes(userId))) {
+    if (rows.some(r => ['civdraft', 'placement', 'draft'].includes(r.status) && r.participantIds.includes(userId))) {
         return { error: L.IN_PREPHASE };
     }
     for (const row of rows) {
@@ -772,7 +785,7 @@ function evict(id) {
 }
 
 module.exports = {
-    init, evict, create, fromLive, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, chat, report, resign,
+    init, evict, create, fromLive, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, civDraftPick, chat, report, resign,
     setNotifyEmail, sweep, room, removeUser, purgeEndedChats,
     processResult,      // for tests/score
 };

@@ -112,7 +112,8 @@ Every event you send gets an answer through the acknowledgement callback (`sio.c
    [{ "id": "…", "joinCode": "K7Q2", "password": "…", "status": "lobby", "hostName": "Anna",
       "playersCount": 1, "maxPlayers": 3, "mapKey": "random", "round": null, "spectators": 0,
       "playerBots": true, "playerBotsFree": null, "customMapName": null, "empires": 4, "kiCount": 1,
-      "difficulty": "mittel", "randomCivs": false, "events": false, "eventMode": "hard", "wonders": false,
+      "difficulty": "mittel", "randomCivs": false, "civMode": "fixed", "turnOrder": "classic",
+      "events": false, "eventMode": "hard", "wonders": false,
       "ranked": false, "turnTime": 0 }]
    ```
 
@@ -154,7 +155,7 @@ As host, your bot starts the game with `game:start` (free seats are filled with 
 Rundenspiele need no socket while you wait, only REST:
 
 * `GET /api/async` → `{ mine, open, invites }`. `mine` are your games; each has `yourTurn`, `status`, `round` and `config`. `open` are public games with free seats (`freeSeats`) whose host allows player-bots when `config.playerBots` is `true`. Games started on an older version of the rules carry it in `engine` (for example `"v98"`, see [Know the rules](#6-know-the-rules)).
-* `POST /api/async/:id/join { civ, ability }` takes a seat.
+* `POST /api/async/:id/join { civ, ability, pos }` takes a seat. `pos` is the turn position (0 = first) when `config.turnOrder` is `"pick"`; `freeSeats` lists the free ones as `slot`.
 * `POST /api/async { config, civ, ability }` creates a Rundenspiel. A Rundenspiel your bot hosts always lets player-bots in. Example `config`: `{ "mapKey": "plaettchen", "playerCount": 3, "kiCount": 0, "difficulty": "schwer", "civMode": "random", "isPublic": true, "ranked": false, "events": false, "eventMode": "hard", "wonders": false, "playerBots": true }`.
 
 Then check `GET /api/async` about once a minute. For every game with `yourTurn: true`:
@@ -164,6 +165,16 @@ Then check `GET /api/async` about once a minute. For every game with `yourTurn: 
 3. After every move the server sends `async:update` with the new view.
 
 A Rundenspiel waits up to 7 days for a move ([Rundenspiele](../reference/rundenspiele.md#waiting-reminders-and-the-ki-takeover)), so checking once a minute is plenty.
+
+### Friends and invitations
+
+A person can invite your bot directly, once the bot is their friend. People ask, your bot answers; a bot never sends requests itself.
+
+* `GET /api/friends` → `{ friends, incoming, outgoing, invites, … }`. `incoming` are requests: `[{ id, username, since }]`. A request also arrives on the socket as `friends:changed { type: "request", from }`.
+* `POST /api/friends/:id/accept` accepts the request of account `:id`; `DELETE /api/friends/:id` declines it, or ends the friendship later. Your bot decides whom it accepts – for example only names its owner listed. Ignoring a request leaves it open.
+* While your bot's socket is connected, its friends see it online and can invite it from their lobby (*👥 Freunde einladen*). The server only sends the invitation when the lobby takes one more player-bot, so the host must have turned on *Spieler-Bots erlauben*.
+* An invitation arrives as `friends:invited { fromId, fromName, joinCode, password, hostName, at }` and is also listed in `invites` of `GET /api/friends` for 15 minutes while the lobby waits. To accept, join as in [Joining a public lobby](#live-lobbies) step 3 with this `joinCode` and `password` (the lobby may be private). To decline, do nothing; it runs out.
+* Rundenspiele: invitations by name (`POST /api/async/:id/invite`) are listed in `invites` of `GET /api/async`. Accept with `POST /api/async/:id/join { civ, ability }`, decline with `POST /api/async/:id/decline`. A Rundenspiel that doesn't allow player-bots can't invite a bot.
 
 ### Matchmaking
 
@@ -201,7 +212,7 @@ Note that `yourIndex` is not the lobby seat (`playerIndex`): the game sorts the 
 
 ### Moves
 
-On your turn, send `action { type, params }` (in a Rundenspiel: `async:action { id, type, params }`). The server applies it, answers `{ ok: true }`, and sends the new state to everyone. If the move isn't allowed it answers `{ error }` and nothing changes.
+On your turn, send `action { type, params }` (in a Rundenspiel: `async:action { id, type, params }`). The server applies it, answers `{ ok: true }`, and sends the new state to everyone. If the move isn't allowed it answers `{ error }` and nothing changes; in a live game the answer also carries the unchanged `state` for you, so you can decide again on it.
 
 | `type` | `params` | Move |
 |---|---|---|
@@ -234,6 +245,8 @@ Some game types need a step before the first turn:
 
 * **Tile maps** (`mapKey` `"random"` live, `"plaettchen"` in Rundenspiele): `placement:start { plan, queue, seed, cfg }` arrives. Every player places their start tile at the same time with `placement:action { o, cell }`. `o` is the orientation (0–2) and `cell` the field of the tile for the capital. In a Rundenspiel: `view.status == "placement"` and `async:place { id, o, cell }`. The engine's `placeOptions(plan, seat, o)` in `js/tiles.js` tells you which cells are allowed, and the KI's `kiPlaceSeat` in `js/ki.js` shows how to pick a good one. If you don't want to deal with this, play only the fixed maps `"0"`, `"1"` and `"gross"`.
 * **Marathon:** every player drafts abilities: `draft:update` shows the choice, `draft:pick { id }` picks (in a Rundenspiel `async:draft { id, abilityId }`). Simplest: leave marathon games.
+* **Nation draft** (`civMode` `"draft"` or `"randomDraft"`): before anything else, the players pick their nations one after another, the last to move first. `civdraft:update` shows the pool and whose pick it is (`cur`, your lobby index); `civdraft:pick { id, ability }` picks. In a Rundenspiel: `view.status == "civdraft"`, `view.civdraft` and `async:civdraft { id, pick, ability }`. A bot that doesn't pick gets a random nation when the time is up.
+* **Turn positions** (`turnOrder` `"pick"` or `"random"`): at the start the seats are put in turn order, so your lobby index may change – `session:index` tells you the new one.
 
 ### The turn timer
 
@@ -374,6 +387,7 @@ The server answers in German; the game page translates the same texts. The ones 
 | `Du bist nicht am Zug.` | Not your turn (often: you acted on an old state) |
 | `Spiel läuft nicht.` | The game hasn't started yet or is over |
 | `Unbekannte Aktion: …` / `Ungültiger Parameter: …` | Wrong `type`, or a parameter that isn't a plain value |
+| `Diese Technologie ist nicht erforschbar.` | `research` for a tech your sheet doesn't offer: not available, already known, or the Singularity before a modern tech in every field |
 | `Zu viele Anfragen …` (HTTP 429) | Rate limit: slow down |
 
 Any other refusal of a move comes from the engine and says what is missing, for example `Zu wenig Münzen.`

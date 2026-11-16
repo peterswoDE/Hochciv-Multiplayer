@@ -65,11 +65,12 @@ async function live(browser, errors, n) {
     await page.fill('#mp-n', 'Hex' + n);
     await page.evaluate(() => MP.host());
     await page.waitForSelector('#mp-p-civ-0');
-    if (n === 2) ok(await page.$('#mp-set-hex') === null, 'no option on a fixed map');
+    // the experimental tile mode is its own entry in the map picker
     await page.selectOption('#mp-set-map', 'random');
-    await page.waitForSelector('#mp-set-hex');
-    await page.check('#mp-set-hex');
-    await page.waitForFunction(() => MP.gameConfig.hexTiles === true);
+    await page.waitForFunction(() => MP.gameConfig.mapKey === 'random' && !MP.gameConfig.hexTiles);
+    await page.selectOption('#mp-set-map', 'random-hex');
+    await page.waitForFunction(() => MP.gameConfig.mapKey === 'random' && MP.gameConfig.hexTiles === true);
+    if (n === 2) ok(await page.$eval('#mp-set-map', el => el.value) === 'random-hex', 'the picker shows the experimental entry');
     await page.evaluate(n => MP.socket.emit('lobby:config', { playerCount: n, kiCount: n - 1, difficulty: 'leicht' }), n);
     await page.waitForFunction(n => MP.gameConfig.playerCount === n, n);
     await page.evaluate(() => MP.startGame());
@@ -101,9 +102,10 @@ async function rundenspiel(browser, errors, user, second, ids) {
     // the form: the option comes with the tile map
     await page.evaluate(() => ASYNC.newGame());
     await page.waitForSelector('#mpa-map');
-    ok(await page.$('#mpa-hex') === null, 'form: no option on a fixed map');
-    await page.selectOption('#mpa-map', 'plaettchen');
-    await page.waitForSelector('#mpa-hex');
+    ok((await page.$$eval('#mpa-map option', o => o.map(x => x.value).join())).includes('plaettchen,plaettchen-hex'), 'form: tile map and experimental tile mode are two entries');
+    await page.selectOption('#mpa-map', 'plaettchen-hex');
+    const fr = await page.evaluate(() => { ASYNC.readForm(false); return { m: ASYNC.form.mapKey, h: ASYNC.form.hexTiles }; });
+    ok(fr.m === 'plaettchen' && fr.h === true, 'form: the experimental entry is the tile map with hexTiles', JSON.stringify(fr));
     await page.evaluate(() => closeModal());
 
     const r = await rest({ config: { mapKey: 'plaettchen', hexTiles: true, civMode: 'random', playerCount: 4, kiCount: 2, difficulty: 'leicht', isPublic: true } });

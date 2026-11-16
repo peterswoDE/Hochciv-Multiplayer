@@ -1,6 +1,7 @@
 /**
  * Friends list over Socket.IO (F8): logged-in sockets count as online (utils/presence.js), and a
  * player in a live lobby invites an online friend ('friends:invite' { userId, joinCode }).
+ * Bot accounts count too, so a bot friend shows online and gets 'friends:invited'.
  */
 const presence = require('../utils/presence');
 const friends = require('../utils/friends');
@@ -9,7 +10,7 @@ module.exports = function registerFriendHandlers(io) {
     friends.init(io);
     io.on('connection', socket => {
         const user = socket.request.user || null;
-        if (user && user.accountType !== 'bot') {
+        if (user) {
             presence.add(user.id, socket.id);
             socket.on('disconnect', () => presence.remove(user.id, socket.id));
         }

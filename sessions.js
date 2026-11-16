@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const config = require('./config');
+const CivDraft = require('./utils/civdraft');
 
 // ─── In-memory session store ─────────────────────────────────────────────────
 
@@ -238,7 +239,7 @@ function cleanup() {
 
         // 3. Inactivity termination: a running game may sit still longer (no turn timer, a
         // player thinking) than a lobby or a finished game
-        const running = ['placement', 'draft', 'playing'].includes(s.status);
+        const running = ['civdraft', 'placement', 'draft', 'playing'].includes(s.status);
         const idleLimit = running ? config.SESSION_TIMEOUT_MS : config.LOBBY_TIMEOUT_MS;
         if (s.lastActivity && now - s.lastActivity > idleLimit) {
             shouldTerminate = true;
@@ -298,6 +299,8 @@ function updatePlayer(sessionId, playerIndex, updates) {
     } else if (ability) {
         player.ability = ability;
     }
+    // Turn position (F34, turn order 'pick'): 0-based, null = none; the socket checks it is free
+    if (updates && updates.pos !== undefined) player.pos = Number.isInteger(updates.pos) && updates.pos >= 0 && updates.pos < 8 ? updates.pos : null;
     return true;
 }
 
@@ -389,6 +392,8 @@ function sessionSummary(s) {
         kiCount: Math.max(0, Math.min(empires - 1, Number.isInteger(cfg.kiCount) ? cfg.kiCount : 0)),
         difficulty: cfg.difficulty || null,
         randomCivs: !!cfg.randomCivs,
+        civMode: CivDraft.modesOf(cfg).civMode,
+        turnOrder: CivDraft.modesOf(cfg).turnOrder,
         events: !!cfg.events,
         eventMode: cfg.eventMode === 'easy' ? 'easy' : 'hard',
         wonders: !!cfg.wonders,

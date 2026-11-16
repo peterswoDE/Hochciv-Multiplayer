@@ -138,7 +138,7 @@ async function run(browser, [host, viewer], rsIds) {
     };
     const cases = [
         ['kind', 'live', 'a,b,c'], ['kind', 'async', 'rs'],
-        ['map', '0', 'a,b,rs'], ['map', 'plaettchen', 'c'],
+        ['map', 'plaettchen', 'c'],     // the classic map ('0') is no longer in the selection (built-in map URKART)
         ['empires', '3', 'a,rs'], ['empires', '2', 'b'],
         ['ki', 'none', 'b'], ['ki', 'some', 'a,c,rs'],
         ['level', 'schwer', 'a'], ['level', 'leicht', 'c'], ['level', 'mittel', 'rs'],

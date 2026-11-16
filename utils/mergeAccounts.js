@@ -11,7 +11,7 @@ const { destroyOtherSessions } = require('./auth');
 const mapService = require('../maps/service');
 const friends = require('./friends');
 
-const ACTIVE_ASYNC = ['setup', 'placement', 'draft', 'playing'];
+const ACTIVE_ASYNC = ['setup', 'civdraft', 'placement', 'draft', 'playing'];
 
 /** Only untouched Activity accounts are merged – once someone made it a real account, it stays. */
 async function isMergeable(user) {

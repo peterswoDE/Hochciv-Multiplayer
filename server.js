@@ -173,6 +173,10 @@ const sessionMiddleware = session({
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
+    // Every answer renews the cookie (and the store's expiry): the 30 days count from the last
+    // visit, not from the login. Without it, players – the app most of all – were logged out
+    // 30 days after logging in, however often they played.
+    rolling: true,
     cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         secure: process.env.NODE_ENV === 'production',

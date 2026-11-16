@@ -1,7 +1,9 @@
 /**
  * Weekly challenge (F21). Every ISO week (Monday 00:00 UTC) has one setup for everybody – map,
  * nation, ability, KI level, events, wonders – derived from the week's id, so it needs no
- * storage and no admin. The week's seed is also the game's fixed dice (config.fixedDice): which
+ * storage and no admin. The map is a tile map generated from the week's seed: a new one every
+ * week, the same in every attempt (weeks before TILE_MAP_FROM were played on the original map
+ * and keep it, so their leaderboards stay comparable). The week's seed is also the game's fixed dice (config.fixedDice): which
  * techs become available and the event of every round are the same in every attempt, however it
  * is played – only battles and the like still depend on the play. An attempt is a Rundenspiel alone against three KI (async/service.js,
  * `config.challenge` = the week), played on the server like every other.
@@ -21,6 +23,8 @@ const { ChallengeResult, Game } = require('../models');
 const engine = require('../engine-adapter');
 
 const DAY = 86400000;
+/** The first week on the week's own tile map; the weeks before keep the original map ('0'). */
+const TILE_MAP_FROM = '2026-W48';
 const BOARD_SIZE = 20;
 
 /** The ISO week of a date: { id: '2026-W45', startsAt (Monday 00:00 UTC), endsAt }. */
@@ -74,7 +78,7 @@ function setupOf(weekId) {
     const levels = (engine.engineConst('KI_LEVELS') || [{ k: 'mittel' }, { k: 'schwer' }]).map(l => l.k);
     return {
         week: weekId,
-        mapKey: '0',
+        mapKey: weekId < TILE_MAP_FROM ? '0' : 'plaettchen',
         civ: civ.k,
         ability: abilities[h[2] % abilities.length].k,
         playerCount: 4,
@@ -254,4 +258,4 @@ async function migrate() {
     await ChallengeResult.sequelize.query('DROP INDEX IF EXISTS "challenge_results_week_user_key"');
 }
 
-module.exports = { weekOf, boundsOf, setupOf, info, start, compare, recordResult, removeUser, mergeUser, migrate, WEEK_RE };
+module.exports = { TILE_MAP_FROM, weekOf, boundsOf, setupOf, info, start, compare, recordResult, removeUser, mergeUser, migrate, WEEK_RE };

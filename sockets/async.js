@@ -48,6 +48,7 @@ module.exports = function registerAsyncHandlers(io) {
         on('async:action', data => service.action(user(), data.id, data.type, data.params));
         on('async:place', data => service.place(user(), data.id, data.o, data.cell));
         on('async:draft', data => service.draftPick(user(), data.id, data.abilityId));
+        on('async:civdraft', data => service.civDraftPick(user(), data.id, data.pick, data.ability));
         on('async:chat', data => service.chat(user(), data.id, data));
         on('async:resign', data => service.resign(user(), data.id));
         on('async:report', data => service.report(user(), data.id, data.msgId, data.reason));

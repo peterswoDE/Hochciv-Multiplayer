@@ -12,7 +12,10 @@
  * a bot over and deleting the owner (the bots go along). Live lobby: player-bots only when the
  * host allows them, up to the limit, first come first served next to humans, a seat bound to its
  * bot; a bot as host always allows them. Rundenspiel: the same rules. Matchmaking: who may be
- * grouped with whom. Test accounts and games are removed afterwards.
+ * grouped with whom. A bot as friend: a person asks, the bot accepts and sends no requests
+ * itself; it is invited into a live lobby and a Rundenspiel only when they take one more
+ * player-bot, sees the invitation, and joins or declines. Test accounts and games are removed
+ * afterwards.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -207,6 +210,35 @@ function matchRule() {
         r = await join(bp[3], botLobby.joinCode, botLobby.password, 'b4');
         ok(/kein Platz mehr/.test(r.error || ''), 'bot as host: its limit of 1 counts the guest bot, not itself', r.error);
 
+        // ── A bot as friend, invited into a live lobby ──────────────────────────
+        // bots[3] is in no game; its page keeps a socket open, so it is online
+        const fb = bots[3], fbPage = bp[3], fbCtx = fbPage.context();
+        const ask = await call(C2, 'POST', '/api/friends', { username: fb.username });
+        ok(ask.body.ok && ask.body.status === 'pending', 'friends: a person asks a bot', JSON.stringify(ask.body));
+        r = (await call(fbCtx, 'POST', '/api/friends', { username: plain.name })).body;
+        ok(r.error === 'Bots schicken keine Freundschaftsanfragen.', 'friends: a bot sends no requests', r.error);
+        ok((await call(fbCtx, 'GET', '/api/friends')).body.incoming.some(x => x.id === creator.id), 'friends: the bot lists the request');
+        ok((await call(fbCtx, 'POST', `/api/friends/${creator.id}/accept`)).body.ok === true, 'friends: the bot accepts');
+        const asFriend = (await call(C2, 'GET', '/api/friends')).body.friends.find(f => f.id === fb.id);
+        ok(asFriend && asFriend.bot === true && asFriend.online === true, 'friends: the bot is a friend, marked as bot, online', JSON.stringify(asFriend));
+        // `lobby`: host, bots[0], a human; player-bots were turned off above
+        await fbPage.evaluate(() => { window.__invited = []; MP.socket.on('friends:invited', i => window.__invited.push(i)); });
+        r = await emit(hostPage, 'friends:invite', { userId: fb.id, joinCode: lobby.joinCode });
+        ok(/keine Spieler-Bots/.test(r.error || ''), 'invite: refused while the lobby allows no player-bots', r.error);
+        await emit(hostPage, 'lobby:config', { playerBots: true, playerBotLimit: 1 });
+        r = await emit(hostPage, 'friends:invite', { userId: fb.id, joinCode: lobby.joinCode });
+        ok(/kein Platz mehr für Spieler-Bots/.test(r.error || ''), 'invite: refused when the bot limit is full', r.error);
+        await emit(hostPage, 'lobby:config', { playerBotLimit: 2 });
+        r = await emit(hostPage, 'friends:invite', { userId: fb.id, joinCode: lobby.joinCode });
+        ok(r.ok === true, 'invite: sent when the lobby takes one more player-bot', r.error);
+        const pushed = await fbPage.waitForFunction(() => window.__invited.length && window.__invited[0], null, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+        ok(pushed && pushed.joinCode === lobby.joinCode && pushed.password === lobby.password, 'invite: the bot gets friends:invited with code and password');
+        const listed = (await call(fbCtx, 'GET', '/api/friends')).body.invites;
+        ok(listed.some(i => i.joinCode === lobby.joinCode && i.fromId === creator.id), "invite: listed in the bot's GET /api/friends");
+        await emit(hostPage, 'session:kick', { playerIndex: 2 });        // the human makes room
+        r = await join(fbPage, pushed.joinCode, pushed.password, 'fb');
+        ok(Number.isInteger(r.playerIndex), "invite: the bot joins with the invitation's code and password", r.error);
+
         // ── Rundenspiel ─────────────────────────────────────────────────────────
         const asyncCreate = async (ctx, config) => {
             const res = await call(ctx, 'POST', '/api/async', { config: { mapKey: '0', playerCount: 4, kiCount: 0, ...config } });
@@ -228,6 +260,19 @@ function matchRule() {
         const botHosted = await asyncCreate(ctxB[1], {});
         r = await call(ctxB[2], 'POST', `/api/async/${botHosted.id}/join`, { code: botHosted.joinCode });
         ok(r.body.ok === true, 'Rundenspiel: a bot as host always allows player-bots', r.body.error);
+        // invitations of a bot by name
+        r = await call(C2, 'POST', `/api/async/${off.id}/invite`, { username: fb.username });
+        ok(/keine Spieler-Bots/.test(r.body.error || ''), 'Rundenspiel invite: refused without player-bots', r.body.error);
+        r = await call(C2, 'POST', `/api/async/${on.id}/invite`, { username: fb.username });
+        ok(/kein Platz mehr für Spieler-Bots/.test(r.body.error || ''), 'Rundenspiel invite: refused when the bot limit is full', r.body.error);
+        const on2 = await asyncCreate(C2, { playerBots: true });
+        r = await call(C2, 'POST', `/api/async/${on2.id}/invite`, { username: fb.username });
+        ok(r.body.ok === true, 'Rundenspiel invite: sent when player-bots are allowed', r.body.error);
+        ok((await call(fbCtx, 'GET', '/api/async')).body.invites.some(g => g.id === on2.id), 'Rundenspiel invite: listed for the bot');
+        ok((await call(fbCtx, 'POST', `/api/async/${on2.id}/decline`)).body.ok === true, 'Rundenspiel invite: the bot can decline');
+        await call(C2, 'POST', `/api/async/${on2.id}/invite`, { username: fb.username });
+        r = await call(fbCtx, 'POST', `/api/async/${on2.id}/join`, {});
+        ok(r.body.ok === true, 'Rundenspiel invite: the bot joins', r.body.error);
 
         // ── Account page: the tab "Meine Bots" ──────────────────────────────────
         const acc = await C2.newPage();
@@ -256,6 +301,8 @@ function matchRule() {
     } finally {
         await browser.close();
         if (asyncIds.length) sql(`DELETE FROM async_games WHERE id IN (${asyncIds.map(id => `'${id}'`).join(',')})`);
+        const tagged = `SELECT id FROM users WHERE username LIKE '${TAG}\\_%'`;
+        sql(`DELETE FROM friendships WHERE "userId" IN (${tagged}) OR "friendId" IN (${tagged})`);
         sql(`DELETE FROM users WHERE username LIKE '${TAG}\\_%'`);
     }
     console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');

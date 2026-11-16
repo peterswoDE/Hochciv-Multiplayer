@@ -8,27 +8,79 @@
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="stylesheet" href="style.css">
     <style>
-        body.modal-mode .portal-header {
+        /* Inside the game's "Anmelden" dialog (MP.showAuthModal, an iframe): the dialog is the
+           frame – no header, card, shadow or footer of its own, the game's paper behind it. */
+        body.modal-mode {
+            background: var(--paper);
+            min-height: 0;
+        }
+
+        body.modal-mode .portal-container {
+            padding: 16px 18px 24px;
+            justify-content: flex-start;
+            width: 100%;
+            max-width: 480px;
+        }
+
+        body.modal-mode .portal-header,
+        body.modal-mode .portal-footer {
             display: none !important;
         }
 
-        body.modal-mode .portal-bg {
-            background: transparent !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            margin: 0 !important;
-        }
-
-        body.modal-mode .auth-box,
+        body.modal-mode .auth-card,
+        body.modal-mode .landing-card,
         body.modal-mode .dashboard-card {
-            margin-top: 0;
+            margin: 0 auto;
+            padding: 0;
+            border: none;
             box-shadow: none;
-            border: 1px solid #ddd;
+            background: transparent;
+            max-width: none;
         }
 
-        body.modal-mode {
-            background: transparent;
-            padding: 15px;
+        /* the second way to log in, under the form */
+        .alt-login {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--rule);
+            text-align: center;
+        }
+
+        .alt-login p {
+            font-size: 13px;
+            color: var(--ink-soft);
+            margin-bottom: 10px;
+        }
+
+        .mfa-step {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--rule);
+        }
+
+        /* h2 under the page's h1, sized like the h3 they were */
+        .mfa-title,
+        .form-title {
+            font-size: 1.17em;
+        }
+
+        .form-title {
+            margin-bottom: 15px;
+            text-align: center;
+            font-family: var(--serif);
+        }
+
+        .mfa-title {
+            margin-top: 0;
+            font-family: var(--serif);
+            color: var(--red);
+        }
+
+        .code-input {
+            text-align: center;
+            font-size: 20px !important;
+            letter-spacing: 5px;
         }
     </style>
     <script>
@@ -91,48 +143,43 @@
                             <div id="login-error" class="error-msg"></div>
                             <button type="submit" class="btn btn-primary">Einloggen</button>
 
-                            <div
-                                style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center;">
-                                <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Oder passwortlos anmelden
-                                </p>
-                                <button type="button" class="btn btn-ghost" id="btn-login-passkey-direct"
-                                    style="width: 100%;">Mit Passkey anmelden</button>
+                            <div class="alt-login">
+                                <p>Oder passwortlos anmelden</p>
+                                <button type="button" class="btn btn-ghost" id="btn-login-passkey-direct">Mit Passkey anmelden</button>
                             </div>
                         </form>
 
                         <!-- MFA Form (Hidden by default) -->
                         <form id="form-mfa" class="auth-form" style="display:none;">
-                            <h3 style="margin-top:0; font-family: Georgia, serif; color: var(--red);">
-                                Zwei-Faktor-Authentifizierung</h3>
-                            <p style="font-size:14px; margin-bottom:15px; color:#555;">Bitte bestätige deine Identität.
+                            <h2 class="mfa-title">
+                                Zwei-Faktor-Authentifizierung</h2>
+                            <p class="form-desc">Bitte bestätige deine Identität.
                             </p>
 
                             <div id="mfa-totp-section" style="display:none;">
                                 <div class="form-group">
                                     <label for="mfa-totp-code">6-stelliger Authenticator-Code</label>
                                     <input type="text" id="mfa-totp-code" maxlength="6"
-                                        style="text-align:center; font-size:20px; letter-spacing:5px;"
+                                        class="code-input"
                                         placeholder="123456">
                                 </div>
                                 <button type="submit" class="btn btn-primary" id="btn-submit-mfa-totp">Code
                                     bestätigen</button>
                             </div>
 
-                            <div id="mfa-passkey-section"
-                                style="display:none; margin-top:15px; padding-top:15px; border-top: 1px solid #ddd;">
+                            <div id="mfa-passkey-section" class="mfa-step">
                                 <button type="button" class="btn btn-ghost" id="btn-submit-mfa-passkey"
                                     style="width:100%;">Mit Passkey anmelden</button>
                             </div>
 
-                            <div id="mfa-email-section"
-                                style="display:none; margin-top:15px; padding-top:15px; border-top: 1px solid #ddd;">
+                            <div id="mfa-email-section" class="mfa-step">
                                 <button type="button" class="btn btn-ghost" id="btn-request-email-otp"
                                     style="width:100%; margin-bottom: 15px;">Code per E-Mail anfordern</button>
                                 <div id="mfa-email-input-container" style="display:none;">
                                     <div class="form-group">
                                         <label for="mfa-email-code">6-stelliger E-Mail-Code</label>
                                         <input type="text" id="mfa-email-code" maxlength="6"
-                                            style="text-align:center; font-size:20px; letter-spacing:5px;"
+                                            class="code-input"
                                             placeholder="123456">
                                     </div>
                                     <button type="button" class="btn btn-primary" id="btn-submit-mfa-email">E-Mail Code
@@ -180,8 +227,8 @@
 
                         <!-- Reset Request Form -->
                         <form id="form-reset-request" class="auth-form">
-                            <h3 style="margin-bottom:15px; text-align:center; font-family:Georgia,serif;">Passwort
-                                zurücksetzen</h3>
+                            <h2 class="form-title">Passwort
+                                zurücksetzen</h2>
                             <p class="form-desc">Bitte gib deine registrierte E-Mail-Adresse ein.</p>
                             <div class="form-group">
                                 <label for="reset-email">E-Mail</label>
@@ -195,8 +242,8 @@
 
                         <!-- Reset Confirm Form -->
                         <form id="form-reset-confirm" class="auth-form">
-                            <h3 style="margin-bottom:15px; text-align:center; font-family:Georgia,serif;">Passwort neu
-                                setzen</h3>
+                            <h2 class="form-title">Passwort neu
+                                setzen</h2>
                             <p class="form-desc">Gib den Code aus deiner E-Mail und ein neues Passwort ein.</p>
                             <div class="form-group">
                                 <label for="reset-conf-email">E-Mail</label>

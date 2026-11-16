@@ -100,7 +100,7 @@ async function cleanup() {
     try {
         const old = await Replay.destroy({ where: { createdAt: { [Op.lt]: new Date(Date.now() - KEEP_DAYS * 86400000) } } });
         const [, orphans] = await sequelize.query(`DELETE FROM replay_frames WHERE "gameKey" NOT IN
-            (SELECT id FROM async_games WHERE status IN ('setup', 'placement', 'draft', 'playing'))`);
+            (SELECT id FROM async_games WHERE status IN ('setup', 'civdraft', 'placement', 'draft', 'playing'))`);
         if (old || (orphans && orphans.rowCount)) console.log(`[Replay] Cleanup: ${old} old replays, ${orphans ? orphans.rowCount : 0} orphaned frames removed.`);
     } catch (err) {
         console.error('[Replay] Cleanup failed:', err);

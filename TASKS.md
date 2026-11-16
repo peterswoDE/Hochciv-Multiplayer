@@ -36,6 +36,12 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ✅ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ✅ |
 | 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ✅ server · app: PR open |
+| 29 | F29 | [Server checks research](#f29-server-checks-research) | ✔ | ✔ | ✅ |
+| 30 | F30 | [Show refused moves](#f30-show-refused-moves) | ✔ | ✔ | ✅ |
+| 31 | F31 | [Bots as friends and invites](#f31-bots-as-friends-and-invites) | ✔ | ✔ | ✅ (PR #148, Nic) |
+| 32 | F32 | [Random nations: no dodging, no rerolling](#f32-random-nations-no-dodging-no-rerolling) | – | ✔ | ✅ |
+| 33 | F33 | [Mirror match (both sides)](#f33-mirror-match-both-sides) | ? | ✔ | ⬜ idea |
+| 34 | F34 | [Nation draft and turn-order choice](#f34-nation-draft-and-turn-order-choice) | ✔ | ✔ | ✅ done |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -499,7 +505,7 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Goal:** A shared goal for everyone each week, also for players who have no opponent at hand.
 
 **Decisions**
-- A week is an ISO week (Monday 00:00 UTC). Its setup comes from a hash of the week's id, the same for everybody and without storage: original or large map, nation and ability, four empires (three KI with the base ability at one of the two hardest levels), events (on/off, easy/hard), wonders, and a fixed seed.
+- A week is an ISO week (Monday 00:00 UTC). Its setup comes from a hash of the week's id, the same for everybody and without storage: a random map every week (2026-11-16: until then it was always the original map; from 2026-W48 the week's tile map from its seed – the same map, KI nations and KI start tiles in every attempt; earlier weeks keep the original map, `utils/challenge.js` TILE_MAP_FROM; `tests/challenge/challenge-map.test.js`), nation and ability, four empires (three KI with the base ability at one of the two hardest levels), events (on/off, easy/hard), wonders, and a fixed seed.
 - Played as a Rundenspiel alone against the KI (own pace, the normal 7 days per turn), as often as a player likes, one attempt at a time: starting another (also of another week) resigns the running one, after asking. It can't be left or cancelled; resigning or a KI takeover counts as a loss. Not ranked; it counts as a game in the history.
 - Leaderboard of the week: each player's best attempt; a victory first, then fewer rounds, then more points, then who finished first. Top 20, one's own result, how many still play.
 - Past weeks (back to the oldest week anyone played; earlier weeks can't be viewed) can be picked and played again, but their leaderboard is closed: only attempts finished before the week's end count; later ones show as "best attempt, not ranked".
@@ -623,3 +629,106 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Android app** (HochCiv-Android PR #4, into `main`): the offline copy carries `client/solo.js` (`syncOfflineGame` copies it); `bridge.js` hands the offline queue to the app (`soloQueue`), `SoloQueue.kt` keeps it in `files/solo-queue.json`, the online page takes it (`soloPull` → `SOLO.importQueue`) and reports what was sent (`soloDelivered`), and the offline page drops it (`soloForget`). Tested with unit tests and in the browser (offline copy under the app's host with a fake native channel → online page → stored); not yet on a device. Reaches players with the next app release.
 
 **Status:** ✅ server and browser on `development`; the app part waits in its PR.
+
+---
+
+F29–F33 come from player feedback on Discord (Nic, 2026-11-15/16), consolidated on 2026-11-16. F29 was a security fix and went first.
+
+## F29 Server checks research
+
+**Goal:** a bot or a modified client can't research what the sheet wouldn't offer.
+
+**Found by:** Nic. The engine's `doResearch` only checks the Dark Age, the expansion and the cost, never `researchable()`. Over the network a player could take the Singularity without a modern tech in every field (and so win), research any tech that was never rolled as available, or pay twice for a known one. The free paths (`freeTech`, `freePick`, `backPick`, `copyTech`) already check their own options.
+
+**Built:** `engine-adapter.js`, action `research`: refused with "Diese Technologie ist nicht erforschbar." unless `researchable(S, pi)` offers the tech. The game in `HochCiv/` is unchanged; works for every kept engine version.
+
+**Tests:** `tests/security/research.test.js` (no docker): per engine version, Singularity without prerequisites, a tech not available, a known tech twice are refused; an offered tech still works. 8 of its checks fail without the fix.
+
+**Status:** ✅
+
+## F30 Show refused moves
+
+**Goal:** when the server refuses a move, the player (and a bot author) sees why, instead of a client that believes the move happened.
+
+**Found:** Rundenspiele already showed the error and reloaded (`mp.js` sendAction). Bots already got `{ error }` in both modes. Live games did not: the page plays each move on its own copy first and sent it without a callback, so a refused move showed nothing and the board kept a move the server never made, until the next update from someone else.
+
+**Built:**
+- `sockets/game.js` `action`: a refused move is answered with `{ error, state }` (the player's view, unchanged), so the client needs no extra round trip.
+- `mp.js` sendAction (live): on an error, a toast with the reason and `applyState(state)`. `endTurn` keeps its own message (the turn button).
+- `client/i18n.js`: English for "Diese Technologie ist nicht erforschbar." (F29).
+- Docs: bot guide (the `state` in a refused live answer, the new message), socket reference.
+
+**Tests:** `tests/security/refused-move.test.js` (local docker): the socket answer for a forged Singularity (error and unchanged state); in the page, a tampered copy plays a move the server refuses → the reason is shown, the board is back to the server's state. `tests/pause/pause.test.js` still passes.
+
+**Status:** ✅
+
+## F31 Bots as friends and invites
+
+**Goal:** a host can let one specific bot into a game instead of any bot; later bots can be befriended like players (F8).
+
+**Status:** ✅ Nic's PR #148 merged as it is (decided 2026-11-16): bots in friend lists, invitations follow the host's player-bot rules (also in ranked lobbies that allow player-bots). Tests: `tests/friends`, `tests/bots`.
+
+**Related, not code:** Nic offered to host a Neura* bot (and trained one of their own) so bots have opponents for MMR while the NeuraBot is down. To agree: bot names that make clear who runs them, and which version they play.
+
+## F32 Random nations: no dodging, no rerolling
+
+**Goal:** with *Zufallsnationen* nobody can choose their nation by skipping or recreating games.
+
+**Problem:** live games deal the nations at the start (`sockets/game.js`), which is fine. Rundenspiele deal every nation when the game is created (`async/logic.js`, `civMode === 'random'`), and `freeSeats()` shows the next seat's nation before anyone joins. So a joiner can skip games with a nation they don't want, and a host can create and delete games until they get the nation they want.
+
+**Decided (2026-11-16):** deal at the start – nobody, the host included, knows their nation until the last seat is filled. No limit on deleting games (nothing left to gain by it).
+
+**Built:**
+- `async/logic.js`: new random games get `config.dealAtStart`; seats are created without a nation (the humans', then the KI's). `freeSeats` offers a seat with `civ: null`; joining takes any free seat. When the last human joins, `dealRandom()` deals one hand for all seats (fixed map: different nations; tile/custom map: as evenly as possible) and the turn positions as before: host first, the others in join order, the KI last. Then the game starts (or its placement/draft). The setup timeout deals those who are there (with KI: the KI takes the free seats; without KI: the free seats leave).
+- **Changed behaviour:** a Rundenspiel with random nations no longer starts at once with the host's first turn – it waits until everybody has joined, like a game without KI.
+- Games created before (nations dealt at creation, no `dealAtStart`) keep their old rules; so do live games turned into Rundenspiele.
+- `mp.js`: the join dialog says the nations are dealt once every seat is taken; the create form's hint follows the new start. English in `client/i18n.js`.
+
+**Tests:** `tests/random/deal.test.js` (no docker): nothing dealt before, the free seat shows no nation, dealt when full (positions, KI last, host moves first), without KI, tile map (placement follows), leaving before the start, setup timeout with and without KI, an old game. `tests/placement/hex.test.js`, `tests/lobbies/lobby-filter.test.js`, `tests/spectators/spectators.test.js` still pass.
+
+**Status:** ✅
+
+## F33 Mirror match (both sides)
+
+**Idea (Nic):** a match type where each pairing is played twice with seats and nations swapped, so the first-move advantage and strong nations even out.
+
+**Thoughts:** fits Rundenspiele best (two linked games, the combined result counts); open whether and how it counts for MMR. Before building it: use the statistics (F13/F23) to measure how big the first-move and nation advantages are. Bigger feature – parked until decided.
+
+## F34 Nation draft and turn-order choice
+
+**Status: done (2026-11-16)** with the proposed defaults below. Implemented:
+- `utils/civdraft.js`: modes (`civMode` fixed / random / draft / randomDraft, `turnOrder` classic / pick / random; configs from before keep working), positions, draft pool, picks, KI and forced picks.
+- Engine adapter: `seatOrder` with a turn-order mode (also in the Marathon preview), custom maps keep spawn *n* for position *n*.
+- Live (`sockets/game.js`, `mp.js`): the two selects replace *Zufällige Nationen für alle*; a position select per player with *Positionen wählen*; at the start the seats are arranged in position order (new lobby indices via `session:index`), then the nation draft (status `civdraft`, `civdraft:update` / `civdraft:pick`, dialog in `MP.drawCivDraft`), then placement / Marathon draft / game. A pick has the turn time, without a timer 2 minutes.
+- Rundenspiele (`async/logic.js`, `async/service.js`, `sockets/async.js`): seats are positions; the host and joiners pick a free one (`pos`), or they are shuffled when everybody is there; the KI takes the free ones; nations picked on joining, dealt or drafted (status `civdraft`, `async:civdraft`, notification *Du wählst jetzt deine Nation*; the deadline picks at random and the player keeps the seat). The create form and join dialog have the new choices; the draft uses the live dialog.
+- Presets, open-games filter and list labels know the new modes; bot guide and socket reference describe the events.
+- Tests: `tests/draft/civdraft.test.js`, `tests/draft/async-draft.test.js` (unit), `tests/draft/live-draft.test.js`, `tests/draft/async-draft-browser.test.js` (browser); deadline and English tests adapted.
+
+**Goal:** more ways to hand out nations and turn positions, so neither comes down to who is host or who joined first.
+
+**Decided (2026-11-16):**
+- Live games and Rundenspiele.
+- **Nation mode** (lobby, replaces the *Zufallsnationen* checkbox): *Standard* (everybody picks), *Zufall* (dealt, F32), *Draft*, *Zufallsdraft*.
+  - **Draft:** players pick their nation one after another in **reverse turn order** – the last to move picks first, the first to move picks last. They pick the ability with it (Marathon: drafted later as now).
+  - **Zufallsdraft:** a pool of random nations, **one per empire, repeats allowed**, drafted in the same reverse order; the ability is **random**. The first to move gets what is left.
+- **Turn order** (lobby): the host can let everybody **pick their position** (1, 2, 3 …) or choose **random order** (dealt at the start, nobody picks).
+- **Classic map:** taken out of the map selection and published as the built-in custom map *Originalkarte* (code `URKART`, like the *Große Karte*). As a custom map its start points belong to no nation – any nation can start on any of them. Done on 2026-11-16.
+
+**Proposed details (defaults, open to change):**
+- Turn order modes: *Klassisch* (today: host first, then the nations' order) stays the default for *Standard* and *Zufall*; *Positionen wählen* and *Zufällige Reihenfolge* are new. A draft needs the turn order before the nations, so the drafts offer only the two new modes.
+- Positions on a custom map (also the Originalkarte): position *n* plays from the start point the map gives seat *n*.
+- *Draft* on a map with one seat per nation (classic map, 4 empires): each nation once. On the tile map or a custom map: each nation at most ⌈empires / 4⌉ times, so a draft still takes nations away from the later pickers.
+- Positions of the KI: with *Positionen wählen*, the free positions at the start; with random order, dealt like everyone's. The KI drafts on its own when its pick comes (random from what is left; ability random).
+- Rundenspiele: positions are picked on joining (free ones only); the draft is a phase like the Marathon draft – whose pick it is gets a notification, the turn deadline counts, and a timeout picks at random. Live: the turn timer counts for a pick.
+- Ranked matchmaking stays as it is (random nations, classic order).
+- Bots get the draft and position events, documented in the bot guide.
+
+**Engine (no change to `HochCiv/`):** `newGame` already supports `seatOrder: true` (turn order = seat order) and capitals by seat (`capitals: [{ r, c }, …]`, as on the tile map and custom maps). The adapter passes `seatOrder` when a turn-order mode is chosen; the seats are arranged in position order before the game starts.
+
+**Steps:**
+1. Adapter: `seatOrder`, seats in position order (live and Rundenspiele) – with tests.
+2. Live lobby: turn-order modes and position picking; nation modes in the settings, presets and the open-games filter.
+3. Live draft phase (server state, client screen, KI picks, turn timer).
+4. Rundenspiele: positions on joining, draft phase with notifications and timeout.
+5. Bot events and docs; replay/statistics check (positions instead of nations on the classic map).
+

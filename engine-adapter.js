@@ -16,6 +16,11 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const Scenes = require('./utils/scenes');
+const CivDraft = require('./utils/civdraft');
+
+/* Turn positions (F34, utils/civdraft.js): with 'pick' or 'random' the seats already sit in
+   position order � the engine keeps that order (seatOrder, v90+) instead of the nations' ORDER. */
+const bySeat = cfg => CivDraft.modesOf(cfg).turnOrder !== 'classic';
 
 // ── Build the engine sandbox ─────────────────────────────────────────────────
 
@@ -154,6 +159,7 @@ function makeAdapter(engineDir, label) {
             eventMode: cfg.eventMode || 'hard',
             wonders: !!cfg.wonders,
             startPlayer: cfg.startPlayer ?? 0,
+            ...(bySeat(cfg) ? { seatOrder: true } : {}),
             // weekly challenge: the same tech availability and events in every attempt (engine v106+)
             ...(Number.isInteger(cfg.fixedDice) ? { fixedDice: cfg.fixedDice } : {}),
             // Marathon (v83): bigger tech costs; the map and drafted abilities come from the draft
@@ -208,6 +214,12 @@ function makeAdapter(engineDir, label) {
         if (!Number.isInteger(cfg.seed)) cfg.seed = Math.floor(Math.random() * 2 ** 31);
         const map = E.mapForPlayers(r.map, n, cfg.seed);
         if (!map) throw new Error(`Die Karte hat nur ${r.map.spawns.length} Startpunkte.`);
+        // Turn positions (F34): position n starts on the map's n-th start point (of those in play),
+        // so the positions mean something on the map � mapForPlayers deals them at random.
+        if (bySeat(cfg)) {
+            const at = cap => r.map.spawns.findIndex(sp => sp[0] === cap.r && sp[1] === cap.c);
+            map.capitals.sort((a, b) => at(a) - at(b));
+        }
         return map;
     }
 
@@ -233,6 +245,7 @@ function makeAdapter(engineDir, label) {
             events: !!cfg.events, eventMode: cfg.eventMode || 'hard',
             wonders: !!cfg.wonders,
             startPlayer: cfg.startPlayer ?? 0,
+            ...(bySeat(cfg) ? { seatOrder: true } : {}),
         };
         const setup = E.rollSetup(base);
         base.avail = setup.avail; base.wpool = setup.wpool;
@@ -340,6 +353,11 @@ function makeAdapter(engineDir, label) {
             switch (action) {
                 // ── Research ──────────────────────────────────────────────
                 case 'research':
+                    // doResearch trusts the client's sheet: it checks the cost, not whether the
+                    // tech is on offer. Over the network only what researchable() offers counts
+                    // (rolled as available, not yet known, Singularity only once it is ready).
+                    if (typeof E.researchable === 'function'
+                        && !E.researchable(state, pi).some(t => t.k === params.tech)) return 'Diese Technologie ist nicht erforschbar.';
                     return E.doResearch(state, pi, params.tech);
 
                 case 'freeTech':
