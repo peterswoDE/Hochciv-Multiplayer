@@ -39,7 +39,7 @@ The log must show `[Push] FCM enabled (project …)` at start. If not, `FCM_SERV
 
 ## E-mails don't arrive
 
-Without `SMTP_HOST` (and locally, without `NODE_ENV=production`) mails are only written to the log – activation and reset codes can be read there.
+Without `SMTP_HOST` (and locally, without `NODE_ENV=production`) mails are only written to the log. Locally the activation and reset codes can be read there; in production mode (staging) they are hidden unless `MAIL_LOG_CODES=on`.
 
 ## Staging didn't update
 

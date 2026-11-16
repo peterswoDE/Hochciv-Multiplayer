@@ -356,6 +356,32 @@
         </div>
     </div>
 
+    <!-- re-confirmation for account changes (routes/admin.js requireRecentAuth) – as on the account page -->
+    <div id="reauth-modal" class="acc-modal" style="display:none; z-index: 110;">
+        <form id="reauth-form" class="acc-modal-card">
+            <button type="button" class="acc-modal-x" id="reauth-cancel" aria-label="Schließen">&times;</button>
+            <h2>Identität bestätigen</h2>
+            <p>Für diese Änderung musst du dich erneut bestätigen.</p>
+            <div id="reauth-password-group" class="form-group">
+                <label>Passwort</label>
+                <input type="password" id="reauth-password" autocomplete="current-password">
+            </div>
+            <div id="reauth-totp-group" class="form-group">
+                <label>Code aus der Authenticator App</label>
+                <input type="text" id="reauth-totp" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+            </div>
+            <div id="reauth-oauth-group">
+                <p>Melde dich dazu erneut mit Google oder Discord an und öffne danach wieder diese Seite.</p>
+                <div class="acc-btns">
+                    <button type="button" class="btn" id="reauth-google">Mit Google bestätigen</button>
+                    <button type="button" class="btn" id="reauth-discord">Mit Discord bestätigen</button>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" id="reauth-submit" style="margin-top:6px;">Bestätigen</button>
+            <p id="reauth-msg" class="acc-msg" style="color:var(--red);"></p>
+        </form>
+    </div>
+
     <script src="i18n.js"></script>
     <script src="profile.js"></script>
     <script src="gamestats.js"></script>

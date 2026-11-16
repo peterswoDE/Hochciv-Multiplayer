@@ -38,6 +38,7 @@ module.exports = {
     SESSION_TIMEOUT_MS: 2 * 60 * 60 * 1000,  // a running live game without any action for 2 hours is removed
     LOBBY_TIMEOUT_MS: 10 * 60 * 1000,        // lobbies and finished games: 10 minutes
     CLEANUP_INTERVAL_MS: 5 * 60 * 1000,       // check every 5 min
+    UNUSED_LOBBY_MS: 60 * 1000,               // a lobby nobody ever connected to is removed after a minute
     // Turn timer of live games: the host's seconds are multiplied by this (tests: e.g. 0.05)
     TURN_TIMER_SCALE: Number(process.env.TURN_TIMER_SCALE) > 0 ? Number(process.env.TURN_TIMER_SCALE) : 1,
     // … and after this many timed-out turns in a row the KI keeps the seat (tests: 2 – shorter games)

@@ -44,6 +44,7 @@ function duration(ms) {
 const ACTIVE = ['setup', 'civdraft', 'placement', 'draft', 'playing'];
 const MAX_ACTIVE_PER_USER = 30;
 const MAX_PENDING_INVITES = 6;
+const INVITE_AGAIN_MS = 24 * 60 * 60 * 1000;     // a declined invitation is sent again at most daily
 
 let io = null;
 const cache = new Map();          // id → { g, queue, touched, busy }
@@ -451,9 +452,24 @@ async function info(user, id, code) {
     return L.summary(e.g, user.id);
 }
 
+/**
+ * Ranked games are only rated between different people: a bot account counts as its owner. True if
+ * `user` (or its owner, or one of its bots) already holds a seat of `g`.
+ */
+async function samePersonSeated(g, user) {
+    const ids = g.seats.map(s => s.userId).filter(Boolean);
+    if (!ids.length) return false;
+    const rows = await User.findAll({ where: { id: ids }, attributes: ['id', 'ownerId'] });
+    const persons = new Set(rows.map(r => r.ownerId || r.id));
+    return persons.has(user.ownerId || user.id);
+}
+
 function join(user, id, body) {
-    return withGame(id, g => {
+    return withGame(id, async g => {
         if (!canSee(g, user.id, body && body.code)) return { error: 'Kein Zugriff auf dieses Spiel.' };
+        if (g.config.ranked && await samePersonSeated(g, user)) {
+            return { error: 'In gewerteten Spielen spielt niemand gegen den eigenen Bot.' };
+        }
         const err = L.join(g, userOf(user), body || {});
         return err ? { error: err } : { ok: true };
     });
@@ -488,12 +504,18 @@ async function invite(user, id, username) {
         if (g.invites.filter(i => i.status === 'pending').length >= MAX_PENDING_INVITES) {
             return { error: 'Zu viele offene Einladungen für dieses Spiel.' };
         }
+        // one e-mail / push per invitation: inviting again while it is open sends nothing, and a
+        // declined one can be renewed once a day (else anybody could flood anybody's inbox)
         const inv = g.invites.find(i => i.userId === target.id);
-        if (inv) inv.status = 'pending';
-        else g.invites.push({ userId: target.id, username: target.username, status: 'pending', by: user.username });
+        if (inv && inv.status === 'pending') return { ok: true, already: true };
+        if (inv && inv.notifiedAt && Date.now() - inv.notifiedAt < INVITE_AGAIN_MS) {
+            return { error: `${target.username} wurde gerade erst eingeladen.` };
+        }
+        if (inv) Object.assign(inv, { status: 'pending', notifiedAt: Date.now() });
+        else g.invites.push({ userId: target.id, username: target.username, status: 'pending', by: user.username, notifiedAt: Date.now() });
         return { ok: true };
     });
-    if (res && res.ok) {
+    if (res && res.ok && !res.already) {
         notify([target.id], {
             type: 'invite', gameId: id,
             subject: `${user.username} lädt dich zu einem Rundenspiel ein`,

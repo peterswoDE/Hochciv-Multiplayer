@@ -57,6 +57,8 @@ function matchRule() {
     ok(!fitsBots([human], bot) && !fitsBots([bot], human), 'match: a player who did not allow bots never meets one');
     ok(fitsBots([open], bot) && fitsBots([bot], open) && fitsBots([bot], bot), 'match: bots meet players who allow them, and each other');
     ok(!fitsBots([open, human], bot) && fitsBots([open, open], bot), 'match: one player without the opt-in keeps bots out');
+    const owner = { userId: 'o1', isBot: false, allowBots: true }, ownBot = { userId: 'b1', ownerId: 'o1', isBot: true }, ownBot2 = { userId: 'b2', ownerId: 'o1', isBot: true };
+    ok(!fitsBots([owner], ownBot) && !fitsBots([ownBot], owner) && !fitsBots([ownBot], ownBot2), 'match: a bot never meets its owner or a bot of the same owner (ranked)');
     ok(matchConfig(true).playerBots === true && matchConfig().playerBots === false, 'match: the lobby allows player-bots when a bot is in it');
 }
 

@@ -20,4 +20,17 @@ async function detachUser(io, userId) {
     }
 }
 
-module.exports = { detachUser };
+/**
+ * The password changed (or was reset): close the open sockets of `userId` except those of the
+ * session `keepSid`. A socket keeps the login it had when it connected, so deleting the other
+ * sessions in the database alone would leave their sockets logged in.
+ */
+async function disconnectSessions(io, userId, keepSid = null) {
+    if (!io) return;
+    for (const s of await io.fetchSockets()) {
+        const u = s.request && s.request.user;
+        if (u && u.id === userId && (!keepSid || s.request.sessionID !== keepSid)) s.disconnect(true);
+    }
+}
+
+module.exports = { detachUser, disconnectSessions };

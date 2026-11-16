@@ -56,7 +56,11 @@ function matchConfig(withBots = false, players = MIN_HUMANS) {
 const windowOf = (e, now) => Math.min(WINDOW_MAX, WINDOW_START + WINDOW_STEP * Math.floor((now - e.since) / WINDOW_EVERY_MS));
 
 /** May `o` join `group`? A bot only with players who allow bots, a player who doesn't only without bots. */
-const fitsBots = (group, o) => (o.isBot ? group.every(g => g.isBot || g.allowBots) : o.allowBots || !group.some(g => g.isBot));
+const fitsBots = (group, o) => (o.isBot ? group.every(g => g.isBot || g.allowBots) : o.allowBots || !group.some(g => g.isBot))
+    // never a bot together with its owner (or two bots of one owner): ranked is rated between people
+    && !group.some(g => personOf(g) && personOf(g) === personOf(o));
+/** Who stands behind a queue entry: a bot's owner, else the account itself. */
+function personOf(e) { return e.ownerId || e.userId || null; }
 
 module.exports = function registerMatchHandlers(io) {
     const emitTo = (socketId, event, data) => { if (socketId) io.to(socketId).emit(event, data); };
@@ -178,7 +182,7 @@ module.exports = function registerMatchHandlers(io) {
             const was = queue.get(u.id);
             queue.set(u.id, {
                 userId: u.id, name: u.username, mmr: u.mmr || 1000, socketId: socket.id, since: was ? was.since : Date.now(),
-                isBot: u.accountType === 'bot', allowBots: data.allowBots === true,
+                isBot: u.accountType === 'bot', allowBots: data.allowBots === true, ownerId: u.ownerId || null,
             });
             socket.data.matchUserId = u.id;
             return { ok: true, queued: queue.size };

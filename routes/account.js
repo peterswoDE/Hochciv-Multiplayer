@@ -11,8 +11,9 @@ const terms = require('../utils/terms');
 const presets = require('../utils/presets');
 const {
     EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, secondFactors, markAuthenticated, requireRecentAuth,
-    str, validPassword, issueCode, consumeCode, destroyOtherSessions,
+    str, validPassword, issueCode, mayIssueCode, consumeCode, destroyOtherSessions,
 } = require('../utils/auth');
+const { disconnectSessions } = require('../utils/detachUser');
 
 router.use(isAuthenticated, noBots);
 
@@ -101,7 +102,7 @@ async function checkCurrentPassword(user, currentPassword) {
 }
 
 // Update Password (also sets a first password for OAuth-only accounts)
-router.post('/update-password', passwordlessNeedsRecentAuth, async (req, res) => {
+router.post('/update-password', rateLimit, passwordlessNeedsRecentAuth, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         const user = await User.findByPk(req.user.id);
@@ -118,6 +119,8 @@ router.post('/update-password', passwordlessNeedsRecentAuth, async (req, res) =>
         user.password_hash = await bcrypt.hash(newPassword, 10);
         await user.save();
         await destroyOtherSessions(sequelize, user.id, req.sessionID);
+        // … and their open sockets, which keep the login they had when they connected
+        await disconnectSessions(req.app.locals.io, user.id, req.sessionID);
         res.json({ ok: true });
     } catch (err) {
         console.error(err);
@@ -145,6 +148,9 @@ router.post('/update-email', rateLimit, passwordlessNeedsRecentAuth, async (req,
             return res.status(400).json({ error: 'Diese E-Mail wird bereits verwendet.' });
         }
 
+        if (!mayIssueCode(user, 'emailChangeCode')) {
+            return res.status(429).json({ error: 'Zu viele Codes angefordert. Bitte versuche es später erneut.' });
+        }
         user.pendingEmail = email;
         const code = issueCode(user, 'emailChangeCode', 'emailChangeCodeExpiresAt', 30 * 60 * 1000); // 30 minutes
         await user.save();

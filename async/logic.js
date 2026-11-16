@@ -1017,7 +1017,7 @@ function view(g, userId) {
     // the stored match and its replay (GET /api/games/:id[/replay])
     if (g.status === 'finished' && g.result && g.result.gameId) out.record = { id: g.result.gameId, replay: !!g.result.replay };
     if (g.state) {
-        out.state = g.state;
+        out.state = ENG(g).stateForPlayer(g.state);      // without the dice state S.seed
         out.myIndex = mine ? stateIndex(g, mine.slot) : -1;
         // "since your last turn" (utils/summary.js) while it is the player's turn
         if (g.status === 'playing' && !g.hold && out.myIndex >= 0 && g.state.cur === out.myIndex) {

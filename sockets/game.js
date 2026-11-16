@@ -102,6 +102,8 @@ module.exports = function registerHandlers(io) {
                 me.dbUserId = socket.request.user.id;
                 me.dbUsername = socket.request.user.username;
                 me.mmr = socket.request.user.mmr;
+                // a bot account counts as its owner in ranked games (startGame)
+                me.dbOwnerId = socket.request.user.ownerId || null;
             }
 
             // Reclaim host if the lobby was abandoned
@@ -258,6 +260,15 @@ module.exports = function registerHandlers(io) {
             // Turn position (F34): one player per position
             if (updates && Number.isInteger(updates.pos) && session.players.some(p => p !== me && p.pos === updates.pos))
                 return ack({ error: 'Diese Position ist schon vergeben.' });
+            // Nation and ability must exist in the engine and belong together (a new nation resets
+            // the ability, so only the nation counts then)
+            if (updates && (updates.civ !== undefined || updates.ability !== undefined)) {
+                const civ = updates.civ !== undefined ? updates.civ : me.civ;
+                const ability = updates.civ !== undefined && updates.civ !== me.civ ? 'basis'
+                    : (updates.ability !== undefined ? updates.ability : me.ability);
+                const bad = engine.checkCivChoice(civ, ability);
+                if (bad) return ack({ error: bad });
+            }
 
             const updated = sessions.updatePlayer(sessionId, myIndex(), updates);
             if (updated) {
@@ -682,6 +693,18 @@ function startGame(io, session) {
     if (gc.ranked && !isPlaettchen) return 'Gewertete Spiele werden auf der Plättchenkarte gespielt.';
     if (gc.ranked && total > config.MAX_RANKED_EMPIRES)
         return `Gewertete Spiele haben höchstens ${config.MAX_RANKED_EMPIRES} Reiche.`;
+    // a KI seat counts as 1000 MMR: alone against the KI, MMR could be farmed (Rundenspiele check
+    // the same in async/logic.js; matchmaking only starts with two)
+    if (gc.ranked && session.players.filter(p => p.kind === 'human').length < 2)
+        return 'Gewertete Spiele brauchen mindestens 2 Spieler.';
+    // … and they are rated between different people: no guest seats (a second tab of the host
+    // would just resign), no account twice and no bot against its owner
+    if (gc.ranked) {
+        const seats = session.players.filter(p => p.kind === 'human');
+        if (seats.some(p => !p.dbUserId)) return 'Gewertete Spiele gibt es nur mit angemeldeten Spielern.';
+        const persons = seats.map(p => p.dbOwnerId || p.dbUserId);
+        if (new Set(persons).size !== persons.length) return 'In gewerteten Spielen spielt niemand gegen sich selbst oder den eigenen Bot.';
+    }
     gc.playerCount = total;
     gc.duel = total === 2;
 
@@ -695,6 +718,13 @@ function startGame(io, session) {
 
     // "Random nations for everyone": the host's setting overrides every player's choice
     if (gc.randomCivs || drafting) session.players.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
+
+    // Every seat's nation and ability exist and belong together: the lobby checks updates, but a
+    // seat also gets them when it is created or joins (REST), and the engine only compares keys
+    for (const p of session.players) {
+        const bad = engine.checkCivChoice(p.civ, p.ability);
+        if (bad) return `${p.name || 'Spieler'}: ${bad}`;
+    }
 
     // Check for duplicate civilizations (fixed maps: every nation once; "random" is
     // resolved below to a nation nobody else has)

@@ -33,6 +33,23 @@ function cleanKey(key, fallback) {
     return typeof key === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(key) ? key : fallback;
 }
 
+/**
+ * The settings a host may set (lobby UI, presets, bots: docs/bots/writing-a-bot.md). Everything
+ * else in gameConfig is the server's: the seed, the map and setup of the start, fixedDice and
+ * startPlayer (weekly challenge), matchmaking. Unknown keys from a client are dropped.
+ */
+const HOST_CONFIG_KEYS = new Set([
+    'mapKey', 'customMap', 'hexTiles', 'events', 'eventMode', 'wonders', 'difficulty', 'ranked',
+    'playerCount', 'kiCount', 'noKi', 'civMode', 'randomCivs', 'turnOrder', 'turnTime',
+    'playerBots', 'playerBotLimit', 'isPublic',
+]);
+function cleanHostConfig(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const k of Object.keys(raw)) if (HOST_CONFIG_KEYS.has(k)) out[k] = raw[k];
+    return out;
+}
+
 function generatePassword() {
     let pw = '';
     for (let i = 0; i < config.PASSWORD_LENGTH; i++)
@@ -82,6 +99,12 @@ function createSession(gameConfig, hostInfo) {
 
     sessions.set(sessionId, session);
     codeIndex.set(joinCode, sessionId);
+    // Nobody connected within UNUSED_LOBBY_MS: the lobby was never used – free its slot now instead
+    // of at the second cleanup (5–10 minutes), so a few addresses can't fill MAX_SESSIONS
+    setTimeout(() => {
+        const s = sessions.get(sessionId);
+        if (s && s.status === 'lobby' && !s.players.some(p => p.connected) && !(s.spectators || []).some(w => w.connected)) removeSession(sessionId);
+    }, config.UNUSED_LOBBY_MS).unref();
     return { sessionId, joinCode, password };
 }
 
@@ -106,7 +129,8 @@ function joinSession(joinCode, password, playerInfo) {
         return { sessionId, playerIndex: existingPlayer.index };
     }
 
-    if (session.status !== 'lobby') return 'Spiel hat bereits begonnen. Wenn du dich wiederverbinden willst, musst du deinen exakten, ursprünglichen Spielernamen verwenden.';
+    // a seat is found by the secret clientId (sessionStorage of the tab), never by the name
+    if (session.status !== 'lobby') return 'Das Spiel hat schon begonnen. Zurück auf deinen Platz kommst du nur im selben Browser-Tab, in dem du beigetreten bist.';
     if (session.players.length >= humanSeats(session)) return 'Sitzung ist voll.';
     if (playerInfo.botUserId) {
         const policy = playerBotPolicy(session);
@@ -258,7 +282,9 @@ _cleanupTimer.unref();   // don't prevent Node from exiting
 function kickPlayer(sessionId, playerIndex, force = false) {
     const session = sessions.get(sessionId);
     if (!session || session.status !== 'lobby') return false;
-    if (playerIndex === 0 && !force) return false;
+    if (!session.players[playerIndex]) return false;
+    // the host's own seat – after a rematch with turn positions it need not be seat 0
+    if (playerIndex === session.hostIndex && !force) return false;
 
     session.players.splice(playerIndex, 1);
     // Reindex remaining players
@@ -273,7 +299,7 @@ function updateConfig(sessionId, newConfig) {
     if (!session || session.status !== 'lobby') return false;
     if (!newConfig || typeof newConfig !== 'object' || Array.isArray(newConfig)) return false;
     if (JSON.stringify(newConfig).length > 10000) return false;
-    const { map, setup, ...allowed } = newConfig;      // both are set by the server at game start
+    const allowed = cleanHostConfig(newConfig);        // seed, map, setup … are the server's
     session.gameConfig = { ...session.gameConfig, ...allowed };
     if (typeof allowed.isPublic === 'boolean') session.isPublic = allowed.isPublic;   // the host switches it in the lobby
     return session.gameConfig;
@@ -450,6 +476,7 @@ module.exports = {
     removeSession,
     cleanup,
     kickPlayer,
+    cleanHostConfig,
     previewSession,
     activityOf,
     lobbyByCode,

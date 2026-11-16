@@ -10,8 +10,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-hochciv}
       # Only used when the database volume is created for the first time.
       # Reachable only on the internal network – still: set your own value in .env.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-hochciv}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
       # A named volume, or a folder (POSTGRES_DATA=./postgres in .env, for an existing installation)
       - ${POSTGRES_DATA:-pgdata}:/var/lib/postgresql/data
@@ -24,7 +29,16 @@ services:
     container_name: hochciv-multiplayer
     restart: unless-stopped
     depends_on:
-      - hochciv-db
+      hochciv-db:
+        condition: service_healthy
+    # The server needs no Linux capabilities and no privilege changes; limits keep a runaway
+    # process (or a flood) from taking the whole host down
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${HOCHCIV_MEM_LIMIT:-2g}
     labels:
       # Updated by the Watchtower below whenever a new image is published (a merge into main)
       - com.centurylinklabs.watchtower.enable=true
@@ -37,7 +51,7 @@ services:
       # Public URL, scheme + host only (e.g. https://hochciv.example). Used for OAuth
       # callbacks, e-mail links and passkeys. A malformed value stops the server at startup.
       - BASE_URL=${BASE_URL:-}
-      - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:-password123}@hochciv-db:5432/${POSTGRES_DB:-hochciv}
+      - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@hochciv-db:5432/${POSTGRES_DB:-hochciv}
       # E-mail (activation, password reset, 2FA codes, turn notifications)
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -45,6 +59,10 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      # STARTTLS is required on ports other than 465 (off: SMTP_REQUIRE_TLS=off)
+      - SMTP_REQUIRE_TLS=${SMTP_REQUIRE_TLS:-}
+      # Without SMTP_HOST mails go to the log with their codes hidden; on = show them (testing only)
+      - MAIL_LOG_CODES=${MAIL_LOG_CODES:-}
       # Push notifications of the Android app (Firebase service account key, base64) – optional
       - FCM_SERVICE_ACCOUNT=${FCM_SERVICE_ACCOUNT:-}
     networks:

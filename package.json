@@ -11,17 +11,17 @@
     "dependencies": {
         "@simplewebauthn/server": "^14.0.3",
         "bcryptjs": "^3.0.3",
-        "compression": "^1.8.1",
+        "compression": "^1.8.2",
         "connect-pg-simple": "^10.0.0",
         "cors": "^2.8.5",
         "express": "^4.21.0",
-        "express-rate-limit": "^8.7.0",
+        "express-rate-limit": "^8.7.4",
         "express-session": "^1.19.0",
-        "google-auth-library": "10.9.1",
+        "google-auth-library": "11.3.4",
         "naughty-words": "^1.2.0",
-        "nodemailer": "^10.1.0",
+        "nodemailer": "^10.5.0",
         "obscenity": "^0.4.6",
-        "otplib": "^13.5.0",
+        "otplib": "^13.6.0",
         "passport": "^0.7.0",
         "passport-google-oauth20": "^2.0.0",
         "passport-local": "^1.0.0",
@@ -38,6 +38,6 @@
     },
     "devDependencies": {
         "@discord/embedded-app-sdk": "^2.5.0",
-        "esbuild": "^0.25.12"
+        "esbuild": "^0.28.2"
     }
 }

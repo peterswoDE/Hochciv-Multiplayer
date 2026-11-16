@@ -37,7 +37,10 @@ function copyDir(src, dst) {
     }
 }
 
-fs.rmSync(OUT, { recursive: true, force: true });
+// Empty public/ instead of removing it: in the image only public/ belongs to the user the server
+// runs as – the rest of /app (the server's code) is read-only for it (Dockerfile)
+fs.mkdirSync(OUT, { recursive: true });
+for (const e of fs.readdirSync(OUT)) fs.rmSync(path.join(OUT, e), { recursive: true, force: true });
 for (const g of GAMES) {
     const src = path.join(ROOT, g.from);
     if (!fs.existsSync(path.join(src, 'index.html'))) {

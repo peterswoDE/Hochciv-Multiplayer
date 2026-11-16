@@ -66,7 +66,7 @@ const ok = (cond, name, info) => {
         await a.fill('#mp-n', 'InviteHost');
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-p-civ-0');
-        await a.evaluate(() => MP.socket.emit('lobby:config', { isPublic: false, playerCount: 3, kiCount: 1 }));
+        await a.evaluate(() => MP.socket.emit('lobby:config', { isPublic: false, playerCount: 3, kiCount: 1, mapKey: '0' }));
         await a.waitForFunction(() => MP.gameConfig.isPublic === false && MP.gameConfig.playerCount === 3);
         const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password }));
         ok(await a.isVisible('#mp-invite-btn'), 'lobby: "Einladungslink teilen" button');

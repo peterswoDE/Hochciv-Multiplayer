@@ -60,6 +60,7 @@ Tests create their own test accounts and delete them afterwards.
 | `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
 | `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
+| `security/regression.test.js` | findings of the security audit of 2026-11-16: passkey login, ranked seats, parallel code guesses, sockets after a password change, invitation e-mails, password-change limit (waits a minute three times for the auth limits) | `TURN_TIMER_SCALE=0.05` |
 | `spectators/spectators.test.js` | spectator mode | default |
 | `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin page | default |
 | `stats/stats.test.js` | post-game statistics | default |
@@ -75,6 +76,10 @@ docker compose -f docker-compose.local.yml up -d     # back to the defaults
 ```
 
 Some tests need the same variable on the test side too (`filter`, `timer`) – the header shows it.
+
+## On GitHub
+
+`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`) and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
 
 ## Which tests to run
 

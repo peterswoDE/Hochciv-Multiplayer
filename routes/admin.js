@@ -6,12 +6,12 @@ const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const { refreshOAuthStrategies } = require('../utils/oauth');
 const config = require('../config');
-const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions } = require('../utils/auth');
+const { validPassword, MIN_PASSWORD_LENGTH, destroyOtherSessions, requireRecentAuth } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
 const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
 const profanity = require('../utils/profanity');
-const { detachUser } = require('../utils/detachUser');
+const { detachUser, disconnectSessions } = require('../utils/detachUser');
 const engine = require('../engine-adapter');
 const { engineVersionOf } = require('../async/logic');
 const GameStats = require('../utils/gamestats');
@@ -68,6 +68,16 @@ function isSuperAdmin(req, res, next) {
 
 router.use(isAdmin);
 router.use(readOnly);
+
+// Every change an admin makes goes to the log: who, what, on whom (never passwords or secrets)
+router.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        const b = req.body || {};
+        const what = [b.action, b.role, b.status].filter(x => typeof x === 'string').join(' ');
+        console.log(`[Admin] ${req.user.username} (${req.user.role}) ${req.method} ${req.path}${what ? ' ' + what : ''}`);
+    }
+    next();
+});
 
 // --- Metrics & Config ---
 router.get('/metrics', (req, res) => {
@@ -139,7 +149,9 @@ router.get('/users/:id/mfa', async (req, res) => {
     }
 });
 
-router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
+// Taking second factors, passwords and roles away needs a recent login: a stolen admin cookie alone
+// must not be enough to take over accounts
+router.delete('/users/:id/mfa/:type/:tokenId?', requireRecentAuth, async (req, res) => {
     try {
         const targetUser = await User.findByPk(req.params.id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
@@ -170,7 +182,7 @@ router.delete('/users/:id/mfa/:type/:tokenId?', async (req, res) => {
     }
 });
 
-router.post('/users/:id/action', async (req, res) => {
+router.post('/users/:id/action', (req, res, next) => (['ban', 'unban', 'set_mmr', 'set_bot_limit'].includes(req.body && req.body.action) ? next() : requireRecentAuth(req, res, next)), async (req, res) => {
     try {
         const { id } = req.params;
         const { action, mmr, newPassword } = req.body;
@@ -230,7 +242,10 @@ router.post('/users/:id/action', async (req, res) => {
         }
 
         await targetUser.save();
-        if (logoutEverywhere) await destroyOtherSessions(sequelize, targetUser.id);
+        if (logoutEverywhere) {
+            await destroyOtherSessions(sequelize, targetUser.id);
+            await disconnectSessions(req.app.locals.io, targetUser.id);
+        }
         if (detach) await detachUser(req.app.locals.io, targetUser.id);
         if (detachBots) await detachBotsOf(req.app.locals.io, targetUser.id);
         res.json({ ok: true });
@@ -239,7 +254,7 @@ router.post('/users/:id/action', async (req, res) => {
     }
 });
 
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', requireRecentAuth, async (req, res) => {
     try {
         const targetUser = await User.findByPk(req.params.id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
@@ -502,7 +517,7 @@ router.get('/oauth', isSuperAdmin, async (req, res) => {
     }
 });
 
-router.post('/oauth/:provider', isSuperAdmin, async (req, res) => {
+router.post('/oauth/:provider', isSuperAdmin, requireRecentAuth, async (req, res) => {
     try {
         const { provider } = req.params;
         if (!['google', 'discord'].includes(provider)) {

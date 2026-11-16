@@ -66,6 +66,19 @@ async function inInstance(app, instanceId, userId) {
     return r.ok && Array.isArray(r.data.users) && r.data.users.includes(userId);
 }
 
+/**
+ * The Discord user of `token` – only if Discord issued the token to this application. /users/@me
+ * alone answers for a token of any Discord app, so a token from another app (one the player once
+ * logged in to) would otherwise seat its holder as that player.
+ */
+async function discordUser(app, token) {
+    const r = await discordFetch(`${DISCORD_API}/oauth2/@me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok || !r.data || !r.data.application || String(r.data.application.id) !== String(app.clientId)) return null;
+    const scopes = Array.isArray(r.data.scopes) ? r.data.scopes : [];
+    if (!scopes.includes('identify') || !r.data.user || !r.data.user.id) return null;
+    return r.data.user;
+}
+
 function displayName(user) {
     const n = String(user.global_name || user.username || '').replace(/[\u0000-\u001f<>]/g, '').trim();
     return n || `Discord ${String(user.id).slice(-4)}`;
@@ -243,8 +256,8 @@ router.post('/lobby', limit, wrap(async (req, res) => {
     const app = await discordApp();
     if (!app) return res.status(503).json({ error: 'Discord-Activity ist auf diesem Server nicht eingerichtet.' });
 
-    const me = await discordFetch(`${DISCORD_API}/users/@me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!me.ok || !me.data.id) return res.status(401).json({ error: 'Discord-Anmeldung abgelaufen. Bitte die Activity neu starten.' });
+    const me = { data: await discordUser(app, token) };
+    if (!me.data) return res.status(401).json({ error: 'Discord-Anmeldung abgelaufen. Bitte die Activity neu starten.' });
     if (!(await inInstance(app, instanceId, me.data.id))) {
         return res.status(403).json({ error: 'Du bist nicht Teil dieser Activity.' });
     }
@@ -263,9 +276,11 @@ router.post('/terms', limit, wrap(async (req, res) => {
     const auth = req.get('authorization') || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
     if (!token) return res.status(401).json({ error: 'Nicht angemeldet.' });
-    const me = await discordFetch(`${DISCORD_API}/users/@me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!me.ok || !me.data.id) return res.status(401).json({ error: 'Discord-Anmeldung abgelaufen. Bitte die Activity neu starten.' });
-    await terms.accept(await activityAccount(me.data));
+    const app = await discordApp();
+    if (!app) return res.status(503).json({ error: 'Discord-Activity ist auf diesem Server nicht eingerichtet.' });
+    const user = await discordUser(app, token);
+    if (!user) return res.status(401).json({ error: 'Discord-Anmeldung abgelaufen. Bitte die Activity neu starten.' });
+    await terms.accept(await activityAccount(user));
     res.json({ ok: true });
 }));
 
@@ -282,3 +297,4 @@ router.post('/log', logLimit, (req, res) => {
 module.exports = router;
 // For tests: seat a user without the Discord round trip
 module.exports.seat = seat;
+module.exports.discordUser = discordUser;

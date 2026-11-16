@@ -19,15 +19,16 @@ COPY --from=activity /build/node_modules/.cache/hochciv-activity ./node_modules/
 # for Rundenspiele started on those versions). Nothing is downloaded, neither at build time nor at start.
 COPY . .
 
-# Ensure entrypoint is executable
-RUN chmod +x entrypoint.sh
-
-# public/ = the game + mp.js (scripts/build-public.js); entrypoint.sh rebuilds it at start
-RUN node scripts/build-public.js
-
-RUN chown -R node:node /app
+# public/ = the game + mp.js (scripts/build-public.js); entrypoint.sh rebuilds it at start.
+# The server runs as `node` and may only write public/ – its own code stays root's, so a bug in it
+# can't be turned into a changed server.
+RUN chmod +x entrypoint.sh \
+    && node scripts/build-public.js \
+    && chown -R node:node /app/public
 
 USER node
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 
 ENTRYPOINT ["/app/entrypoint.sh"]

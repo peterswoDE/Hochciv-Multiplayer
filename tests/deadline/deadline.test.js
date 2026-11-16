@@ -29,6 +29,18 @@ const BROWSER = process.env.HOCHCIV_BROWSER || [
 const TIMEOUT = Number(process.env.ASYNC_TIMEOUT_MS) || 70000;
 const CONTAINER = process.env.HOCHCIV_CONTAINER || 'hochciv-multiplayer-local';
 const inServer = code => execFileSync('docker', ['exec', '-i', '-w', '/app', CONTAINER, 'node', '-'], { input: code }).toString().trim();
+// The container must run with the same scaled-down times – with the defaults (7 days) nothing
+// times out during the test and its failures say nothing about the code.
+{
+    const envOf = k => { try { return execFileSync('docker', ['exec', CONTAINER, 'printenv', k]).toString().trim(); } catch { return ''; } };
+    const wrong = [['ASYNC_TIMEOUT_MS', v => +v === TIMEOUT], ['ASYNC_REMINDER_MS', v => +v > 0 && +v < TIMEOUT], ['ASYNC_SWEEP_MS', v => +v > 0 && +v <= 5000]]
+        .filter(([k, good]) => !good(envOf(k))).map(([k]) => k);
+    if (wrong.length) {
+        console.error(`Not run: the container ${CONTAINER} needs the short deadline times (${wrong.join(', ')}; ASYNC_TIMEOUT_MS as here: ${TIMEOUT}). Start it with\n`
+            + '  ASYNC_TIMEOUT_MS=70000 ASYNC_REMINDER_MS=50000 ASYNC_SWEEP_MS=1000 docker compose -f docker-compose.local.yml up -d');
+        process.exit(2);
+    }
+}
 const sql = q => execFileSync('docker', ['exec', 'hochciv-db', 'psql', '-U', 'hochciv', '-d', 'hochciv', '-tAc', q]).toString().trim();
 const PASSWORD = 'Test-' + crypto.randomBytes(6).toString('hex');
 const users = [], asyncIds = [];

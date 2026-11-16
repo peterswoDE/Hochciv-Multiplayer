@@ -2,7 +2,7 @@
  * Ranked matchmaking (sockets/match.js, client/matchmaking.js) against the local docker setup,
  * with short waits:
  *
- *   MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000 docker compose -f docker-compose.local.yml up -d --build
+ *   MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000 TURN_TIMER_SCALE=0.05 docker compose -f docker-compose.local.yml up -d --build
  *   npm i --no-save playwright-core
  *   node tests/match/match.test.js [http://localhost:3000]
  *
@@ -23,6 +23,19 @@ const fs = require('fs');
 
 const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
 const CONTAINER = 'hochciv-multiplayer-local';
+
+// The waits above must be shortened in the running container – with the defaults (20 s each,
+// full turn time) the test times out and its failures say nothing about the code.
+{
+    const envOf = k => { try { return execFileSync('docker', ['exec', CONTAINER, 'printenv', k]).toString().trim(); } catch { return ''; } };
+    const need = { MATCH_GROUP_WAIT_MS: v => +v > 0 && +v <= 5000, MATCH_CONFIRM_MS: v => +v > 0 && +v <= 10000, TURN_TIMER_SCALE: v => +v > 0 && +v < 1 };
+    const missing = Object.keys(need).filter(k => !need[k](envOf(k)));
+    if (missing.length) {
+        console.error(`Not run: the container ${CONTAINER} needs short waits (${missing.join(', ')}). Start it with\n`
+            + '  MATCH_GROUP_WAIT_MS=3000 MATCH_CONFIRM_MS=5000 TURN_TIMER_SCALE=0.05 docker compose -f docker-compose.local.yml up -d');
+        process.exit(2);
+    }
+}
 const BROWSER = process.env.HOCHCIV_BROWSER || [
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',

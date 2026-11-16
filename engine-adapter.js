@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const crypto = require('crypto');
 const Scenes = require('./utils/scenes');
 const CivDraft = require('./utils/civdraft');
 
@@ -172,7 +173,14 @@ function makeAdapter(engineDir, label) {
             if (cfg.setup.wpool) gameCfg.wpool = cfg.setup.wpool;
         }
 
-        return E.newGame(gameCfg);
+        const S = E.newGame(gameCfg);
+        /* The engine's dice are a counter on S.seed: whoever knows it and counts the rolls knows
+           every combat, event and tech roll before it happens. The start seed is no secret (the
+           host's config, the tile placement), so the game goes on with a fresh one only the server
+           knows – stateForPlayer never sends it. The setup rolled before (avail, wpool) and the
+           weekly challenge's fixedDice stay as they are. */
+        S.seed = crypto.randomInt(2 ** 31) | 0;
+        return S;
     }
 
     /**
@@ -407,6 +415,9 @@ function makeAdapter(engineDir, label) {
                     return E.buyPower(state, pi, params.n || 1);
 
                 case 'buildRoad':
+                    // the engine checks the tech with target === 1 / === 2: the string "2" (or any
+                    // other value) skipped it and was stored as a railway
+                    if (params.target !== 1 && params.target !== 2) return 'Ungültiger Parameter: target';
                     return E.buildRoad(state, pi, params.r, params.c, params.target);
 
                 // Kolonialismus: claimTile since v103 (free claims), buyTile up to v100
@@ -720,18 +731,35 @@ function makeAdapter(engineDir, label) {
     }
 
     /**
-     * Return a sanitised copy of the state for a specific player.
-     * Currently sends the full state (the board game has no hidden info
-     * beyond dice-roll results, which are seeded).
+     * The state as clients get it: a deep copy without the dice state S.seed (see createGame) –
+     * with it a client could compute every roll ahead. Everything else on the board is open
+     * information. The client only previews its own moves locally; the server's state replaces
+     * that preview right after.
      */
     function stateForPlayer(state, _pi) {
-        // Full state – the client needs everything to render.
-        // Deep-clone so mutations don't leak.
-        return JSON.parse(JSON.stringify(state));
+        const copy = JSON.parse(JSON.stringify(state));
+        delete copy.seed;
+        // the weekly challenge's fixed dice: with them (and fixedRand, public engine code) a client
+        // could work out every tech roll and event of the week before it happens
+        delete copy.fixedDice;
+        return copy;
+    }
+
+    /**
+     * A lobby choice of nation and ability that exists in this engine: a nation of CIVS (or
+     * 'random'), and one of its abilities, 'basis' or 'random'. Returns an error text or null.
+     */
+    function checkCivChoice(civ, ability) {
+        const RANDOM = ['random', 'zufall'];
+        if (RANDOM.includes(civ)) return RANDOM.includes(ability) || ability === 'basis' ? null : 'Unbekannte Fähigkeit.';
+        const def = (engineConst('CIVS') || []).find(c => c.k === civ);
+        if (!def) return 'Unbekannte Nation.';
+        if (ability === 'basis' || RANDOM.includes(ability)) return null;
+        return (def.abilities || []).some(a => a.k === ability) ? null : 'Diese Fähigkeit gehört nicht zu der Nation.';
     }
 
     return {
-        createGame, applyAction, stateForPlayer, stateIndexOf, rollSetup,
+        createGame, applyAction, stateForPlayer, checkCivChoice, stateIndexOf, rollSetup,
         marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
         advanceDraft, assignDoubles, isAutoPlayer, kiLevelFor, randomAbility, checkCustomMap,
         engineConst, turnOrderSlots, peekNext, advanceWithoutBegin, applyLateAbility, autoTurn,

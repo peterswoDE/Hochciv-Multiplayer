@@ -101,41 +101,84 @@ function codesEqual(a, b) {
     return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
+/*
+ * How often a code of one kind may be sent to one account: every new code allows another
+ * MAX_CODE_ATTEMPTS guesses, so without this limit requesting codes over and over (from many
+ * addresses) would allow any number of guesses. In memory – the server is one process.
+ */
+const CODES_PER_WINDOW = 3;
+const CODE_WINDOW_MS = 60 * 60 * 1000;
+const codeIssues = new Map();          // `${field}:${userId}` → [ms, …]
+
+/** True if `user` may get another code of kind `field` now (and counts it). */
+function mayIssueCode(user, field) {
+    const key = `${field}:${user.id}`;
+    const now = Date.now();
+    const times = (codeIssues.get(key) || []).filter(t => now - t < CODE_WINDOW_MS);
+    if (times.length >= CODES_PER_WINDOW) { codeIssues.set(key, times); return false; }
+    codeIssues.set(key, times.concat(now));
+    return true;
+}
+const _codeIssuesSweep = setInterval(() => {
+    const now = Date.now();
+    for (const [k, times] of codeIssues) if (!times.some(t => now - t < CODE_WINDOW_MS)) codeIssues.delete(k);
+}, CODE_WINDOW_MS);
+_codeIssuesSweep.unref();
+
 /**
  * Store a new one-time code in `field` (e.g. 'resetCode'), valid for `ttlMs`. Each code type has
  * its own attempt counter (`<field>Attempts`), so requesting one kind of code never resets
- * the attempts on another. Returns the code; the caller saves the user.
+ * the attempts on another. A code that replaces one still valid keeps its failed attempts.
+ * Returns the code; the caller saves the user. Callers limit how often with mayIssueCode.
  */
 function issueCode(user, field, expiryField, ttlMs) {
     const code = generateCode();
+    const live = !!user[field] && user[expiryField] instanceof Date && user[expiryField] > new Date();
     user[field] = code;
     user[expiryField] = new Date(Date.now() + ttlMs);
-    user[`${field}Attempts`] = 0;
+    if (!live) user[`${field}Attempts`] = 0;
     return code;
 }
 
 /**
  * Check a one-time code stored on the user (`field`, `expiryField`). Every wrong guess
  * counts; after MAX_CODE_ATTEMPTS the code is burnt and a new one must be requested.
- * Returns null on success or an error message.
+ * The attempt is counted in the database first, in one statement, so parallel guesses each get
+ * their own number (no read-modify-write race), and a right code is used up only once.
+ * Returns null on success or an error message. `field` / `expiryField` are server constants.
  */
 async function consumeCode(user, field, expiryField, code) {
+    const { sequelize } = require('../models');
     const attempts = `${field}Attempts`;
-    if (!user[field]) return 'Kein gültiger Code vorhanden. Bitte fordere einen neuen an.';
-    if (user[expiryField] && user[expiryField] < new Date()) return 'Der Code ist abgelaufen. Bitte fordere einen neuen an.';
-    if (!codesEqual(user[field], code)) {
-        user[attempts] = (user[attempts] || 0) + 1;
-        if (user[attempts] >= MAX_CODE_ATTEMPTS) {
+    const [rows] = await sequelize.query(
+        `UPDATE users SET "${attempts}" = COALESCE("${attempts}", 0) + 1 WHERE id = :id
+         RETURNING "${attempts}" AS n, "${field}" AS c, "${expiryField}" AS e`,
+        { replacements: { id: user.id } });
+    const row = rows && rows[0];
+    if (!row || !row.c) return 'Kein gültiger Code vorhanden. Bitte fordere einen neuen an.';
+    if (row.e && new Date(row.e) < new Date()) return 'Der Code ist abgelaufen. Bitte fordere einen neuen an.';
+    if (row.n > MAX_CODE_ATTEMPTS) {
+        await sequelize.query(`UPDATE users SET "${field}" = NULL, "${attempts}" = 0 WHERE id = :id`, { replacements: { id: user.id } });
+        user[field] = null;
+        return 'Zu viele Fehlversuche. Bitte fordere einen neuen Code an.';
+    }
+    if (!codesEqual(row.c, code)) {
+        if (row.n >= MAX_CODE_ATTEMPTS) {
+            await sequelize.query(`UPDATE users SET "${field}" = NULL, "${attempts}" = 0 WHERE id = :id`, { replacements: { id: user.id } });
             user[field] = null;
-            user[attempts] = 0;
-            await user.save();
             return 'Zu viele Fehlversuche. Bitte fordere einen neuen Code an.';
         }
-        await user.save();
         return 'Ungültiger Code.';
     }
-    user[field] = null;
-    user[attempts] = 0;
+    // single use: of two parallel right guesses only one gets through
+    const [, meta] = await sequelize.query(
+        `UPDATE users SET "${field}" = NULL, "${attempts}" = 0 WHERE id = :id AND "${field}" = :code`,
+        { replacements: { id: user.id, code } });
+    if (!meta || meta.rowCount !== 1) return 'Kein gültiger Code vorhanden. Bitte fordere einen neuen an.';
+    // the row is up to date already; the caller's save must not write the old values back
+    user.setDataValue(field, null);
+    user.setDataValue(attempts, 0);
+    if (user.changed) { user.changed(field, false); user.changed(attempts, false); }
     return null;
 }
 
@@ -151,5 +194,5 @@ module.exports = {
     USERNAME_RE, EMAIL_RE, MIN_PASSWORD_LENGTH,
     isAuthenticated, noBots, secondFactors, markAuthenticated, recentlyAuthenticated, requireRecentAuth,
     userJson, str, validPassword,
-    generateCode, issueCode, consumeCode, destroyOtherSessions,
+    generateCode, issueCode, mayIssueCode, consumeCode, destroyOtherSessions,
 };

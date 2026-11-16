@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # The workflows pin actions to commit SHAs – Dependabot proposes new SHAs as pull requests
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: development
+  # Security updates and new versions of the server's npm dependencies
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: development
+    open-pull-requests-limit: 5

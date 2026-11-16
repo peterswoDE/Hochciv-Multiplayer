@@ -51,8 +51,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         await a.fill('#mp-n', 'ReadyHost');
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-p-civ-0');
-        await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 1 }));
-        await a.waitForFunction(() => MP.gameConfig.playerCount === 4);
+        // the classic map: the lobby starts on the tile map (#153), which leads to the placement,
+        // not straight into the game this test waits for
+        await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 4, kiCount: 1, mapKey: '0' }));
+        await a.waitForFunction(() => MP.gameConfig.playerCount === 4 && MP.gameConfig.mapKey === '0');
         const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password }));
         await b.evaluate(c => MP.joinWith(c.code, c.pw, 'ReadyB'), cred);
         await c.evaluate(c => MP.joinWith(c.code, c.pw, 'ReadyC'), cred);

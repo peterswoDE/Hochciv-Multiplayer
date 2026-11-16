@@ -12,8 +12,12 @@ Settings that change at runtime (maintenance mode, registration switch, OAuth pr
 |---|---|---|
 | `SESSION_SECRET` | **yes** | Long random string that signs login cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. The server refuses to start with a missing or publicly known value. Changing it logs everyone out. |
 | `BASE_URL` | **yes** for OAuth/passkeys | Public URL, scheme and host only, e.g. `https://hochciv.example` – no path, no trailing characters. Used for OAuth callbacks, links in e-mails and as the passkey origin. A malformed value stops the server at startup. Without it, OAuth redirects to `http://localhost:3000` and fails. |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | recommended | Database credentials. Only applied when the database volume is created for the first time – changing them later does not change an existing database. The compose file builds `DATABASE_URL` from them. |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log. |
+| `POSTGRES_PASSWORD` | **yes** | Database password – the production and staging compose files refuse to start without it (there is no default any more). For an existing database it must be the password the volume was created with (before: `password123` unless set). |
+| `POSTGRES_USER` / `POSTGRES_DB` | no | Database user and name (default `hochciv`). Like the password, only applied when the database volume is created for the first time – changing them later does not change an existing database. The compose file builds `DATABASE_URL` from them. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | for e-mail | Mail server for activation codes, password reset, 2FA codes and turn notifications. Without `SMTP_HOST`, mails are only written to the log – in production mode (staging) with the one-time codes hidden, see `MAIL_LOG_CODES`. On ports other than 465 the connection must be upgraded with STARTTLS. |
+| `SMTP_REQUIRE_TLS` | no | `off` allows a mail server without STARTTLS (not recommended). |
+| `MAIL_LOG_CODES` | no | `on` writes the codes of logged mails in full in production mode, e.g. to test registration on a staging server without SMTP. Off by default: whoever reads the logs could use anybody's reset or 2FA code. |
+| `HOCHCIV_MEM_LIMIT` | no | Memory limit of the server container (default `2g`). |
 | `FCM_SERVICE_ACCOUNT` | for push | Firebase service account key, base64-encoded on one line. Without it, push is off. See [Push notifications](push-notifications.md). |
 | `ALLOWED_ORIGINS` | no | Further web origins (comma-separated, e.g. `https://second.example`) whose pages may use a visitor's login. By default only this site (the request's host or `BASE_URL`) and the Discord Activity may connect a socket or send changing API requests – see [Security](../reference/security.md). |
 | `PROXY_NETWORK` | no | Docker network of the reverse proxy (default `nginx`). |
@@ -26,7 +30,7 @@ Settings that change at runtime (maintenance mode, registration switch, OAuth pr
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | `postgres://user:pass@host:5432/db`. Set by the compose files; needed when running without Docker. |
-| `NODE_ENV` | `production` in production and on staging. Without it (local), e-mails are printed to the log. |
+| `NODE_ENV` | `production` in production and on staging. Without it (local), e-mails are printed to the log with their codes. |
 | `PORT` | Port inside the container (default `3000`). |
 
 ## Tuning and test settings

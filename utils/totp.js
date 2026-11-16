@@ -34,25 +34,26 @@ const LOCK_MS = 15 * 60 * 1000;
  * LOCK_MS. Returns null when the code is right, else the error (German, translated by the client).
  */
 async function checkLimited(user, token) {
-    if (user.totpLockedUntil && user.totpLockedUntil > new Date()) {
-        return 'Zu viele falsche Codes. Versuche es in 15 Minuten erneut.';
-    }
+    const { sequelize } = require('../models');
+    const LOCKED = 'Zu viele falsche Codes. Versuche es in 15 Minuten erneut.';
+    // Count the attempt in the database first, in one statement: parallel guesses each get their
+    // own number, so no more than MAX_ATTEMPTS are checked before the lock. A locked account
+    // returns no row.
+    const [rows] = await sequelize.query(
+        `UPDATE users SET "totpAttempts" = COALESCE("totpAttempts", 0) + 1
+         WHERE id = :id AND ("totpLockedUntil" IS NULL OR "totpLockedUntil" <= now())
+         RETURNING "totpAttempts" AS n`,
+        { replacements: { id: user.id } });
+    const lock = () => sequelize.query(
+        `UPDATE users SET "totpAttempts" = 0, "totpLockedUntil" = now() + make_interval(secs => :secs) WHERE id = :id`,
+        { replacements: { id: user.id, secs: LOCK_MS / 1000 } });
+    if (!rows || !rows.length) return LOCKED;
+    if (rows[0].n > MAX_ATTEMPTS) { await lock(); return LOCKED; }
     if (await checkUserToken(user, token)) {
-        if (user.totpAttempts || user.totpLockedUntil) {
-            user.totpAttempts = 0;
-            user.totpLockedUntil = null;
-            await user.save();
-        }
+        await sequelize.query(`UPDATE users SET "totpAttempts" = 0, "totpLockedUntil" = NULL WHERE id = :id`, { replacements: { id: user.id } });
         return null;
     }
-    user.totpAttempts = (user.totpAttempts || 0) + 1;
-    if (user.totpAttempts >= MAX_ATTEMPTS) {
-        user.totpAttempts = 0;
-        user.totpLockedUntil = new Date(Date.now() + LOCK_MS);
-        await user.save();
-        return 'Zu viele falsche Codes. Versuche es in 15 Minuten erneut.';
-    }
-    await user.save();
+    if (rows[0].n >= MAX_ATTEMPTS) { await lock(); return LOCKED; }
     return 'Ungültiger Code';
 }
 

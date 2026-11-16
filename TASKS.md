@@ -35,15 +35,17 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 25 | F25 | [Lobby presets](#f25-lobby-presets) | ✔ | ✔ | ✅ |
 | 26 | F26 | [Challenge: compare with the best attempt](#f26-challenge-compare-with-the-best-attempt) | – | ✔ (challenge) | ✅ |
 | 27 | F27 | [Pause a live game, or continue it as a Rundenspiel](#f27-pause-a-live-game-or-continue-it-as-a-rundenspiel) | ✔ | – | ✅ |
-| 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ✅ server · app: PR open |
+| 28 | F28 | [Single-player games in the statistics](#f28-single-player-games-in-the-statistics) | – | – (single player, browser and app) | ✅ |
 | 29 | F29 | [Server checks research](#f29-server-checks-research) | ✔ | ✔ | ✅ |
 | 30 | F30 | [Show refused moves](#f30-show-refused-moves) | ✔ | ✔ | ✅ |
 | 31 | F31 | [Bots as friends and invites](#f31-bots-as-friends-and-invites) | ✔ | ✔ | ✅ (PR #148, Nic) |
 | 32 | F32 | [Random nations: no dodging, no rerolling](#f32-random-nations-no-dodging-no-rerolling) | – | ✔ | ✅ |
-| 33 | F33 | [Mirror match (both sides)](#f33-mirror-match-both-sides) | ? | ✔ | ⬜ idea |
+| 33 | F33 | [Mirror match (both sides)](#f33-mirror-match-both-sides) | ? | ✔ | ✅ moved to issue #161 |
 | 34 | F34 | [Nation draft and turn-order choice](#f34-nation-draft-and-turn-order-choice) | ✔ | ✔ | ✅ done |
+| 35 | F35 | [Security audit fixes](#f35-security-audit-fixes) | ✔ | ✔ | ✅ |
+| 36 | F36 | [Second security audit](#f36-second-security-audit) | ✔ | ✔ | ✅ |
 
-The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
+The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122), mirror match (#161, was F33). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
 F1–F14 are in production. Production (`main`) gets them through a PR from `development` once they have been tested on staging. Each feature has its own test in `tests/`; together they run against the local docker setup (see each file's header).
 
@@ -628,7 +630,7 @@ Texts with bad language are not sent but reported automatically, and the sender 
 
 **Android app** (HochCiv-Android PR #4, into `main`): the offline copy carries `client/solo.js` (`syncOfflineGame` copies it); `bridge.js` hands the offline queue to the app (`soloQueue`), `SoloQueue.kt` keeps it in `files/solo-queue.json`, the online page takes it (`soloPull` → `SOLO.importQueue`) and reports what was sent (`soloDelivered`), and the offline page drops it (`soloForget`). Tested with unit tests and in the browser (offline copy under the app's host with a fake native channel → online page → stored); not yet on a device. Reaches players with the next app release.
 
-**Status:** ✅ server and browser on `development`; the app part waits in its PR.
+**Status:** ✅ server and browser; the app part is merged (HochCiv-Android PR #4, 2026-11-10).
 
 ---
 
@@ -694,6 +696,8 @@ F29–F33 come from player feedback on Discord (Nic, 2026-11-15/16), consolidate
 
 **Thoughts:** fits Rundenspiele best (two linked games, the combined result counts); open whether and how it counts for MMR. Before building it: use the statistics (F13/F23) to measure how big the first-move and nation advantages are. Bigger feature – parked until decided.
 
+**Status:** ✅ moved to GitHub issue [#161](https://github.com/peterswoDE/Hochciv-Multiplayer/issues/161) (2026-11-16), nothing to build here.
+
 ## F34 Nation draft and turn-order choice
 
 **Status: done (2026-11-16)** with the proposed defaults below. Implemented:
@@ -732,3 +736,54 @@ F29–F33 come from player feedback on Discord (Nic, 2026-11-15/16), consolidate
 4. Rundenspiele: positions on joining, draft phase with notifications and timeout.
 5. Bot events and docs; replay/statistics check (positions instead of nations on the classic map).
 
+## F35 Security audit fixes
+
+**Goal:** a modified client or a host can't bend the rules of a game, and server and client agree on what they send each other.
+
+**Found by:** an audit of the server and the client layer on 2026-11-16, each finding reproduced against the local docker setup.
+
+**Built:**
+- **Roads** (`engine-adapter.js`, `buildRoad`): only the numbers 1 (road) and 2 (railway). The engine checks the tech with `target === 1` / `=== 2`, so the string `"2"` skipped the Eisenbahn check, cost one coin and was stored as a railway.
+- **Dice** (`engine-adapter.js` `createGame` / `stateForPlayer`, `async/logic.js` view): the engine's dice are a counter on `S.seed`. A started game now rolls with a seed only the server knows; the setup rolled before (available techs, wonder pools) and the challenge's `fixedDice` stay as they were. Clients get the state without `seed` (live and Rundenspiele); their local preview of a move is replaced by the server's state right after. Games already running keep their seed.
+- **Nation and ability** (`sockets/game.js`): `lobby:player:update` refuses a nation the engine doesn't know and an ability of another nation (`engine.checkCivChoice`); the live start checks every seat once more (seats also get their choice when they are created or join over REST).
+- **Host settings** (`sessions.js` `cleanHostConfig`, `routes/api.js`): `lobby:config` and `POST /api/sessions` keep only the settings the lobby, presets and bots send. `seed`, `fixedDice`, `startPlayer`, `map`, `setup` and `matchmaking` stay the server's; a new lobby always gets a server seed.
+- **Ranked live games** need two humans at the start ("min 2 H-Spieler" was only text). Rundenspiele already turn ranked off below two; matchmaking already needed two.
+- **Admin broadcast** (`mp.js`): the client listens for `sys:message` and shows it as a dialog, as plain text. Before, the admin got "ok" and nobody saw anything.
+- **Kick after a rematch** (`sessions.js` `kickPlayer`): the host's seat is protected, not seat 0. After a game with turn positions the host may sit elsewhere and could not kick seat 0 (a regression of F34). A seat that doesn't exist is no longer "kicked".
+- **Reconnect text:** joining a running game said to use the exact original name. A seat is found by the secret client id of the browser tab, so the text says that now.
+- **Tests:** the ready and invite tests set the classic map (the lobby starts on the tile map, which leads to the placement and changes the invite text). The match and deadline tests check that the container runs with the short waits they need and say how to start it, instead of failing for no reason in the code.
+
+**Tests:** `tests/security/audit.test.js` (no docker): roads, dice, nation and ability for every engine version; host settings, kick, ranked and the start check through `sessions.js` and `sockets/game.js`. `tests/security/audit-live.test.js` (docker): the same over real sockets, and the admin broadcast in the game page.
+
+**Not changed:** the Android app has its own copy of `mp.js` (no `sys:message` dialog there yet).
+
+**Status:** ✅
+
+## F36 Second security audit
+
+**Goal:** fix the findings of the second audit of 2026-11-16 (findings SA-01 … SA-18; the report stays private until production runs the fixes), each reproduced against an isolated local instance.
+
+**Built:**
+- **SA-01 passkey login** (`routes/auth.js`): `Passkey` was no longer imported since `0105ebf` – every passkey login (passwordless and as second factor) answered 500. Import back; the auth routes log their errors.
+- **SA-10 dependencies:** `compression` 1.8.2 (DoS advisory), `qs` 6.16.2.
+- **SA-03 attempt counters** (`utils/auth.js` `consumeCode`, `utils/totp.js` `checkLimited`): counted in the database before comparing, in one statement – parallel guesses no longer share one count; a right code is used up once. A code replacing a valid one keeps its attempts; at most 3 codes of a kind per account and hour (reset, e-mail login, e-mail change).
+- **SA-15 login limits** (`routes/auth.js`): separate IP limits per group of auth endpoints; 20 wrong passwords per account in 15 minutes lock password guesses for that account.
+- **SA-02 ranked** (`sockets/game.js` `startGame`, `sockets/match.js` `fitsBots`, `async/service.js` `join`): rated only between different logged-in people – no guest seat, no account twice, no bot with its owner or two bots of one owner.
+- **SA-04 revocation** (`utils/detachUser.js` `disconnectSessions`): a password change, reset or admin-set password also closes the other sessions' open sockets.
+- **SA-05 Discord Activity** (`routes/activity.js`): the access token must belong to this application (`/oauth2/@me`).
+- **SA-06 invitations** (`async/service.js`, `routes/async.js`): one mail per invitation, a declined one again after a day; 60 Rundenspiel requests a minute per account.
+- **SA-07** `update-password` rate-limited. **SA-11** registration answers the same for a taken e-mail (note to its owner), unknown logins take as long as wrong passwords, `activate` doesn't tell whether an account exists.
+- **SA-08** a lobby nobody connects to within a minute is removed (`UNUSED_LOBBY_MS`).
+- **SA-12** mails logged in production mode hide their codes (`MAIL_LOG_CODES=on` shows them); SMTP requires STARTTLS (`SMTP_REQUIRE_TLS=off`).
+- **SA-13** image: only `public/` writable for `node`, health check; compose: no capabilities, `no-new-privileges`, pid and memory limits, database health check, `POSTGRES_PASSWORD` required; server: database retries at start, pool errors and unhandled rejections logged instead of ending the process; Socket.IO messages ≤ 100 KB.
+- **SA-14** admin: re-confirmation for password, second factors, roles, deleting and OAuth (dialog on the admin page); every admin change logged.
+- **SA-17** the weekly challenge's `fixedDice` no longer reaches clients. **SA-18** HSTS over HTTPS.
+- **SA-09** (without Watchtower, which stays as it is): workflow actions pinned to commit SHAs, Dependabot for actions and npm, `.github/workflows/checks.yml` runs the tests without a server and `npm audit` on pull requests.
+
+**Not changed:** Watchtower and the `latest` auto-deploy (decided 2026-11-16); a database role without superuser rights and migrations instead of `sync({ alter: true })` (bigger change, later); CSP `script-src` (needs the inline `onclick` handlers of the account and admin pages replaced first); the cookie name (changing it would log everybody out).
+
+**Operators:** `.env` must now contain `POSTGRES_PASSWORD` (the one the database was created with – `password123` if it was never set); on staging `MAIL_LOG_CODES=on` to read codes in the log.
+
+**Tests:** `tests/security/regression.test.js` (docker, `TURN_TIMER_SCALE=0.05`): all 8 checks failed before, pass now. `tests/bots/bots.test.js`: a bot never meets its owner in matchmaking.
+
+**Status:** ✅

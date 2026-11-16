@@ -41,7 +41,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadReportCount();
     setInterval(loadReportCount, 60000);
 
-    const post = (url, body) => fetch(url, {
+    // Changes to accounts (password, second factors, roles, deleting) and the OAuth settings need a
+    // recent login (routes/admin.js requireRecentAuth): the server answers 403 { reauthRequired },
+    // the admin confirms with password or authenticator code, and the request is sent again.
+    function askReauth(methods) {
+        const form = document.getElementById('reauth-form');
+        const msg = document.getElementById('reauth-msg');
+        const pw = document.getElementById('reauth-password');
+        const code = document.getElementById('reauth-totp');
+        const viaOAuth = !methods.password && !methods.totp;
+        document.getElementById('reauth-password-group').style.display = methods.password ? 'block' : 'none';
+        document.getElementById('reauth-totp-group').style.display = methods.totp ? 'block' : 'none';
+        document.getElementById('reauth-oauth-group').style.display = viaOAuth ? 'block' : 'none';
+        document.getElementById('reauth-google').style.display = currentUser.googleLinked ? 'inline-flex' : 'none';
+        document.getElementById('reauth-discord').style.display = currentUser.discordLinked ? 'inline-flex' : 'none';
+        document.getElementById('reauth-submit').style.display = viaOAuth ? 'none' : 'inline-flex';
+        document.getElementById('reauth-google').onclick = () => window.location.href = '/api/auth/google';
+        document.getElementById('reauth-discord').onclick = () => window.location.href = '/api/auth/discord';
+        pw.value = '';
+        code.value = '';
+        msg.textContent = '';
+        ACC.openModal('reauth-modal');
+        (methods.password ? pw : code).focus();
+        return new Promise(resolve => {
+            const close = ok => { ACC.closeModal('reauth-modal'); form.onsubmit = null; resolve(ok); };
+            document.getElementById('reauth-cancel').onclick = () => close(false);
+            form.onsubmit = async e => {
+                e.preventDefault();
+                const body = pw.value ? { password: pw.value } : { token: code.value.trim() };
+                const res = await fetch('/api/account/reauth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (res.ok) return close(true);
+                msg.textContent = txs((await res.json().catch(() => ({}))).error || 'Bestätigung fehlgeschlagen.');
+            };
+        });
+    }
+    /** fetch() that asks for the re-confirmation when the server wants it, then tries once more. */
+    async function authFetch(url, options) {
+        const res = await fetch(url, options);
+        if (res.status !== 403) return res;
+        const data = await res.clone().json().catch(() => ({}));
+        if (!data.reauthRequired || !(await askReauth(data.methods || {}))) return res;
+        return fetch(url, options);
+    }
+    const post = (url, body) => authFetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     const fail = async res => {
@@ -284,7 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!confirm(tx('Diesen MFA-Token wirklich löschen?'))) return;
         let url = `/api/admin/users/${userId}/mfa/${type}`;
         if (tokenId) url += `/${tokenId}`;
-        const res = await fetch(url, { method: 'DELETE' });
+        const res = await authFetch(url, { method: 'DELETE' });
         if (res.ok) {
             // Reload just the MFA container
             document.getElementById(`admin-user-mfa-${userId}`).style.display = 'none';
@@ -302,7 +344,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tx('Gib zur Bestätigung den Benutzernamen ein:'));
         if (typed === null) return;
         if (typed.trim() !== u.username) return alert(tx('Der Benutzername stimmt nicht – nichts gelöscht.'));
-        const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const res = await authFetch(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
         if (res.ok) loadUsers();
         else fail(res);
     };

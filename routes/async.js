@@ -12,6 +12,15 @@ function isAuthenticated(req, res, next) {
     res.status(401).json({ error: 'Rundenspiele gibt es nur mit Anmeldung.' });
 }
 router.use(isAuthenticated);
+// per account: creating games and inviting send e-mails and push messages
+router.use(require('express-rate-limit')({
+    windowMs: 60 * 1000,
+    max: 60,
+    keyGenerator: req => 'u:' + req.user.id,
+    message: { error: 'Zu viele Anfragen. Bitte versuche es später erneut.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+}));
 
 const send = (res, p) => p.then(r => {
     if (r && r.error) return res.status(400).json(r);

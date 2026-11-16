@@ -25,6 +25,7 @@ const { checkOrigin, allowSocket } = require('./utils/origin');
 const Assets = require('./utils/assets');
 
 // ── Passport Configuration ──────────────────────────────────────────────────
+const DUMMY_HASH = bcrypt.hashSync('no account has this password', 10);
 passport.use(new LocalStrategy(
     async (username, password, done) => {
         try {
@@ -38,7 +39,11 @@ passport.use(new LocalStrategy(
                     ]
                 }
             });
-            if (!user || !user.password_hash) return done(null, false, { message: 'Incorrect username or email.' });
+            if (!user || !user.password_hash) {
+                // as slow as a wrong password, so the answer time doesn't tell which accounts exist
+                await bcrypt.compare(pw, DUMMY_HASH);
+                return done(null, false, { message: 'Incorrect username or email.' });
+            }
             const match = await bcrypt.compare(pw, user.password_hash);
             if (!match) return done(null, false, { message: 'Incorrect password.' });
             return done(null, user);
@@ -109,6 +114,8 @@ app.use((req, res, next) => {
         'Content-Security-Policy': "frame-ancestors 'self' https://discord.com https://*.discord.com https://*.discordsays.com",
         'Referrer-Policy': 'same-origin',
     });
+    // HTTPS only from now on (production runs behind TLS; req.secure via trust proxy)
+    if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
 });
 
@@ -189,8 +196,15 @@ app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Initialize ORM
-sequelize.sync({ alter: true }).then(() => {
+// Initialize ORM – with retries: at a cold start the database may not take connections yet
+function syncDatabase(attempt = 1) {
+    return sequelize.sync({ alter: true }).catch(err => {
+        if (attempt >= 10) throw err;
+        console.warn(`[DB] Not reachable yet (${err.message}), attempt ${attempt} of 10 – retrying in 3 s`);
+        return new Promise(r => setTimeout(r, 3000)).then(() => syncDatabase(attempt + 1));
+    });
+}
+syncDatabase().then(() => {
     console.log('[DB] Sequelize synced tables.');
     // facts of older matches for the overall statistics (needs the column `facts`)
     require('./utils/facts').startBackfill();
@@ -218,7 +232,15 @@ sequelize.sync({ alter: true }).then(() => {
 
     // Load OAuth strategies from database
     refreshOAuthStrategies().catch(err => console.error('[OAuth] Initial strategy load failed:', err));
+}).catch(err => {
+    console.error('[DB] Database sync failed – giving up:', err);
+    process.exit(1);
 });
+
+// A database restart or a failed background task must not end the process (and every live game
+// in memory with it): log it and go on
+pgPool.on('error', err => console.error('[DB] Idle session-store connection failed:', err.message));
+process.on('unhandledRejection', err => console.error('[Process] Unhandled rejection:', err));
 
 // Health check
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -272,6 +294,10 @@ const io = new Server(server, {
     },
     // CORS doesn't cover WebSockets: only this site's pages may connect (utils/origin.js)
     allowRequest: allowSocket,
+    // the largest real message is a custom map in lobby:config (≈ 10 KB, sessions.js caps the
+    // config at 10 000 characters); the default 1 MB would let any socket make the server parse
+    // megabytes per message
+    maxHttpBufferSize: 100 * 1024,
 });
 
 app.locals.io = io;

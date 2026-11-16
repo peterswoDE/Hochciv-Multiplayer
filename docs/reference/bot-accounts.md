@@ -51,6 +51,10 @@ The same two settings at creation (`config.playerBots`, `config.playerBotLimit`)
 
 A bot can be a friend (`utils/friends.js`): a person sends the request, and the bot's program accepts or declines it over `/api/friends` like a player would; bots can't send requests. A bot's socket counts as online for its friends (`sockets/friends.js`). Inviting a bot friend into a live lobby (`friends:invite`) is refused unless the lobby takes one more player-bot (`playerBotPolicy`); a Rundenspiel invitation of a bot (`POST /api/async/:id/invite`) is refused unless `playerBotRoom` lets it in. Joining checks the same rules again. Friend suggestions (*Zuletzt gespielt mit*) still leave bots out.
 
+### Ranked games
+
+In ranked games a bot counts as its owner: it can't play a ranked live game, Rundenspiel or matchmaking game together with its owner or with another bot of the same owner ([Points and MMR](ranking.md#which-games-are-ranked)).
+
 ### Matchmaking
 
 Players opt in with **Spieler-Bots als Mitspieler zulassen** in the multiplayer menu (`match:join { allowBots: true }`, remembered in the browser). A bot only lands in a group where every human opted in; games with only bots are possible. The match lobby then allows player-bots.

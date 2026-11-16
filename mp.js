@@ -496,6 +496,14 @@ const MP = {
                 resolve();
             });
 
+            // the admin page's broadcast to a lobby (routes/admin.js): free text, so escaped, and
+            // in a dialog – a toast is gone after two seconds
+            this.socket.on('sys:message', msg => {
+                if (typeof msg !== 'string' || !msg) return;
+                if (typeof modal === 'function') modal('📢 ' + TX('Nachricht vom Admin'), `<p style="white-space:pre-wrap">${escHtml(msg)}</p>`);
+                else toast(msg);
+            });
+
             this.socket.on('player:joined', data => {
                 MP.players = data.players;
                 if (data.newHostIndex !== undefined) MP.hostIndex = data.newHostIndex;

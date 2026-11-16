@@ -10,7 +10,7 @@ All endpoints take and return JSON (request body limit 20 KB). Logins are cookie
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| POST | `/register` | public | Create an account (username, password, e-mail); sends an activation code. Refused while registration is off. |
+| POST | `/register` | public | Create an account (username, password, e-mail); sends an activation code. Refused while registration is off. A taken username is refused; a taken e-mail address gets the same answer as a new one (its owner gets a note instead of a code). |
 | POST | `/activate` | public | Activate with the e-mailed code |
 | POST | `/login` | public | Username + password. With 2FA, answers which second factors are needed. |
 | POST | `/bot` | public | Bot account login: `{ token }` or `Authorization: Bearer <token>` → session ([Bot accounts](bot-accounts.md)) |
@@ -101,7 +101,7 @@ The `clientId` is a secret the browser generates and keeps; the game itself then
 | POST | `/:id/leave` | Leave before the start |
 | POST | `/:id/cancel` | Host cancels |
 | POST | `/:id/resign` | Resign while the game runs: the KI plays the seat to the end ([Resign](socket-events.md#resign)) |
-| POST | `/:id/invite` | Invite a player by username (a bot account only when the game takes one more player-bot) |
+| POST | `/:id/invite` | Invite a player by username (a bot account only when the game takes one more player-bot). One e-mail per invitation: again while it is open → `{ ok, already }` without a mail; a declined one can be renewed once a day |
 | POST | `/:id/decline` | Decline an invitation |
 
 Playing the opened game: [Socket.IO events → Rundenspiele](socket-events.md#rundenspiele). Rules: [Rundenspiele](rundenspiele.md).
@@ -182,7 +182,7 @@ Rate limit: 60 requests a minute per account.
 
 ## Admin – `/api/admin`
 
-All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage accounts with the role `user` or `botcreator`.
+All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage accounts with the role `user` or `botcreator`. *Recent* (a re-confirmation within 10 minutes, the admin page asks for it) is needed for `DELETE /users/:id/mfa/…`, `DELETE /users/:id`, `POST /oauth/:provider` and the user actions other than `ban`, `unban`, `set_mmr` and `set_bot_limit`.
 
 | Method | Path | Purpose |
 |---|---|---|
