@@ -17,6 +17,7 @@ const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 const Scenes = require('./utils/scenes');
+const LogText = require('./utils/logtext');
 const CivDraft = require('./utils/civdraft');
 
 /* Turn positions (F34, utils/civdraft.js): with 'pick' or 'random' the seats already sit in
@@ -92,7 +93,13 @@ function makeAdapter(engineDir, label) {
             sandbox.__sceneHook = (S, e) => {
                 try { Scenes.onLog(sandbox, S, e); } catch (err) { console.error('[Scenes] Recording failed:', err); }
             };
-            vm.runInContext('if (typeof animSnap === "function" && typeof LOG_HOOK !== "undefined") LOG_HOOK = (S, e) => __sceneHook(S, e);', sandbox);
+            // The log in every player's language (utils/logtext.js): what each line is made of, as e.t
+            const annotate = LogText.install(sandbox);
+            sandbox.__logText = (S, e) => {
+                try { if (annotate) annotate(S, e); } catch (err) { console.error('[LogText] Failed:', err); }
+            };
+            vm.runInContext(`if (typeof LOG_HOOK !== "undefined") LOG_HOOK = typeof animSnap === "function"
+                ? (S, e) => { __logText(S, e); __sceneHook(S, e); } : (S, e) => __logText(S, e);`, sandbox);
 
             console.log(`[Engine Adapter] Loaded Hochciv game engine ${label} from ${dir}`);
             return true;

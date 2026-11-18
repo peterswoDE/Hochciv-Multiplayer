@@ -68,6 +68,7 @@ function onLog(E, S, e) {
     const log = logOf(S);
     if (!log || e.c !== 'act') return;
     const f = { pi: S.cur, t: 'a', m: e.m };
+    if (e.t) f.mt = e.t;                    // the line's parts for the client's language (utils/logtext.js)
     if (e.art) f.art = e.art;
     push(log, S, f, E.animSnap(S));
 }

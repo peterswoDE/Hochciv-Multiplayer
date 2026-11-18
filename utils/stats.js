@@ -130,4 +130,26 @@ function publicStats(stats) {
     return rest;
 }
 
-module.exports = { record, publicStats, snapshot, enrich };
+/**
+ * The statistics while the game runs (the player report, client/report.js): only what everyone
+ * can see on the map – points, cities, population, techs, armies, wonders, out – and the key
+ * moments. No income: that is each empire's own business until the end.
+ */
+const TREND_KEYS = ['s', 'c', 'pop', 't', 'a', 'w', 'd'];
+function trend(stats) {
+    if (!stats || !stats.players || !stats.rounds) return null;
+    return {
+        players: stats.players,
+        rounds: stats.rounds.map(rd => ({
+            r: rd.r,
+            p: rd.p.map(x => {
+                const o = {};
+                for (const k of TREND_KEYS) if (x[k] != null) o[k] = x[k];
+                return o;
+            }),
+        })),
+        events: stats.events || [],
+    };
+}
+
+module.exports = { record, publicStats, snapshot, enrich, trend };

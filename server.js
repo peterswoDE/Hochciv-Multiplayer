@@ -282,6 +282,9 @@ const io = new Server(server, {
     // config at 10 000 characters); the default 1 MB would let any socket make the server parse
     // megabytes per message
     maxHttpBufferSize: 100 * 1024,
+    // Compress larger messages: a game state is mostly its log (in German, plus its parts for
+    // every language – utils/logtext.js) and shrinks to about a fifth
+    perMessageDeflate: { threshold: 1024 },
 });
 
 app.locals.io = io;

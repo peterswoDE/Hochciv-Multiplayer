@@ -510,6 +510,14 @@ module.exports = function registerHandlers(io) {
         });
 
         // ── Resign (F16): the KI plays the seat to the end ───────────────────
+        // The player report (client/report.js): points and counts over the rounds so far, for
+        // players and spectators. Only the public part (Stats.trend); the end has 'game:stats'.
+        on(socket, 'game:trend', (_data, ack) => {
+            if (!session || (!bound() && !watcher)) return ack({ error: 'Nicht verbunden.' });
+            if (!session.stats) return ack({ trend: null });
+            ack({ trend: session.status === 'finished' ? Stats.publicStats(session.stats) : Stats.trend(session.stats) });
+        });
+
         on(socket, 'game:resign', (_data, ack) => {
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
             const S = session.state;

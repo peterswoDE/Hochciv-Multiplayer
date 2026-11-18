@@ -38,6 +38,7 @@ const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
 const CivDraft = require('../utils/civdraft');
+const Stats = require('../utils/stats');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
    the game shipped with this server have none and count as v83, a label only by now: forVersion
@@ -1014,6 +1015,8 @@ function view(g, userId) {
         void owners; void wonders;
         out.stats = stats;
     }
+    // while it runs: the public part for the player report (client/report.js)
+    if (g.status === 'playing' && g.stats) out.trend = Stats.trend(g.stats);
     // the stored match and its replay (GET /api/games/:id[/replay])
     if (g.status === 'finished' && g.result && g.result.gameId) out.record = { id: g.result.gameId, replay: !!g.result.replay };
     if (g.state) {

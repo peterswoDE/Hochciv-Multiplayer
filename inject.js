@@ -1,7 +1,7 @@
 /**
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
- *   • adds the multiplayer texts (client/i18n.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the sound and tab alerts (client/alerts.js), the friends list (client/friends.js), the leaderboard (client/ranking.js), the weekly challenge (client/challenge.js), the lobby presets (client/presets.js), pause and "continue as a Rundenspiel" (client/pause.js), the single-player recorder (client/solo.js), the Discord Activity bridge, the
+ *   • adds the multiplayer texts (client/i18n.js), the game log in the player's language (client/logtext.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the player report (client/report.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the sound and tab alerts (client/alerts.js), the friends list (client/friends.js), the leaderboard (client/ranking.js), the weekly challenge (client/challenge.js), the lobby presets (client/presets.js), pause and "continue as a Rundenspiel" (client/pause.js), the single-player recorder (client/solo.js), the Discord Activity bridge, the
  *     map browser (client/maps) and the mobile layer (client/mobile) to index.html,
  *   • points mp.js at this server,
  *   • writes a content hash into every script and stylesheet tag (utils/assets.js), so browsers
@@ -22,6 +22,8 @@ const jsPath = path.join(dir, 'js', 'mp.js');
 const SOCKET_IO = '<script src="/socket.io/socket.io.min.js"></script>';
 // Multiplayer texts in the player's language – before profile.js and mp.js, which use them
 const I18N = '<script src="/client/i18n.js"></script>';
+// The game log in the player's language (after client/i18n.js, before mp.js, which uses it)
+const LOGTEXT_JS = '<script src="/client/logtext.js"></script>';
 const PROFILE = '<script src="/client/profile.js"></script>';
 const MP = '<script src="js/mp.js"></script>';
 // In-game chat (after mp.js, which it uses)
@@ -30,6 +32,8 @@ const CHAT = '<script src="/client/chat.js"></script>';
 const CONSENT = '<script src="/client/consent.js"></script>';
 // Post-game statistics (after mp.js)
 const STATS = '<script src="/client/stats.js"></script>';
+// Player report (after mp.js and client/stats.js, whose chart it uses)
+const REPORT = '<script src="/client/report.js"></script>';
 // Overall statistics over all matches (menu button "Statistiken", mp.js)
 const GAMESTATS = '<script src="/client/gamestats.js"></script>';
 // What the others did, played on the map (after mp.js, which queues it)
@@ -82,7 +86,7 @@ if (fs.existsSync(htmlPath)) {
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
     if (!html.includes(MAPS_CSS)) html = html.replace('</head>', MAPS_CSS + '\n</head>');
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, I18N, PROFILE, MP, ALERTS, FRIENDS, RANKING, CHALLENGE, PRESETS, PAUSE, SOLO, SCENES, CHAT, CONSENT, STATS, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, LOGTEXT_JS, PROFILE, MP, ALERTS, FRIENDS, RANKING, CHALLENGE, PRESETS, PAUSE, SOLO, SCENES, CHAT, CONSENT, STATS, REPORT, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     html = Assets.versioned(html, fileOf);
     fs.writeFileSync(htmlPath, html, 'utf8');

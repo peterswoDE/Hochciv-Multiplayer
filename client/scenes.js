@@ -101,7 +101,7 @@
         for (const f of chain.frames || []) {
             const next = apply(cur, f.d);
             if (f.n > after && f.t === 'a' && f.pi !== me) {
-                const s = { art: f.art || animUnterschied(cur, next, f.pi), pi: f.pi, vor: cur, nach: next, bild: next, texte: [f.m] };
+                const s = { art: f.art || animUnterschied(cur, next, f.pi), pi: f.pi, vor: cur, nach: next, bild: next, texte: [typeof LOGTEXT !== 'undefined' ? LOGTEXT.text({ m: f.m, t: f.mt }) : f.m] };
                 animDetails(s);
                 const last = parts[parts.length - 1];
                 if (last && last.anim && last.pi === f.pi) last.anim.push(s);

@@ -43,6 +43,8 @@ Tests create their own test accounts and delete them afterwards.
 | `terms/terms.test.js` | consent to the terms of use: popup for accounts and guests, declining, the server's refusals, new versions | `TERMS_CHECK=on` |
 | `friends/friends.test.js` | friends list: requests, accepting, crossing requests, refusals and blocks, suggestions, profile button, live invitation into a lobby, Rundenspiel names, removing, offline, account deletion, English | default |
 | `i18n/english.test.js` | every screen in English, no German left | default |
+| `i18n/log.test.js` | the game log (Protokoll, `logSince`) in English from the server's parts (`e.t`), German unchanged, the compressed WebSocket | default |
+| `i18n/victory.test.js` | the end screen in English: every victory text the engine writes, points comparisons with several claims, resign texts, via state and `game:over`; German unchanged | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
 | `maps/maps.test.js` | map browser: browsing, search, sorting, favorites, the detail view, picking a map for a lobby and a Rundenspiel, map reports and the admin's unpublish, the editor's drag painting and undo, phone layout, account merge and deletion | default |
 | `loading/loading.test.js` | fast page load: content hashes, year-long caching, gzip, page files without session queries | default |
@@ -55,9 +57,11 @@ Tests create their own test accounts and delete them afterwards.
 | `placement/world.test.js` | the "Welt" button while start tiles are placed in a live game | default |
 | `placement/hex.test.js` | the experimental tile mode in lobbies and Rundenspiele (since v107: 14 triangles with four empires) | default |
 | `rematch/rematch.test.js` | rematch of a live game | default |
+| `report/report.test.js` | in-game player list: turn order and positions; the player report (score, rank, victory progress, empire, abilities, read-only tech tree, trend via `game:trend` without income), English | default |
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin section | default |
 | `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
+| `techs/tech-tree-refresh.test.js` | the open tech tree redraws from the server's state after researching (the next age's roll), other modals stay | default |
 | `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
 | `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |

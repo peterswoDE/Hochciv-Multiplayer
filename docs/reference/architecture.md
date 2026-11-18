@@ -57,6 +57,8 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/i18n.js` | English texts of everything the server adds ([Languages](../development/languages.md)) |
 | `client/chat.js` | In-game chat panel |
 | `client/stats.js`, `client/replay.js` | Post-game statistics, replay viewer (`?replay=<id>`) |
+| `utils/logtext.js`, `client/logtext.js` | The game log in every language: the server records what each log line is made of (`e.t`: `T()` keys with arguments, literal text), the client puts it together in the player's language |
+| `client/report.js` | Player report: tap a row of the in-game player list – score, victory progress, empire, abilities, tech tree, trend and key moments |
 | `client/scenes.js` | Plays what the others did on the map (also the diff code `utils/scenes.js` uses) |
 | `client/profile.js` | Player profiles |
 | `client/matchmaking.js` | Ranked matchmaking UI |

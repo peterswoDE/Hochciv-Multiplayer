@@ -67,6 +67,7 @@ const REPLAY = {
         // the end screen (mp.js keeps the local game safe: no saveGame, "Zurück zum Menü" only leaves)
         if (S.over && this.at === frames.length - 1) {
             this.pause();
+            MP.translateOver(S.over);                            // the frames hold the server's German texts
             gameOver();
         }
     },
