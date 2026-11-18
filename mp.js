@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v107', 'v106', 'v100', 'v98'];
+const OLD_VERSIONS = ['v108', 'v107', 'v106', 'v100', 'v98'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -2462,12 +2462,21 @@ const patchTurnButton = setInterval(() => {
                     const stop = blockingIssues(S, S.cur);
                     if (stop.length) return toast(stop[0]);
                 }
-                // Keep warnings check from original ui.js
+                // Ask once per turn, as the game does (turns.js endHumanTurn). Since v109 a dialog
+                // ("Zug beenden?": what is left and what it could still buy, open free actions);
+                // its "Zug beenden" comes back here. Older versions: a toast, tap again.
                 const warn = pendingWarnings(S, S.cur);
-                if (warn.length && !ui.confirmedEnd) {
+                const rest = typeof unspent === 'function' && typeof endTurnAsk === 'function' && !ui.fg
+                    ? unspent(S, S.cur) : { kaufbar: [], frei: [] };
+                if ((warn.length || rest.kaufbar.length || rest.frei.length) && !ui.confirmedEnd) {
                     ui.confirmedEnd = true;
-                    return toast(warn[0] + ' ' + TX('Nochmal tippen zum Bestätigen.'));
+                    if (typeof endTurnAsk !== 'function') return toast(warn[0] + ' ' + TX('Nochmal tippen zum Bestätigen.'));
+                    endTurnAsk(warn, rest);
+                    const ok = $('end-ok');
+                    if (ok) ok.onclick = () => aEnd.onclick();
+                    return;
                 }
+                if ($('end-ok') && $('overlay').classList.contains('show')) closeModal();
                 ui.confirmedEnd = false; ui.army = null; ui.sel = null; ui.mode = null;
                 closeSheet();
 

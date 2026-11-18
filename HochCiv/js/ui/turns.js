@@ -252,6 +252,34 @@ function animMarks(world, S2, s) {
     world.appendChild(t);
   });
 }
+/* Zugende mit Resten (v109, Anweisung des Autors): ein Fenster, einmal je Zug – der Vorrat, der am
+   Zugende verfiele (beginTurn ersetzt ihn durch das Einkommen), und wofür er noch reicht; offene
+   kostenlose Aktionen; die Hinweise aus pendingWarnings. „Zug beenden" beendet, „Zurück" und ✕
+   lassen weiterspielen – danach beendet die Leiste in diesem Zug ohne Frage. Die Namen sind die
+   der Knöpfe, über die es geht. Bis v108 gab es nur den Hinweis auf eine wartende kostenlose
+   Armee, als Meldung mit „Nochmal tippen zum Bestätigen". */
+const KAUF_NAME = {
+  forschung: 'Forschen', macht: 'Macht', wachstum: 'Bevölkerungswachstum',
+  armee: 'Armee bauen', stadt: 'Stadt gründen', wunder: 'Weltwunder bauen',
+};
+const FREI_NAME = {
+  forschung: 'Freie Forschung', rueckschau: 'Rückschau', wunder: 'Kostenlose Technologie',
+  wachstum: 'Kostenlos wachsen', internet: 'Technologien kopieren',
+};
+function endTurnAsk(warn, rest) {
+  const R = P(S).res;
+  const vorrat = ['sci', 'food', 'coins'].map((k, i) => R[k] > 0 ? `${YIELD_ICON[i]} ${R[k]}` : '').filter(Boolean).join(' · ');
+  const saetze = [], kauf = rest.kaufbar.map(k => T(KAUF_NAME[k]));
+  // Was nichts kostet (Forschung für 0, Wachstum einer kleinen Stadt), zählt zu „noch offen"
+  if (vorrat && kauf.length) saetze.push(T('%s verfallen am Zugende – genug für: %s.', vorrat, kauf.join(', ')));
+  const offen = (vorrat ? [] : kauf).concat(rest.frei.map(k => T(FREI_NAME[k])));
+  if (offen.length) saetze.push(T('Noch offen: %s.', offen.join(', ')));
+  modal(T('Zug beenden?'), saetze.concat(warn).map(s => `<p>${s}</p>`).join('') +
+    `<div class="ask"><button class="btn" id="end-back">${T('Zurück')}</button>` +
+    `<button class="btn primary" id="end-ok">${T('Zug beenden')}</button></div>`);
+  $('end-back').onclick = closeModal;
+  $('end-ok').onclick = endHumanTurn;
+}
 function endHumanTurn() {
   // Nur im eigenen Zug und nie, solange das Blatt eines KI- oder Bot-Zugs offen ist: sonst
   // liefe dessen Kampf ein zweites Mal, und der Zug spränge an seinem „Weiter" vorbei.
@@ -263,12 +291,13 @@ function endHumanTurn() {
   if (stop.length) { toast(stop[0]); return; }
   // Erstes Spiel (v92): Zugende gehört zum Schritt – abgelehnt oder einmal nachgefragt
   if (ui.fg && typeof fgZugendeOk === 'function' && !fgZugendeOk()) return;
-  const warn = pendingWarnings(S, S.cur);
-  if (warn.length && !ui.confirmedEnd) {
+  // Einmal je Zug nachfragen (v109), wenn noch etwas ginge – im Ersten Spiel sagt der Text, wann
+  const warn = pendingWarnings(S, S.cur), rest = ui.fg ? { kaufbar: [], frei: [] } : unspent(S, S.cur);
+  if ((warn.length || rest.kaufbar.length || rest.frei.length) && !ui.confirmedEnd) {
     ui.confirmedEnd = true;
-    toast(warn[0] + ' ' + T('Nochmal tippen zum Bestätigen.'));
-    return;
+    return endTurnAsk(warn, rest);
   }
+  if ($('end-ok') && $('overlay').classList.contains('show')) closeModal();
   ui.confirmedEnd = false; ui.army = null; ui.sel = null; ui.mode = null;
   closeSheet();
   const sinceSeq = S.logSeq || 0;

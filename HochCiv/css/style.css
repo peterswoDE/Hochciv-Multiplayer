@@ -264,6 +264,16 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
 .abil-card small{display:block;color:var(--ink-soft);font-size:11px;line-height:1.35;margin-top:1px}
 .sheet .abil-note{margin:0 2px 7px;line-height:1.4}
 .opt.free{background:#fbf3e6;border-color:var(--red-soft);box-shadow:inset 3px 0 0 var(--red)}
+/* Kopieren (v105): je Technologie eine Zeile wie .opt, rechts je offenem Weg sein Preis als Knopf */
+.copy-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 12px;
+  margin-bottom:7px;background:var(--paper-2);border:1px solid var(--rule);border-radius:9px}
+.copy-row small{display:block;color:var(--ink-soft);font-size:11px;margin-top:2px}
+.copy-row .owner-marks{margin-top:4px}
+.copy-ways{display:flex;gap:6px;flex:none}
+.way{font-family:var(--mono);font-size:12px;white-space:nowrap;padding:8px 10px;min-width:44px;
+  background:var(--paper);border:1px solid var(--rule);border-radius:7px;cursor:pointer;color:var(--ink-soft)}
+.way.free{background:#fbf3e6;border-color:var(--red-soft);color:var(--red)}
+.way[disabled]{opacity:.45;cursor:default}
 .opt .owner-marks{margin-top:4px}
 
 /* ------------------------------------------------------------------ Protokoll & Modal */
@@ -699,10 +709,17 @@ body.fg .tut-nav .btn.small{flex:1}
 .civ-row{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:8px;
   background:var(--paper-2)}
 .civ-row.self{outline:2px solid var(--ink);outline-offset:-2px}
-.civ-row .civ-n{font-family:var(--serif);font-size:14px;min-width:104px}
+.civ-row .civ-nw{display:flex;flex-direction:column;min-width:104px}
+.civ-row .civ-n{font-family:var(--serif);font-size:14px}
 .civ-row .civ-a{font-size:12px;line-height:1.3}
 .civ-row .civ-a small{display:block;color:var(--ink-soft);font-size:11px}
 .civ-row .civ-a i{color:var(--ink-soft)}
+/* Einkommen nächster Zug je Reich in der Welt (v109): dieselbe Summe wie im Technologiebogen */
+.civ-row .civ-y{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12px;font-weight:700}
+.civ-row .civ-y .ydot{width:16px;height:16px;font-size:10px}
+/* Zug beenden? (v109): zwei Knöpfe nebeneinander */
+.ask{display:flex;gap:10px;margin-top:18px}
+.ask .btn{flex:1}
 
 /* Legephase: Fähigkeit, Legende der dominierten Felder und Ertragsvorschau in der
    Hinweiszeile. Die Legende trägt die Farbe des rötlichen Rands (OVERLAY.dom in ui.js). */

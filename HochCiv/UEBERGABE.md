@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 18.11., `sw.js` v108)
+# Hochzeivilization — Projekt-Übergabe (Stand 18.11., `sw.js` v109)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v108)
+## Letzte Sitzungen auf einen Blick (v61 → v109)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -63,11 +63,11 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v106 | Gemeldet vom Autor: In der App auf dem Home-Bildschirm ging **„Fähigkeiten" in keiner Partie auf**, im Browser schon. Ursache, nachgestellt: Ihr Offline-Cache hielt neue Dateien neben alten (`copyRate is not defined`) – `sw.js` war schon neu, während der Upload lief, und gefüllt wird ein Cache nur einmal je `VERSION`. **Der Service Worker übernimmt eine Fassung jetzt ganz oder gar nicht:** jede Datei frisch (`cache: 'reload'`), Inhalt gegen `BUILD_HASH` geprüft, sonst bleibt die alte. Ist das Menü offen, lädt die App eine übernommene Fassung gleich neu (`swStart`) | Fehler + Auslieferung |
 | v107 | Fünf Anweisungen des Autors, drei Rückfragen vorab: **Wikinger haben die Navigation immer verfügbar** (nach dem Wurf dazu, `CIV_TECH`, `civTechAfterRoll`; auch in laufenden Partien); **Maschinengewehr +3** Verteidigung je Bevölkerung (`MG_DEFENSE`); **Forschung vor dem Legen mit allen Reichen** (Marken wie im Spiel, ohne Hilfszeile); **Fähigkeitswahl** auf der Plättchenkarte, wenn alle Reiche ausgelost sind – rückwärts in der Zugfolge, Vorrat so groß wie die Zahl der Wählenden, die Zivilisation kommt mit, gewürfelt ist schon (`pickNew`, `pickApply`, `kiPickAbility`; Bildschirm des Drafts, `startPick`); **experimenteller Plättchenmodus aus 14 Dreiecken** statt zehn Sechsecken: die zehn der Vierer-Karte offen, vier Startdreiecke außen an jeder zweiten Kante, je 8 Felder auseinander (`TILE_SHAPES.tri14`), als eigene Karte statt Häkchen; die Sechsecke sind entfernt | Regel + Modus + Oberfläche |
 | v108 | Sechs Anweisungen des Autors, ohne Rückfrage: **Hauptstadt** verteidigt mit 1 mehr je Bevölkerung (`CAPITAL_DEFENSE`, `defensePerPop`); **Wirkungen getauscht** – Eisenverarbeitung ↔ Stahl, Gewehre ↔ Panzer, die Zahlen jetzt in `TECHS` neben ihrem Text (`machtPreis`, `machtVerlust`; `powerPrice`, `powerDecay`); **Kosten** Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 (wie bis v83); **Flankieren mit Raketentechnik** auch aus 1 und 2 Feldern auf einer Linie (`hexOpposite`; gemeldet als Fehler); **offline vom Home-Bildschirm** (gemeldet): in WebKit nachgestellt – ein gescheiterter erster Einbau wurde erst beim Kaltstart wiederholt, offline bekam ein fehlendes Skript HTML. Jetzt nachgeholt, sobald die App sichtbar oder online wird; Ausliefern nur aus dem eigenen Cache, HTML nur für Seiten; im Menü „nur online", solange kein Service Worker die Seite hält | Regel + Fehler + Auslieferung |
+| v109 | Vier Anweisungen des Autors, ohne Rückfrage: **Auswahl** auf der Karte weiß mit dunklem Rand (bis v108 dunkelrot wie Englands Grenze); **Stadtscheiben** mit einem Hauch der Reichsfarbe (`cityFill`, 0,18); **Zug beenden?** einmal je Zug, wenn der verfallende Vorrat noch etwas kauft oder Kostenloses offen ist (`unspent`, `endTurnAsk`; ersetzt die Meldung „Nochmal tippen"); **Welt** mit dem Einkommen des nächsten Zugs je Reich als ∑ wie im Technologiebogen | Oberfläche |
 
-Neu in v108: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
-(Abschnitt „Hauptstadt · Macht getauscht · Militärkosten · Flankieren mit Raketentechnik · offline
-vom Home-Bildschirm (v108)"), die Fragilität zum Service Worker erweitert, zwei neu, die offenen
-Punkte 69 bis 71, ein neuer Prüfstand: WebKit (unter „Verifikationsmethoden").
+Neu in v109: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Auswahl · getönte Städte · Zug beenden? · Einkommen in der Welt (v109)"), zwei
+Fragilitäten neu, der offene Punkt 72.
 
 Neu in v106: der erste Punkt unter „Was das Spiel heute kann", die Bug-Historie und `ANNAHMEN.md`
 (Abschnitt „Aktualisierung ganz oder gar nicht (v106)"), Punkt 66.
@@ -242,33 +242,33 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1385 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1388 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
 | `js/data.js` | 567 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 161 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
 | `js/tiles.js` | 360 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4, seit v107 `tri14`), `SHAPE_BY_KEY`, Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2340 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/engine.js` | 2365 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 487 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
 | `js/ki.js` | 1944 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
 | `js/marathon.js` | 360 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`); **Fähigkeitswahl der Plättchenkarte** (v107: `pickWanted`, `pickNew`, `kiPickAbility`, `pickApply`) |
 | `js/ui/base.js` | 181 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
-| `js/ui/map.js` | 555 | SVG-Karte (`drawMap`), Geländezeichen, Erträge im Gründungsmodus, Machtringe, Flüsse, Kampfbilder, `attachTaps` |
-| `js/ui/game.js` | 425 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
+| `js/ui/map.js` | 567 | SVG-Karte (`drawMap`), Geländezeichen, Erträge im Gründungsmodus, Machtringe, Flüsse, Kampfbilder, `attachTaps` |
+| `js/ui/game.js` | 427 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
 | `js/ui/sheets.js` | 317 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
-| `js/ui/turns.js` | 378 | Zugende, KI- und Bot-Züge, Kampf- und Zug-Nachspiel (Szenen, Satz, laufender Vorrat), Bot-Blatt |
+| `js/ui/turns.js` | 407 | Zugende, KI- und Bot-Züge, Kampf- und Zug-Nachspiel (Szenen, Satz, laufender Vorrat), Bot-Blatt |
 | `js/ui/end.js` | 178 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
-| `js/ui/world.js` | 223 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
+| `js/ui/world.js` | 227 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
 | `js/ui/setup.js` | 335 | die eine Vorliebe (`prefs.anim`, `setAnim`); Aufbau: Spielart, Plätze (eine Zeile, Fähigkeitswahl mit Wirkung), Karte, Startspieler, Rezept, Doppelte |
 | `js/ui/place.js` | 241 | Legephase der Plättchenkarte: würfeln, wählen lassen (`startPick`) oder legen (`placeBegin`), Forschung mit allen Reichen, Welt |
 | `js/ui/draft.js` | 150 | Fähigkeiten wählen: Draft des Marathons, seit v107 die Fähigkeitswahl der Plättchenkarte (`startPick`, `pickAdvance`, `drawPick`) auf demselben Bildschirm |
 | `js/ui/editor.js` | 34 | Karteneditor |
 | `js/ui/boot.js` | 311 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
 | `js/firstgame.js` | 1460 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 8107 | **2020 Assertions**, `node test.js` |
-| `smoke.js` | 4764 | **173 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `test.js` | 8134 | **2027 Assertions**, `node test.js` |
+| `smoke.js` | 4844 | **176 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 75 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
@@ -296,6 +296,32 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v109 auf einen Blick.** Vier Anweisungen des Autors zur Oberfläche, ohne Rückfrage umgesetzt.
+  · **Auswahl:** weißer Ring mit dunklem Rand, zwei Lagen (`OVERLAY.sel` in `drawMap`, `markHexes`
+    zeichnet Listen von Lagen). Bis v108 dunkelrot (#9d3b2f, die Farbe der Leiste) – neben Englands
+    Grenze (#8f2f3f) kaum zu unterscheiden. Verglichen auf der Karte: weiß-dunkel, gold, tinte, weiß;
+    Gold hätte mit der goldenen Hervorhebung des Ersten Spiels und der Kampffelder kollidiert, Tinte
+    liest sich wie eine Grenze.
+  · **Stadtscheiben:** `cityFill(farbe)` mischt 18 % der Reichsfarbe ins Beige (#f7f1e0) – im Spiel
+    und bei den Hauptstädten der Legephase. Verglichen: 12, 20, 28 %; ab gut 25 % verschwimmen
+    russische Scheiben im Grasland.
+  · **Zug beenden?** `unspent(S, pi)` (`js/engine.js`) sagt, was der Vorrat noch kaufen kann –
+    `kaufbar`: forschen, Macht, Wachstum, Armee, Stadt, Weltwunder, je über die Prüfung der Aktion –
+    und was kostenlos offen ist (`frei` = `freeActions`). `endHumanTurn` zeigt dann einmal je Zug
+    `endTurnAsk` (`js/ui/turns.js`): „🪙 9 verfallen am Zugende – genug für: Macht, Armee bauen." bzw.
+    „Noch offen: …", dazu die Hinweise aus `pendingWarnings`; „Zurück" (oder ✕) spielt weiter, danach
+    beendet die Leiste ohne Frage (`ui.confirmedEnd`, wie bisher). Im Ersten Spiel nicht – dort fragt
+    `fgZugendeOk`.
+  · **Welt:** unter jedem Reich `∑ 🔬 🌾 🪙` aus `incomeBreakdown(S, i).total` – derselben Summe wie
+    „Ertrag nächster Zug" im Technologiebogen (`yieldCells`, `SUM_COLOR` teilen sich beide). Name
+    und Summe stehen getrennt (`.civ-nw` > `.civ-n` + `.civ-y`), damit `.civ-n` nur den Namen trägt.
+  · **Tests:** `test.js` `unspent` in sieben Lagen (leer, 4 und 5 Münzen, 1 Wissenschaft, Wachstum,
+    Gründen, Armee nur mit freier Stadt, Dunkles Zeitalter, Kosten 0 bei Griechenland) und die
+    Reichsfarben als #rrggbb. `smoke.js`: Auswahl in zwei Lagen und keiner Reichsfarbe, Scheiben je
+    Reich getönt (Zahlen fest), Welt-∑ gleich Einkommen und gleich der Summe im Bogen, das Fenster
+    (Text, Zurück, zweiter Tipp ohne Frage, der Nächste wird wieder gefragt, „Zug beenden" im Fenster,
+    ohne Reste keine Frage, „Noch offen" auf Englisch). Wo Schritte nur einen Zug beenden, tut das jetzt
+    `zugEnde()` – Tippen, und bestätigen, falls gefragt.
 - **v108 auf einen Blick.** Sechs Anweisungen des Autors, ohne Rückfrage umgesetzt; zwei davon Fehler
   (Flankieren, offline).
   · **Hauptstadt:** +1 Verteidigung je Bevölkerung gegenüber anderen Städten (`CAPITAL_DEFENSE`).
@@ -1308,10 +1334,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 2020 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2027 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (173 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (176 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -1393,6 +1419,12 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
 - **Macht-Technologien (seit v108):** Preis und Verlust wirken nur über `machtPreis`/`machtVerlust` in
   `TECHS`. Eine neue Technologie mit solcher Wirkung braucht das Feld; der Test prüft Text und Zahl für
   genau die vier heutigen.
+- **„Zug beenden?" (seit v109)** kennt nur, was `unspent` prüft. Eine neue Art, Vorrat auszugeben
+  (eine neue Aktion mit Kosten), gehört dort hinein, sonst verfällt ihr Geld ohne Frage. Schritte in
+  `smoke.js`, die nur einen Zug beenden, nehmen `zugEnde()`; ein rohes `$('a-end').onclick()` bleibt
+  bei Resten im Fenster stehen.
+- **Reichsfarben (seit v109)** müssen #rrggbb sein – `cityFill` rechnet mit den drei Kanälen; ein Test
+  prüft es für alle Reiche und die Barbaren.
 - **Maßstab großer Bildschirme (seit v103)**: `html{zoom:var(--ui)}` lässt auch `vh`/`vw` mitwachsen
   (Chromium gemessen). Darum bleibt `--ui` gedreht bei 1 (die Drehung rechnet mit 100vh/100vw), und
   wer neue Längen in `vh`/`vw` braucht, prüft sie bei `--ui` > 1. Höhen fürs CSS mit `offsetHeight`
@@ -2643,6 +2675,14 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    in iOS-Safari vom Home-Bildschirm. Ob dort derselbe Grund vorlag, zeigt erst der Versuch: App mit
    Netz öffnen, warten, bis „nur online" verschwindet, Flugmodus, App neu starten. Bleibt „nur online"
    mit Netz stehen, passen die Dateien auf dem Server nicht zu `BUILD_HASH` (alles neu hochladen).
+72. **Getroffene Auslegungen (v109) – zum Ändern angeboten.** (a) „Einmal": je Zug – nach „Zurück"
+   beendet der nächste Tipp ohne Frage; der nächste Zug fragt wieder. Die andere Lesart (einmal je
+   Partie, als Lernhinweis) wäre eine Zeile. (b) „Ressourcen übrig" heißt: der Vorrat kauft noch
+   etwas. Reste, die nichts kaufen (1 Münze), lösen keine Frage aus. (c) Armeen mit Bewegung zählen
+   nicht als offene Aktion – Belagerung und Wache bestehen aus Stehenbleiben, und die Karte markiert
+   bewegliche Armeen schon mit einem Punkt; Straßen, Kopien und Felder zählen auch nicht. (d) Die
+   Auswahl ist weiß statt einer neuen Akzentfarbe. (e) Das Einkommen in der Welt zeigen alle Reiche,
+   auch Bots und die KI – ablesbar war es schon an der Karte.
 
 ## Arbeitsweise, die der Autor schätzt
 

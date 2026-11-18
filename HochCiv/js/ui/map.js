@@ -279,6 +279,15 @@ function riverLines(g, rows) {
     g.appendChild(svgEl('path', { d, fill: 'none', stroke: '#a6d0ec', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: 0.75, 'pointer-events': 'none' }));
   }
 }
+/* Stadtscheibe (v109, Anweisung des Autors): das Beige mit einem Hauch der Reichsfarbe – knapp
+   ein Fünftel. Die Bevölkerung steht darauf in der vollen Farbe und bleibt lesbar; bis v108 war
+   jede Scheibe gleich beige. Reichsfarben sind #rrggbb (data/civs.json, ein Test prüft es). */
+const CITY_BEIGE = '#f7f1e0', CITY_TINT = 0.18;
+function cityFill(col) {
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const a = rgb(CITY_BEIGE), b = rgb(col);
+  return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * CITY_TINT).toString(16).padStart(2, '0')).join('');
+}
 function drawMap(svg, map, opts) {
   opts = opts || {};
   svg.innerHTML = '';
@@ -297,17 +306,20 @@ function drawMap(svg, map, opts) {
     tut: { fill: 'rgba(255,214,102,.30)', stroke: '#b8860b', 'stroke-width': 3.4, 'stroke-linejoin': 'round' },
     frame: { fill: 'none', stroke: '#b8860b', 'stroke-width': 3, 'stroke-linejoin': 'round' },
     // Legephase: erlaubt, aber dominiert. Etwas eingerückt, damit es innerhalb des goldenen
-    // Rahmens sitzt und nicht mit der Auswahl (volle Größe, dunkelrot) verwechselt wird.
+    // Rahmens sitzt und nicht mit der Auswahl (volle Größe, weiß) verwechselt wird.
     dom: { inset: 5, fill: 'none', stroke: '#d0402c', 'stroke-width': 3, 'stroke-linejoin': 'round' },
-    sel: { fill: 'none', stroke: '#9d3b2f', 'stroke-width': 4 },
+    /* Auswahl (v109, gemeldet vom Autor): weiß mit dunklem Rand, in zwei Lagen – keine Reichsfarbe
+       ist weiß, und auf jedem Gelände steht der Ring. Bis v108 dunkelrot wie die Leiste: neben
+       Englands Grenze (#8f2f3f) kaum zu unterscheiden. */
+    sel: [{ fill: 'none', stroke: '#2a2721', 'stroke-width': 6.5, 'stroke-linejoin': 'round' },
+      { fill: 'none', stroke: '#ffffff', 'stroke-width': 3.5, 'stroke-linejoin': 'round' }],
   };
   const markHexes = (list, art) => (list || []).forEach(([r, c]) => {
     const [x, y] = hexCenter(r, c, HEX);
-    const { inset, ...stil } = OVERLAY[art];
-    world.appendChild(svgEl('polygon', Object.assign({
+    [].concat(OVERLAY[art]).forEach(({ inset, ...stil }) => world.appendChild(svgEl('polygon', Object.assign({
       points: inset ? hexPath(HEX - inset) : pts,
       transform: `translate(${x},${y})`, 'pointer-events': 'none',
-    }, stil)));
+    }, stil))));
   });
 
   // 1 Gelände. „Kein Feld" (X) gehört nicht zur Karte: es wird nicht gezeichnet und
@@ -408,7 +420,7 @@ function drawMap(svg, map, opts) {
       const [x, y] = hexCenter(ct.r, ct.c, HEX);
       const civ = civOf(S2.players[ct.owner]);
       world.appendChild(svgEl('circle', {
-        cx: x, cy: y, r: 15, fill: '#f7f1e0', stroke: ct.cap ? '#2a2721' : civ.color,
+        cx: x, cy: y, r: 15, fill: cityFill(civ.color), stroke: ct.cap ? '#2a2721' : civ.color,
         'stroke-width': ct.cap ? 3.5 : 2.4, 'pointer-events': 'none'
       }));
       const n = String(Math.max(0, ct.pop)), lang = n.length;
@@ -433,7 +445,7 @@ function drawMap(svg, map, opts) {
       const [r, c] = pos, civ = CIVS.find(x => x.k === k);
       if (!civ || r >= R) continue;
       const [x, y] = hexCenter(r, c, HEX);
-      world.appendChild(svgEl('circle', { cx: x, cy: y, r: 15, fill: '#f7f1e0', stroke: '#2a2721', 'stroke-width': 3, 'pointer-events': 'none' }));
+      world.appendChild(svgEl('circle', { cx: x, cy: y, r: 15, fill: cityFill(civ.color), stroke: '#2a2721', 'stroke-width': 3, 'pointer-events': 'none' }));
       const t = svgEl('text', { x, y: y + 7, 'text-anchor': 'middle', 'font-size': 20, fill: civ.color, 'pointer-events': 'none' });
       t.textContent = SYM[civ.sym]; world.appendChild(t);
     }

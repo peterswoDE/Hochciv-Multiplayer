@@ -61,6 +61,12 @@ SET('ANIM_MS', 0);
 G('prefs').anim = 'aus';
 
 const $ = id => window.document.getElementById(id);
+/* Zug beenden wie ein Mensch (v109): Bleibt etwas ungenutzt, fragt das Spiel einmal je Zug nach –
+   bestätigt wird mit „Zug beenden" im Fenster. Sonst endet der Zug gleich beim ersten Tipp. */
+const zugEnde = () => {
+  $('a-end').onclick();
+  if ($('overlay').classList.contains('show') && $('end-ok')) $('end-ok').onclick();
+};
 /* Ausgabe (v102): grün nur eine Zeile („smoke  185 passed"), rot jede FAIL-Zeile; der Rest nur
    mit `node smoke.js --verbose`. */
 const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v');
@@ -533,7 +539,7 @@ step('Bot-Fenster zeigt Einträge auch bei vollem Log (Bugfix)', () => {
   const S = G('S');
   for (let i = 0; i < 650; i++) G('log')(S, 'roll', 'Füller ' + i);
   if (S.log.length !== 600) throw new Error('Log nicht gekappt');
-  $('a-end').onclick();                       // Bots laufen
+  zugEnde();                       // Bots laufen
   if (AUTO(S.players[S.cur])) {
     const lines = $('sheet-body').querySelectorAll('.logline').length;
     if (lines === 0) throw new Error('Bot-Fenster leer trotz Aktionen (der alte Bug)');
@@ -545,7 +551,7 @@ step('Bot-Fenster zeigt Einträge auch bei vollem Log (Bugfix)', () => {
 });
 step('Bot-Zug: nur „Weiter" führt weiter (Punkt 5)', () => {
   const S = G('S');
-  $('a-end').onclick();                       // menschlichen Zug beenden → Bots laufen
+  zugEnde();                       // menschlichen Zug beenden → Bots laufen
   let guard = 0;
   while (AUTO(S.players[S.cur]) && !S.over && guard++ < 6) {
     if (!$('bot-next')) throw new Error('kein Weiter-Knopf im Bot-Sheet');
@@ -558,7 +564,7 @@ step('Bot-Zug: nur „Weiter" führt weiter (Punkt 5)', () => {
 });
 step('Zug beenden + Bot-Züge', () => {
   for (let i = 0; i < 8 && !G('S').over; i++) {
-    $('a-end').onclick();
+    zugEnde();
     let guard = 0;
     while (AUTO(G('S').players[G('S').cur]) && !G('S').over && guard++ < 6) {
       const next = $('bot-next'); if (!next) break; next.onclick();
@@ -992,7 +998,7 @@ step('Oxford + Singularität zeigt den Siegbildschirm (gemeldeter Fehler)', () =
     if ($('bot-next')) { $('bot-next').onclick(); continue; }
     if ($('overlay').classList.contains('show')) { G('closeModal')(); continue; }
     if ($('a-end').disabled) throw new Error('Zugende gesperrt, Runde nicht spielbar');
-    $('a-end').onclick();
+    zugEnde();
     if ($('ov-title') && $('ov-title').textContent === 'Zug beenden')
       $('overlay').querySelector('.btn.primary, .btn.wide').onclick();
   }
@@ -1300,7 +1306,7 @@ step('Zugende ist mit Armee in der Stadt gesperrt (nicht nur bestätigungspflich
   arm.mp = G('moveAllowance')(S, pi);
   G('moveArmy')(S, arm, ziel[0], ziel[1]);
   if (G('blockingIssues')(S, pi).length) throw new Error('Sperre bleibt trotz freiem Stadtfeld');
-  $('a-end').onclick();
+  zugEnde();
   if (G('S').round === runde && G('S').cur === dran)
     throw new Error('der Zug ließ sich danach immer noch nicht beenden');
   console.log('       zweimal blockiert, nach dem Herausziehen frei');
@@ -2675,7 +2681,7 @@ step('KI: Züge laufen über das Blatt mit „Weiter", dann ist wieder der Mensc
   $('setup-events').checked = mitEreignis; $('setup-events').onchange();
   const S = G('S');
   if (AUTO(G('P')(S))) throw new Error('das Spiel beginnt nicht beim Menschen');
-  $('a-end').onclick();
+  zugEnde();
   let n = 0, titel = '';
   while (G('P')(G('S')).kind === 'ki' && !G('S').over && n++ < 6) {
     titel = $('sheet-body').querySelector('h3').textContent;
@@ -2712,7 +2718,7 @@ const kiTisch = () => {
 };
 step('Sperre: „Zug beenden" wirkt nicht, solange das Blatt eines KI-Zugs offen ist', () => {
   const S = kiTisch();
-  $('a-end').onclick();                               // Mensch beendet, erste KI zieht
+  zugEnde();                               // Mensch beendet, erste KI zieht
   if (!G('ui').botLock || !$('bot-next')) throw new Error('kein gesperrtes KI-Blatt');
   const cur = S.cur, laenge = S.log.length;
   G('endHumanTurn')();                                // käme es doch durch: zweiter Kampf, Zug übersprungen
@@ -2721,7 +2727,7 @@ step('Sperre: „Zug beenden" wirkt nicht, solange das Blatt eines KI-Zugs offen
 });
 step('Sperre: beginnt der Zug des Menschen, ist ein übrig gebliebenes KI-Blatt weg', () => {
   const S = kiTisch();
-  $('a-end').onclick();
+  zugEnde();
   // der gemeldete Zustand: Mensch am Zug, KI-Blatt noch gesperrt
   let g = 0;
   while (AUTO(G('P')(S)) && g++ < 8) G('advanceTurn')(S);
@@ -2733,7 +2739,7 @@ step('Sperre: beginnt der Zug des Menschen, ist ein übrig gebliebenes KI-Blatt 
 });
 step('Sperre: dieselbe KI zieht nicht zweimal (Neuladen mitten im KI-Blatt)', () => {
   const S = kiTisch();
-  $('a-end').onclick();
+  zugEnde();
   const ki = S.cur;
   const vorher = JSON.stringify(S.players[ki]) + S.armies.length + S.log.length;
   const zeilen = $('sheet-body').querySelectorAll('.logline, details').length;
@@ -2749,7 +2755,7 @@ step('Sperre: ein Fehler im KI-Zug hält das Spiel nicht an – er steht im Prot
   const echt = G('kiTurn');
   window.__set('kiTurn', () => { throw new Error('Testfehler'); });
   const ce = console.error; console.error = () => { };   // der absichtliche Fehler muss nicht in die Ausgabe
-  try { $('a-end').onclick(); }
+  try { zugEnde(); }
   finally { window.__set('kiTurn', echt); console.error = ce; }
   if (!G('ui').botLock || !$('bot-next')) throw new Error('kein KI-Blatt nach dem Fehler');
   if (!/Interner Fehler.*Testfehler/.test($('sheet-body').textContent)) throw new Error('der Fehler steht nicht im Blatt');
@@ -2789,7 +2795,7 @@ step('KI: auf Englisch heißen Sitzart, Stufe und Blatt „AI"', () => {
   if (zeile !== 'AI') { G('switchLang')('de'); throw new Error('Zeile: ' + zeile); }
   $('setup-start').value = '0'; $('setup-start').onchange();
   $('setup-go').onclick();
-  $('a-end').onclick();
+  zugEnde();
   let n = 0, titel = '';
   while (AUTO(G('P')(G('S'))) && !G('S').over && n++ < 6) {
     const h = $('sheet-body').querySelector('h3').textContent;
@@ -3117,7 +3123,7 @@ step('Normales Spiel (v85): Griechenland und Methode wie bisher, Startausgleich 
   if (/im Marathon doppelt|des Mittelalters oder früher/.test(txt)) throw new Error('Marathontext im normalen Spiel');
   // der Mensch beginnt; nach einer Runde stehen die beiden KI mit ihrem Platz im Protokoll,
   // der Bot nicht
-  $('a-end').onclick();
+  zugEnde();
   let n = 0;
   while (AUTO(G('P')(G('S'))) && !G('S').over && n++ < 6 && $('bot-next')) $('bot-next').onclick();
   const platz = i => G('turnPosition')(S, i);
@@ -3157,7 +3163,7 @@ const griechenSpiel = abil => {
 const zahlAbil = () => $('a-abil-n').hidden ? 0 : +$('a-abil-n').textContent;
 step('Bot- und KI-Blatt: „Weiter" oben und unten, beide führen weiter (v87)', () => {
   const S = griechenSpiel('basis');
-  $('a-end').onclick();
+  zugEnde();
   if (!AUTO(G('P')(S))) throw new Error('kein Bot am Zug');
   const oben = $('bot-next-top'), unten = $('bot-next');
   if (!oben || !unten) throw new Error('nicht beide Knöpfe da');
@@ -3378,7 +3384,7 @@ step('Fähigkeiten: auf Englisch vollständig, kostenlose Technologie aus Wunder
   G('closeSheet')();
   // das Blatt eines Bot-Zugs: „Continue" oben und unten
   const knopfEn = $('a-abil').childNodes[0].textContent.trim();
-  $('a-end').onclick();
+  zugEnde();
   if ($('bot-next-top').textContent !== 'Continue' || $('bot-next').textContent !== 'Continue') throw new Error('Bot-Blatt nicht übersetzt');
   while (AUTO(G('P')(G('S'))) && !G('S').over && $('bot-next')) $('bot-next').onclick();
   console.log('       „' + knopfEn + '" · Blatt ohne fehlende Übersetzung, Wunder-Technologie gewählt, Bot-Blatt „Continue"');
@@ -3505,8 +3511,7 @@ step('v89: frisch gezeigte Blätter nehmen kurz keine Tipps an – außer auf de
   if (ct.pop !== pop0 + 1) throw new Error(`Stadtblatt: ${pop0} → ${ct.pop} statt +1`);
   // 6 Blatt eines Bot- oder KI-Zugs: „Weiter" wirkt sofort
   G('closeSheet')();
-  $('a-end').onclick();
-  if (!G('ui').botLock) $('a-end').onclick();          // eine Warnung bestätigen
+  zugEnde();
   if (!G('ui').botLock) throw new Error('kein Bot-Blatt nach dem Zugende');
   const wer = G('S').cur;
   tippe($('bot-next-top'));
@@ -3561,8 +3566,7 @@ step('v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke, m
   const { S, pi, C, E } = kampfLage();
   SET('COMBAT_MS', 1000);
   try {
-    $('a-end').onclick();
-    if (!G('ui').combat) $('a-end').onclick();              // eine Warnung bestätigen
+    zugEnde();
     const k = G('ui').combat;
     if (!k) throw new Error('kein Nachspiel');
     if (k.kaempfe.map(f => f.art).join() !== 'stadt,flanke') throw new Error('Reihenfolge: ' + k.kaempfe.map(f => f.art).join());
@@ -3605,7 +3609,7 @@ step('v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke, m
       throw new Error('Hinweis: ' + hinweis.className + ' „' + hinweis.textContent + '"');
     // Während des Nachspiels: kein zweites Zugende, kein Feldblatt
     const seq = S.logSeq;
-    $('a-end').onclick();
+    zugEnde();
     if (S.logSeq !== seq || S.cur !== pi) throw new Error('„Zug beenden" wirkte während des Nachspiels');
     // Bild 2: die Flanke – Macht 5 gegen 3, die Armee steht im Bild noch (Stand davor)
     G('combatNext')();
@@ -3641,8 +3645,7 @@ step('v90: das Menü (☰) beendet ein laufendes Nachspiel, bevor es öffnet', (
   const { S, pi, C, E } = kampfLage();
   SET('COMBAT_MS', 1000);
   try {
-    $('a-end').onclick();
-    if (!G('ui').combat) $('a-end').onclick();
+    zugEnde();
     if (!G('ui').combat) throw new Error('kein Nachspiel');
     SET('COMBAT_MS', 0);
     $('g-menu').onclick();
@@ -3669,8 +3672,7 @@ step('v90: im Zug eines Bots erst der Kampf, dann das Blatt', () => {
   SET('COMBAT_MS', 1000);
   try {
     // bis zum Zug dieses Bots durchklicken
-    $('a-end').onclick();
-    if (!G('ui').botLock && !G('ui').combat) $('a-end').onclick();
+    zugEnde();
     let guard = 0;
     while (G('S').cur !== bi && G('ui').botLock && guard++ < 10) $('bot-next').onclick();
     const k = G('ui').combat;
@@ -4206,7 +4208,7 @@ step('v92: Erstes Spiel – gründen, wachsen, Zugende, Englands Zug', () => {
   G('tapHex')(cap.r, cap.c);
   $('sheet-body').querySelector('.opt[data-label="Bevölkerungswachstum"]').onclick();
   if (fgId() !== 'zug1') throw new Error('wachsen: ' + fgId());
-  $('a-end').onclick();
+  zugEnde();
   if (!G('ui').botLock || !/England ist am Zug/.test($('tut-title').textContent)) throw new Error('Englands Zug: ' + $('tut-title').textContent);
   $('bot-next').onclick();
   if (S.round !== 2 || fgId() !== 'wachsen2' || !/in Runde 1 waren es 1, 4 und 4/.test(panelText())) throw new Error('Runde 2: ' + panelText());
@@ -4229,10 +4231,10 @@ step('v92: Erstes Spiel – alle Städte wachsen, Handelsroute, dritte Stadt, be
   $('a-found').onclick(); G('tapHex')(2, 3);
   $('sheet-body').querySelector('.opt[data-label="Hier gründen"]').onclick();
   if (fgId() !== 'zug2') throw new Error('dritte Stadt: ' + fgId());
-  $('a-end').onclick(); $('bot-next').onclick();
+  zugEnde(); $('bot-next').onclick();
   if (fgId() !== 'belagert' || !/Angriff 3 gegen Verteidigung 2/.test(panelText())) throw new Error('belagert: ' + panelText());
   // Zugende geht nicht, solange die Stadt fiele
-  $('a-end').onclick();
+  zugEnde();
   if (S.round !== 3 || S.cur !== 0 || !/Die Stadt fiele/.test($('toast').textContent)) throw new Error('Zugende: ' + $('toast').textContent);
   const stadt = G('cityAt')(S, 5, 5);
   G('tapHex')(5, 5);
@@ -4255,9 +4257,9 @@ step('v93: Erstes Spiel – Runde 3 vom Weg geführt, Nachfrage beim Zugende, Fl
   $('ov-body').querySelector('[data-tech="schrift"]').onclick();
   if (S.players[0].techs.schrift || !/Erst Belagerungsmaschinen/.test($('toast').textContent)) throw new Error('Schrift: ' + $('toast').textContent);
   G('closeModal')();
-  $('a-end').onclick();
+  zugEnde();
   if (S.cur !== 0 || !/Belagerungsmaschinen noch nicht erforscht/.test($('toast').textContent)) throw new Error('keine Nachfrage: ' + $('toast').textContent);
-  $('a-end').onclick();
+  zugEnde();
   $('bot-next').onclick();
   if (S.round !== 4 || fgId() !== 'flanke') throw new Error('Runde 4: ' + fgId());
   if (fgSpieleBis('m_belagern') !== 'm_belagern') throw new Error('bis zum Militärweg: ' + fgId());
@@ -4312,7 +4314,7 @@ step('v92: Erstes Spiel – fortsetzen, Englisch, beenden (England spielt als KI
   if (S.fg || G('ui').fg || !$('tut-panel').hidden) throw new Error('nicht beendet');
   const r = S.round;
   // jetzt ohne Schienen: Zugende geht, England zieht als KI
-  $('a-end').onclick();
+  zugEnde();
   if (G('ui').botLock) $('bot-next').onclick();
   if (G('S').round !== r + 1) throw new Error('Zug ging nicht weiter: Runde ' + G('S').round);
   console.log('       ' + en + ' · beendet, Runde ' + G('S').round + ' ohne Führung');
@@ -4331,7 +4333,7 @@ step('v93: Spielstand von v92 ohne Weg – das Panel fragt zuerst, dann geht es 
   $('m-continue').onclick();
   const knoepfe = [...$('tut-body').querySelectorAll('[data-pfad]')].map(b => b.dataset.pfad).join();
   if (knoepfe !== 'militaer,wirtschaft,wissenschaft' || !/Wähle deinen Weg/.test(panelText())) throw new Error('keine Wahl im Panel: ' + panelText());
-  $('a-end').onclick();
+  zugEnde();
   if (!/Wähle deinen Weg/.test($('toast').textContent) || G('S').round !== 5) throw new Error('Zugende ohne Weg: ' + $('toast').textContent);
   $('tut-body').querySelector('[data-pfad="wirtschaft"]').onclick();
   if (G('S').fg.pfad !== 'wirtschaft' || fgId() !== 'w_theologie' || 'wahl' in G('S').fg) throw new Error('nach der Wahl: ' + fgId());
@@ -4399,8 +4401,8 @@ step('v94: nach dem Zugende laufen alle Bots durch, bis du wieder dran bist – 
   mitAnimation(0, () => {
     const S = griechenSpiel('basis'), pi = S.cur, r0 = S.round, seq = S.logSeq;
     $('sheet-body').innerHTML = '';                                     // das Blatt behält sonst den Inhalt des letzten
-    $('a-end').onclick();
-    if (S.cur === pi && S.round === r0) $('a-end').onclick();          // eine Warnung bestätigen
+    zugEnde();
+    if (S.cur === pi && S.round === r0) zugEnde();          // eine Warnung bestätigen
     if (G('ui').botLock || $('sheet').classList.contains('open') || $('bot-next')) throw new Error('ein Blatt steht');
     if (S.cur !== pi || S.round !== r0 + 1) throw new Error(`nicht wieder dran: Runde ${S.round}, am Zug ${S.cur}`);
     if (G('ui').anim || window.document.body.classList.contains('blocked')) throw new Error('noch gesperrt');
@@ -4449,8 +4451,8 @@ step('v94: Szene für Szene – Karte, Satz unten, Sperre; ein Tipp überspringt
   mitAnimation(100000, () => {
     const S = griechenSpiel('basis'), pi = S.cur;
     const cap = G('capitalOf')(S, pi);
-    $('a-end').onclick();
-    if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+    zugEnde();
+    if (!G('ui').anim && S.cur === pi) zugEnde();
     const a = G('ui').anim;
     if (!a) throw new Error('kein Nachspiel');
     const bi = S.cur, t = $('toast');
@@ -4478,7 +4480,7 @@ step('v94: Szene für Szene – Karte, Satz unten, Sperre; ein Tipp überspringt
         if (gleiten.has(ar.id) === armeeGezeichnet(ar.r, ar.c, ar.owner)) throw new Error(s.art + ': Armee ' + ar.id + ' falsch gezeichnet');
       }
       // Zugende geht nicht, das Protokoll (Leiste) ist gesperrt
-      $('a-end').onclick();
+      zugEnde();
       if (G('ui').anim !== a) throw new Error('„Zug beenden" hat eingegriffen');
       G('animNext')();
     }
@@ -4600,8 +4602,8 @@ step('v94: der Kampf eines Bots kommt nach seinen Szenen, dann geht es gleich we
     SET('botTurn', (S2, i) => { if (i === bi) G('growCity')(S2, i, G('capitalOf')(S2, i), 'paid'); });
     SET('COMBAT_MS', 1000);
     try {
-      $('a-end').onclick();
-      if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+      zugEnde();
+      if (!G('ui').anim && S.cur === pi) zugEnde();
       const a = G('ui').anim;
       if (!a || S.cur !== bi || a.szenen.map(s => s.art).join() !== 'wachsen') throw new Error('erst die Szene: ' + (a && a.szenen.map(s => s.art).join()));
       if (G('ui').combat) throw new Error('Kampf schon während der Szene');
@@ -4622,8 +4624,8 @@ step('v94: der Kampf eines Bots kommt nach seinen Szenen, dann geht es gleich we
 step('v94: neu geladen mitten im Nachspiel – der Bot zieht nicht noch einmal, es geht beim nächsten weiter', () => {
   mitAnimation(100000, () => {
     const S0 = griechenSpiel('basis'), pi = S0.cur;
-    $('a-end').onclick();
-    if (!G('ui').anim && S0.cur === pi) $('a-end').onclick();
+    zugEnde();
+    if (!G('ui').anim && S0.cur === pi) zugEnde();
     const alt = G('ui').anim;
     if (!alt) throw new Error('kein Nachspiel');
     const bi = S0.cur, runde = S0.round;
@@ -4655,8 +4657,8 @@ step('v95: Animationen „Keine" über die Einstellungen – das Blatt mit „We
     SET('ANIM_MS', 900);
     const S = griechenSpiel('basis'), pi = S.cur;
     stelle('aus');
-    $('a-end').onclick();
-    if (!G('ui').botLock && S.cur === pi) $('a-end').onclick();
+    zugEnde();
+    if (!G('ui').botLock && S.cur === pi) zugEnde();
     if (!G('ui').botLock || !$('bot-next') || G('ui').anim) throw new Error('kein Blatt mit „Weiter"');
     let guard = 0;
     while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
@@ -4667,8 +4669,8 @@ step('v95: Animationen „Keine" über die Einstellungen – das Blatt mit „We
     for (const stufe of ['schnell', 'langsam']) {
       stelle(stufe);
       const r = S.round;
-      $('a-end').onclick();
-      if (!G('ui').anim && S.cur === pi && S.round === r) $('a-end').onclick();
+      zugEnde();
+      if (!G('ui').anim && S.cur === pi && S.round === r) zugEnde();
       if (G('ui').botLock || !G('ui').anim) throw new Error(stufe + ': kein Nachspiel');
       nachgespielt.push(stufe + ' ' + G('ui').anim.szenen[0].tempo);
       guard = 0;
@@ -4688,7 +4690,7 @@ step('v94: Erstes Spiel – Englands Zug auf der Karte, das Panel sagt es, dann 
     if (fgSpieleBis('zug1') !== 'zug1') throw new Error('nicht bis zum Zugende: ' + fgId());
     if (!/auf der Karte siehst du, was es tut/.test(panelText())) throw new Error('Zugende-Text: ' + panelText());
     const S = G('S');
-    $('a-end').onclick();
+    zugEnde();
     const a = G('ui').anim;
     if (!a || G('ui').botLock || $('sheet').classList.contains('open')) throw new Error('kein Nachspiel von Englands Zug');
     if (!/England ist am Zug/.test($('tut-title').textContent) || !/Schau auf der Karte zu, was England tut/.test(panelText()) ||
@@ -4772,8 +4774,8 @@ step('v96: laufender Vorrat in der Kopfzeile – je Szene der Stand danach und e
     $('setup-events').checked = mitEreignis; $('setup-events').onchange();
     const S = G('S'), pi = S.cur;
     if (S.players[pi].kind !== 'human') throw new Error('der Mensch beginnt nicht');
-    $('a-end').onclick();
-    if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+    zugEnde();
+    if (!G('ui').anim && S.cur === pi) zugEnde();
     const a = G('ui').anim;
     if (!a || S.players[S.cur].kind !== 'ki') throw new Error('kein Nachspiel eines KI-Zugs');
     const marken = () => [...$('screen-game').querySelectorAll('.hud-res .res-delta')]
@@ -4818,8 +4820,8 @@ step('v96: laufender Vorrat in der Kopfzeile – je Szene der Stand danach und e
       const x = G('P')(S);
       return [[x.res.sci, x.res.food + (x.foodDeficit ? ` (−${x.foodDeficit})` : ''), x.res.coins, G('powerOf')(S, S.cur)].join('/'), 0];
     };
-    $('a-end').onclick();
-    if (!G('ui').anim && S.cur === pi) $('a-end').onclick();
+    zugEnde();
+    if (!G('ui').anim && S.cur === pi) zugEnde();
     if (!G('ui').anim) throw new Error('kein zweites Nachspiel');
     guard = 0;
     let uebersprungen = 0;
@@ -5106,6 +5108,84 @@ step('v99: Flüsse als Wasserlauf, Inseln mit Wasser rundum', () => {
   const strand = svg.querySelectorAll(`path[fill="${G('TERRAIN').I.color}"]`).length;
   if (strand !== inseln) throw new Error(`${strand} Eilande für ${inseln} Inseln`);
   console.log(`       ${fluesse} Flussfelder mit Wasserlauf, ${inseln} Inseln mit Strand im Wasser`);
+});
+
+/* v109 (Anweisungen des Autors): Auswahl klar anders als England, Stadtscheiben mit einem Hauch der
+   Reichsfarbe, einmal je Zug nachfragen, wenn noch etwas ginge, und das Einkommen je Reich in der Welt */
+const zweiMenschen = () => {
+  SET('S', G('newGame')({ seed: 5, players: [{ civ: 'england', kind: 'human' }, { civ: 'russland', kind: 'human' }] }));
+  G('startGameScreen')(); G('closeModal')(); G('closeSheet')();
+  return G('S');
+};
+step('v109: Auswahl weiß mit dunklem Rand – in keiner Reichsfarbe; Stadtscheiben in der Farbe ihres Reichs getönt', () => {
+  const S = zweiMenschen(), cap = G('capitalOf')(S, S.cur);
+  G('ui').sel = [cap.r, cap.c]; G('redraw')();
+  const lagen = [...$('map').querySelectorAll('polygon')].slice(-2).map(p => [p.getAttribute('stroke'), +p.getAttribute('stroke-width')]);
+  if (JSON.stringify(lagen) !== JSON.stringify([['#2a2721', 6.5], ['#ffffff', 3.5]])) throw new Error('Auswahl: ' + JSON.stringify(lagen));
+  const farben = G('CIVS').map(c => c.color.toLowerCase());
+  if (lagen.some(([s]) => farben.includes(s.toLowerCase()))) throw new Error('Auswahl in einer Reichsfarbe');
+  const fill = G('cityFill');
+  if (fill('#8f2f3f') !== '#e4cec3' || fill('#3f6f3f') !== '#d6dac3') throw new Error('Tönung: ' + fill('#8f2f3f') + ' / ' + fill('#3f6f3f'));
+  const ist = [...$('map').querySelectorAll('circle[r="15"]')].map(c => c.getAttribute('fill')).sort();
+  const soll = S.cities.map(ct => fill(G('civOf')(S.players[ct.owner]).color)).sort();
+  if (ist.join() !== soll.join() || new Set(ist).size < 2) throw new Error('Scheiben: ' + ist.join() + ' statt ' + soll.join());
+  G('ui').sel = null;
+});
+step('v109: Welt – je Reich das Einkommen des nächsten Zugs als ∑, gleich der Summe im Technologiebogen', () => {
+  const S = G('S');
+  G('worldModal')();
+  const zahlen = el => [...el.querySelectorAll('.yv')].map(v => +(v.textContent.replace(/[^0-9-]/g, '') || 0));
+  const reihen = [...$('ov-body').querySelectorAll('.civ-row')];
+  const folge = S.players.map((x, i) => i).filter(i => S.players[i].kind !== 'barbar')
+    .sort((a, b) => G('turnPosition')(S, a) - G('turnPosition')(S, b));
+  const ist = reihen.map(r => zahlen(r.querySelector('.civ-y')));
+  const soll = folge.map(i => G('incomeBreakdown')(S, i).total);
+  if (JSON.stringify(ist) !== JSON.stringify(soll)) throw new Error('Welt: ' + JSON.stringify(ist) + ' statt ' + JSON.stringify(soll));
+  if (reihen.some(r => /∑/.test(r.querySelector('.civ-n').textContent))) throw new Error('der Name trägt die Summe mit');
+  const eigen = ist[folge.indexOf(S.cur)];
+  G('closeModal')(); G('techModal')();
+  const bogen = zahlen($('ov-body').querySelector('.yrow.sum'));
+  G('closeModal')();
+  if (JSON.stringify(bogen) !== JSON.stringify(eigen)) throw new Error(`Bogen ${bogen} ≠ Welt ${eigen}`);
+  console.log('       ' + ist.map(y => '∑ ' + y.join('/')).join(' · '));
+});
+step('v109: Zug beenden mit Resten – einmal je Zug ein Fenster; „Zurück" spielt weiter, danach endet der Zug ohne Frage', () => {
+  const S = zweiMenschen(), offen = () => $('overlay').classList.contains('show');
+  const erster = S.cur;
+  S.players[erster].res = { sci: 0, food: 0, coins: 9 };
+  $('a-end').onclick();
+  if (S.cur !== erster || !offen() || $('ov-title').textContent !== 'Zug beenden?') throw new Error('kein Fenster: ' + $('ov-title').textContent);
+  const text = $('ov-body').textContent;
+  if (!/🪙 9 verfallen am Zugende – genug für: .*Macht.*Armee bauen/.test(text)) throw new Error('Text: ' + text);
+  $('end-back').onclick();
+  if (offen() || S.cur !== erster) throw new Error('„Zurück" beendet oder bleibt offen');
+  $('a-end').onclick();                                      // einmal je Zug – jetzt ohne Frage
+  if (S.cur === erster || offen()) throw new Error('der zweite Tipp beendet nicht');
+  // Der Nächste wird wieder gefragt; „Zug beenden" im Fenster beendet und schließt es
+  const zweiter = S.cur;
+  S.players[zweiter].res = { sci: 0, food: 0, coins: 9 };
+  $('a-end').onclick();
+  if (S.cur !== zweiter || !$('end-ok') || !offen()) throw new Error('der Nächste wurde nicht gefragt');
+  $('end-ok').onclick();
+  if (S.cur === zweiter || offen()) throw new Error('„Zug beenden" im Fenster beendet nicht');
+  // Nichts übrig, nichts offen: keine Frage
+  const dritter = S.cur;
+  S.players[dritter].res = { sci: 0, food: 0, coins: 0 };
+  if (G('unspent')(S, dritter).frei.length) throw new Error('Voraussetzung: nichts kostenlos offen');
+  $('a-end').onclick();
+  if (S.cur === dritter || offen()) throw new Error('ohne Reste kam doch eine Frage');
+  // Nur Kostenloses (ohne Vorrat): „Noch offen", auf Englisch
+  const vierter = S.cur;
+  S.players[vierter].res = { sci: 0, food: 0, coins: 0 };
+  const echt = G('unspent');
+  SET('unspent', () => ({ kaufbar: [], frei: ['wachstum'] }));
+  G('switchLang')('en');
+  try {
+    $('a-end').onclick();
+    if ($('ov-title').textContent !== 'End turn?' || !/^Still open: Grow for free\.$/.test($('ov-body').querySelector('p').textContent))
+      throw new Error('Englisch: ' + $('ov-title').textContent + ' · ' + $('ov-body').querySelector('p').textContent);
+    $('end-back').onclick();
+  } finally { SET('unspent', echt); G('switchLang')('de'); }
 });
 
 step('kein abgefangener Fehler im Zugablauf', () => {

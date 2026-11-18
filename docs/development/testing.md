@@ -61,6 +61,7 @@ Tests create their own test accounts and delete them afterwards.
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin section | default |
 | `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
+| `turns/end-turn.test.js` | ending a turn with something left (v109): the game's "Zug beenden?" dialog, nothing sent until its button, "Zurück" keeps the turn, asked once per turn | default |
 | `techs/tech-tree-refresh.test.js` | the open tech tree redraws from the server's state after researching (the next age's roll), other modals stay | default |
 | `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
 | `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |

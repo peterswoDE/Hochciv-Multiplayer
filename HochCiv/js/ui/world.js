@@ -10,14 +10,17 @@ function curEvent() {
 /* Die Reiche als Liste in Zugfolge, durchnummeriert (v99, Anweisung des Autors: „in
    Spielerreihenfolge“ – bis v98 standen sie in der Reihenfolge des Spielstands, also etwa
    Russland zuerst, auch wenn England anfing). Je Reich Farbe, Name und Fähigkeit(en); `self`
-   hebt eines hervor, `extra` hängt etwas an den Namen. Teilen sich die Weltansicht im Spiel und
-   die der Legephase. */
+   hebt eines hervor, `extra` hängt etwas an den Namen, `y` setzt das Einkommen des nächsten
+   Zugs darunter – als ∑ wie im Technologiebogen (v109, Anweisung des Autors). Teilen sich die
+   Weltansicht im Spiel und die der Legephase (dort ohne Einkommen). */
 function civRowsHTML(list, V) {
-  return '<div class="civ-list">' + list.map(({ x, self, extra }, n) => {
+  return '<div class="civ-list">' + list.map(({ x, self, extra, y }, n) => {
     const c = civOf(x), as = abilInfos(x);
+    const summe = y ? `<span class="civ-y"><span class="ydot" style="background:${SUM_COLOR}">∑</span>
+        <span class="yvals">${yieldCells(y)}</span></span>` : '';
     return `<div class="civ-row${self ? ' self' : ''}">
         <span class="civ-chip" style="border-color:${c.color};color:${c.color}">${SYM[c.sym]}</span>
-        <span class="civ-n">${n + 1}. ${esc(c.n)}${extra || ''}</span>
+        <span class="civ-nw"><span class="civ-n">${n + 1}. ${esc(c.n)}${extra || ''}</span>${summe}</span>
         <span class="civ-a">${as.length ? as.map(a => `<b>${esc(a.n)}</b><small>${esc(abilEffect(a, V))}</small>`).join('')
         : `<i>${T('Bots haben keine Fähigkeit')}</i>`}</span></div>`;
   }).join('') + '</div>';
@@ -34,7 +37,8 @@ function worldModal() {
       capitalsTaken(x) ? T('%s von %s Hauptstädten erobert', capitalsTaken(x), capitalsToWin(S)) : '',
       capitalOf(S, i) ? '' : T('ohne Hauptstadt'),
     ].filter(Boolean).map(t => ' · ' + t).join('') : '';
-    return { x, self: i === pi, extra: (x.dead ? ' · ' + T('ausgeschieden') : '') + haupt };
+    return { x, self: i === pi, extra: (x.dead ? ' · ' + T('ausgeschieden') : '') + haupt,
+      y: x.dead ? null : incomeBreakdown(S, i).total };
   }), S);
   if (oldTreeShown())
     h += `<p class="sub" style="margin-top:12px">${T('Alter Techtree')} · ${oldTreeText()}</p>`;

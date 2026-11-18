@@ -284,6 +284,33 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     t.machtPreis ? `${t.machtPreis} coins = 1 power` : `Power loss = 1/${t.machtVerlust}`]), 'Techtexte nennen Preis bzw. Verlust');
   eq(texte.map(x => x[0]), ['eisenverarbeitung', 'stahl', 'gewehre', 'panzer'], '… genau diese vier');
 }
+/* --- Was am Zugende ungenutzt bliebe (v109, Anweisung des Autors: einmal nachfragen). Der Vorrat
+       verfällt zu Zugbeginn (beginTurn ersetzt ihn), gezählt wird, was er noch kaufen kann – über
+       dieselben Prüfungen wie die Aktionen –, dazu die kostenlosen Aktionen. Russland, Grundfähigkeit:
+       nichts ist umsonst. */
+{
+  const S = mk('russland'), p = S.players[0], cap = capitalOf(S, 0);
+  const mit = res => { p.res = Object.assign({ sci: 0, food: 0, coins: 0 }, res); return unspent(S, 0); };
+  eq(beginTurn.toString().includes('p.res = { sci: inc.sci'), true, 'Voraussetzung: der Vorrat wird zu Zugbeginn ersetzt, nicht aufgefüllt');
+  eq([mit({}), mit({ coins: 4 }).kaufbar, mit({ coins: 5 }).kaufbar],
+    [{ kaufbar: [], frei: [] }, ['forschung', 'wachstum'], ['forschung', 'macht', 'wachstum', 'armee']],
+    'leer: nichts · 4 Münzen: forschen (2:1) und wachsen · 5 Münzen: dazu Macht und Armee');
+  eq([mit({ sci: 1 }).kaufbar, mit({ food: 1, coins: 1 }).kaufbar, mit({ food: 9 }).kaufbar],
+    [['forschung'], ['wachstum'], ['stadt']], '1 Wissenschaft: forschen · 1 Nahrung + 1 Münze: wachsen · 9 Nahrung: gründen');
+  S.armies.push({ id: S.nextId++, owner: 0, r: cap.r, c: cap.c, mp: 3, born: 0 });
+  eq(mit({ coins: 5 }).kaufbar.includes('armee'), false, 'keine Armee, wenn in jeder eigenen Stadt schon eine steht');
+  S.armies.pop();
+  S.ev = true; S.event = { k: 'dunkles_zeitalter', round: S.round };
+  eq(mit({ sci: 3 }).kaufbar, [], 'Dunkles Zeitalter: Forschen zählt nicht');
+  S.event = null;
+  // Kostenlose Aktionen kommen aus freeActions; Kosten 0 zählen als kaufbar (Griechenland: Rabatt 1)
+  const G2 = mk('griechenland');
+  G2.players[0].res = { sci: 0, food: 0, coins: 0 };
+  eq([unspent(G2, 0).kaufbar.includes('forschung'), unspent(G2, 0).frei], [true, freeActions(G2, 0)],
+    'Griechenland: Technologien zu 0 sind auch ohne Vorrat zu haben; frei = freeActions');
+  // Die Farben der Reiche sind #rrggbb – die Stadtscheibe mischt sie ins Beige (cityFill, v109)
+  eq(CIVS.concat(BARB_CIV).every(c => /^#[0-9a-f]{6}$/i.test(c.color)), true, 'Reichsfarben als #rrggbb');
+}
 
 /* --- Armeekosten 5 je Armee inkl. der neuen; Wikinger zahlen eine weniger */
 {

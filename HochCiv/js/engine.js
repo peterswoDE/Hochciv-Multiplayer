@@ -2476,6 +2476,31 @@ function pendingWarnings(S, pi) {
   }
   return out;
 }
+/* Was am Zugende ungenutzt bliebe (v109, Anweisung des Autors: dann einmal nachfragen). Der Vorrat
+   verfällt – beginTurn ersetzt ihn durch das Einkommen –, also zählt, was er jetzt noch kaufen
+   kann, je über dieselbe Prüfung wie die Aktion: forschen, Macht, Wachstum, Armee, Stadt,
+   Weltwunder (`kaufbar`). Dazu die kostenlosen Aktionen (`frei`, freeActions). Armeen mit
+   Bewegung zählen nicht: Stehenbleiben ist oft der Zug (Belagerung, Wache), und die Karte zeigt
+   sie schon mit einem Punkt. Straßen, Kopien und Felder bleiben außen vor – Kleinkram, der jede
+   Runde fragen ließe. */
+function unspent(S, pi) {
+  const staedte = citiesOf(S, pi), kaufbar = [];
+  const muenzen = n => affordAll(S, pi, { coins: n }, payOpts(S, pi));
+  if (!evActive(S, pi, 'dunkles_zeitalter') && researchable(S, pi).some(t => affordAll(S, pi, { sci: techCost(S, pi, t) })))
+    kaufbar.push('forschung');
+  if (muenzen(powerPrice(S, pi))) kaufbar.push('macht');
+  if (staedte.some(c => !canGrowPaid(S, pi, c))) kaufbar.push('wachstum');
+  if (staedte.some(c => !armyAt(S, c.r, c.c)) && muenzen(armyCost(S, pi))) kaufbar.push('armee');
+  if (foundPossible(S, pi)) kaufbar.push('stadt');
+  if (woOn(S) && staedte.some(c => availableWonders(S).some(w => !canBuildWonder(S, pi, c, w.k)))) kaufbar.push('wunder');
+  return { kaufbar, frei: freeActions(S, pi) };
+}
+// Gibt es ein Feld, auf dem diese Runde gegründet werden kann? (canFound, Wege einmal berechnet)
+function foundPossible(S, pi) {
+  const p = S.players[pi], n = citiesOf(S, pi).length;
+  if (available(S, pi, 'food') < foundCostOf(p, n * (n + 1) / 2, 0)) return false;   // nicht einmal der billigste Platz
+  return withFoundTable(S, pi, () => S.map.rows.some((row, r) => [...row].some((_, c) => !canFound(S, pi, r, c))));
+}
 /* Schritt 4 + 5 des Zuges. Läuft für Menschen wie Bots an genau einer Stelle –
    sonst würde ein Belagerungszähler zweimal pro Zug steigen. */
 // `rec`: siehe combatPhase – die Oberfläche bekommt so jeden Kampf zum Nachspielen

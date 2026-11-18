@@ -6938,3 +6938,68 @@ Pages): frischer Einbau → offline alle drei Adressen und eine unbekannte mit M
 ein Netzfehler; erster Einbau über einen halben Upload → „v108 · nur online", kein Service Worker; Upload
 fertig, Rückkehr in die App → eingebaut ohne Neustart, Menü „v108", offline neu gestartet läuft; v107
 installiert, v108 halb hochgeladen → bleibt v107, auch offline; komplett → v108, offline v108.
+
+## Auswahl · getönte Städte · Zug beenden? · Einkommen in der Welt (v109)
+
+Anweisungen des Autors (18.11.), wörtlich: „make selected tiles a clearly different color from
+england" – „Give cities 'beige' background color a slight hue of the players color" – „If a player
+still has resources or possible actions left, please pop up a 'do you really want to end the turn'
+once" – „In the 'world' overview, add each players next turn income to them (like the 'sum' in the
+research)". Dazu der Grundsatz von v102. Ohne Rückfrage umgesetzt; was ausgelegt ist, steht unten
+und als offener Punkt 72 in `UEBERGABE.md`.
+
+### Oberfläche – wie ausgelegt
+
+* **Auswahl:** ein weißer Ring mit dunklem Rand um das gewählte Feld. Bis v108 war sie dunkelrot
+  (#9d3b2f, die Farbe von Leiste und „Zug beenden") und neben Englands Grenze (#8f2f3f) kaum zu
+  erkennen. Auf der Karte verglichen: weiß mit dunklem Rand, Gold, Tinte, reines Weiß – je auf Gras,
+  Meer und an Englands Grenze. Gold ist schon vergeben (Hervorhebung im Ersten Spiel, Kampf- und
+  Szenenfelder), Tinte liest sich wie eine Grenze, reines Weiß verliert auf Sand. Weiß gibt es unter den
+  Reichsfarben nicht, und auch in der Legephase (Rahmen gold, dominiert rot) bleibt es eindeutig.
+* **Stadtscheiben:** 18 % der Reichsfarbe im Beige – „slight hue". Verglichen: 12, 20 und 28 %; 12 %
+  ist kaum zu sehen, ab gut 25 % verschwimmen grüne Scheiben im Grasland. Die Zahl darauf bleibt in der
+  vollen Farbe, die Hauptstadt behält ihren dunklen Ring. Ebenso die Hauptstädte der Legephase.
+* **Zug beenden?** Der Vorrat verfällt: Zu Beginn des eigenen Zugs ersetzt das Einkommen ihn
+  (`beginTurn`). „Ressourcen übrig" heißt deshalb: Der Vorrat kauft noch etwas – sonst wäre die Frage
+  bei jeder übrigen Münze da, ohne dass man etwas tun könnte. Gezählt werden Forschen, Macht,
+  Bevölkerungswachstum, Armee, Stadt und Weltwunder, je über dieselbe Prüfung wie die Aktion; „mögliche
+  Aktionen" sind die kostenlosen (`freeActions`, dieselbe Zahl wie am Knopf „Fähigkeiten"). Nicht gezählt:
+  Armeen mit Bewegung – Stehenbleiben ist bei Belagerung und Wache der Zug, und die Karte markiert sie
+  schon mit einem Punkt –, Straßen, Kopien, Felder: Kleinkram, der fast jede Runde fragen ließe.
+  „Once": **einmal je Zug** – nach „Zurück" beendet der nächste Tipp ohne Frage, der nächste Zug fragt
+  wieder. Das Fenster sagt in einem Satz, was verfällt und wofür es reicht, mit den Namen der Knöpfe
+  („🪙 9 verfallen am Zugende – genug für: Macht, Armee bauen."); was nichts kostet oder kostenlos ist,
+  steht unter „Noch offen". Die Meldung „Eine kostenlose Armee wartet noch …" steht jetzt im selben
+  Fenster statt als Meldung mit „Nochmal tippen zum Bestätigen". Im Ersten Spiel fragt nur das Erste Spiel
+  selbst – seine Schritte sagen, wann der Zug endet.
+* **Welt:** unter dem Namen jedes Reichs `∑ 🔬 🌾 🪙`, genau wie die Zeile „Summe" im Technologiebogen
+  (gleiche Zellen, gleiches ∑). Gezeigt für alle Reiche, auch Bots und KI; ausgeschiedene ohne. In der
+  Welt der Legephase gibt es noch kein Einkommen.
+
+### Umsetzung
+
+* `js/ui/map.js`: `OVERLAY.sel` als zwei Lagen (Tinte 6,5, Weiß 3,5), `markHexes` zeichnet jede Lage;
+  `cityFill` mit `CITY_BEIGE`/`CITY_TINT` für Stadtscheiben im Spiel und in der Legephase.
+* `js/engine.js`: `unspent(S, pi)` → `{ kaufbar, frei }`, dazu `foundPossible` (canFound über alle
+  Felder, Wege einmal je Prüfung über `withFoundTable`, vorab die billigste Möglichkeit gegen die
+  Nahrung).
+* `js/ui/turns.js`: `endHumanTurn` fragt einmal je Zug (`ui.confirmedEnd`), `endTurnAsk` baut das
+  Fenster (`KAUF_NAME`, `FREI_NAME`: die Beschriftungen der Knöpfe); ein Tipp auf die Leiste bei
+  offenem Fenster beendet und schließt es.
+* `js/ui/world.js` und `js/ui/game.js`: `civRowsHTML` nimmt `y`; `yieldCells` und `SUM_COLOR` teilen
+  sich Welt und Technologiebogen. `css/style.css`: `.civ-nw`, `.civ-y`, `.ask`.
+
+### Abgesichert (v109)
+
+`test.js`: `unspent` – leer nichts; 4 Münzen forschen (2:1) und wachsen; 5 Münzen dazu Macht und
+Armee; 1 Wissenschaft forschen; 1 Nahrung + 1 Münze wachsen; 9 Nahrung gründen; keine Armee, wenn jede
+eigene Stadt besetzt ist; im Dunklen Zeitalter kein Forschen; Griechenland forscht für 0 auch ohne
+Vorrat; `frei` gleich `freeActions`; der Vorrat wird zu Zugbeginn ersetzt (Voraussetzung der Frage);
+Reichsfarben als #rrggbb. `smoke.js`: Auswahl als Tinte 6,5 + Weiß 3,5, keine Lage in einer
+Reichsfarbe; `cityFill` für England #e4cec3, für Russland #d6dac3, jede Scheibe in der Tönung ihres
+Reichs; Welt-∑ je Reich gleich `incomeBreakdown`, der Name ohne Summe, die eigene gleich der Summe im
+Technologiebogen; das Fenster – Titel und Satz mit 🪙 9, „Zurück" lässt weiterspielen, der zweite Tipp
+beendet ohne Frage, der nächste Mensch wird wieder gefragt, „Zug beenden" im Fenster beendet und
+schließt, ohne Reste und ohne Kostenloses keine Frage, „Noch offen: Grow for free." auf Englisch.
+Von Hand (Chromium): Auswahl an Englands Grenze, Scheiben aller vier Reiche, Fenster und Welt auf
+iPad- und Telefongröße.

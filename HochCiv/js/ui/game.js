@@ -400,14 +400,16 @@ function ownerMarks(S, techKey, pi) {
    Bevölkerung und die Gesamtsumme. Zeigt das Einkommen des laufenden Zugs. */
 const YIELD_ICON = ['🔬', '🌾', '🪙'];
 const TERRAIN_GLYPH = { G: '🌿', W: '🌲', B: '⛰️', F: '💧', M: '🌊', I: '🏝️' };
+const SUM_COLOR = '#6b5d47';           // ∑ – auch beim Einkommen je Reich in der Welt (v109)
+// Wissenschaft, Nahrung, Münzen als Zellen; eine Null als Punkt
+const yieldCells = y => y.map((n, i) => n
+  ? `<span class="yv"><span class="yi">${YIELD_ICON[i]}</span>${n}</span>`
+  : `<span class="yv zero">·</span>`).join('');
 function yieldRow(label, glyph, color, count, y, opts = {}) {
-  const cells = y.map((n, i) => n
-    ? `<span class="yv"><span class="yi">${YIELD_ICON[i]}</span>${n}</span>`
-    : `<span class="yv zero">·</span>`).join('');
   return `<div class="yrow ${opts.cls || ''}">
     <span class="yl"><span class="ydot" style="background:${color}">${glyph}</span>
       <span class="yname">${label}</span>${count != null ? `<span class="ycount">×${count}</span>` : ''}</span>
-    <span class="yvals">${cells}</span></div>`;
+    <span class="yvals">${yieldCells(y)}</span></div>`;
 }
 function yieldOverview(S, pi) {
   const b = incomeBreakdown(S, pi);
@@ -417,7 +419,7 @@ function yieldOverview(S, pi) {
   for (const e of (b.extra || []))
     h += yieldRow(e.name, e.glyph || '✦', '#c8a86a', e.count, e.y);
   h += yieldRow(T('Bevölkerung'), '👥', '#c8b98a', b.pop.count, b.pop.y, { cls: 'pop' });
-  h += yieldRow(T('Summe'), '∑', '#6b5d47', null, b.total, { cls: 'sum' });
+  h += yieldRow(T('Summe'), '∑', SUM_COLOR, null, b.total, { cls: 'sum' });
   // Vorschau: kein Einkommen, sondern was die Armeen zu Zugende erbeuten (Wikinger)
   for (const e of (b.preview || []))
     h += yieldRow(e.name, e.glyph || '⚔︎', '#b08a4a', null, e.y, { cls: 'prev' });

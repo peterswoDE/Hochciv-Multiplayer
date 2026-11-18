@@ -53,6 +53,7 @@ Running Rundenspiele are not affected by a new version only if their version is 
 | v106 | #114 | v100, v98 |
 | v107 | #145 | v106, v100, v98 |
 | v108 | #177 | v107, v106, v100, v98 |
+| v109 | #187 | v108, v107, v106, v100, v98 |
 
 ## Removed maps
 
