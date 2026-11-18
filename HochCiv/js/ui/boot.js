@@ -60,7 +60,7 @@ function menuButtons() {
 /* Texte, die boot() einmalig setzt – beim Sprachwechsel dieselben Zeilen erneut. */
 function bootTexts() {
   const ver = $('m-version');
-  if (ver) ver.textContent = APP_VERSION;
+  if (ver) ver.textContent = swOffline === false ? T('%s · nur online', APP_VERSION) : APP_VERSION;
 }
 
 function boot() {
@@ -186,13 +186,27 @@ function boot() {
    Seite neu (v106) – so kommt sie mit dem ersten Start nach dem Upload an, nicht erst mit dem
    zweiten. Mitten im Spiel nicht: dann beim nächsten Start. `vorher`: beim allerersten Einbau
    gab es keine alte Fassung, die zu ersetzen wäre. Die Einzeldatei hat keinen Service Worker
-   (build_single.py nimmt den Aufruf heraus). */
+   (build_single.py nimmt den Aufruf heraus).
+   Seit v108: Ein Einbau, der nicht durchkam (Upload noch nicht fertig, App zu früh geschlossen,
+   kein Netz), wird nachgeholt, sobald die App wieder sichtbar oder online ist – vom Home-Bildschirm
+   bleibt sie oft tagelang offen, ein Kaltstart kommt selten. Solange kein Service Worker sie
+   offline bereithält, steht im Menü „nur online" neben der Version. Als App vom Home-Bildschirm
+   bittet sie, ihren Speicher behalten zu dürfen (WebKit gewährt das dort). */
+let swOffline = null;   // ohne Service Worker (Einzeldatei, http) null – sonst: offline bereit?
 function swStart() {
-  const vorher = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (vorher && $('screen-menu').classList.contains('show')) location.reload();
+  const sw = navigator.serviceWorker, vorher = !!sw.controller;
+  const stand = () => { swOffline = !!sw.controller; bootTexts(); };
+  sw.addEventListener('controllerchange', () => {
+    if (vorher && $('screen-menu').classList.contains('show')) return location.reload();
+    stand();
   });
-  navigator.serviceWorker.register('sw.js').catch(() => { });
+  const einbau = () => sw.register('sw.js').then(r => r.active && r.update()).catch(() => { });
+  stand();
+  einbau();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) einbau(); });
+  addEventListener('online', einbau);
+  const app = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (app && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
 }
 function startGameScreen() {
   show('screen-game');
@@ -213,7 +227,7 @@ function rulesModal() {
       <li>${T('Einkommen aus allen Feldern rund um deine Städte plus Bevölkerung.')}</li>
       <li>${T('Macht halbiert sich (aufgerundet).')}</li>
       <li>${T('Aktionen in beliebiger Reihenfolge, beliebig oft.')}</li>
-      <li>${T('Kampf: Angriff = Macht je Armee, Verteidigung = Bevölkerung + benachbarte Armeen. Zwei Züge in Folge stärker → Stadt erobert.')}</li>
+      <li>${T('Kampf: Angriff = Macht je Armee, Verteidigung = Bevölkerung (in der Hauptstadt doppelt) + benachbarte Armeen. Zwei Züge in Folge stärker → Stadt erobert.')}</li>
       <li>${T('Sieg: Singularität · mehr als %s der Weltbevölkerung (UN %s, Theologie %s; geprüft am Ende jeder Runde, wenn alle gleich oft gezogen haben – dann endet das Spiel sofort) · gegnerische Hauptstadt · Weltwunder der Stufe 3. Außer beim Militärsieg endet das Spiel erst am Rundenende; mehrere Ansprüche entscheiden Punkte (Bevölkerung + Wunder + Technologien).',
         victoryLabels(S).base, victoryLabels(S).un, victoryLabels(S).theologie)}</li>
     </ol>

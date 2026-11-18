@@ -107,18 +107,18 @@ const DATA_EN = {
     containerlogistik: ['Container shipping', 'Sea yields 2 food, 2 coins'],
     robotik: ['Robotics', 'Population yields 3 coins each'],
     taktik: ['Tactics', 'Flanking from any two positions'],
-    eisenverarbeitung: ['Ironworking', '4 coins = 1 power'],
+    eisenverarbeitung: ['Ironworking', 'Power loss = 1/3'],
     belagerung: ['Siege engines', '+3 attack against cities'],
     stadtmauern: ['City walls', 'Cities have +5 defence'],
     burgenbau: ['Castles', 'Cities contain an immobile army'],
-    stahl: ['Steel', 'Power loss = 1/3'],
+    stahl: ['Steel', '4 coins = 1 power'],
     militaerlogistik: ['Military logistics', '+1 movement per wonder you own'],
     schiesspulver: ['Gunpowder', 'Zone of control'],
-    gewehre: ['Rifles', '3 coins = 1 power'],
+    gewehre: ['Rifles', 'Power loss = 1/4'],
     panzerschiff: ['Ironclad', 'Movement = 6, movement on and across sea'],
     dynamit: ['Dynamite', 'Armies have double attack against cities'],
     maschinengewehr: ['Machine gun', 'Cities: +3 defence per population'],
-    panzer: ['Tanks', 'Power loss = 1/4'],
+    panzer: ['Tanks', '3 coins = 1 power'],
     luftwaffe: ['Air force', 'Movement = 9, ignores obstacles'],
     raketentechnik: ['Rocketry', 'Armies have one more ring of range'],
     atomwaffen: ['Nuclear weapons', 'Once per round pick a tile and its surroundings, destroying all armies there'],
@@ -312,6 +312,7 @@ const UI_EN = {
   'Karte bearbeiten': 'Edit map',
   'Regeln & Technologien': 'Rules & technologies',
   'Spielstand laden': 'Load save',
+  '%s · nur online': '%s · online only',
 
   /* --- Einstellungen (Erweiterungsmodule) */
   'Einstellungen': 'Settings',
@@ -1060,8 +1061,8 @@ const UI_EN = {
     'A foreign army that enters a tile in a zone of control stops there: its remaining movement is lost for this turn, on roads and railways too. So it cannot pass through a zone of control – a road or railway running through one is cut there for that army.',
   'Eine Armee, die ihren Zug in einer Kontrollzone beginnt, darf heraus; betritt sie dabei wieder ein Feld einer Kontrollzone, hält sie dort an. Die Luftwaffe ignoriert Kontrollzonen. Handelsrouten unterbrechen sie nicht.':
     'An army that starts its turn in a zone of control may move out; if it enters a zone-of-control tile again on the way, it stops there. The Air force ignores zones of control. They do not cut trade routes.',
-  'Kampf: Angriff = Macht je Armee, Verteidigung = Bevölkerung + benachbarte Armeen. Zwei Züge in Folge stärker → Stadt erobert.':
-    'Combat: attack = power per army, defence = population + adjacent armies. Stronger two turns in a row → city captured.',
+  'Kampf: Angriff = Macht je Armee, Verteidigung = Bevölkerung (in der Hauptstadt doppelt) + benachbarte Armeen. Zwei Züge in Folge stärker → Stadt erobert.':
+    'Combat: attack = power per army, defence = population (double in the capital) + adjacent armies. Stronger two turns in a row → city captured.',
   'Kosten 10/20/30/40 … für das 1./2./3./4. Wunder. Stufe 2 muss seltener sein als Stufe 1, Stufe 3 seltener als Stufe 2. Je Stadt zwei Wunder. Ein Wunder der Stufe 3 gewinnt zu Beginn des nächsten Zuges.':
     'Cost 10/20/30/40 … for your 1st/2nd/3rd/4th wonder. Level 2 must stay rarer than level 1, level 3 rarer than level 2. Two wonders per city. A level 3 wonder wins at the start of your next turn.',
   'Kosten links, Wirkung rechts. Verfügbar wird eine Technologie erst, wenn sie ausgewürfelt ist.':
@@ -1429,13 +1430,13 @@ const UI_EN = {
   'Die englische Armee stünde noch – und griffe wieder an.': 'The English army would still be standing – and would attack again.',
   'Flankiert wird am Ende deines Zugs – dann ist die Armee weg. Städte lassen sich nicht flankieren, die muss man belagern.':
     'Flanking happens at the end of your turn – then the army is gone. Cities cannot be flanked, they have to be besieged.',
-  '<b>Eisenverarbeitung</b> (Militär): Macht kostet dann 4 🪙 statt 5 – und Macht entscheidet jeden Kampf.':
-    '<b>Ironworking</b> (Military): power then costs 4 🪙 instead of 5 – and power decides every fight.',
+  '<b>Eisenverarbeitung</b> (Militär): Zu Beginn deines Zugs verfällt dann nur ein Drittel deiner Macht statt der Hälfte – und Macht entscheidet jeden Kampf.':
+    '<b>Ironworking</b> (Military): at the start of your turn only a third of your power then decays instead of half – and power decides every fight.',
   '<b>Demokratie</b> (Spezial) öffnet das Mittelalter in Spezial – dort liegt die <b>Theologie</b>, die deine Siegschwelle senkt.':
     '<b>Democracy</b> (Special) opens the Middle Ages in Special – that is where <b>Theology</b> lies, which lowers your victory threshold.',
   '<b>Papier</b> (Forschung, Mittelalter): +1 🔬 je Grasland – und es öffnet die Industrialisierung in der Forschung.':
     '<b>Paper</b> (Research, Middle Ages): +1 🔬 per grassland – and it opens the Industrial Age in Research.',
-  'Jede Münze bringt dir jetzt mehr Macht.': 'Every coin now buys you more power.',
+  'Deine Macht hält jetzt länger.': 'Your power now lasts longer.',
   'Neu ausgewürfelt – %s, %s: %s. Der Rest fehlt in dieser Partie.': 'Newly rolled – %s, %s: %s. The rest is missing in this game.',
   'Am Ende deines Zugs wird flankiert.': 'Flanking happens at the end of your turn.',
 
@@ -1450,10 +1451,10 @@ const UI_EN = {
     'Besiege England\'s capital: at the end of your turn, your attack must be higher than its defense.',
   'Angriff <b>%s</b> · Verteidigung <b>%s</b>': 'Attack <b>%s</b> · defense <b>%s</b>',
   'Dein Angriff reicht noch nicht: Angriff %s, Verteidigung %s.': 'Your attack is not enough yet: attack %s, defense %s.',
-  '<b>Belagerungsmaschinen</b> geben +3 Angriff gegen Städte, und jede Armee neben der Stadt greift mit an. Verteidigung: Bevölkerung + Englands Macht für jede englische Armee daneben.':
-    '<b>Siege engines</b> give +3 attack against cities, and every army next to the city joins the attack. Defense: population + England\'s power for each English army next to it.',
+  '<b>Belagerungsmaschinen</b> geben +3 Angriff gegen Städte, und jede Armee neben der Stadt greift mit an. Verteidigung: doppelte Bevölkerung (Hauptstadt) + Englands Macht für jede englische Armee daneben.':
+    '<b>Siege engines</b> give +3 attack against cities, and every army next to the city joins the attack. Defense: double the population (capital) + England\'s power for each English army next to it.',
   'Belagerung 1 von 2. Noch ein Zug, und die Stadt gehört dir.': 'Siege 1 of 2. One more turn and the city is yours.',
-  'England hat nachgerüstet – und deine Macht hat sich halbiert.': 'England has rearmed – and your power has halved.',
+  'England hat nachgerüstet – und deine Macht hat zu Zugbeginn 1/%s verloren.': 'England has rearmed – and your power lost 1/%s at the start of your turn.',
   'Sei am Ende dieses Zugs wieder stärker als Englands Hauptstadt.': 'Be stronger than England\'s capital again at the end of this turn.',
   'Angriff je Armee = deine Macht + 3 (Belagerungsmaschinen).': 'Attack per army = your power + 3 (siege engines).',
   'Angriff je Armee = deine Macht – mit Belagerungsmaschinen 3 mehr.': 'Attack per army = your power – 3 more with siege engines.',

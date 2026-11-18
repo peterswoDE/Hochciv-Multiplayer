@@ -52,6 +52,7 @@ Admins open the admin page from their account page (*Mein Konto* in the game men
 | `node elevate.js <username> [admin\|superadmin]` | give a user admin rights |
 | `node scripts/dedupe-constraints.js [--fix]` | find (and with `--fix` drop) duplicate UNIQUE constraints that older `sequelize.sync({ alter: true })` runs piled up (`users_email_key1`, …) |
 | `node scripts/build-public.js` | rebuild `public/` from the game folders (done automatically at start) |
+| `node scripts/migrate.js` | apply pending database migrations (done automatically at start) |
 
 Run them inside the container with `docker exec <container> node …`.
 

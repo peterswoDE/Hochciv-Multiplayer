@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v106/, HochCiv-v100/ and HochCiv-v98/ the versions deployed before it. Every version gets its own sandbox
+ * HochCiv-v107/, HochCiv-v106/, HochCiv-v100/ and HochCiv-v98/ the versions deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -35,6 +35,7 @@ const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
    (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
+    v107: path.resolve(__dirname, 'HochCiv-v107', 'js'),
     v106: path.resolve(__dirname, 'HochCiv-v106', 'js'),
     v100: path.resolve(__dirname, 'HochCiv-v100', 'js'),
     v98: path.resolve(__dirname, 'HochCiv-v98', 'js'),

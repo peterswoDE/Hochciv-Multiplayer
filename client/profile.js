@@ -104,6 +104,7 @@
         .hcp-sub { color: var(--ink-soft, #6f6551); font-size: 13px; }
         .hcp-bot { font-family: var(--sans, sans-serif); font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
             background: #3b5f7d; color: #fff; vertical-align: 4px; }
+        .hcp-bot-description { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
         .hcp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
         .hcp-stat { background: var(--paper-2, #efe6ce); border-radius: 8px; padding: 8px 6px; text-align: center; }
         .hcp-stat b { display: block; font-size: 20px; font-family: var(--serif, Georgia, serif); }
@@ -266,6 +267,7 @@
                 <div class="hcp-sub">${tx('Dabei seit %s', esc(fmtDate(data.memberSince)))}</div>
                 ${data.isBotAccount && data.owner ? `<div class="hcp-sub">${tx('Bot von %s', link(data.owner.username, data.owner.id))}</div>` : ''}</div>
             </div>
+            ${data.isBotAccount && data.description ? `<p class="hcp-bot-description">${esc(data.description)}</p>` : ''}
             <div class="hcp-stats">
               <div class="hcp-stat"><b>${esc(data.mmr)}</b><span>MMR</span></div>
               <div class="hcp-stat"><b>${esc(total)}</b><span>${tx('Spiele')}</span></div>

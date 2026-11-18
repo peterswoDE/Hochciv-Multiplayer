@@ -45,4 +45,5 @@ module.exports = {
     TURN_TIMER_AFK_AFTER: Number(process.env.TURN_TIMER_AFK_AFTER) >= 1 ? Number(process.env.TURN_TIMER_AFK_AFTER) : 3,
     // Bot accounts (utils/bots.js) a bot creator may own; admins raise it per user, admins have no limit
     BOTS_PER_OWNER: 4,
+    BOT_DESCRIPTION_MAX_LENGTH: 280,
 };

@@ -140,7 +140,7 @@ app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__di
 app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
-// The older versions (/v106/, /v100/, /v98/ – Rundenspiele started on them) get the same no-op service
+// The older versions (/v107/, /v106/, /v100/, /v98/ – Rundenspiele started on them) get the same no-op service
 // worker and Activity bridge
 const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
 app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
@@ -196,20 +196,15 @@ app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Initialize ORM – with retries: at a cold start the database may not take connections yet
-function syncDatabase(attempt = 1) {
-    return sequelize.sync({ alter: true }).catch(err => {
-        if (attempt >= 10) throw err;
-        console.warn(`[DB] Not reachable yet (${err.message}), attempt ${attempt} of 10 – retrying in 3 s`);
-        return new Promise(r => setTimeout(r, 3000)).then(() => syncDatabase(attempt + 1));
-    });
-}
-syncDatabase().then(() => {
-    console.log('[DB] Sequelize synced tables.');
+// Database schema: migrations (migrations/, utils/migrate.js). In Docker entrypoint.sh has applied
+// them already with the owner role – this finds nothing to do; the server's own role (DATABASE_URL)
+// can't change the schema. Waits for the database at a cold start.
+require('./utils/migrate').migrate(dbUrl).then(async () => {
+    const problems = await require('./utils/schema-check').check(sequelize);
+    for (const p of problems) console.warn(`[DB] Schema: ${p} – a migration is missing (docs/reference/database.md)`);
+    if (!problems.length) console.log('[DB] Schema is current.');
     // facts of older matches for the overall statistics (needs the column `facts`)
     require('./utils/facts').startBackfill();
-    // weekly challenge: many attempts per week now (utils/challenge.js)
-    require('./utils/challenge').migrate().catch(err => console.error('[Challenge] Migration failed:', err));
     // ranked seasons: the current quarter, closing the last one (utils/seasons.js)
     require('./utils/seasons').start();
     // the maps that belong to nobody (maps/builtin.js)
@@ -218,22 +213,11 @@ syncDatabase().then(() => {
     require('./async/service').purgeEndedChats().catch(err => console.error('[Async] Deleting old chats failed:', err));
     // the admins' words for the chat filter (utils/profanity.js)
     require('./utils/profanity').reload().catch(err => console.error('[Chat filter] Loading the word list failed:', err));
-    sequelize.query(`
-        CREATE TABLE IF NOT EXISTS "session" (
-          "sid" varchar NOT NULL COLLATE "default",
-          "sess" json NOT NULL,
-          "expire" timestamp(6) NOT NULL,
-          CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
-        )
-        WITH (OIDS=FALSE);
-    `).then(() => {
-        sequelize.query(`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");`).catch(() => { });
-    }).catch(e => console.error('[DB] Session table init error', e));
 
     // Load OAuth strategies from database
     refreshOAuthStrategies().catch(err => console.error('[OAuth] Initial strategy load failed:', err));
 }).catch(err => {
-    console.error('[DB] Database sync failed – giving up:', err);
+    console.error('[DB] Database not ready – giving up:', err.message || err);
     process.exit(1);
 });
 

@@ -264,13 +264,25 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(c1, 1 + 3, 'Zweite Stadt in Distanz 3 kostet 4');
 }
 
-/* --- Machtverlust: 8 → 4 */
+/* --- Macht: Preis und Verlust zu Zugbeginn. Seit v108 (Anweisung des Autors) getauscht:
+       Eisenverarbeitung 1/3 und Stahl 4 Münzen (bis v107 4 Münzen, 1/3), Gewehre 1/4 und Panzer
+       3 Münzen (bis v107 3 Münzen, 1/4). Die Zahl steht in TECHS neben ihrem Text. */
 {
-  const S = mk('griechenland');
-  S.players[0].power = 8; S.cur = 0;
-  const div = 2, loss = Math.ceil(8 / div);
-  eq(8 - loss, 4, 'Macht 8 halbiert ergibt 4');
-  eq(8 - Math.ceil(8 / 3), 5, 'Macht 8 mit Stahl (1/3) ergibt 5');
+  const S = mk('griechenland'), p = S.players[0];
+  const mit = (...ks) => { p.techs = {}; ks.forEach(k => { p.techs[k] = true; }); return [powerPrice(S, 0), powerDecay(p)]; };
+  eq([mit(), mit('eisenverarbeitung'), mit('stahl'), mit('gewehre'), mit('panzer')],
+    [[5, 2], [5, 3], [4, 2], [5, 4], [3, 2]], 'Macht: ohne 5 Münzen und 1/2 · Eisenverarbeitung 1/3 · Stahl 4 · Gewehre 1/4 · Panzer 3');
+  eq([mit('eisenverarbeitung', 'gewehre')[1], mit('panzer', 'stahl')[0]], [4, 3], 'Macht: es zählt die beste eigene Technologie');
+  // Zugbeginn: Macht 8 verliert die Hälfte (4), mit Eisenverarbeitung ein Drittel, aufgerundet (3)
+  const zugbeginn = (...ks) => { mit(...ks); p.power = 8; S.cur = 0; beginTurn(S); return p.power; };
+  eq([zugbeginn(), zugbeginn('eisenverarbeitung'), zugbeginn('gewehre')], [4, 5, 6], 'Zugbeginn: Macht 8 → 4, mit Eisenverarbeitung 5, mit Gewehren 6');
+  // Die Texte nennen die Zahlen, deutsch und englisch – auch die KI liest sie aus TECHS
+  const texte = TECHS.filter(t => t.machtPreis || t.machtVerlust).map(t => [t.k,
+    DATA_DE ? DATA_DE.tech[t.k][1] : t.e, DATA_EN.tech[t.k][1]]);
+  eq(texte, TECHS.filter(t => t.machtPreis || t.machtVerlust).map(t => [t.k,
+    t.machtPreis ? `${t.machtPreis} Münzen = 1 Macht` : `Machtverlust = 1/${t.machtVerlust}`,
+    t.machtPreis ? `${t.machtPreis} coins = 1 power` : `Power loss = 1/${t.machtVerlust}`]), 'Techtexte nennen Preis bzw. Verlust');
+  eq(texte.map(x => x[0]), ['eisenverarbeitung', 'stahl', 'gewehre', 'panzer'], '… genau diese vier');
 }
 
 /* --- Armeekosten 5 je Armee inkl. der neuen; Wikinger zahlen eine weniger */
@@ -338,12 +350,14 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 }
 
 /* --- Verteidigungswert aus dem Kampfbeispiel: Stadt mit 2 Bevölkerung + Bot-Armee
-       daneben (Bot-Macht = Gesamtbevölkerung 3) → 5                              */
+       daneben (Bot-Macht = Gesamtbevölkerung 3) → 5. Die Stadt ist hier keine Hauptstadt –
+       die steht weiter weg und hat je Bevölkerung 1 mehr (v108).                     */
 {
   const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'bot', diff: 'david' }], seed: 3 });
   const eng = capitalOf(S, 1);
-  eng.pop = 2;
-  S.cities.push({ id: 500, owner: 1, r: eng.r + 4, c: eng.c, pop: 1, cap: false, grown: 0, born: 0 });
+  eng.pop = 2; eng.cap = false;
+  const haupt = { id: 500, owner: 1, r: eng.r + 4, c: eng.c, pop: 1, cap: true, grown: 0, born: 0 };
+  S.cities.push(haupt);
   const spot = neighbors(eng.r, eng.c).find(([r, c]) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c));
   S.armies.push({ id: 501, owner: 1, r: spot[0], c: spot[1], mp: 0, born: 0 });
   eq(defenseValue(S, eng), 5, 'Verteidigung 2 Bevölkerung + Armee mit Machtwert 3');
@@ -351,8 +365,22 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   S.players[1].kind = 'human'; S.players[1].power = 0;
   S.armies = S.armies.filter(a => a.id !== 501);
   eq(defenseValue(S, eng), 2, 'ohne Armee: 2 Bevölkerung');
+  // Hauptstadt (v108, Anweisung des Autors): +1 je Bevölkerung gegenüber anderen Städten
+  haupt.pop = 2;
+  eq([defenseValue(S, haupt), CAPITAL_DEFENSE], [4, 1], 'Hauptstadt: 2 Bevölkerung, je Bevölkerung 1 mehr = 4');
   S.players[1].techs.maschinengewehr = true;
   eq([defenseValue(S, eng), MG_DEFENSE], [8, 3], 'Maschinengewehr: 2 Bevölkerung + 3 je Bevölkerung = 8');
+  eq(defenseValue(S, haupt), 10, 'Maschinengewehr in der Hauptstadt: 2 Bevölkerung · (1 + 1 + 3) = 10');
+  // Große Mauer: die Gesamtbevölkerung (4) zählt – in der Hauptstadt mit beiden Zuschlägen
+  delete S.players[1].techs.maschinengewehr;
+  S.wonders = (S.wonders || []).concat({ k: 'mauer', lvl: 1, owner: 1, cityId: haupt.id, r: haupt.r, c: haupt.c });
+  eq([defenseValue(S, eng), defenseValue(S, haupt)], [4, 8], 'Große Mauer: Stadt 4, Hauptstadt 2 · 4 = 8');
+  // Regelbogen und Erstes Spiel sagen „doppelt" – das stimmt, solange CAPITAL_DEFENSE 1 ist
+  eq([CAPITAL_DEFENSE, /in der Hauptstadt doppelt/.test(fs.readFileSync(__dirname + '/js/ui/boot.js', 'utf8')),
+    /doppelte Bevölkerung \(Hauptstadt\)/.test(fs.readFileSync(__dirname + '/js/firstgame.js', 'utf8'))],
+  [1, true, true], 'Texte: die Hauptstadt verteidigt mit doppelter Bevölkerung');
+  S.wonders = S.wonders.filter(w => w.k !== 'mauer');
+  S.players[1].techs.maschinengewehr = true;
   eq([DATA_DE ? DATA_DE.tech.maschinengewehr[1] : TECH_BY_KEY.maschinengewehr.e, DATA_EN.tech.maschinengewehr[1]],
     [`Städte: +${MG_DEFENSE} Verteidigung je Bevölkerung`, `Cities: +${MG_DEFENSE} defence per population`],
     'Techtext nennt den Zuschlag, deutsch und englisch');
@@ -593,8 +621,8 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
    Stand davor – in der Reihenfolge, in der gerechnet wird. */
 {
   // Englands Hauptstadt C, daneben Englands Armee E; Griechenland flankiert E von G1 und G2
-  // (gegenüber), G1 steht zugleich an C. Griechenland Macht 5, England 3, C mit 3 Bevölkerung:
-  // Verteidigung mit E 3 + 3 = 6 ≥ 5 – die Stadt hält; danach fällt E (5 > 3).
+  // (gegenüber), G1 steht zugleich an C. Griechenland Macht 7, England 3, C mit 3 Bevölkerung:
+  // Verteidigung mit E 2 · 3 (Hauptstadt, v108) + 3 = 9 ≥ 7 – die Stadt hält; danach fällt E (7 > 3).
   const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 9 });
   const C = capitalOf(S, 1); C.pop = 3;
   const frei = (r, c) => isLand(S, r, c) && !cityAt(S, r, c) && !armyAt(S, r, c);
@@ -613,9 +641,9 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   S.armies.push(E,
     { id: 952, owner: 0, r: lage.G1[0], c: lage.G1[1], mp: 0, born: 0 },
     { id: 953, owner: 0, r: lage.G2[0], c: lage.G2[1], mp: 0, born: 0 });
-  S.players[0].power = 5; S.players[1].power = 3;
-  eq([defenseValue(S, C), attackValue(S, 0, attackersOn(S, 0, C).length)], [6, 5],
-    'vor dem Kampf: Verteidigung 6 (mit der Armee), Angriff 5');
+  S.players[0].power = 7; S.players[1].power = 3;
+  eq([defenseValue(S, C), attackValue(S, 0, attackersOn(S, 0, C).length)], [9, 7],
+    'vor dem Kampf: Verteidigung 9 (mit der Armee), Angriff 7');
   const kopie = (mitArmee, belagerung) => {
     const X = JSON.parse(JSON.stringify(Object.assign({}, S, { log: [] })));
     if (mitArmee && !X.armies.some(a => a.id === 951)) X.armies.push(Object.assign({}, E));
@@ -627,11 +655,11 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const rec = [], seq = S.logSeq;
   finishTurn(S, rec);
   eq([S.armies.includes(E), S.sieges['0|' + C.id] || 0], [false, 0],
-    'erst die Stadt: sie hält (5 ≤ 6, die Armee verteidigt mit) – dann wird die Armee weggeflankt (5 > 3)');
+    'erst die Stadt: sie hält (7 ≤ 9, die Armee verteidigt mit) – dann wird die Armee weggeflankt (7 > 3)');
   eq(logSince(S, seq).filter(l => l.c === 'fight').map(l => /flankiert/.test(l.m) ? 'flanke' : 'stadt'),
     ['flanke'], 'im Protokoll nur die Flanke (eine Stadt, die ohne laufende Belagerung hält, steht dort nicht)');
   eq(rec.map(e => [e.art, e.pi, e.gegner, e.r, e.c, e.a, e.d, e.sieg]),
-    [['stadt', 0, 1, C.r, C.c, 5, 6, false], ['flanke', 0, 1, E.r, E.c, 5, 3, true]], 'zwei Einträge: Stadt, dann Flanke');
+    [['stadt', 0, 1, C.r, C.c, 7, 9, false], ['flanke', 0, 1, E.r, E.c, 7, 3, true]], 'zwei Einträge: Stadt, dann Flanke');
   eq([rec[0].von.map(String), rec[1].von.map(String).sort(), rec[0].zug || 0, !!rec[0].genommen, !!rec[0].gebrochen],
     [[String(lage.G1)], [lage.G1, lage.G2].map(String).sort(), 0, false, false], 'beteiligte Felder und Ausgang');
   eq([rec[0].snap.armies.some(a => a.id === 951), rec[1].snap.armies.some(a => a.id === 951)], [true, true],
@@ -1130,7 +1158,20 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     eq([flankiert(er, ec, zwei(1), zwei(4), { raketentechnik: true }),
       flankiert(er, ec, zwei(1), zwei(4))], [true, false],
       `${zeile} Zeile: auf Distanz 2 diagonal gegenüber nur mit Raketentechnik`);
+    /* v108 (gemeldet vom Autor): mit Raketentechnik auch 1 und 2 Felder entfernt, auf einer Linie
+       durch den Gegner – bis v107 nur bei gleichem Abstand. Schräg (ein Feld im Ring 2 zwischen
+       zwei Richtungen) oder auf derselben Seite nicht. */
+    const R = { raketentechnik: true }, sechs = f => [0, 1, 2, 3, 4, 5].map(f);
+    eq([sechs(d => flankiert(er, ec, neighbor(er, ec, d), zwei((d + 3) % 6), R)),
+      sechs(d => flankiert(er, ec, neighbor(er, ec, d), neighbor(...neighbor(er, ec, (d + 3) % 6), (d + 4) % 6), R)),
+      sechs(d => flankiert(er, ec, neighbor(er, ec, d), zwei(d), R)),
+      sechs(d => flankiert(er, ec, neighbor(er, ec, d), zwei((d + 3) % 6)))],
+    [sechs(() => true), sechs(() => false), sechs(() => false), sechs(() => false)],
+    `${zeile} Zeile: Raketentechnik flankiert aus 1 und 2 Feldern auf einer Linie – nicht schräg, nicht von derselben Seite, ohne sie gar nicht`);
   }
+  eq([hexOpposite(6, 6, ...neighbor(6, 6, 0), ...neighbor(...neighbor(6, 6, 3), 3)),
+    hexOpposite(6, 6, ...neighbor(...neighbor(6, 6, 3), 3), ...neighbor(6, 6, 0)),
+    hexOpposite(6, 6, 6, 6, 6, 6)], [true, true, false], 'hexOpposite: auch in verschiedenem Abstand, in beiden Richtungen; nie das Feld selbst');
   eq([hexOpposite(5, 6, 4, 7, 6, 6), hexOpposite(5, 6, 4, 6, 6, 6), hexOpposite(6, 6, 5, 5, 7, 6)],
     [true, false, true], 'hexOpposite: Spiegelung in Würfelkoordinaten');
   // Die Machtansicht liest dieselbe Regel: eine flankierte Armee trägt das flankierende Reich
@@ -1252,11 +1293,12 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
 
 /* Kopieren (v105, Anweisung des Autors): Internet, Spionage und Kundschafterei sind je EINE Kopie
    je Runde, unabhängig voneinander – gratis, 1× und 2× der Grundkosten in Münzen. Bis v104
-   kopierten die beiden bezahlten Wege beliebig oft, und Spionage ersetzte Kundschafterei. */
+   kopierten die beiden bezahlten Wege beliebig oft, und Spionage ersetzte Kundschafterei. Kopiert
+   wird Eisenverarbeitung (Grundkosten 2; bis v107 waren das die Stadtmauern). */
 {
   const spiel = (...wege) => {
     const S = newGame({ players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'human' }], seed: 15 });
-    ['stadtmauern', 'taktik', 'mathematik', 'astronomie'].forEach(k => { S.players[1].techs[k] = true; delete S.players[0].techs[k]; });
+    ['eisenverarbeitung', 'taktik', 'mathematik', 'astronomie'].forEach(k => { S.players[1].techs[k] = true; delete S.players[0].techs[k]; });
     wege.forEach(k => { S.players[0].techs[k] = true; });
     S.players[0].res.coins = 50;
     return S;
@@ -1267,8 +1309,8 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   // Nur Internet: eine Gratiskopie, die zweite in derselben Runde nicht
   {
     const S = spiel('internet');
-    eq([offen(S), preise(S, 'stadtmauern')], ['internet', 'internet 0'], 'Internet: ein Weg, gratis');
-    eq(copyTech(S, 0, 'stadtmauern'), null, 'erste Kopie (ohne Angabe: der billigste Weg) klappt');
+    eq([offen(S), preise(S, 'eisenverarbeitung')], ['internet', 'internet 0'], 'Internet: ein Weg, gratis');
+    eq(copyTech(S, 0, 'eisenverarbeitung'), null, 'erste Kopie (ohne Angabe: der billigste Weg) klappt');
     eq([copyTech(S, 0, 'taktik'), copyTech(S, 0, 'taktik', 'internet')], ['Diese Runde schon kopiert.', 'Diese Runde schon per Internet kopiert.'],
       'zweite Kopie in derselben Runde wird abgelehnt');
     eq([S.players[0].res.coins, S.players[0].copied], [50, { internet: S.round }], 'kostet nichts, vermerkt die Runde');
@@ -1276,8 +1318,8 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   // Nur Spionage: einmal je Runde zum Einfachen
   {
     const S = spiel('spionage');
-    eq(preise(S, 'stadtmauern'), 'spionage 2', 'Spionage: 1× Grundkosten (Stadtmauern 2)');
-    eq([copyTech(S, 0, 'stadtmauern', 'spionage'), S.players[0].res.coins], [null, 48], 'Spionage kopiert für 2 Münzen');
+    eq(preise(S, 'eisenverarbeitung'), 'spionage 2', 'Spionage: 1× Grundkosten (Eisenverarbeitung 2)');
+    eq([copyTech(S, 0, 'eisenverarbeitung', 'spionage'), S.players[0].res.coins], [null, 48], 'Spionage kopiert für 2 Münzen');
     eq([copyTech(S, 0, 'taktik', 'spionage'), copyableTechs(S, 0)], ['Diese Runde schon per Spionage kopiert.', []],
       'ein zweites Mal in derselben Runde nicht – bis v104 beliebig oft');
     S.round++;
@@ -1286,8 +1328,8 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   // Nur Kundschafterei: einmal je Runde zum Doppelten
   {
     const S = spiel('kundschafterei');
-    eq(preise(S, 'stadtmauern'), 'kundschafterei 4', 'Kundschafterei: 2× Grundkosten (2×2)');
-    eq([copyTech(S, 0, 'stadtmauern'), copyTech(S, 0, 'taktik'), S.players[0].res.coins], [null, 'Diese Runde schon kopiert.', 46],
+    eq(preise(S, 'eisenverarbeitung'), 'kundschafterei 4', 'Kundschafterei: 2× Grundkosten (2×2)');
+    eq([copyTech(S, 0, 'eisenverarbeitung'), copyTech(S, 0, 'taktik'), S.players[0].res.coins], [null, 'Diese Runde schon kopiert.', 46],
       'einmal für 4 Münzen, kein zweites Mal');
   }
   // Alle drei: drei Kopien in einer Runde, je Weg eine, jede zu ihrem Preis
@@ -1297,17 +1339,17 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
     eq(copyTech(S, 0, 'astronomie', 'kundschafterei'), null, 'Kundschafterei zuerst – Spionage ersetzt sie nicht mehr');
     eq(preise(S, 'mathematik'), 'internet 0, spionage 1', 'danach steht Kundschafterei nirgends mehr');
     eq(copyTech(S, 0, 'mathematik', 'spionage'), null, 'Spionage auf Mathematik');
-    eq(copyTech(S, 0, 'stadtmauern', 'internet'), null, 'Internet auf Stadtmauern');
+    eq(copyTech(S, 0, 'eisenverarbeitung', 'internet'), null, 'Internet auf Eisenverarbeitung');
     eq([offen(S), copyableTechs(S, 0).length, S.players[0].res.coins], ['', 0, 50 - 4 - 1], 'drei Kopien, alle Wege genutzt, 5 Münzen bezahlt');
     eq(S.log.filter(l => / kopiert \(/.test(l.m)).map(l => l.m.replace(/^[^:]+: /, '')),
-      ['Astronomie kopiert (Kundschafterei, 4 Münzen).', 'Mathematik kopiert (Spionage, 1 Münzen).', 'Stadtmauern kopiert (Internet, gratis).'],
+      ['Astronomie kopiert (Kundschafterei, 4 Münzen).', 'Mathematik kopiert (Spionage, 1 Münzen).', 'Eisenverarbeitung kopiert (Internet, gratis).'],
       'das Protokoll nennt den Weg');
   }
   // Zu wenig Münzen: der Weg bleibt offen
   {
     const S = spiel('kundschafterei');
     S.players[0].res = { sci: 0, food: 0, coins: 3 };
-    eq([copyTech(S, 0, 'stadtmauern', 'kundschafterei'), offen(S)], ['Zu wenig Münzen (4 nötig).', 'kundschafterei'], 'zu wenig Münzen: abgelehnt, nichts verbraucht');
+    eq([copyTech(S, 0, 'eisenverarbeitung', 'kundschafterei'), offen(S)], ['Zu wenig Münzen (4 nötig).', 'kundschafterei'], 'zu wenig Münzen: abgelehnt, nichts verbraucht');
   }
   // Ein Spielstand von vor v105 (p.internetUsed) zählt weiter
   {
@@ -3277,10 +3319,9 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     schrift: 1, mathematik: 2, astronomie: 3, philosophie: 4,
     wiss_methode: 11, chemie: 12, biologie: 15,
     landwirtschaft: 1, bewaesserung: 5,
-    eisenverarbeitung: 2, belagerung: 4, stadtmauern: 5,
     theologie: 10, buerokratie: 8, militaergericht: 13, nationalismus: 11, stahl: 8, burgenbau: 7,
     kunstduenger: 14, dampfmaschine: 11, eisenbahn: 13,
-  }, 'alter Techtree: die neun Kosten bis v81, die drei militärischen bis v83, die neun bis v104');
+  }, 'alter Techtree: die neun Kosten bis v81 und die neun bis v104 (die drei militärischen gelten seit v108 wieder überall)');
   /* v105 (Anweisung des Autors): neun Kosten getauscht bzw. gedreht, jede im selben Zeitalter wie
      vorher – im Tutorial (alter Techtree) bleiben die alten, sein Ablauf rechnet mit Burgenbau 7. */
   const v105 = { theologie: 8, buerokratie: 10, militaergericht: 11, nationalismus: 13, stahl: 7, burgenbau: 8,
@@ -3291,13 +3332,12 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
     ['rittertum kundschafterei theologie kartografie buerokratie', 'militaergericht spionage nationalismus kolonialismus',
       'stahl burgenbau schiesspulver', 'kunstduenger dampfmaschine eisenbahn fliessband'],
     'v105: die vier Leitern – Spezial Mittelalter und Industrialisierung, Militär Mittelalter, Produktion Industrialisierung');
-  // v84 (Anweisung des Autors): Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5
-  eq(['stadtmauern', 'eisenverarbeitung', 'belagerung'].map(k => TECH_BY_KEY[k].c), [2, 4, 5],
-    'Militär/Antike: Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5 (v84)');
-  eq(leiter(STD, 2), ['taktik', 'stadtmauern', 'eisenverarbeitung', 'belagerung'],
-    'Standard: Militär/Antike nach Kosten 1, 2, 4, 5');
-  eq(leiter(OLD, 2), ['taktik', 'eisenverarbeitung', 'belagerung', 'stadtmauern'],
-    'alter Techtree: Militär/Antike wie bis v83'); 
+  // v108 (Anweisung des Autors): Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 – wie bis v83
+  // (v84–v107: Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5)
+  eq(['eisenverarbeitung', 'belagerung', 'stadtmauern'].map(k => TECH_BY_KEY[k].c), [2, 4, 5],
+    'Militär/Antike: Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 (v108)');
+  eq([leiter(STD, 2), leiter(OLD, 2)], [['taktik', 'eisenverarbeitung', 'belagerung', 'stadtmauern'],
+    ['taktik', 'eisenverarbeitung', 'belagerung', 'stadtmauern']], 'Militär/Antike nach Kosten 1, 2, 4, 5 – in beiden Techtrees');
   eq([STD.oldTree, OLD.oldTree], [false, true], 'der alte Techtree steht als Schalter im Spielstand');
   eq(newGame({ seed: 7, players: auf('england') }).oldTree, false, 'ohne Angabe gilt der (neue) Standard');
   eq(newGame({ seed: 7, players: auf('england'), altTree: false }).oldTree, false,
@@ -5383,21 +5423,41 @@ const spielArt = mode => mode === 'duell'
     const soll = (sw.match(/const BUILD_HASH = '([^']*)'/) || [])[1];
     eq(ist, soll, `sw.js kennt den Stand der Dateien (sonst: node tools_version.js)`);
   }
+  // Seit v108 legt der Service Worker nichts nebenher ab: was index.html lädt, muss vorab in den Cache
+  {
+    const html = fs.readFileSync(__dirname + '/index.html', 'utf8');
+    const geladen = [...html.matchAll(/(?:src|href)="([^"#:]+)"/g)].map(x => x[1]);
+    const vorab = [...sw.match(/const STATIC = \[([\s\S]*?)\];/)[1].matchAll(/'\.\/([^']*)'/g)].map(x => x[1]).concat(SKRIPTE);
+    eq([geladen.length > SKRIPTE.length, geladen.filter(f => !vorab.includes(f))], [true, []],
+      'alles, was index.html lädt (Skripte, Stil, Manifest, Icon), liegt vorab im Offline-Cache');
+  }
   /* Der Einbau (v106): jede Datei frisch vom Server, und in den Cache nur, wenn der Inhalt
      BUILD_HASH ergibt – sonst bleibt die alte Fassung. Gemeldet nach v105: Die App auf dem
      Home-Bildschirm hielt neue Dateien neben alten, „Fähigkeiten" ging nicht mehr auf. sw.js
      läuft hier in eigener Umgebung; fetch liest die Dateien dieses Ordners (auf Wunsch eine
      verändert, wie bei einem halb fertigen Upload), caches merkt sich, was abgelegt wird. */
   SPAETER.push(async () => {
+    /* netz: false = offline. Der Cache kennt Adressen wie './js/engine.js'; Anfragen kommen mit
+       derselben Form, der Suchteil fällt nur mit ignoreSearch weg (wie im Browser). */
     const einbau = async veraltet => {
-      const h = {}, abgelegt = new Map(), modi = new Set();
-      let uebernommen = false, fehler = null, warten = null;
+      const h = {}, abgelegt = new Map(), modi = new Set(), optionen = [];
+      let uebernommen = false, fehler = null, warten = null, netz = true;
+      const cache = {
+        put: async (u, r) => { abgelegt.set(u, r); },
+        match: async (q, o) => {
+          optionen.push(o);
+          const u = typeof q === 'string' ? q : q.url, r = abgelegt.get(o && o.ignoreSearch ? u.split('?')[0] : u);
+          return r && r.clone();
+        },
+      };
       const g = {
         crypto: require('crypto').webcrypto, TextEncoder,
-        caches: { open: async () => ({ put: async (u, r) => { abgelegt.set(u, r); } }) },
+        caches: { open: async () => cache },
         fetch: async (u, opt) => {
+          if (!netz) throw new TypeError('offline');
           modi.add(opt && opt.cache);
-          const f = u.replace(/^\.\//, '') || 'index.html';
+          const f = (typeof u === 'string' ? u : u.url).replace(/^\.\//, '').split('?')[0] || 'index.html';
+          if (!fs.existsSync(__dirname + '/' + f)) return new Response('fehlt', { status: 404 });
           const inhalt = fs.readFileSync(__dirname + '/' + f);
           return new Response(f === veraltet ? Buffer.concat([inhalt, Buffer.from('\n// alt')]) : inhalt);
         },
@@ -5408,14 +5468,39 @@ const spielArt = mode => mode === 'duell'
       vm.runInNewContext(sw, g);
       h.install({ waitUntil: p => { warten = p; } });
       try { await warten; } catch (e) { fehler = e.message; }
-      return { abgelegt: abgelegt.size, modi: [...modi], uebernommen, fehler };
+      // Eine Anfrage an den fertigen Service Worker: Text der Antwort oder 'Netzfehler'
+      const hole = async (url, mode = 'no-cors', online = false) => {
+        netz = online;
+        let antwort = null;
+        h.fetch({ request: { url, mode, method: 'GET' }, respondWith: p => { antwort = p; } });
+        try { const r = await antwort; return r ? (await r.text()).slice(0, 15) : 'nichts'; } catch (e) { return 'Netzfehler'; }
+      };
+      return { abgelegt: abgelegt.size, modi: [...modi], uebernommen, fehler, hole, optionen, groesse: () => abgelegt.size };
     };
     const n = 8 + SKRIPTE.length;    // STATIC samt './', Icons und Favicons, dazu die Skripte
-    eq(await einbau(null), { abgelegt: n, modi: ['reload'], uebernommen: true, fehler: null },
+    const ganz = await einbau(null);
+    eq({ abgelegt: ganz.abgelegt, modi: ganz.modi, uebernommen: ganz.uebernommen, fehler: ganz.fehler },
+      { abgelegt: n, modi: ['reload'], uebernommen: true, fehler: null },
       `Service Worker: mit den Dateien dieser Fassung kommen alle ${n} frisch vom Server in den Cache`);
     const halb = await einbau('js/ui/sheets.js');
     eq([halb.abgelegt, halb.uebernommen, /passen \(noch\) nicht/.test(halb.fehler || '')], [0, false, true],
       'Service Worker: weicht eine Datei ab (halber Upload, alter HTTP-Cache), kommt nichts in den Cache – die alte Fassung bleibt');
+    /* Ausliefern (v108), offline: Seiten aus dem Cache – auch mit Suchteil oder unbekannter Adresse
+       (dann index.html); Skripte aus dem Cache; ein fehlendes Skript ist ein Netzfehler, nie HTML.
+       Gemeldet nach v107: Die App vom Home-Bildschirm ging offline nicht. */
+    const html = fs.readFileSync(__dirname + '/index.html', 'utf8').slice(0, 15);
+    const engine = fs.readFileSync(__dirname + '/js/engine.js', 'utf8').slice(0, 15);
+    eq([await ganz.hole('./', 'navigate'), await ganz.hole('./?source=pwa', 'navigate'),
+      await ganz.hole('./index.html', 'navigate'), await ganz.hole('./gibts-nicht', 'navigate')],
+    [html, html, html, html], 'Service Worker offline: jede Seite bekommt index.html aus dem Cache');
+    eq([await ganz.hole('./js/engine.js'), await ganz.hole('./js/engine.js?v=1'), await ganz.hole('./js/fehlt.js')],
+      [engine, engine, 'Netzfehler'], 'Service Worker offline: Skripte aus dem Cache, ein fehlendes ist ein Netzfehler statt HTML');
+    eq(ganz.optionen.every(o => o.ignoreSearch === true && o.ignoreVary === true) && ganz.optionen.length > 0, true,
+      'Service Worker: sucht ohne Suchteil und ohne Vary (GitHub Pages schickt Vary: Accept-Encoding)');
+    eq([await ganz.hole('./js/fehlt.js', 'no-cors', true), ganz.groesse()], ['fehlt', n],
+      'Service Worker online: was fehlt, kommt vom Netz – abgelegt wird es nicht (sonst mischten sich Fassungen)');
+    eq(await halb.hole('./', 'navigate'), 'Netzfehler',
+      'Service Worker: ohne fertigen Einbau gibt es offline nichts – kein halber Cache');
   });
 }
 
@@ -5687,6 +5772,10 @@ for (const [pfad, art, runde] of [['militaer', /^Militärsieg/, 6], ['wirtschaft
   fgLauf('wissenschaft', { bis: 'zug4' });
   eq(/Neu ausgewürfelt – Forschung, Industrialisierung: Biologie, Wissenschaftliche Methode\./.test(FG_BY_ID.rest4.gut()), true,
     'Forschung, Runde 4: die Rückmeldung nennt, was in der Industrialisierung ausgewürfelt wurde');
+  // v108: Eisenverarbeitung macht Macht haltbarer statt billiger – so sagen es Tipp und Rückmeldung
+  fgLauf('militaer', { bis: 'm_erobern' });
+  eq([/ein Drittel deiner Macht/.test(FG_BY_ID.rest4.tipp()), FG_BY_ID.rest4.gut(), /1\/3 verloren/.test(FG_BY_ID.m_erobern.info())],
+    [true, 'Deine Macht hält jetzt länger.', true], 'Militär: Eisenverarbeitung – Tipp, Rückmeldung und Runde 6 nennen den Verlust von 1/3');
 }
 // Englands Drehbuch im gemeinsamen Teil: Belagerung in Runde 2, die Stadt hält in Runde 3
 {
@@ -6071,8 +6160,10 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   }
   {
     // Ganze Züge der KI: der Stand läuft lückenlos von Zugbeginn bis zum Ende des Zugs, jede Szene
-    // setzt dort an, wo die vorige aufhörte; Gründen kostet Nahrung, Forschen Wissenschaft
-    const K = newGame({ seed: 8, players: [{ civ: 'russland', kind: 'ki', kiLevel: 'schwer' }, { civ: 'england', kind: 'ki', kiLevel: 'mittel' }] });
+    // setzt dort an, wo die vorige aufhörte; Gründen kostet Nahrung, Forschen Wissenschaft.
+    // Startwert 9 (bis v107 8): Mit 8 übersieht die mittlere KI seit v108 in Runde 1 das Wachsen
+    // (sie sieht nur die Hälfte ihrer Möglichkeiten) – Russland erreicht 2/3, die Partie ist nach zwei Zügen aus.
+    const K = newGame({ seed: 9, players: [{ civ: 'russland', kind: 'ki', kiLevel: 'schwer' }, { civ: 'england', kind: 'ki', kiLevel: 'mittel' }] });
     const R = x => [x.sci, x.food, x.coins];
     let szenen = 0, luecken = [], gruenden = 0, forschen = 0, macht = 0;
     for (let z = 0; z < 12 && !K.over; z++) {
@@ -7759,7 +7850,9 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   //     Hauptstadt der KI, Stadtmauern gibt es nicht. Das Reich ist klein: nach einem ersten
   //     Treffer könnte es nicht genug nachlegen (v79: nur dann sorgt die KI vor). Sie muss
   //     den ersten Treffer verhindern – Armeen neben die Stadt UND Macht dazu (bis v77 baute
-  //     sie Armeen ohne Macht oder flankierte eine und ließ die Stadt offen).
+  //     sie Armeen ohne Macht oder flankierte eine und ließ die Stadt offen). Englands Macht 6
+  //     (bis v107 4): Seit der Hauptstadt je Bevölkerung 1 mehr zusteht (v108), reichte gegen 4
+  //     einmal Wachsen – richtig, aber nicht das, was hier geprüft wird.
   const S = newGame({ seed: 7, players: [{ civ: 'russland', kind: 'ki', kiLevel: 'schwer', ability: 'basis' }, { civ: 'england', kind: 'human' }] });
   S.map.rows = S.map.rows.map(z => 'G'.repeat(z.length));
   S.cities.length = 0; S.armies.length = 0; S.sieges = {};
@@ -7767,7 +7860,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   const armee = (owner, r, c) => { const x = { id: S.nextId++, owner, r, c, mp: 0, born: -1 }; S.armies.push(x); return x; };
   const hs = stadt(0, 5, 5, 3, true); stadt(0, 1, 1, 3, false);
   stadt(1, 5, 14, 4, true); stadt(1, 9, 12, 2, false);
-  S.players[1].power = 4;
+  S.players[1].power = 6;
   armee(1, 5, 8); armee(1, 7, 7);
   S.cur = 0; S.players[0].res = { sci: 0, food: 0, coins: 45 }; S.players[0].avail = {};
   const K = kiContext(S, 0), info = K.info.get(1);
@@ -7843,8 +7936,9 @@ function kiAbwehrLage(popKI, gross) {
   };
   const v = lauf(false), e = lauf(true);
   eq([v.K.emergency, e.K.emergency], [false, true], 'Ernstfall heißt: eine eigene Stadt wird schon belagert');
-  eq(e.danach <= e.d && e.an > 0 && e.macht > 0, true,
-    `im Ernstfall hält die Hauptstadt jedem Angriff im nächsten Zug stand (${e.danach} gegen ${e.d}), mit Armeen daneben und Macht`);
+  // Seit v108 verteidigt die Hauptstadt je Bevölkerung 1 mehr (16 statt 8): Sie hält auch ohne Armeen
+  // daneben – die KI steckt ihre Münzen trotzdem in Armeen und Macht (Zeile darunter), nur anderswo.
+  eq(e.danach <= e.d, true, `im Ernstfall hält die Hauptstadt jedem Angriff im nächsten Zug stand (${e.danach} gegen ${e.d})`);
   eq(v.militaer < e.militaer, true, `vorher steckt sie weniger in Macht und Armeen als im Ernstfall (${v.militaer} gegen ${e.militaer} Münzen)`);
   // Die Rest-Gefahr, wenn sie nach einem Treffer nachlegen kann, ist klein
   eq(KI_W.preFloor <= 0.02, true, 'Rest-Gefahr vor einem Treffer höchstens 2 %');

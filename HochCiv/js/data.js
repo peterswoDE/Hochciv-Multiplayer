@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v107';
+const APP_VERSION = 'v108';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -53,7 +53,8 @@ const CITY_YIELD = [1, -1, 1];
    Belagerungsmaschinen 5 (vorher 5, 2, 4). Seit v105 (Anweisung des Autors) getauscht bzw.
    gedreht, jeweils im selben Zeitalter: Theologie 8 und Bürokratie 10 (vorher 10, 8),
    Militärgericht 11 und Nationalismus 13 (13, 11), Stahl 7 und Burgenbau 8 (8, 7), Kunstdünger
-   11, Dampfmaschine 13, Eisenbahn 14 (14, 11, 13).
+   11, Dampfmaschine 13, Eisenbahn 14 (14, 11, 13). Seit v108 (Anweisung des Autors) wieder
+   Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 – die Werte bis v83.
    Die alten Werte behält der alte Techtree (OLD_TECH_COSTS). Die Reihenfolge dieser
    Liste ist bewusst die alte geblieben – die Leiter im Bogen kommt aus techsIn (nach
    Kosten sortiert), und wo Code die Liste der Reihe nach durchgeht, bleibt so alles,
@@ -96,18 +97,18 @@ const TECHS = [
   { k: 'robotik', n: 'Robotik', f: 1, c: 19, e: 'Bevölkerung bringt je 3 Münzen' },
   // Militär
   { k: 'taktik', n: 'Taktik', f: 2, c: 1, e: 'Flankieren von zwei beliebigen Positionen' },
-  { k: 'eisenverarbeitung', n: 'Eisenverarbeitung', f: 2, c: 4, e: '4 Münzen = 1 Macht' },
-  { k: 'belagerung', n: 'Belagerungsmaschinen', f: 2, c: 5, e: '+3 Angriff gegen Städte' },
-  { k: 'stadtmauern', n: 'Stadtmauern', f: 2, c: 2, e: 'Städte haben +5 Verteidigung' },
+  { k: 'eisenverarbeitung', n: 'Eisenverarbeitung', f: 2, c: 2, machtVerlust: 3, e: 'Machtverlust = 1/3' },
+  { k: 'belagerung', n: 'Belagerungsmaschinen', f: 2, c: 4, e: '+3 Angriff gegen Städte' },
+  { k: 'stadtmauern', n: 'Stadtmauern', f: 2, c: 5, e: 'Städte haben +5 Verteidigung' },
   { k: 'burgenbau', n: 'Burgenbau', f: 2, c: 8, e: 'Städte enthalten unbewegliche Armee' },
-  { k: 'stahl', n: 'Stahl', f: 2, c: 7, e: 'Machtverlust = 1/3' },
+  { k: 'stahl', n: 'Stahl', f: 2, c: 7, machtPreis: 4, e: '4 Münzen = 1 Macht' },
   { k: 'militaerlogistik', n: 'Militärlogistik', f: 2, c: 6, wo: true, e: '+1 Bewegungsweite je eigenem Weltwunder' },
   { k: 'schiesspulver', n: 'Schießpulver', f: 2, c: 10, e: 'Kontrollzone' },
-  { k: 'gewehre', n: 'Gewehre', f: 2, c: 11, e: '3 Münzen = 1 Macht' },
+  { k: 'gewehre', n: 'Gewehre', f: 2, c: 11, machtVerlust: 4, e: 'Machtverlust = 1/4' },
   { k: 'panzerschiff', n: 'Panzerschiff', f: 2, c: 13, e: 'Bewegung = 6, Bewegung auf und über Meer' },
   { k: 'dynamit', n: 'Dynamit', f: 2, c: 14, e: 'Armeen haben doppelten Angriff gegen Städte' },
   { k: 'maschinengewehr', n: 'Maschinengewehr', f: 2, c: 15, e: 'Städte: +3 Verteidigung je Bevölkerung' },
-  { k: 'panzer', n: 'Panzer', f: 2, c: 16, e: 'Machtverlust = 1/4' },
+  { k: 'panzer', n: 'Panzer', f: 2, c: 16, machtPreis: 3, e: '3 Münzen = 1 Macht' },
   { k: 'luftwaffe', n: 'Luftwaffe', f: 2, c: 17, e: 'Bewegung = 9, Hindernisse ignorieren' },
   { k: 'raketentechnik', n: 'Raketentechnik', f: 2, c: 19, e: 'Armeen haben einen Ring mehr Reichweite' },
   { k: 'atomwaffen', n: 'Atomwaffen', f: 2, c: 20, e: '1x pro Runde ein Feld mit Umland wählen, alle Armeen zerstören' },
@@ -147,6 +148,14 @@ const SINGULARITY_BASE = 120;
 const SIEGE_BONUS = 3;
 // Maschinengewehr: Verteidigung je Bevölkerung einer Stadt zusätzlich (bis v106: 2). Der Techtext nennt die Zahl.
 const MG_DEFENSE = 3;
+// Hauptstadt: Verteidigung je Bevölkerung zusätzlich (v108, Anweisung des Autors). Regeltext und Erstes Spiel nennen sie.
+const CAPITAL_DEFENSE = 1;
+/* Macht ohne Technologie: 5 Münzen je Macht, zu Beginn des eigenen Zugs verfällt 1/2. Billiger bzw.
+   haltbarer machen sie die Technologien mit machtPreis bzw. machtVerlust in TECHS – die Zahl steht
+   dort neben ihrem Text, es zählt die beste eigene. Seit v108 (Anweisung des Autors) getauscht:
+   Eisenverarbeitung 1/3 und Stahl 4 Münzen (vorher 4 Münzen, 1/3), Gewehre 1/4 und Panzer 3 Münzen
+   (vorher 3 Münzen, 1/4). */
+const POWER_PRICE = 5, POWER_DECAY = 2;
 const KREML_SURCHARGE = 50;        // Weltwunder "Der Kreml": Singularität teurer, für alle
 // Englands „Seemacht": Zuschlag je Stadt am Meer auf jeden der drei Erträge (v53: 1)
 const SEA_CITY_BONUS = 1;
@@ -260,8 +269,8 @@ const SINGULARITY = {
 /* Der alte Techtree (bis v81 der Standard): v82–v101 im Tutorial (Anweisung des Autors: „bis
    ich ein besseres Tutorialspiel liefere"), seit v102 (Tutorial entfernt) nur noch in
    Spielständen von vor v82. Er unterscheidet sich vom heutigen nur in den Grundkosten dieser
-   einundzwanzig Technologien – ändert sich der Standard, behält er die alten Werte (die drei
-   militärischen seit v84, neun weitere seit v105) – und seit v97 im Rabatt der
+   achtzehn Technologien – ändert sich der Standard, behält er die alten Werte (neun seit v105;
+   drei militärische von v84 bis v107, seit v108 gelten sie wieder überall) – und seit v97 im Rabatt der
    Wissenschaftlichen Methode (OLD_METHOD_DISCOUNT); die übrigen Wirkungen, Feld und Zeitalter
    sind gleich. Eine Partie trägt ihn als S.oldTree. Bis v81 hieß der Schalter andersherum
    S.altTree (der heutige Standard war zuschaltbar) – migrateState übersetzt alte
@@ -271,7 +280,6 @@ const OLD_TECH_COSTS = {
   schrift: 1, mathematik: 2, astronomie: 3, philosophie: 4,     // Forschung, Antike
   wiss_methode: 11, chemie: 12, biologie: 15,                   // Forschung, Industrialisierung
   landwirtschaft: 1, bewaesserung: 5,                           // Produktion, Antike
-  eisenverarbeitung: 2, belagerung: 4, stadtmauern: 5,          // Militär, Antike (bis v83 Standard)
   // bis v104 Standard (seit v105 getauscht bzw. gedreht)
   theologie: 10, buerokratie: 8, militaergericht: 13, nationalismus: 11, stahl: 8, burgenbau: 7,
   kunstduenger: 14, dampfmaschine: 11, eisenbahn: 13,

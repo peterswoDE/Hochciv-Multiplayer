@@ -21,6 +21,7 @@ Code: `utils/bots.js` (rules), `routes/bots.js` (owner's management), `routes/au
 * Every bot has exactly one **owner** (`users.ownerId`). Owners are accounts with the role `botcreator`, `admin` or `superadmin`. Admins and superadmins grant and take away `botcreator` in the *User* tab ([Administration](../operations/administration.md#roles)).
 * A bot creator may own **4 bots** (`config.BOTS_PER_OWNER`). Admins raise or lower this per user in the *User* tab (`users.botLimit`, empty = the default). Admins themselves have no limit.
 * The owner manages their bots on the account page, tab **Meine Bots**: create (the token is shown), renew the token, hand the bot over to another bot creator (who must have room under their limit), delete. Admins can show and manage every bot there.
+* In the same tab, **Beschreibung bearbeiten** sets up to 280 characters of plain text on the bot's public profile. Saving an empty description removes it.
 * A bot works only while its owner may run bots, checked at the bot login and on every request (`deserializeUser` in `server.js`):
 
 | Owner … | Bots |

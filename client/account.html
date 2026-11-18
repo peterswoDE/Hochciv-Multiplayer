@@ -219,6 +219,18 @@
         <p>&copy; 2026 Hochciv Multiplayer. Alle Rechte vorbehalten. | <a href="/datenschutzerklaerung.html">Datenschutzerklärung</a> | <a href="/nutzungsbedingungen.html">Nutzungsbedingungen</a> | <a href="/impressum.html">Impressum</a></p>
     </footer>
 
+    <!-- Public bot profile text (account.js) -->
+    <div id="bot-description-modal" class="acc-modal">
+        <form id="form-bot-description" class="acc-modal-card" role="dialog" aria-labelledby="bot-description-title">
+            <button type="button" class="acc-modal-x" data-close aria-label="Schließen">&times;</button>
+            <h2><label id="bot-description-title" for="input-bot-description">Öffentliche Beschreibung</label></h2>
+            <p id="bot-description-hint" class="acc-desc">Erscheint im Bot-Profil. Bis zu 280 Zeichen, zum Entfernen leer lassen.</p>
+            <textarea id="input-bot-description" rows="4" aria-describedby="bot-description-hint"></textarea>
+            <div class="acc-btns"><button id="save-bot-description" type="submit" class="btn btn-primary">Speichern</button></div>
+            <p id="msg-bot-description" class="acc-msg" aria-live="polite"></p>
+        </form>
+    </div>
+
     <!-- A finished game (ACC.gameDetails) -->
     <div id="history-modal" class="acc-modal" style="display:none;">
         <div class="acc-modal-card wide">

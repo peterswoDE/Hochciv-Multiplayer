@@ -23,7 +23,7 @@ Details: [Features](docs/overview/features.md) · roadmap: [TASKS.md](TASKS.md)
 **Production** (pre-built image behind a reverse proxy):
 
 ```bash
-docker network create nginx
+docker network create proxy
 cp .env.template .env          # set at least SESSION_SECRET and BASE_URL
 docker compose up -d
 docker exec hochciv-multiplayer node elevate.js <your-username> superadmin
@@ -60,4 +60,4 @@ Branch from `origin/development`, PR into `development` (auto-deployed to stagin
 
 ## The game
 
-`HochCiv/` is [timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv) with the multiplayer extension; the older versions in `HochCiv-v106/`, `HochCiv-v100/` and `HochCiv-v98/` keep running Rundenspiele on their rules. → [How it works](docs/overview/how-it-works.md) · [Updating the game](docs/development/updating-the-game.md)
+`HochCiv/` is [timooom-hash/Hochciv](https://github.com/timooom-hash/Hochciv) with the multiplayer extension; the older versions in `HochCiv-v107/`, `HochCiv-v106/`, `HochCiv-v100/` and `HochCiv-v98/` keep running Rundenspiele on their rules. → [How it works](docs/overview/how-it-works.md) · [Updating the game](docs/development/updating-the-game.md)

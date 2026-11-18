@@ -6799,3 +6799,142 @@ Forschung zeigt die Marken der anderen ohne Hilfszeile, gewählte Wikinger mit N
 mit einem Menschen gegen Bots oder einem festen Reich; „Nochmal spielen" wählt wieder; danach hat der
 Marathon-Draft Titel und Hinweis. Von Hand (Chromium): Wahl deutsch und englisch, Telefon hochkant wie
 der Draft gedreht, Karte aus 14 Dreiecken beim Legen und im Spiel.
+
+## Hauptstadt · Macht getauscht · Militärkosten · Flankieren mit Raketentechnik · offline vom Home-Bildschirm (v108)
+
+Anweisungen des Autors (17.11.), wörtlich: „capitals should get +1 defense per population, compared
+to other cities" – „swap the effects of iron working and steel" – „swap the effects of rifling and
+tanks" – „switch the costs of iron working to 2, siege engines to 4 and walls to 5" – „fix a bug where
+with rocketry (but no tactics) two armies on opposite sides of an enemy army don't flank it, if they
+have different distance to it" – „the saved to homscreen app is currently not working offline, please
+check that." Dazu der Grundsatz von v102. Ohne Rückfrage umgesetzt: Jede Anweisung ließ sich an den
+Regeln selbst festmachen; was ausgelegt ist, steht unten.
+
+### Regeln
+
+* **Hauptstadt:** verteidigt mit 1 mehr je Bevölkerung als andere Städte (`CAPITAL_DEFENSE`) – ohne
+  Maschinengewehr also mit der doppelten Bevölkerung, mit ihm mit der fünffachen. Ausgelegt: Mit der
+  Großen Mauer zählt der Zuschlag die Gesamtbevölkerung wie alles andere je Bevölkerung (die Mauer
+  setzt die Gesamtbevölkerung an die Stelle der eigenen; das Maschinengewehr rechnet seit v107 ebenso).
+  Barbarenstädte haben keine Hauptstadt; eine eroberte Hauptstadt ist schon bisher eine gewöhnliche
+  Stadt (`captureCity`). Gilt auch in laufenden Partien.
+* **Macht:** **Eisenverarbeitung** Machtverlust 1/3 und **Stahl** 4 Münzen = 1 Macht (bis v107
+  umgekehrt), **Gewehre** Machtverlust 1/4 und **Panzer** 3 Münzen = 1 Macht (bis v107 umgekehrt). Wie
+  bisher zählt die beste eigene; ohne kostet Macht 5 Münzen und halbiert sich zu Zugbeginn
+  (aufgerundet). Folge: Den haltbareren Verlust gibt es jetzt schon in der Antike, billigere Macht erst im
+  Mittelalter (4) und in der Moderne (3). Burg Himeji zieht weiter 1 vom Preis ab.
+* **Kosten:** Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 – genau die Werte bis v83, die
+  der alte Techtree behalten hatte. Die Leiter in Militär (Antike) lautet damit in beiden Techtrees
+  Taktik 1, Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5.
+* **Flankieren** ohne Taktik: Zwei Positionen flankieren, wenn sie auf **einer Linie durch die gegnerische
+  Armee** auf entgegengesetzten Seiten liegen – in beliebigem Abstand innerhalb der Reichweite, also mit
+  Raketentechnik auch 1 und 2 Felder. Bis v107 galt nur die Spiegelung (gleicher Abstand), das war der
+  gemeldete Fehler. Ausgelegt: genau gegenüber, nicht ungefähr – ein Feld im Ring 2 zwischen zwei
+  Richtungen hat im Ring 1 kein Gegenüber (die nächsten liegen 150° entfernt) und flankiert mit keinem.
+  So bleibt es dieselbe Regel wie bei gleichem Abstand, nur ohne dessen Bedingung.
+
+### Offline vom Home-Bildschirm – was geprüft und was geändert ist
+
+Safari läuft hier nicht. Geprüft in Chromium und in **WebKit** (WebKitGTK 2.52.6, dieselbe Engine wie
+Safari, ohne die iOS-Hülle) gegen einen Server, der sich wie GitHub Pages benimmt (`Cache-Control:
+max-age=600`, `Vary: Accept-Encoding`, gzip, ETag, `/repo` → `/repo/`); „offline" heißt: Server aus.
+
+* **v107 lief dort**: frischer Einbau (30 Einträge, Hash geprüft), danach offline `/repo/`,
+  `/repo/index.html`, `/repo/?source=pwa` – alle mit Menü. WebCrypto im Service Worker, `cache:
+  'reload'`, `Vary` und `ignoreSearch` sind also nicht die Ursache.
+* **Zwei Schwächen von v107, in WebKit nachgestellt:** (1) Scheitert der **erste** Einbau – Upload noch
+  nicht fertig (Hash passt nicht), App zu früh geschlossen, kurz kein Netz –, gibt es keinen Service
+  Worker, und der nächste Versuch kommt erst mit dem nächsten Laden der Seite. Die App vom Home-Bildschirm
+  bleibt auf dem iPad oft tagelang im Hintergrund offen; Zurückkehren lädt nicht neu. Offline dann
+  „Could not connect" (nachgestellt: 10 s nach der Rückkehr kein Service Worker, Neustart offline
+  scheitert). (2) Offline bekam **jede** fehlgeschlagene Anfrage `index.html` – auch ein Skript, das nicht
+  im Cache lag (nachgestellt: `fetch('js/fehlt.js')` → 200 mit HTML): eine App, die startet und nichts kann.
+* Welche der beiden auf dem iPad des Autors zutraf, lässt sich von hier nicht sagen (offener Punkt 71).
+  Eine dritte Möglichkeit bleibt: Dateien auf dem Server, die nicht zu `BUILD_HASH` passen – dann
+  scheitert jeder Einbau. Dafür steht jetzt „nur online" im Menü.
+
+**Geändert** (`sw.js`, `js/ui/boot.js`):
+* Ein Einbau, der nicht durchkam, wird nachgeholt, **sobald die App sichtbar oder online wird**
+  (`visibilitychange`, `online`): `register('sw.js')` legt eine verlorene Registrierung neu an, `update()`
+  prüft eine bestehende auf eine neue Fassung. Ohne Netz scheitert beides still.
+* **Ausliefern nur aus dem Cache dieser Fassung**, Suchteil und `Vary` zählen nicht (je Adresse liegt dort
+  genau eine Datei). Was fehlt, kommt vom Netz und wird **nicht** abgelegt – nebenher Abgelegtes war der
+  Weg, auf dem sich Fassungen mischen. Ohne Netz bekommt eine **Seite** `index.html`, alles andere den
+  Netzfehler.
+* **„v108 · nur online"** im Menü, solange kein Service Worker die Seite hält – auf dem iPad also beim
+  allerersten Start, bis der Einbau fertig ist, und dauerhaft, wenn er immer wieder scheitert. Die einzige
+  neue Zeile der Fassung; sie steht nur, solange sie stimmt (Grundsatz von v102: keine Hilfstexte – das ist
+  ein Zustand, den man sonst erst ohne Netz bemerkt). Die Einzeldatei hat keinen Service Worker und zeigt
+  sie nie.
+* Als App vom Home-Bildschirm bittet sie um **dauerhaften Speicher** (`navigator.storage.persist()`):
+  WebKit räumt bei vollem Gerät ganze Ursprünge und gewährt die Bitte laut WebKit-Blog („Updates to
+  Storage Policy") nach Heuristiken „like whether the website is opened as a Home Screen Web App". Im
+  Browser fragt sie nicht – manche Browser fragen dann den Menschen.
+
+### Oberfläche – wie ausgelegt
+
+Regelbogen: „Verteidigung = Bevölkerung (in der Hauptstadt doppelt) + benachbarte Armeen" – „doppelt"
+statt „+1 je Bevölkerung", weil es sich so liest, wie man es auf dem Brett zählt; ein Test hält das Wort
+an `CAPITAL_DEFENSE` 1. Die Kacheln von Eisenverarbeitung, Stahl, Gewehren und Panzer tragen die
+getauschten Texte. Erstes Spiel: Tipp in Runde 4 „Zu Beginn deines Zugs verfällt dann nur ein Drittel
+deiner Macht statt der Hälfte", Rückmeldung „Deine Macht hält jetzt länger.", in Runde 6 „deine Macht
+hat zu Zugbeginn 1/3 verloren" (aus `powerDecay`; das feste „halbiert" von v107 stimmte mit der
+Eisenverarbeitung aus Runde 4 nicht mehr), Englands Hauptstadt „doppelte Bevölkerung". Der
+Ablauf des Ersten Spiels ist derselbe; der Militärweg siegt weiter in Runde 6.
+
+### Umsetzung
+
+* `js/data.js`: Kosten und Texte in `TECHS`, dazu die Felder `machtPreis` (Stahl 4, Panzer 3) und
+  `machtVerlust` (Eisenverarbeitung 3, Gewehre 4) neben ihrem Text; `POWER_PRICE = 5`, `POWER_DECAY = 2`,
+  `CAPITAL_DEFENSE = 1`; `OLD_TECH_COSTS` ohne die drei militärischen (gleich dem Standard).
+* `js/engine.js`: `powerPrice` und `powerDecay` nehmen das Beste aus `TECHS` (bis v107 zwei Ketten mit
+  Namen); `defensePerPop(S, city)` – 1, Hauptstadt, Maschinengewehr – für `defenseValue`.
+  `js/hex.js`: `hexOpposite` mit db·(a−m) + da·(b−m) = 0. `js/ki.js`: `kiDecayDiv` entfällt
+  (`powerDecay`); der Technologiewert für Macht folgt den Feldern (billiger: 2 + Ersparnis je Macht, also
+  3 bzw. 4 wie bisher; haltbarer: 1 + 0,25 · Macht wie bisher); `kiDefensePotential` rechnet Wachstum mit
+  `defensePerPop`. Bots und KI flankieren über dieselbe `hexOpposite`.
+* `sw.js`: Ausliefern über `caches.open(VERSION)` und `AUS_CACHE` (`ignoreSearch`, `ignoreVary`), ohne
+  Ablage, `index.html` nur für `mode: 'navigate'`. `js/ui/boot.js`: `swStart` mit `einbau` (register +
+  update) beim Start, bei `visibilitychange` und `online`, `persist()` als App; `swOffline` (null ohne
+  Service Worker) und `bootTexts` für die Versionszeile.
+* Texte: `DATA_EN.tech` getauscht, Regelbogen, Erstes Spiel (drei Stellen, deutsch und englisch).
+
+### Gemessen (v108)
+
+KI gegen KI (Schwer), dieselben Startwerte mit v107 und v108: `node tools_ki.js selbst 200 reiche=2`
+und `node tools_ki.js selbst 100 reiche=4` (Plättchenkarte, Fähigkeiten nach dem Muster des Werkzeugs).
+Alle Änderungen zusammen; einzeln nicht gemessen.
+
+* **1 gegen 1, 200 Partien:** Militärsiege **48** statt 71, Forschungssiege 105 statt 79,
+  Wirtschaftssiege 47 statt 50; Startspieler gewinnt weiter 148 (74 %); Median Runde 6 wie bisher.
+* **Zu viert, 100 Partien:** Militärsiege **66** statt 81, Forschungs- 17 statt 10, Wirtschafts- 17 statt
+  9; Startspieler 43 statt 50; Median Runde 6 statt 5.
+* Der Rückgang der Militärsiege liegt bei etwa zweieinhalb Standardfehlern – erwartbar, weil ein
+  Militärsieg genau die Hauptstadt verlangt, die jetzt doppelt zählt. KI-Zug: Median 48–56 ms wie bisher.
+* Was das nicht sagt: wie es Menschen geht, welchen Anteil jede der vier Regeländerungen hat, und wie
+  stark die getauschten Machtwirkungen allein sind.
+
+### Abgesichert (v108)
+
+`test.js`: Hauptstadt – 2 Bevölkerung verteidigen mit 4, eine gewöhnliche Stadt daneben mit 2, mit
+Maschinengewehr 10 gegen 8, mit der Großen Mauer 8 gegen 4; „doppelt" in Regelbogen und Erstem Spiel
+nur mit `CAPITAL_DEFENSE` 1. Macht – Preis und Verlust ohne und mit jeder der vier, die beste zählt, der
+Zugbeginn verliert 4, 3 bzw. 2 von 8, Texte deutsch und englisch nennen die Zahlen genau dieser vier.
+Kosten – 2/4/5, Leitern in beiden Techtrees, `OLD_TECH_COSTS` mit 18 Einträgen. Flankieren – in gerader
+und ungerader Zeile je Richtung: 1 und 2 Felder auf einer Linie gegenüber flankieren mit Raketentechnik,
+schräg (Ring 2 zwischen zwei Richtungen), von derselben Seite und ohne Raketentechnik nicht;
+`hexOpposite` in beiden Richtungen, nie das Feld selbst. Service Worker – offline jede Seite `index.html`
+(mit Suchteil, unbekannte Adresse), Skripte aus dem Cache auch mit Suchteil, ein fehlendes Skript ein
+Netzfehler, gesucht immer ohne Suchteil und `Vary`, online nichts nebenher abgelegt, ohne fertigen Einbau
+offline nichts; alles, was `index.html` lädt, liegt vorab im Cache. Erstes Spiel – Militärweg: Tipp,
+Rückmeldung und Runde 6 nennen 1/3. Angepasst und warum: Kampfreihenfolge (Griechenland Macht 7, die
+Hauptstadt verteidigt mit 9), Kopieren (Eisenverarbeitung statt Stadtmauern als Technologie zu 2), die
+Abwehr gegen einen Vorstoß (England Macht 6 statt 4 – gegen 4 reicht jetzt einmal Wachsen), der
+Ernstfall (die Hauptstadt mit 8 Bevölkerung hält mit 16 auch ohne Armeen daneben; geprüft bleibt, dass
+sie hält und die KI mehr in Armeen und Macht steckt), die KI-Partie für den Vorrat je Szene (Startwert 9,
+offener Punkt 70). `smoke.js`: „nur online" ohne Service Worker, danach die bloße Version; das
+Kampfnachspiel zeigt 🛡️ 9; Kopierpreise mit Eisenverarbeitung. Von Hand (WebKit, Server wie GitHub
+Pages): frischer Einbau → offline alle drei Adressen und eine unbekannte mit Menü, ein fehlendes Skript
+ein Netzfehler; erster Einbau über einen halben Upload → „v108 · nur online", kein Service Worker; Upload
+fertig, Rückkehr in die App → eingebaut ohne Neustart, Menü „v108", offline neu gestartet läuft; v107
+installiert, v108 halb hochgeladen → bleibt v107, auch offline; komplett → v108, offline v108.

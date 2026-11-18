@@ -31,13 +31,17 @@ function hexDistance(r1, c1, r2, c2) {
   const x1 = c1 - (r1 - (r1 & 1)) / 2, x2 = c2 - (r2 - (r2 & 1)) / 2;
   return Math.max(Math.abs(x1 - x2), Math.abs((-x1 - r1) - (-x2 - r2)), Math.abs(r1 - r2));
 }
-/* Liegen a und b einander gegenüber, gespiegelt an m? In Würfelkoordinaten heißt das
-   genau a + b = 2·m – auf allen drei Achsen, in jeder Entfernung. (Bis v74 wurde in
-   Zeile/Spalte gespiegelt. Im versetzten Raster stimmt das nur waagerecht: die beiden
-   Diagonalen paarten Felder derselben Seite, etwa Nordost mit Südost.) */
+/* Liegen a und b einander gegenüber, mit m dazwischen auf einer Geraden? In Würfelkoordinaten:
+   Die Wege von m nach a und nach b zeigen genau in entgegengesetzte Richtungen, je mit der
+   Entfernung des anderen gewichtet: db·(a − m) + da·(b − m) = 0 auf allen drei Achsen. Bei
+   gleicher Entfernung ist das die Spiegelung a + b = 2·m (bis v107 die einzige Form – mit
+   Raketentechnik flankierten so Armeen in 1 und 2 Feldern Abstand auf einer Linie nicht). Ein Feld
+   im Ring 2 zwischen zwei Richtungen hat kein Gegenüber im Ring 1. (Bis v74 wurde in Zeile/Spalte
+   gespiegelt; im versetzten Raster paarte das auf den Diagonalen Felder derselben Seite.) */
 function hexOpposite(mr, mc, ar, ac, br, bc) {
   const m = toCube(mr, mc), a = toCube(ar, ac), b = toCube(br, bc);
-  return a[0] + b[0] === 2 * m[0] && a[1] + b[1] === 2 * m[1] && a[2] + b[2] === 2 * m[2];
+  const da = hexDistance(ar, ac, mr, mc), db = hexDistance(br, bc, mr, mc);
+  return da > 0 && db > 0 && [0, 1, 2].every(i => db * (a[i] - m[i]) + da * (b[i] - m[i]) === 0);
 }
 // Ring mit Radius n um ein Feld (inkl. aller Felder mit Distanz <= n, ohne Zentrum)
 function within(r, c, n) {

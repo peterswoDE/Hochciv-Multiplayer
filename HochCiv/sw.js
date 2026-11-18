@@ -1,7 +1,7 @@
 /* Offline-Cache. Nach Änderungen an den Dateien: node tools_version.js – zählt VERSION hoch und
    setzt BUILD_HASH. Ohne passenden BUILD_HASH übernimmt die App eine neue Fassung nicht (v106). */
-const VERSION = 'hochciv-v107';
-const BUILD_HASH = '15912cee6a4b';   // von tools_version.js
+const VERSION = 'hochciv-v108';
+const BUILD_HASH = '6e374fc1d9a6';   // von tools_version.js
 /* Was zwischengespeichert wird: die festen Dateien hier, die Skripte aus index.html – dort
    steht ihre Liste als <script>-Tags, und nur dort (v102). */
 const STATIC = [
@@ -51,14 +51,15 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
+/* Ausliefern (v108): aus dem Cache dieser Fassung – je Adresse liegt dort genau eine Datei, Suchteil
+   und Vary zählen also nicht. Was fehlt, kommt vom Netz; abgelegt wird nur beim Einbau, nie nebenher,
+   sonst mischten sich wieder Fassungen. Ohne Netz bekommt eine Seite index.html – ein Skript aber nie
+   HTML statt seiner selbst (bis v107 möglich: eine App, die offline startet und nichts kann). */
+const AUS_CACHE = { ignoreSearch: true, ignoreVary: true };
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(hit => hit ||
-      fetch(e.request).then(res => {
-        const copy = res.clone();
-        caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});
-        return res;
-      }).catch(() => caches.match('./index.html')))
-  );
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  e.respondWith(caches.open(VERSION).then(c => c.match(req, AUS_CACHE).then(hit => hit ||
+    fetch(req).catch(err => req.mode === 'navigate'
+      ? c.match('./index.html', AUS_CACHE).then(r => r || Promise.reject(err)) : Promise.reject(err)))));
 });

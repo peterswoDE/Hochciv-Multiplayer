@@ -111,8 +111,10 @@ function unit() {
         ok(v.status === 'playing' && v.my && v.cfg.challenge === week && !v.cfg.isPublic && !v.cfg.ranked && v.seats.filter(s => s.startsWith('ki:')).length === 3
             && mine === `human:${guest.setup.civ}:${guest.setup.ability}` && v.cfg.mapKey === guest.setup.mapKey && v.cfg.difficulty === guest.setup.difficulty,
             'started: alone against three KI with the week\'s setup, A\'s turn', JSON.stringify({ seats: v.seats, map: v.cfg.mapKey }));
-        // the week's seed is the game's fixed dice: the same tech availability and events in every attempt
-        ok(v.fixedDice === guest.setup.seed, 'fixed dice: the week\'s seed (same techs and events for everybody)', `${v.fixedDice} / ${guest.setup.seed}`);
+        // the week's seed is the game's fixed dice (same techs and events in every attempt) – it stays on
+        // the server: a client that had it could compute the week in advance (audit SA-17)
+        ok(v.fixedDice === undefined && guest.setup.seed === undefined, 'fixed dice: the week\'s seed stays on the server',
+            `game ${v.fixedDice}, /api/challenge ${guest.setup.seed}`);
         const api = (method, path, body) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : undefined, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, body: await r.json() }; }, [method, path, body]);
         const leave = await api('POST', `/api/async/${v.id}/leave`), cancel = await api('POST', `/api/async/${v.id}/cancel`);
         ok(leave.body.error === 'Die Wochen-Challenge kann man nur aufgeben.' && cancel.body.error === 'Die Wochen-Challenge kann man nur aufgeben.', 'leaving and cancelling are refused');

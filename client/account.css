@@ -203,7 +203,8 @@ td.acc-empty { color: var(--ink-soft); text-align: center; padding: 18px; }
 .acc-modal-card p { margin: 0 0 10px; }
 .acc-modal-x { position: absolute; right: 10px; top: 8px; width: 36px; height: 36px; border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--ink-soft); border-radius: 8px; }
 .acc-modal-x:hover { background: var(--paper-2); color: var(--ink); }
-.acc-modal input { width: 100%; padding: 9px 11px; background: var(--field); border: 1px solid var(--rule); border-radius: 8px; font: inherit; }
+.acc-modal input, .acc-modal textarea { width: 100%; padding: 9px 11px; background: var(--field); border: 1px solid var(--rule); border-radius: 8px; font: inherit; }
+.acc-modal textarea { resize: vertical; }
 .acc-code-input { width: 170px !important; text-align: center; font-size: 22px !important; letter-spacing: 6px; font-family: var(--mono) !important; }
 
 /* ------------------------------------------------------------------ footer */

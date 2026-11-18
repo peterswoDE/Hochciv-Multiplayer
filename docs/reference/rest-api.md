@@ -38,8 +38,9 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| GET | `/[?all=1]` | login | Own bots (admins with `all=1`: every bot), `{ canCreate, limit, own, bots }` |
+| GET | `/[?all=1]` | login | Own bots (admins with `all=1`: every bot), `{ canCreate, limit, own, bots }`. Each bot has a `description` string or null |
 | POST | `/` | recent | Create a bot `{ username }` → `{ bot, token }` – the token is shown only now |
+| POST | `/:id/description` | owner or admin | Set public plain text `{ description }` → `{ description }`. The string is trimmed and limited to 280 Unicode code points. An empty string clears it and returns null |
 | POST | `/:id/token` | recent | New token → `{ token }`; the old one and its sessions end |
 | POST | `/:id/transfer` | recent | Hand the bot over `{ username }` to another bot creator |
 | DELETE | `/:id` | login | Delete the bot |
@@ -129,7 +130,7 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 |---|---|---|
 | GET | `/api/games/:id` | Finished match: date, version, rounds, players with points and MMR changes, statistics, whether a replay exists, nation and wonder names (German, English; nations with their colour) |
 | GET | `/api/games/:id/replay` | The replay `{ v, version, names, frames }`, Brotli-compressed for browsers that accept it |
-| GET | `/api/profile/:userId[?offset=n]` | Name, MMR, games played, wins and the player's games |
+| GET | `/api/profile/:userId[?offset=n]` | Name, MMR, games played, wins and the player's games. Bot profiles include a public `description` string or null |
 | GET | `/api/stats[?seats=humans\|bots\|players\|ki\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN&origin=all\|online\|solo]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
 | GET | `/api/stats/player/:userId[?n=…&mode=…&ver=…]` | The same over one account's own seats (personal statistics, public like the profile): "how games are won" counts its wins, `query.seats` is `user`; a seat the KI took over still counts for its player |
 | POST | `/api/solo/games` | A finished single-player game (login, no bots; up to 2 MB): `{ cid, ver, state, t, rounds }` from client/solo.js → `{ ok, id, duplicate? }`. Checked for plausibility (known version, sane numbers, a finish the engine can score) and stored once per `cid` as a match marked `solo`; hotseat games without an account on any seat (utils/solo.js) |

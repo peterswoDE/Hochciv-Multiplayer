@@ -1,4 +1,5 @@
 const { DataTypes } = require('sequelize');
+const { BOT_DESCRIPTION_MAX_LENGTH } = require('../config');
 
 module.exports = (sequelize) => {
     const User = sequelize.define('User', {
@@ -92,6 +93,10 @@ module.exports = (sequelize) => {
         },
         ownerId: {
             type: DataTypes.UUID,
+            allowNull: true,
+        },
+        botDescription: {
+            type: DataTypes.STRING(BOT_DESCRIPTION_MAX_LENGTH),
             allowNull: true,
         },
         // SHA-256 of the bot's token; the token itself is shown once when created or renewed

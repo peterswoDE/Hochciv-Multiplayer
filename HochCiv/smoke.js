@@ -385,7 +385,7 @@ step('v105: Kopieren – je Weg eine Kopie je Runde, die Preise als Knöpfe in d
   try {
     S.cur = pi;
     ['internet', 'spionage', 'kundschafterei'].forEach(k => { p.techs[k] = true; });
-    ['stadtmauern', 'taktik', 'astronomie'].forEach(k => { S.players[o].techs[k] = true; delete p.techs[k]; });
+    ['eisenverarbeitung', 'taktik', 'astronomie'].forEach(k => { S.players[o].techs[k] = true; delete p.techs[k]; });
     p.res = { sci: 0, food: 0, coins: 3 }; delete p.copied;   // nichts, was in Münzen einspringt
     G('redraw')(); $('a-abil').onclick();
     const preise = k => {
@@ -393,19 +393,19 @@ step('v105: Kopieren – je Weg eine Kopie je Runde, die Preise als Knöpfe in d
       return b ? [...b.closest('.copy-row').querySelectorAll('button')].map(x => x.textContent + (x.disabled ? ' (aus)' : '')).join(' · ') : '–';
     };
     const tippe = act => { const b = $('sheet-body').querySelector(`[data-act="${act}"]`); if (!b) throw new Error('kein Knopf ' + act); b.onclick(); };
-    const stand = () => ['stadtmauern', 'taktik', 'astronomie'].map(k => k + ': ' + preise(k)).join(' | ');
+    const stand = () => ['eisenverarbeitung', 'taktik', 'astronomie'].map(k => k + ': ' + preise(k)).join(' | ');
     const a = stand();
-    if (a !== `stadtmauern: gratis · ${geld(2)} · 4🪙 (aus) | taktik: gratis · ${geld(1)} · ${geld(2)} | astronomie: gratis · ${geld(2)} · 4🪙 (aus)`)
+    if (a !== `eisenverarbeitung: gratis · ${geld(2)} · 4🪙 (aus) | taktik: gratis · ${geld(1)} · ${geld(2)} | astronomie: gratis · ${geld(2)} · 4🪙 (aus)`)
       throw new Error('drei Wege, 3 Münzen: ' + a);
     tippe('kopie:kundschafterei:taktik');                 // 2 Münzen, Kundschafterei ist verbraucht
     const b = stand();
-    if (b !== 'stadtmauern: gratis · 2🪙 (aus) | taktik: – | astronomie: gratis · 2🪙 (aus)') throw new Error('nach Kundschafterei: ' + b);
+    if (b !== 'eisenverarbeitung: gratis · 2🪙 (aus) | taktik: – | astronomie: gratis · 2🪙 (aus)') throw new Error('nach Kundschafterei: ' + b);
     tippe('kopie:internet:astronomie');                   // gratis, Internet ist verbraucht
     p.res = { sci: 0, food: 0, coins: 5 }; G('redraw')(); G('abilSheet')();
     const c = stand();
-    if (c !== `stadtmauern: ${geld(2)} | taktik: – | astronomie: –`) throw new Error('nach dem Internet: ' + c);
-    tippe('kopie:spionage:stadtmauern');
-    if (!['taktik', 'astronomie', 'stadtmauern'].every(k => p.techs[k]) || p.res.coins !== 3) throw new Error('Kopien oder Münzen falsch: ' + p.res.coins);
+    if (c !== `eisenverarbeitung: ${geld(2)} | taktik: – | astronomie: –`) throw new Error('nach dem Internet: ' + c);
+    tippe('kopie:spionage:eisenverarbeitung');
+    if (!['taktik', 'astronomie', 'eisenverarbeitung'].every(k => p.techs[k]) || p.res.coins !== 3) throw new Error('Kopien oder Münzen falsch: ' + p.res.coins);
     if ($('sheet-body').querySelector('.copy-row') || !/Diese Runde schon kopiert/.test($('sheet-body').textContent)) throw new Error('nach drei Kopien noch Zeilen');
     console.log('       ' + a.replace(/\s+/g, ' ') + '  →  drei Kopien in einer Runde, danach „Diese Runde schon kopiert."');
   } finally {
@@ -1264,6 +1264,19 @@ step('Hauptmenü zeigt die Versionsnummer', () => {
   // Sie darf die Menüknöpfe nicht verdrängen
   if (!$('screen-menu').querySelector('#m-new')) throw new Error('Menüknöpfe fehlen');
   console.log('       ' + txt);
+});
+// v108: Solange kein Service Worker die Seite hält (erster Einbau läuft oder scheiterte), sagt das Menü es
+step('Menü: „nur online", bis die App offline bereitliegt', () => {
+  const h = {}, sw = { controller: null, addEventListener: (a, f) => { h[a] = f; }, register: () => Promise.resolve({ active: null }) };
+  Object.defineProperty(window.navigator, 'serviceWorker', { configurable: true, value: sw });
+  G('swStart')();
+  const ver = G('APP_VERSION'), txt = () => $('m-version').textContent;
+  if (txt() !== ver + ' · nur online') throw new Error('vor dem Einbau: „' + txt() + '"');
+  sw.controller = {};           // Einbau fertig, der Service Worker übernimmt
+  h.controllerchange();
+  if (txt() !== ver) throw new Error('nach dem Einbau: „' + txt() + '"');
+  delete window.navigator.serviceWorker;
+  SET('swOffline', null);
 });
 step('Zugende ist mit Armee in der Stadt gesperrt (nicht nur bestätigungspflichtig)', () => {
   frischesSpiel();
@@ -3509,8 +3522,8 @@ step('v89: frisch gezeigte Blätter nehmen kurz keine Tipps an – außer auf de
    Die Bilder schaltet hier nicht der Zeitgeber weiter (die Schritte laufen synchron), sondern
    combatNext – so wie es der Zeitgeber täte. */
 // Griechenland (Mensch) gegen eine Bot-Stadt: Armee daneben, von G1 (auch an der Stadt) und
-// G2 (gegenüber) flankierbar. Macht 5 gegen 3, Stadt mit 3 Bevölkerung: Verteidigung 6 mit der
-// Armee – die Stadt hält (die Armee verteidigt mit), danach wird die Armee weggeflankt.
+// G2 (gegenüber) flankierbar. Macht 5 gegen 3, Hauptstadt mit 3 Bevölkerung: Verteidigung 2 · 3 + 3
+// = 9 mit der Armee (bis v107 6) – die Stadt hält (die Armee verteidigt mit), danach wird die Armee weggeflankt.
 const kampfLage = () => {
   const S = griechenSpiel('basis'), pi = S.cur;
   const frei = (r, c) => G('isLand')(S, r, c) && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c);
@@ -3559,7 +3572,7 @@ step('v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke, m
     if (!armeeGezeichnet(E.r, E.c, E.owner)) throw new Error('Bild 1 zeigt die Armee an der Stadt nicht mehr');
     if (!window.document.body.classList.contains('blocked')) throw new Error('Leiste während des Nachspiels nicht gesperrt');
     const b1 = [fightText('fight-a'), fightText('fight-sign'), fightText('fight-d'), fightText('fight-caption')];
-    if (JSON.stringify(b1) !== JSON.stringify(['⚔️ 5', '≤', '🛡️ 6', 'Stadt 1/2 · hält']))
+    if (JSON.stringify(b1) !== JSON.stringify(['⚔️ 5', '≤', '🛡️ 9', 'Stadt 1/2 · hält']))
       throw new Error('Bild 1: ' + b1.join(' | '));
     if ($('map').querySelectorAll('.fight-from').length !== 1) throw new Error('Stadt: nicht genau der Angreifer markiert');
     // Die Werte verdecken weder die Figuren der Angreifer noch das Kampffeld (in jedem Bild)
@@ -3622,7 +3635,7 @@ step('v91: am Zugende jeder Kampf einzeln – erst die Stadt, dann die Flanke, m
     let guard = 0;
     while (G('ui').botLock && guard++ < 10) $('bot-next').onclick();
   } finally { SET('COMBAT_MS', 0); }
-  console.log('       Bild 1: ⚔️ 5 ≤ 🛡️ 6 · Stadt 1/2 · hält · Bild 2: ⚔️ 5 > 🛡️ 3 · Flanke 2/2 · Armee zerstört · Tipp überspringt');
+  console.log('       Bild 1: ⚔️ 5 ≤ 🛡️ 9 · Stadt 1/2 · hält · Bild 2: ⚔️ 5 > 🛡️ 3 · Flanke 2/2 · Armee zerstört · Tipp überspringt');
 });
 step('v90: das Menü (☰) beendet ein laufendes Nachspiel, bevor es öffnet', () => {
   const { S, pi, C, E } = kampfLage();

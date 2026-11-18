@@ -13,7 +13,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hochciv}
-      # Only used when the database volume is created for the first time.
+      # The superuser – only for the database itself, backups and hochciv-staging-db-setup. Only used
+      # when the database volume is created for the first time.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-hochciv}
     healthcheck:
@@ -26,13 +27,39 @@ services:
     networks:
       - internal
 
+  hochciv-staging-db-setup:
+    # One-shot at every `docker compose up`: creates the database roles the server uses
+    # (hochciv_owner for migrations, hochciv_app for everything else) and hands the tables to the
+    # owner (scripts/db-setup.js). Runs as the database superuser, whose password the server no
+    # longer gets.
+    image: peterswode/hochciv-multiplayer:staging
+    container_name: hochciv-staging-db-setup
+    restart: "no"
+    entrypoint: ["node", "scripts/db-setup.js"]
+    depends_on:
+      hochciv-staging-db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - DB_HOST=hochciv-staging-db
+      - POSTGRES_USER=${POSTGRES_USER:-hochciv}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - POSTGRES_DB=${POSTGRES_DB:-hochciv}
+      - POSTGRES_OWNER_PASSWORD=${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD in .env}
+      - POSTGRES_APP_PASSWORD=${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}
+    networks:
+      - internal
+
   hochciv-staging:
     image: peterswode/hochciv-multiplayer:staging
     container_name: hochciv-multiplayer-staging
     restart: unless-stopped
     depends_on:
-      hochciv-staging-db:
-        condition: service_healthy
+      hochciv-staging-db-setup:
+        condition: service_completed_successfully
     # The server needs no Linux capabilities and no privilege changes; limits keep a runaway
     # process (or a flood) from taking the whole host down
     security_opt:
@@ -52,7 +79,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in .env to a long random string}
       # Public URL of staging, e.g. https://staging.hochciv.de
       - BASE_URL=${BASE_URL:-}
-      - DATABASE_URL=postgres://${POSTGRES_USER:-hochciv}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@hochciv-staging-db:5432/${POSTGRES_DB:-hochciv}
+      # The server's database role: rows only, no schema changes, no superuser (scripts/db-setup.js)
+      - DATABASE_URL=postgres://hochciv_app:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}@hochciv-staging-db:5432/${POSTGRES_DB:-hochciv}
+      # Owner of the tables: only for the migrations before the server starts (entrypoint.sh)
+      - MIGRATION_DATABASE_URL=postgres://hochciv_owner:${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD in .env}@hochciv-staging-db:5432/${POSTGRES_DB:-hochciv}
       # E-mail – optional. Without SMTP_HOST, mails are only written to the log.
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -87,9 +117,9 @@ services:
 
 networks:
   nginx:
-    # The Docker network of the reverse proxy (PROXY_NETWORK in .env, default "nginx").
+    # The Docker network of the reverse proxy (PROXY_NETWORK in .env, default "proxy").
     external: true
-    name: ${PROXY_NETWORK:-nginx}
+    name: ${PROXY_NETWORK:-proxy}
   internal:
 
 volumes:

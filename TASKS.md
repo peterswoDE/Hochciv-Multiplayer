@@ -44,6 +44,8 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 34 | F34 | [Nation draft and turn-order choice](#f34-nation-draft-and-turn-order-choice) | ✔ | ✔ | ✅ done |
 | 35 | F35 | [Security audit fixes](#f35-security-audit-fixes) | ✔ | ✔ | ✅ |
 | 36 | F36 | [Second security audit](#f36-second-security-audit) | ✔ | ✔ | ✅ |
+| 37 | F37 | [Database roles and migrations](#f37-database-roles-and-migrations) | ✔ | ✔ | ✅ |
+| 38 | F38 | [Public bot descriptions](#f38-public-bot-descriptions) | ✔ | ✔ | ✅ (#171) |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122), mirror match (#161, was F33). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -694,10 +696,14 @@ F29–F33 come from player feedback on Discord (Nic, 2026-11-15/16), consolidate
 
 **Idea (Nic):** a match type where each pairing is played twice with seats and nations swapped, so the first-move advantage and strong nations even out.
 
-**Thoughts:** fits Rundenspiele best (two linked games, the combined result counts); open whether and how it counts for MMR. Before building it: use the statistics (F13/F23) to measure how big the first-move and nation advantages are. Bigger feature – parked until decided.
-
-**Status:** ✅ moved to GitHub issue [#161](https://github.com/peterswoDE/Hochciv-Multiplayer/issues/161) (2026-11-16), nothing to build here.
-
+**Thoughts:** fits Rundenspiele best (two linked games, the combined result counts); open whether and how it counts for MMR. Before building it: use the statistics (F13/F23) to measure how big the first-move and nation advantages are. Bigger feature – parked until decided.
+
+
+
+**Status:** ✅ moved to GitHub issue [#161](https://github.com/peterswoDE/Hochciv-Multiplayer/issues/161) (2026-11-16), nothing to build here.
+
+
+
 ## F34 Nation draft and turn-order choice
 
 **Status: done (2026-11-16)** with the proposed defaults below. Implemented:
@@ -735,7 +741,8 @@ F29–F33 come from player feedback on Discord (Nic, 2026-11-15/16), consolidate
 3. Live draft phase (server state, client screen, KI picks, turn timer).
 4. Rundenspiele: positions on joining, draft phase with notifications and timeout.
 5. Bot events and docs; replay/statistics check (positions instead of nations on the classic map).
-
+
+
 ## F35 Security audit fixes
 
 **Goal:** a modified client or a host can't bend the rules of a game, and server and client agree on what they send each other.
@@ -780,10 +787,36 @@ F29–F33 come from player feedback on Discord (Nic, 2026-11-15/16), consolidate
 - **SA-17** the weekly challenge's `fixedDice` no longer reaches clients. **SA-18** HSTS over HTTPS.
 - **SA-09** (without Watchtower, which stays as it is): workflow actions pinned to commit SHAs, Dependabot for actions and npm, `.github/workflows/checks.yml` runs the tests without a server and `npm audit` on pull requests.
 
-**Not changed:** Watchtower and the `latest` auto-deploy (decided 2026-11-16); a database role without superuser rights and migrations instead of `sync({ alter: true })` (bigger change, later); CSP `script-src` (needs the inline `onclick` handlers of the account and admin pages replaced first); the cookie name (changing it would log everybody out).
+**Not changed:** Watchtower and the `latest` auto-deploy (decided 2026-11-16); a database role without superuser rights and migrations instead of `sync({ alter: true })` (→ F37); CSP `script-src` (needs the inline `onclick` handlers of the account and admin pages replaced first); the cookie name (changing it would log everybody out).
 
 **Operators:** `.env` must now contain `POSTGRES_PASSWORD` (the one the database was created with – `password123` if it was never set); on staging `MAIL_LOG_CODES=on` to read codes in the log.
 
 **Tests:** `tests/security/regression.test.js` (docker, `TURN_TIMER_SCALE=0.05`): all 8 checks failed before, pass now. `tests/bots/bots.test.js`: a bot never meets its owner in matchmaking.
+
+**Status:** ✅
+
+## F37 Database roles and migrations
+
+Rest of SA-13 from the second security audit: the server no longer connects as the database superuser, and no longer changes the schema itself.
+
+- **Roles** (`scripts/db-setup.js`, one-shot container `hochciv-db-setup` / `hochciv-staging-db-setup` / local `hochciv-db-setup` at every `docker compose up`): `hochciv_owner` owns the tables and runs the migrations; `hochciv_app` is the server – rows only, no schema, no writes to the migration log, no superuser. Existing tables are handed to the owner; default privileges cover future tables. Idempotent.
+- **Migrations** (`utils/migrate.js`, `migrations/`, `scripts/migrate.js`): numbered files, each in a transaction, recorded in `schema_migrations`, an advisory lock against parallel runs. `0001-baseline` creates the schema of `sync({ alter: true })` on an empty database (`0001-baseline.sql`, a schema dump – identical to what `sync` creates) and only records it on an existing one. `entrypoint.sh` runs them as the owner and starts the server without `MIGRATION_DATABASE_URL`.
+- **Server** (`server.js`): no `sync`, no `CREATE TABLE "session"`, no `DROP INDEX` of the challenge any more (both in the baseline); waits for the database, refuses to start with a pending migration it can't apply, and logs models that don't match the schema (`utils/schema-check.js`).
+- **Compatible:** without `MIGRATION_DATABASE_URL` (old compose files, `npm start`) everything uses `DATABASE_URL` as before.
+- Docs: [Database](docs/reference/database.md#roles-and-migrations) (incl. how to change the schema), [Deployment](docs/operations/deployment.md#switching-to-the-database-roles-from-2026-11), Configuration, Staging, Security, Testing.
+
+**Operators (once, production and staging):** back up; add `POSTGRES_OWNER_PASSWORD` and `POSTGRES_APP_PASSWORD` to `.env`; take the new compose file; `docker compose pull && docker compose up -d`. Until then the new image runs as before with the superuser.
+
+**Tests:** `tests/db/migrations.test.js` (empty Postgres; in CI as a service container): setup twice, migrations, models = schema, the app role's refusals. Checked by hand: an existing database (data kept, all tables to the owner), an empty one (schema identical to `sync`), the new image with the old compose file and the switch afterwards; the local docker setup with the server tests.
+
+**Status:** ✅
+
+## F38 Public bot descriptions
+
+**Goal:** Bot owners can tell players what their bot does on its public profile.
+
+**Built:** Owners and admins can set, edit or clear up to 280 characters of plain text in *Meine Bots*. The public bot profile shows the saved text below the owner. Column `users.botDescription` comes with migration `0002-bot-description`. See [#171](https://github.com/peterswoDE/Hochciv-Multiplayer/issues/171).
+
+**Tests:** `tests/bots/description.test.js` (local Docker and browser) covers permissions, validation, editing and public rendering; `tests/db/migrations.test.js` checks the model against the schema.
 
 **Status:** ✅

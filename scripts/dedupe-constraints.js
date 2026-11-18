@@ -10,6 +10,8 @@
  * users.username), otherwise the original one (shortest name). The kept one is renamed to the
  * original name, which the models use (see `indexes` there).
  */
+// Changes constraints: needs the owner role (in the container: MIGRATION_DATABASE_URL)
+if (process.env.MIGRATION_DATABASE_URL) process.env.DATABASE_URL = process.env.MIGRATION_DATABASE_URL;
 const { sequelize } = require('../models');
 
 const ident = name => `"${name.replace(/"/g, '""')}"`;

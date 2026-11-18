@@ -5,7 +5,7 @@
  *   GET /api/profile/:userId[?offset=n]  – name, MMR, games played, wins and the player's games
  *
  * Only public data goes out: no e-mail, no role, no account flags – only whether it is a bot
- * account and who owns it. The client side is
+ * account, who owns it and any public bot description. The client side is
  * client/profile.js – new profile content goes there and here.
  */
 const express = require('express');
@@ -70,7 +70,7 @@ router.get('/:userId', limit, async (req, res) => {
         const userId = req.params.userId;
         if (!UUID_RE.test(userId)) return res.status(404).json({ error: 'Spieler nicht gefunden.' });
         const user = await User.findByPk(userId, {
-            attributes: ['id', 'username', 'mmr', 'gamesPlayed', 'avatarUrl', 'createdAt', 'accountType', 'ownerId'],
+            attributes: ['id', 'username', 'mmr', 'gamesPlayed', 'avatarUrl', 'createdAt', 'accountType', 'ownerId', 'botDescription'],
         });
         if (!user) return res.status(404).json({ error: 'Spieler nicht gefunden.' });
         // a bot account shows who runs it (utils/bots.js)
@@ -114,6 +114,7 @@ router.get('/:userId', limit, async (req, res) => {
             avatarUrl: user.avatarUrl,
             memberSince: user.createdAt,
             isBotAccount: user.accountType === 'bot',
+            ...(user.accountType === 'bot' ? { description: user.botDescription } : {}),
             owner: owner ? { id: owner.id, username: owner.username } : null,
             games: { total: count, offset, pageSize: PAGE, list: rows.map(g => gameEntry(g, user.id)) },
         });

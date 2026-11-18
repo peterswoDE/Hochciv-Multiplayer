@@ -9,6 +9,7 @@
 * The game code in `HochCiv*/` runs on your server and in your players' browsers – review changes to it like server code.
 * Only superadmins can grant admin rights or change OAuth settings; admins manage normal users only ([Administration](../operations/administration.md)). Changes that could take over an account – a new password, removing second factors, roles, deleting an account – and the OAuth settings need a recent login of the admin (password or authenticator), and every admin change is written to the log (`[Admin] <who> <what>`).
 * The image runs the server as `node`, which may only write `public/`; the compose files drop all Linux capabilities, forbid privilege changes, limit processes and memory and wait for the database's health check. `POSTGRES_PASSWORD` has no default.
+* The server connects to PostgreSQL as `hochciv_app`: it reads and writes rows but is no superuser and can't change the schema. Migrations run as `hochciv_owner` before the server starts, and the server process never sees that password; the superuser's password stays with the database ([Roles and migrations](database.md#roles-and-migrations)).
 * Workflow actions are pinned to commit SHAs (Dependabot updates them); pull requests run `.github/workflows/checks.yml` (tests without a server, `npm audit`).
 
 ## Sessions and cookies

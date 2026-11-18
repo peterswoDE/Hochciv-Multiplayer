@@ -2,7 +2,7 @@
 
 # Database
 
-PostgreSQL 15 through Sequelize. The models are in `models/` (`models/index.js` wires them up). There are no migration files: the server runs `sequelize.sync({ alter: true })` at every start, which creates missing tables and adds or changes columns to match the models. Sessions (login cookies) are stored in the same database by `connect-pg-simple`.
+PostgreSQL 15 through Sequelize. The models are in `models/` (`models/index.js` wires them up); the schema comes from the migrations in `migrations/`, and the server connects with a role that can't change it – see [Roles and migrations](#roles-and-migrations). Sessions (login cookies) are stored in the same database by `connect-pg-simple`.
 
 Live lobbies and games are **not** in the database – they live in memory (`sessions.js`). Only their result (`games`) and replay (`replays`) are stored when they end.
 
@@ -27,7 +27,8 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `oauth_providers` | `OAuthProvider` | Google/Discord configuration |
 | `reports` | `Report` | Chat reports |
 | `banned_words` | `BannedWord` | Admins' word-filter entries |
-| `session` | – | Login sessions (`connect-pg-simple`), created by `server.js` |
+| `session` | – | Login sessions (`connect-pg-simple`) |
+| `schema_migrations` | – | The applied migrations (`name`, `appliedAt`) |
 
 Relations: a `User` has many `Passkey`, `TotpToken` and `DeviceToken` rows (device tokens are deleted with the user); `Game.winnerUsername` refers to `User.username`. Everything else refers to users by id inside its own columns (`ownerId`, `hostUserId`, `participantIds`, …).
 
@@ -39,7 +40,7 @@ Relations: a `User` has many `Passkey`, `TotpToken` and `DeviceToken` rows (devi
 | `password_hash` | bcrypt; empty for Google/Discord/passkey-only accounts |
 | `mmr` (default 1000), `gamesPlayed` | Ranking |
 | `role` (`user`/`botcreator`/`admin`/`superadmin`), `isActive`, `isBanned` | Rights and state |
-| `accountType` (`human`/`bot`), `ownerId`, `botTokenHash`, `botLimit` | [Bot accounts](bot-accounts.md): a bot's owner and the SHA-256 of its token; how many bots a bot creator may own (null = default) |
+| `accountType` (`human`/`bot`), `ownerId`, `botTokenHash`, `botLimit`, `botDescription` | [Bot accounts](bot-accounts.md): a bot's owner and the SHA-256 of its token; how many bots a bot creator may own (null = default); the bot's public profile text (null = none) |
 | `googleId`, `discordId`, `avatarUrl` | Linked providers |
 | `activationCode…`, `resetCode…`, `pendingEmail`, `emailChangeCode…` | One-time codes with expiry and attempt counters |
 | `totpSecret`, `totpEnabled`, `totpAttempts`, `totpLockedUntil` | Authenticator (and its lockout) |
@@ -72,7 +73,40 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 * **`reports`:** `kind` (`chat` or `map`), `status`, `source`/`sourceId` (live game or Rundenspiel; for a map `map` and the map's id), reporter and reported (id and name), `reason`, `message`, `context` (the game's chat history from the server's copy; for a map report the map as it was), `auto` (word filter), `matches`, `penalty`, `note`, `handledBy`, `handledAt`. Reports about an existing account are kept as long as it exists; the others for `REPORT_KEEP_YEARS` (3).
 * **`banned_words`:** `word` (normalized: lower case, ä → ae, ß → ss), `kind` (`ban`/`allow`), `match` (`word` – whole word, or `part` – anywhere), `addedBy`.
 
+## Roles and migrations
+
+The server doesn't use the database superuser. There are three roles:
+
+| Role | Used by | May |
+|---|---|---|
+| `hochciv` (`POSTGRES_USER`) | the database container, the db-setup container, backups | everything (superuser) |
+| `hochciv_owner` | the migrations before the server starts (`MIGRATION_DATABASE_URL`) | owns the tables: create, change and drop them – in this database only |
+| `hochciv_app` | the server (`DATABASE_URL`) | read and write rows; no schema changes, no writes to `schema_migrations`, no superuser rights such as running programs |
+
+`scripts/db-setup.js` creates the two roles. It runs as the one-shot container `hochciv-db-setup` (staging: `hochciv-staging-db-setup`) at every `docker compose up`, before the server: it sets the roles' passwords from `.env` (`POSTGRES_OWNER_PASSWORD`, `POSTGRES_APP_PASSWORD`), hands every table to `hochciv_owner` and grants `hochciv_app` its rights – also on the tables later migrations create. Running it again changes nothing.
+
+At start, `entrypoint.sh` runs `scripts/migrate.js` as the owner and then starts the server without `MIGRATION_DATABASE_URL` in its environment. The server checks that no migration is pending and compares the models with the schema: a table or column a model expects but the database lacks is logged as `[DB] Schema: … – a migration is missing`.
+
+Without `MIGRATION_DATABASE_URL` (`npm start`, or a compose file from before the roles) the migrations and the server both use `DATABASE_URL`.
+
+`0001-baseline` is the schema `sequelize.sync({ alter: true })` kept at every start until 2026-11: an empty database gets it from `0001-baseline.sql`; a database from before only records it.
+
+### Changing the schema
+
+Changing a model doesn't change the database any more. Every model change comes with a migration:
+
+1. Add `migrations/NNNN-what-it-does.js` with the next number. It exports `up(db)`; `db` is a pg client inside the migration's transaction. Plain SQL:
+   ```js
+   exports.up = async db => {
+       await db.query('ALTER TABLE users ADD COLUMN "theme" varchar(255)');
+   };
+   ```
+2. Change the model to match.
+3. `docker compose -f docker-compose.local.yml up -d` applies it (log: `[DB] Migration … applied`). `tests/db/migrations.test.js` – also run on every pull request – fails when a model and the schema disagree.
+
+Migrations only go forward; there is no down. An older image started on a newer schema (pinning `HOCHCIV_IMAGE_TAG` back) must still work, so prefer additive changes – new columns nullable or with a default – and drop columns a release after the code stopped using them. Never change a migration that has been applied somewhere, nor `0001-baseline.sql`.
+
 ## Maintenance
 
-* `node scripts/dedupe-constraints.js [--fix]` removes duplicate UNIQUE constraints that older `sync({ alter: true })` runs created.
-* Backups: back up the PostgreSQL volume (e.g. `docker exec hochciv-db pg_dump -U hochciv hochciv > backup.sql`).
+* `node scripts/dedupe-constraints.js [--fix]` removes duplicate UNIQUE constraints that older `sync({ alter: true })` runs created (in the container it uses the owner role).
+* Backups: back up the PostgreSQL volume (e.g. `docker exec hochciv-db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql`). A dump restored into a new database belongs to the superuser; the next `docker compose up` hands it to `hochciv_owner` again.

@@ -207,7 +207,7 @@ const fgDurchgefallen = a => techPool(S).filter(t => t.age === a && fgOffen(fgP(
 // Die Felder, in denen das Zeitalter `a` schon offen ist (für die Texte)
 const fgOffeneFelder = a => FIELDS.map((_, f) => f).filter(f => a > 0 && fgOffen(fgP(), f, a));
 /* Die Technologie, um die es in Runde 3 und 4 geht – je Weg die, die ihn voranbringt:
-   Militär Belagerungsmaschinen, dann Eisenverarbeitung (Macht billiger); Wirtschaft Keramik
+   Militär Belagerungsmaschinen, dann Eisenverarbeitung (Macht hält länger); Wirtschaft Keramik
    (zweimal wachsen), dann Demokratie (öffnet das Mittelalter in Spezial – die Theologie);
    Forschung Schrift, dann Papier (öffnet die Industrialisierung in der Forschung). */
 const fgRestTech = runde => runde === 3 ? fgJe('belagerung', 'keramik', 'schrift') : fgJe('eisenverarbeitung', 'demokratie', 'papier');
@@ -726,10 +726,10 @@ const FG_STEPS = [
   },
   fgRestSchritt(4, {
     id: 'rest4', t: 'Den Sieg vorbereiten',
-    tipp: () => fgJe(T('<b>Eisenverarbeitung</b> (Militär): Macht kostet dann 4 🪙 statt 5 – und Macht entscheidet jeden Kampf.'),
+    tipp: () => fgJe(T('<b>Eisenverarbeitung</b> (Militär): Zu Beginn deines Zugs verfällt dann nur ein Drittel deiner Macht statt der Hälfte – und Macht entscheidet jeden Kampf.'),
       T('<b>Demokratie</b> (Spezial) öffnet das Mittelalter in Spezial – dort liegt die <b>Theologie</b>, die deine Siegschwelle senkt.'),
       T('<b>Papier</b> (Forschung, Mittelalter): +1 🔬 je Grasland – und es öffnet die Industrialisierung in der Forschung.')) + ' ' + T('Fehlt 🔬, zahlen Münzen 2:1. Danach wachsen, bis nichts mehr geht.'),
-    gut: () => fgJe(T('Jede Münze bringt dir jetzt mehr Macht.'), fgNeuGewuerfelt(3, 1), fgNeuGewuerfelt(0, 2)),
+    gut: () => fgJe(T('Deine Macht hält jetzt länger.'), fgNeuGewuerfelt(3, 1), fgNeuGewuerfelt(0, 2)),
     vorzug: () => fgJe(['landwirtschaft', 'schrift'], ['landwirtschaft', 'schrift'], ['landwirtschaft', 'universitaet', 'schrift']),
   }),
   {
@@ -754,7 +754,7 @@ const FG_STEPS = [
     },
     ziel: () => T('Belagere Englands Hauptstadt: Am Ende deines Zugs muss dein Angriff höher sein als ihre Verteidigung.'),
     stand: () => fgStandHaupt(),
-    tipp: () => T('<b>Belagerungsmaschinen</b> geben +3 Angriff gegen Städte, und jede Armee neben der Stadt greift mit an. Verteidigung: Bevölkerung + Englands Macht für jede englische Armee daneben.'),
+    tipp: () => T('<b>Belagerungsmaschinen</b> geben +3 Angriff gegen Städte, und jede Armee neben der Stadt greift mit an. Verteidigung: doppelte Bevölkerung (Hauptstadt) + Englands Macht für jede englische Armee daneben.'),
     zeige: () => { const c = fgErCap(); return c ? [[c.r, c.c]] : []; },
     hl: () => { const c = fgErCap(); return c ? neighbors(c.r, c.c).filter(([r, c2]) => canStop(S, FG_ICH, r, c2)) : []; },
     techs: () => ['belagerung'], leiste: ['#a-power'],
@@ -766,7 +766,8 @@ const FG_STEPS = [
   },
   {
     id: 'm_erobern', pfad: 'militaer', t: 'Noch einmal', zug: true, lassen: true,
-    info: () => T('England hat nachgerüstet – und deine Macht hat sich halbiert.'),
+    // die Hälfte, mit Eisenverarbeitung aus Runde 4 ein Drittel (seit v108; bis v107 machte sie Macht billiger)
+    info: () => T('England hat nachgerüstet – und deine Macht hat zu Zugbeginn 1/%s verloren.', powerDecay(fgP())),
     ziel: () => T('Sei am Ende dieses Zugs wieder stärker als Englands Hauptstadt.'),
     stand: () => fgStandHaupt(),
     tipp: () => (has(fgP(), 'belagerung') ? T('Angriff je Armee = deine Macht + 3 (Belagerungsmaschinen).') : T('Angriff je Armee = deine Macht – mit Belagerungsmaschinen 3 mehr.')) +

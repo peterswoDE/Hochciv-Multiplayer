@@ -1202,7 +1202,7 @@ function beginTurn(S) {
   // 2 Macht reduzieren. Zuschläge aus Armeen/Zeusstatue erhöhen den Verlust,
   // können aber selbst nicht verloren gehen.
   if (p.kind !== 'bot' && powerOf(S, S.cur) > 0) {
-    const div = has(p, 'panzer') ? 4 : has(p, 'stahl') ? 3 : 2;
+    const div = powerDecay(p);
     const loss = Math.min(p.power, Math.ceil(powerOf(S, S.cur) / div));
     p.power -= loss;
     if (loss) log(S, 'info', T('Macht −%s (1/%s, aufgerundet) → %s.', loss, div, powerOf(S, S.cur)));
@@ -1853,11 +1853,13 @@ function buildArmy(S, pi, city) {
   log(S, 'act', T('%s: Armee gebaut (%s Münzen) – muss die Stadt noch verlassen.', civOf(S.players[pi]).n, cost));
   return null;
 }
+// Macht: Preis in Münzen und Verlust zu Zugbeginn (1/…) – die beste eigene Technologie zählt (TECHS)
 function powerPrice(S, pi) {
   const p = S.players[pi];
-  const base = has(p, 'gewehre') ? 3 : has(p, 'eisenverarbeitung') ? 4 : 5;
+  const base = TECHS.reduce((m, t) => (t.machtPreis && has(p, t.k) ? Math.min(m, t.machtPreis) : m), POWER_PRICE);
   return Math.max(1, base - (hasWonder(S, pi, 'himeji') ? 1 : 0));   // Burg Himeji
 }
+const powerDecay = p => TECHS.reduce((d, t) => (t.machtVerlust && has(p, t.k) ? Math.max(d, t.machtVerlust) : d), POWER_DECAY);
 function buyPower(S, pi, n = 1) {
   const price = powerPrice(S, pi) * n;
   if (!pay(S, pi, 'coins', price, payOpts(S, pi))) return T('Zu wenig Münzen.');
@@ -2079,6 +2081,10 @@ function attackValue(S, pi, count, pow) {
   if (has(p, 'dynamit')) per *= 2;
   return per * (COMBAT.attackStacks ? count : 1);
 }
+/* Verteidigung je Bevölkerung: 1, in der Hauptstadt CAPITAL_DEFENSE mehr (v108), mit Maschinengewehr
+   MG_DEFENSE mehr (v107: 3, bis v106 2). Mit der Großen Mauer zählt die Gesamtbevölkerung – auch für beide Zuschläge. */
+const defensePerPop = (S, city) => 1 + (city.cap ? CAPITAL_DEFENSE : 0) +
+  (has(S.players[city.owner], 'maschinengewehr') ? MG_DEFENSE : 0);
 // `helpersIn` (Tempo): die Armeen in Reichweite, falls schon gezählt (kiRisk)
 function defenseValue(S, city, pow, helpersIn) {
   const o = S.players[city.owner], oi = city.owner;
@@ -2086,7 +2092,7 @@ function defenseValue(S, city, pow, helpersIn) {
   const macht = pow != null ? pow : powerOf(S, oi);      // v94: in der Kampfphase festgehalten
   // Die Große Mauer rechnet die Verteidigung mit der Gesamtbevölkerung des Reiches.
   const base = hasWonder(S, oi, 'mauer') ? popOf(S, oi) : city.pop;
-  let d = base * (1 + (has(o, 'maschinengewehr') ? MG_DEFENSE : 0));   // v107: +3 je Bevölkerung (bis v106 +2)
+  let d = base * defensePerPop(S, city);
   if (has(o, 'stadtmauern')) d += 5;
   if (has(o, 'burgenbau')) d += macht;                   // virtuelle Armee in der Stadt
   let helpers = helpersIn;
@@ -2103,7 +2109,8 @@ function defenseValue(S, city, pow, helpersIn) {
    der Oberfläche dieselbe Regel liest wie der Kampf.
    Positionen, von denen aus ein Reich flankiert: seine Armeen und – mit Burgenbau – seine
    Städte (die virtuelle Burgenarmee). Nötig sind zwei davon in Reichweite (1, mit
-   Raketentechnik 2), ohne Taktik gegenüberliegend (am Gegner gespiegelt, hexOpposite).
+   Raketentechnik 2), ohne Taktik gegenüberliegend: auf einer Linie durch den Gegner
+   (hexOpposite, seit v108 auch in 1 und 2 Feldern Abstand).
    Ob die Armee dann fällt, entscheidet erst der Machtvergleich in combatPhase.
    v75 behoben: gegenüberliegend wurde in Zeile/Spalte gespiegelt – das trifft im
    versetzten Raster nur Ost–West. Nordwest–Südost und Nordost–Südwest flankierten nicht,

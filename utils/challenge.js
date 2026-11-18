@@ -137,7 +137,9 @@ async function info(user, weekId) {
     return {
         week: { id: week, current: week === now.id, startsAt: bounds.startsAt, endsAt: bounds.endsAt, previous: weeks[i + 1] || null, next: weeks[i - 1] || null },
         weeks,
-        setup: setupOf(week),
+        // without the seed: it is the game's fixed dice – whoever knows it can compute the week's
+        // techs and events in advance (audit SA-17); the client doesn't need it
+        setup: (({ seed, ...pub }) => (void seed, pub))(setupOf(week)),
         list: rows.slice(0, BOARD_SIZE).map((r, i) => publicRow(r, i + 1)),
         finished: rows.length, playing,
         me,
@@ -253,9 +255,4 @@ async function mergeUser(fromId, into, transaction) {
     await ChallengeResult.update({ userId: into.id, username: into.username }, { where: { userId: fromId }, transaction });
 }
 
-/** Until 2026-11 the table had one attempt per week and player; that unique index goes. */
-async function migrate() {
-    await ChallengeResult.sequelize.query('DROP INDEX IF EXISTS "challenge_results_week_user_key"');
-}
-
-module.exports = { TILE_MAP_FROM, weekOf, boundsOf, setupOf, info, start, compare, recordResult, removeUser, mergeUser, migrate, WEEK_RE };
+module.exports = { TILE_MAP_FROM, weekOf, boundsOf, setupOf, info, start, compare, recordResult, removeUser, mergeUser, WEEK_RE };

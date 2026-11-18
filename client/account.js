@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         else { btn.disabled = false; alert(tx('Netzwerkfehler.')); }
     });
 
-    // --- Bot accounts (routes/bots.js): create, new token, hand over, delete ---
+    // --- Bot accounts (routes/bots.js) ---
     async function loadBots() {
         const all = document.getElementById('bots-all').checked;
         const tbody = document.querySelector('#table-bots tbody');
@@ -447,6 +447,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${esc(b.mmr)}</td>
                     <td>${esc(b.gamesPlayed)}</td>
                     <td>
+                        <button class="btn small" data-bot-description="${id}">${tx('Beschreibung bearbeiten')}</button>
                         <button class="btn small" data-bot-token="${id}">${tx('Neues Token')}</button>
                         <button class="btn small" data-bot-transfer="${id}">${tx('Übergeben')}</button>
                         <button class="btn small error" data-bot-delete="${id}">${tx('Löschen')}</button>
@@ -483,14 +484,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         showBotToken(data.bot.username, data.token);
         loadBots();
     });
+    const descriptionForm = document.getElementById('form-bot-description');
+    const descriptionInput = document.getElementById('input-bot-description');
+    const descriptionSave = document.getElementById('save-bot-description');
+    descriptionForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const id = descriptionForm.dataset.botId;
+        if (!id || descriptionSave.disabled) return;
+        descriptionSave.disabled = true;
+        const res = await postJson(`/api/bots/${encodeURIComponent(id)}/description`, { description: descriptionInput.value }).catch(() => null);
+        const data = res ? await res.json().catch(() => ({})) : {};
+        descriptionSave.disabled = false;
+        if (!res || !res.ok) {
+            say('msg-bot-description', data.error ? txs(data.error) : tx('Netzwerkfehler.'), BAD);
+            return;
+        }
+        const bot = myBots.find(b => b.id === id);
+        if (bot) bot.description = data.description;
+        ACC.closeModal('bot-description-modal');
+        botMsg(tx('Erledigt.'), true);
+    });
     document.getElementById('table-bots').addEventListener('click', async e => {
         const btn = e.target.closest('button');
         if (!btn) return;
-        const id = btn.dataset.botToken || btn.dataset.botTransfer || btn.dataset.botDelete;
+        const id = btn.dataset.botDescription || btn.dataset.botToken || btn.dataset.botTransfer || btn.dataset.botDelete;
         const bot = myBots.find(b => b.id === id);
         if (!bot) return;
         let res, data = {};
-        if (btn.dataset.botToken) {
+        if (btn.dataset.botDescription) {
+            if (descriptionSave.disabled) return;
+            descriptionForm.dataset.botId = id;
+            descriptionInput.value = bot.description || '';
+            document.getElementById('bot-description-title').textContent = tx('Öffentliche Beschreibung für %s', bot.username);
+            say('msg-bot-description', '');
+            ACC.openModal('bot-description-modal');
+            descriptionInput.focus();
+            return;
+        } else if (btn.dataset.botToken) {
             if (!confirm(tx('Neues Token für %s? Das alte funktioniert dann nicht mehr.', bot.username))) return;
             res = await postJson(`/api/bots/${encodeURIComponent(id)}/token`).catch(() => null);
         } else if (btn.dataset.botTransfer) {

@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 13.11., `sw.js` v107)
+# Hochzeivilization — Projekt-Übergabe (Stand 18.11., `sw.js` v108)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v107)
+## Letzte Sitzungen auf einen Blick (v61 → v108)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -62,11 +62,12 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v105 | **Neun Kosten** getauscht bzw. gedreht (Theologie 8/Bürokratie 10, Militärgericht 11/Nationalismus 13, Stahl 7/Burgenbau 8, Kunstdünger 11/Dampfmaschine 13/Eisenbahn 14; jede im selben Zeitalter; der alte Techtree behält die alten über `OLD_TECH_COSTS`). **Kopieren:** Internet, Spionage und Kundschafterei je eine Kopie je Runde, unabhängig (`COPY_WAYS`, `copyWaysOpen`, `copyTech(…, way)`, `p.copied`) – Rückfrage beim Autor: wer beide bezahlten hat, kopiert zweimal. Im Blatt eine Zeile je Technologie mit den Preisen als Knöpfen | Regel + Oberfläche + KI |
 | v106 | Gemeldet vom Autor: In der App auf dem Home-Bildschirm ging **„Fähigkeiten" in keiner Partie auf**, im Browser schon. Ursache, nachgestellt: Ihr Offline-Cache hielt neue Dateien neben alten (`copyRate is not defined`) – `sw.js` war schon neu, während der Upload lief, und gefüllt wird ein Cache nur einmal je `VERSION`. **Der Service Worker übernimmt eine Fassung jetzt ganz oder gar nicht:** jede Datei frisch (`cache: 'reload'`), Inhalt gegen `BUILD_HASH` geprüft, sonst bleibt die alte. Ist das Menü offen, lädt die App eine übernommene Fassung gleich neu (`swStart`) | Fehler + Auslieferung |
 | v107 | Fünf Anweisungen des Autors, drei Rückfragen vorab: **Wikinger haben die Navigation immer verfügbar** (nach dem Wurf dazu, `CIV_TECH`, `civTechAfterRoll`; auch in laufenden Partien); **Maschinengewehr +3** Verteidigung je Bevölkerung (`MG_DEFENSE`); **Forschung vor dem Legen mit allen Reichen** (Marken wie im Spiel, ohne Hilfszeile); **Fähigkeitswahl** auf der Plättchenkarte, wenn alle Reiche ausgelost sind – rückwärts in der Zugfolge, Vorrat so groß wie die Zahl der Wählenden, die Zivilisation kommt mit, gewürfelt ist schon (`pickNew`, `pickApply`, `kiPickAbility`; Bildschirm des Drafts, `startPick`); **experimenteller Plättchenmodus aus 14 Dreiecken** statt zehn Sechsecken: die zehn der Vierer-Karte offen, vier Startdreiecke außen an jeder zweiten Kante, je 8 Felder auseinander (`TILE_SHAPES.tri14`), als eigene Karte statt Häkchen; die Sechsecke sind entfernt | Regel + Modus + Oberfläche |
+| v108 | Sechs Anweisungen des Autors, ohne Rückfrage: **Hauptstadt** verteidigt mit 1 mehr je Bevölkerung (`CAPITAL_DEFENSE`, `defensePerPop`); **Wirkungen getauscht** – Eisenverarbeitung ↔ Stahl, Gewehre ↔ Panzer, die Zahlen jetzt in `TECHS` neben ihrem Text (`machtPreis`, `machtVerlust`; `powerPrice`, `powerDecay`); **Kosten** Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 (wie bis v83); **Flankieren mit Raketentechnik** auch aus 1 und 2 Feldern auf einer Linie (`hexOpposite`; gemeldet als Fehler); **offline vom Home-Bildschirm** (gemeldet): in WebKit nachgestellt – ein gescheiterter erster Einbau wurde erst beim Kaltstart wiederholt, offline bekam ein fehlendes Skript HTML. Jetzt nachgeholt, sobald die App sichtbar oder online wird; Ausliefern nur aus dem eigenen Cache, HTML nur für Seiten; im Menü „nur online", solange kein Service Worker die Seite hält | Regel + Fehler + Auslieferung |
 
-Neu in v107: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
-(Abschnitt „Wikinger mit Navigation · Maschinengewehr +3 · Forschung aller vor dem Legen ·
-Fähigkeitswahl · 14 Dreiecke (v107)"), die Fragilität zur Sechseckform ersetzt, zwei neu, die offenen
-Punkte 67 und 68 (Punkt 58 überholt).
+Neu in v108: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Hauptstadt · Macht getauscht · Militärkosten · Flankieren mit Raketentechnik · offline
+vom Home-Bildschirm (v108)"), die Fragilität zum Service Worker erweitert, zwei neu, die offenen
+Punkte 69 bis 71, ein neuer Prüfstand: WebKit (unter „Verifikationsmethoden").
 
 Neu in v106: der erste Punkt unter „Was das Spiel heute kann", die Bug-Historie und `ANNAHMEN.md`
 (Abschnitt „Aktualisierung ganz oder gar nicht (v106)"), Punkt 66.
@@ -241,16 +242,16 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1384 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1385 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 559 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
-| `js/hex.js` | 157 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
+| `js/data.js` | 567 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/hex.js` | 161 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
 | `js/tiles.js` | 360 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4, seit v107 `tri14`), `SHAPE_BY_KEY`, Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2333 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/engine.js` | 2340 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 487 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
-| `js/ki.js` | 1946 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
+| `js/ki.js` | 1944 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
 | `js/marathon.js` | 360 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`); **Fähigkeitswahl der Plättchenkarte** (v107: `pickWanted`, `pickNew`, `kiPickAbility`, `pickApply`) |
 | `js/ui/base.js` | 181 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
@@ -264,10 +265,10 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 | `js/ui/place.js` | 241 | Legephase der Plättchenkarte: würfeln, wählen lassen (`startPick`) oder legen (`placeBegin`), Forschung mit allen Reichen, Welt |
 | `js/ui/draft.js` | 150 | Fähigkeiten wählen: Draft des Marathons, seit v107 die Fähigkeitswahl der Plättchenkarte (`startPick`, `pickAdvance`, `drawPick`) auf demselben Bildschirm |
 | `js/ui/editor.js` | 34 | Karteneditor |
-| `js/ui/boot.js` | 297 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
-| `js/firstgame.js` | 1459 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 8013 | **2004 Assertions**, `node test.js` |
-| `smoke.js` | 4751 | **172 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `js/ui/boot.js` | 311 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
+| `js/firstgame.js` | 1460 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
+| `test.js` | 8107 | **2020 Assertions**, `node test.js` |
+| `smoke.js` | 4764 | **173 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 75 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
@@ -295,6 +296,43 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v108 auf einen Blick.** Sechs Anweisungen des Autors, ohne Rückfrage umgesetzt; zwei davon Fehler
+  (Flankieren, offline).
+  · **Hauptstadt:** +1 Verteidigung je Bevölkerung gegenüber anderen Städten (`CAPITAL_DEFENSE`).
+    `defensePerPop` (`js/engine.js`) bündelt die Zuschläge je Bevölkerung – 1, Hauptstadt +1,
+    Maschinengewehr +3 –; `defenseValue` und die Schätzung der KI (`kiDefensePotential`) lesen sie. Mit
+    der Großen Mauer gilt sie für die Gesamtbevölkerung. Regelbogen („in der Hauptstadt doppelt") und
+    Erstes Spiel (Englands Hauptstadt) sagen es.
+  · **Macht:** Eisenverarbeitung Machtverlust 1/3, Stahl 4 Münzen = 1 Macht, Gewehre 1/4, Panzer 3 Münzen
+    (getauscht). Die Zahl steht in `TECHS` neben ihrem Text (`machtPreis`, `machtVerlust`), die Grundwerte
+    in `POWER_PRICE`/`POWER_DECAY`; `powerPrice` und `powerDecay` nehmen die beste eigene, die KI liest
+    dieselben (`kiDecayDiv` entfällt; ihr Technologiewert folgt den Feldern, Werte wie bisher). Erstes
+    Spiel: Tipp und Rückmeldung in Runde 4 sagen „hält länger" statt „billiger", Runde 6 nennt 1/3.
+  · **Kosten:** Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 – die Werte bis v83; der alte
+    Techtree braucht sie nicht mehr eigens (`OLD_TECH_COSTS` 18 statt 21 Einträge).
+  · **Flankieren:** `hexOpposite` verlangt eine Linie durch den Gegner mit den beiden Positionen auf
+    entgegengesetzten Seiten, in beliebigem Abstand (db·(a−m) + da·(b−m) = 0 in Würfelkoordinaten); bei
+    gleichem Abstand ist das die Spiegelung von v75. Kampf, Machtansicht, KI und Bots fragen dieselbe
+    Funktion.
+  · **Offline vom Home-Bildschirm** (gemeldet): Der Code lief in Chromium und in WebKit (WebKitGTK 2.52,
+    neu als Prüfstand) gegen einen Server wie GitHub Pages. Nachgestellt in WebKit mit v107: Scheitert der
+    erste Einbau (halber Upload), holt die App ihn bis zum nächsten Kaltstart nicht nach – offline dann
+    „Could not connect"; und offline bekam ein fehlendes Skript `index.html`. Jetzt: `swStart` registriert
+    erneut, sobald die App sichtbar oder online wird (`register`, dann `update`), bittet als App vom
+    Home-Bildschirm um dauerhaften Speicher (`navigator.storage.persist`), und das Menü zeigt „v108 · nur
+    online", solange kein Service Worker die Seite hält (`swOffline`, `bootTexts`). `sw.js` liefert nur aus
+    dem Cache seiner Fassung (`ignoreSearch`, `ignoreVary`), legt nichts nebenher ab und gibt `index.html`
+    nur Seiten.
+  · **Tests:** `test.js` Hauptstadt (4 bei 2 Bevölkerung, mit Maschinengewehr 10, mit Großer Mauer,
+    Texte), Macht (Preis und Verlust je Technologie, die beste zählt, Zugbeginn, Texte deutsch und
+    englisch), Kosten und Leitern in beiden Techtrees, Flankieren (je Richtung: 1 + 2 auf einer Linie ja;
+    schräg, von derselben Seite und ohne Raketentechnik nein), Service Worker offline (Seiten, Skripte,
+    fehlendes Skript, Suchoptionen, keine Ablage nebenher, alles aus `index.html` vorab im Cache), Erstes
+    Spiel (Texte zu Eisenverarbeitung). Angepasst: Kampfreihenfolge (Griechenland Macht 7 statt 5),
+    Kopieren (Eisenverarbeitung statt Stadtmauern als Technologie zu 2), zwei Abwehrtests der KI (die
+    Hauptstadt hält jetzt oft durch Wachsen), eine KI-Partie (Startwert 9 statt 8, offener Punkt 70).
+    `smoke.js`: „nur online" vor und nach dem Einbau, Kampfnachspiel (🛡️ 9), Kopierpreise. Von Hand:
+    WebKit, drei Fälle (frischer Einbau, gescheiterter erster Einbau, Update über einen halben Upload).
 - **v107 auf einen Blick.** Fünf Anweisungen des Autors; vorab gefragt und beantwortet: die gewählte
   Fähigkeit bringt ihre Zivilisation mit, gewürfelt wird vor der Wahl, die Startdreiecke liegen oben
   links, rechts oben, unten rechts und links unten.
@@ -1270,10 +1308,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 2004 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2020 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (172 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (173 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -1293,6 +1331,14 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
    und das überdeckt jeden Unterschied. Eine Änderung, die kein Ergebnis ändern soll
    (Tempo), mit alter und neuer Fassung auf denselben Startwerten laufen lassen und die
    Protokolle vergleichen – so in v78 geprüft.
+8. **Offline in WebKit prüfen** (seit v108): Safari läuft hier nicht, WebKitGTK schon –
+   `apt-get install webkit2gtk-driver gir1.2-webkit2-4.1 python3-gi xvfb`, dann mit `python3.12`
+   (die Bindungen gehören zu 3.12) unter `xvfb-run` eine `WebKit2.WebView` mit eigenem
+   `WebsiteDataManager` steuern (`call_async_javascript_function` wartet auf Promises). Server wie
+   GitHub Pages: `Cache-Control: max-age=600`, `Vary: Accept-Encoding`, gzip, ETag, `/repo` → `/repo/`;
+   „offline" heißt Server aus. So in v108: frischer Einbau, gescheiterter erster Einbau mit Rückkehr in
+   die App, Update über einen halben Upload. iOS selbst (Home-Bildschirm, eigener Speicher je App)
+   bleibt ungeprüft.
 
 ## Oberfläche und Regeln (Stand 22.8.)
 
@@ -1337,6 +1383,16 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
   den Inhalt und übernimmt nur eine vollständige Fassung. Ein Host, der Dateien beim Ausliefern
   umschreibt (Minify, eingefügte Skripte), verhindert damit jede Aktualisierung; dann die Prüfung in
   `sw.js` herausnehmen. `build_single.py` sucht den Aufruf `swStart();` aus `boot.js` wörtlich.
+  Seit v108 legt der Service Worker nichts nebenher ab: Was die App lädt, muss in `STATIC` oder als
+  `<script>`-Tag in `index.html` stehen, sonst fehlt es offline (ein Test prüft `index.html`; was ein
+  Skript zur Laufzeit lädt, prüft er nicht – bisher lädt keines etwas). „nur online" im Menü hängt an
+  `navigator.serviceWorker.controller`: Ein harter Neuladen im Desktop-Browser zeigt es kurz, obwohl
+  der Cache da ist.
+- **„In der Hauptstadt doppelt" (seit v108)** stimmt nur mit `CAPITAL_DEFENSE` 1 – ein Test hält Zahl,
+  Regelbogen und Erstes Spiel zusammen.
+- **Macht-Technologien (seit v108):** Preis und Verlust wirken nur über `machtPreis`/`machtVerlust` in
+  `TECHS`. Eine neue Technologie mit solcher Wirkung braucht das Feld; der Test prüft Text und Zahl für
+  genau die vier heutigen.
 - **Maßstab großer Bildschirme (seit v103)**: `html{zoom:var(--ui)}` lässt auch `vh`/`vw` mitwachsen
   (Chromium gemessen). Darum bleibt `--ui` gedreht bei 1 (die Drehung rechnet mit 100vh/100vw), und
   wer neue Längen in `vh`/`vw` braucht, prüft sie bei `--ui` > 1. Höhen fürs CSS mit `offsetHeight`
@@ -1799,6 +1855,18 @@ gegen die Fassung davor — identisch).
   Fehlerbehebung, nicht Aufräumen. Ebenso schreibt `mp()` das Dezimalkomma fest.
 
 ## Vollständige Bug-Historie (alle behoben — nicht versehentlich rückgängig machen)
+
+Aus der Sitzung v108:
+- **Die App vom Home-Bildschirm ging offline nicht** (gemeldet vom Autor). In WebKit nachgestellt:
+  Scheiterte der erste Einbau des Service Workers (halber Upload, App zu früh geschlossen, Netz weg),
+  versuchte es die App erst beim nächsten Kaltstart wieder – vom Home-Bildschirm bleibt sie oft
+  tagelang offen; offline dann „Could not connect". Außerdem bekam offline jede fehlgeschlagene Anfrage
+  `index.html`, auch ein Skript – eine App, die startet und nichts kann. Jetzt: nachgeholt bei Rückkehr
+  in die App und bei Netz, HTML nur für Seiten, „nur online" im Menü.
+- **Flankieren mit Raketentechnik aus verschiedenem Abstand** (gemeldet vom Autor): Zwei Armeen auf
+  entgegengesetzten Seiten, eine 1, eine 2 Felder entfernt, flankierten nicht – `hexOpposite` verlangte
+  die Spiegelung a + b = 2·m, also gleichen Abstand. Jetzt eine Linie durch den Gegner in beliebigem
+  Abstand.
 
 Aus der Sitzung v106:
 - **„Fähigkeiten" ging in der App auf dem Home-Bildschirm nicht auf** (gemeldet vom Autor, in jeder
@@ -2555,6 +2623,26 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    `ANNAHMEN.md` v107): Startspieler 30,3 % gegen 40,5 % auf 10 Dreiecken, die vier Startdreiecke je
    23,8–25,6 %, viel mehr Forschungssiege (193 gegen 50), Median Runde 6 statt 5. Wie Menschen dort
    spielen, zeigt erst das Spielen.
+69. **Getroffene Auslegungen (v108) – zum Ändern angeboten.** (a) Hauptstadt: Mit der Großen Mauer
+   zählt auch ihr Zuschlag die Gesamtbevölkerung (wie das Maschinengewehr); Barbarenstädte haben keine
+   Hauptstadt; eine eroberte Hauptstadt ist für den Eroberer eine gewöhnliche Stadt. (b) Flankieren:
+   nur genau gegenüber auf einer Linie – ein Feld im Ring 2 zwischen zwei Richtungen (150° zur Armee im
+   Ring 1) flankiert nicht. (c) Getauschte Wirkungen und neue Kosten gelten auch in laufenden Partien
+   und im alten Techtree (die Wirkungen waren dort immer dieselben). (d) „nur online" ist die einzige
+   neue Zeile: Sie steht nur, solange es stimmt, die Einzeldatei zeigt sie nie. (e) Erstes Spiel: Ablauf
+   unverändert, der Militärweg siegt weiter in Runde 6; geändert sind nur die Texte zu Eisenverarbeitung
+   und zu Englands Hauptstadt.
+70. **KI am Rundenende: nur der eigene Anspruch.** `kiScore` prüft nach dem Zug nur den eigenen
+   Wirtschaftssieg (`checkVictory`), nicht den des Gegners. Aufgefallen in v108 an einer KI-Partie im
+   Test (Startwert 8): Die mittlere KI forscht als Letzte in Runde 1, statt zu wachsen, und Russland
+   erreicht 2/3 – das Wachsen gehörte zu der Hälfte, die diese Stufe übersieht. Mit dem ganzen
+   Rundenende (`checkEconomyRoundEnd`, dann `resolveClaims`) sähe die KI die Niederlage; das ändert ihr
+   Verhalten aber über diesen Fall hinaus und ist nicht gemessen – nicht übernommen, der Test nimmt
+   Startwert 9.
+71. **Nicht auf einem iPad geprüft (v108).** Offline ist in Chromium und WebKitGTK nachgestellt, nicht
+   in iOS-Safari vom Home-Bildschirm. Ob dort derselbe Grund vorlag, zeigt erst der Versuch: App mit
+   Netz öffnen, warten, bis „nur online" verschwindet, Flugmodus, App neu starten. Bleibt „nur online"
+   mit Netz stehen, passen die Dateien auf dem Server nicht zu `BUILD_HASH` (alles neu hochladen).
 
 ## Arbeitsweise, die der Autor schätzt
 

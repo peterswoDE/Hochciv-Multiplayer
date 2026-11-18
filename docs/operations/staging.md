@@ -12,7 +12,7 @@ Staging runs on the production server next to production, with its own container
 2. Put `docker-compose.staging.yml` into its **own** folder (not the production one), copy `.env.template` next to it as `.env` and fill it in:
    * `SESSION_SECRET`: a different value than production.
    * `BASE_URL`: the staging URL, e.g. `https://staging.hochciv.de`.
-   * `POSTGRES_PASSWORD`: its own value.
+   * `POSTGRES_PASSWORD`, `POSTGRES_OWNER_PASSWORD`, `POSTGRES_APP_PASSWORD`: their own values (see [Configuration](configuration.md)).
    * SMTP: optional; leave `SMTP_HOST` empty to only log mails. Their codes are hidden in the log; set `MAIL_LOG_CODES=on` to read activation and reset codes there while testing. Leave `FCM_SERVICE_ACCOUNT` empty unless you test push.
 3. Start: `docker compose -f docker-compose.staging.yml up -d`.
 4. Proxy the subdomain to `hochciv-multiplayer-staging:3000` with WebSocket support – see the staging block in `nginx-example.conf`, or in Nginx Proxy Manager add a proxy host for it with *Websockets Support* on. `PROXY_NETWORK` must be the same network as production's.

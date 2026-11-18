@@ -4,6 +4,7 @@
  *
  *   GET    /api/bots[?all=1]         – own bots (admins with all=1: every bot), the limit
  *   POST   /api/bots { username }    – new bot → { bot, token }; the token is shown only now
+ *   POST   /api/bots/:id/description { description } – set or clear the public profile text
  *   POST   /api/bots/:id/token       – new token, the old one stops working → { token }
  *   POST   /api/bots/:id/transfer { username } – hand the bot to another bot creator
  *   DELETE /api/bots/:id             – delete the bot (like an account: its games stay)
@@ -13,6 +14,7 @@
 const express = require('express');
 const rateLimitLib = require('express-rate-limit');
 const { sequelize, User } = require('../models');
+const { BOT_DESCRIPTION_MAX_LENGTH } = require('../config');
 const Bots = require('../utils/bots');
 const { deleteAccount } = require('../utils/deleteAccount');
 const { detachUser } = require('../utils/detachUser');
@@ -36,6 +38,7 @@ function botJson(bot, owner) {
     return {
         id: bot.id,
         username: bot.username,
+        description: bot.botDescription,
         mmr: bot.mmr,
         gamesPlayed: bot.gamesPlayed,
         createdAt: bot.createdAt,
@@ -46,10 +49,16 @@ function botJson(bot, owner) {
     };
 }
 
+const managedBotWhere = req => ({
+    id: req.params.id,
+    accountType: 'bot',
+    ...(isAdmin(req.user) ? {} : { ownerId: req.user.id }),
+});
+
 /** The bot `req.params.id` if the user may manage it, else an error is sent and null returned. */
 async function managedBot(req, res) {
-    const bot = await User.findOne({ where: { id: req.params.id, accountType: 'bot' } }).catch(() => null);
-    if (!bot || (bot.ownerId !== req.user.id && !isAdmin(req.user))) {
+    const bot = await User.findOne({ where: managedBotWhere(req) }).catch(() => null);
+    if (!bot) {
         res.status(404).json({ error: 'Bot nicht gefunden.' });
         return null;
     }
@@ -103,6 +112,27 @@ router.post('/', rateLimit, requireRecentAuth, async (req, res) => {
         res.json({ bot: botJson(bot, req.user), token });
     } catch (err) {
         console.error('[Bots] Create', err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+router.post('/:id/description', rateLimit, async (req, res) => {
+    try {
+        const bot = await managedBot(req, res);
+        if (!bot) return;
+        const input = req.body?.description;
+        const text = typeof input === 'string' ? input.trim() : null;
+        if (text === null || [...text].length > BOT_DESCRIPTION_MAX_LENGTH) {
+            return res.status(400).json({ error: `Die Beschreibung muss ein Text mit höchstens ${BOT_DESCRIPTION_MAX_LENGTH} Zeichen sein.` });
+        }
+        if (text.includes('\0')) return res.status(400).json({ error: 'Die Beschreibung enthält ein ungültiges Zeichen.' });
+        const description = text || null;
+        // Check ownership at the write too, in case the bot was handed over since the lookup.
+        const [updated] = await User.update({ botDescription: description }, { where: managedBotWhere(req) });
+        if (!updated) return res.status(404).json({ error: 'Bot nicht gefunden.' });
+        res.json({ description });
+    } catch (err) {
+        console.error('[Bots] Description', err);
         res.status(500).json({ error: 'Serverfehler' });
     }
 });

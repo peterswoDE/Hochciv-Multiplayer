@@ -35,6 +35,7 @@ Tests create their own test accounts and delete them afterwards.
 | `invite/invite.test.js` | invite links: copying, the preview, joining a private lobby and a Rundenspiel, watching a running game, guests, English | default |
 | `lobbies/lobby-filter.test.js` | filters of the open games: every lobby setting in `/api/public-sessions`, each filter and combinations on live lobbies and Rundenspiele, search, reset, kept filters, phone | default |
 | `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups; a bot as friend, invited into a lobby and a Rundenspiel | default |
+| `bots/description.test.js` | bot descriptions: owner and admin permissions, length validation, editing and clearing in *Meine Bots*, escaped and wrapped public profile text | default |
 | `chat/chat.test.js` | chat, emotes, pings, blocks | default |
 | `challenge/challenge.test.js` | weekly challenge: weeks and setup, starting from the menu, the running attempt, refused shortcuts, the result after resigning, the leaderboard order (best attempt per player), play again, start over (one running attempt, also across weeks), past weeks (playable, closed leaderboard, none before the first played week), English | default |
 | `deadline/deadline.test.js` | time per turn of Rundenspiele: the form, the open games and the filter, the deadline in the list, the takeover after 1 "day" while a 7-day game still waits | `ASYNC_TIMEOUT_MS=70000 ASYNC_REMINDER_MS=50000 ASYNC_SWEEP_MS=1000` |
@@ -60,6 +61,7 @@ Tests create their own test accounts and delete them afterwards.
 | `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
 | `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
+| `db/migrations.test.js` | database roles and migrations on an empty database: the setup, every migration, models matching the schema, what the server's role may not do | no server – an empty PostgreSQL (see header); runs on every pull request |
 | `security/regression.test.js` | findings of the security audit of 2026-11-16: passkey login, ranked seats, parallel code guesses, sockets after a password change, invitation e-mails, password-change limit (waits a minute three times for the auth limits) | `TURN_TIMER_SCALE=0.05` |
 | `spectators/spectators.test.js` | spectator mode | default |
 | `stats/overall.test.js` | overall statistics: facts from the engine and a real Rundenspiel, aggregation, API, menu overlay, admin page | default |
@@ -79,7 +81,7 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 
 ## On GitHub
 
-`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`) and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
+`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`), `db/migrations` against a Postgres service container and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
 
 ## Which tests to run
 
@@ -93,3 +95,4 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 | auth, origin check, sessions | `security`, `auth`, `loading` |
 | bot accounts, player-bots | `bots`, `match`, `security` |
 | `server.js` middleware order, `inject.js`, static files | `loading` |
+| `models/`, `migrations/`, database roles | `db/migrations`, then the tests of the feature |

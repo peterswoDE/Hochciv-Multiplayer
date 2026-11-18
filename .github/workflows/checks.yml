@@ -1,6 +1,7 @@
 name: Checks
 
-# Runs on every pull request: the tests that need no running server and the dependency audit.
+# Runs on every pull request: the tests that need no running server, the migrations against an
+# empty database and the dependency audit.
 # (The end-to-end tests in tests/ need the local docker setup and a browser – see
 # docs/development/testing.md.) Actions are pinned to commit SHAs; Dependabot keeps them current.
 on:
@@ -15,6 +16,21 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # An empty database for the migrations test (tests/db/migrations.test.js)
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: hochciv
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: hochciv
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hochciv -d hochciv"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -29,5 +45,9 @@ jobs:
                    tests/draft/civdraft.test.js tests/draft/async-draft.test.js tests/challenge/challenge-map.test.js; do
             echo "::group::$t"; node "$t"; echo "::endgroup::"
           done
+      - name: Database roles and migrations (a model changed without a migration fails here)
+        env:
+          POSTGRES_PASSWORD: ci-only
+        run: node tests/db/migrations.test.js
       - name: Dependency audit (runtime dependencies, high and critical)
         run: npm audit --omit=dev --audit-level=high

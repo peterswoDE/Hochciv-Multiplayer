@@ -228,7 +228,7 @@ function botFlankOk(S, pi, army, e, t) {
     .concat(has(p, 'burgenbau') ? citiesOf(S, pi).map(c => [c.r, c.c]) : [])
     .filter(([r, c]) => { const dd = hexDistance(r, c, e.r, e.c); return dd >= 1 && dd <= rng; });
   if (has(p, 'taktik')) return partners.length >= 1;
-  // gegenüber, am Gegner gespiegelt – in Würfelkoordinaten (v75, vorher Zeile/Spalte)
+  // gegenüber auf einer Linie durch den Gegner (hexOpposite, seit v108 auch in verschiedenem Abstand)
   return partners.some(([r, c]) => hexOpposite(e.r, e.c, t[0], t[1], r, c));
 }
 /* Feindliche Armeen, die diese eigene Stadt bedrohen.

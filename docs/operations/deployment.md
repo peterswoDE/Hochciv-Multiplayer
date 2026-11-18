@@ -9,15 +9,15 @@ The production setup uses the pre-built image `peterswode/hochciv-multiplayer` b
 1. Install Docker with Docker Compose.
 2. Create the external network the proxy and the server share:
    ```bash
-   docker network create nginx
+   docker network create proxy
    ```
-   If your proxy is already in a network with another name (e.g. `proxy`), skip this and set `PROXY_NETWORK=proxy` in `.env`.
-3. Put `docker-compose.yml` into a folder, copy `.env.template` next to it as `.env` and fill it in (see [Configuration](configuration.md)). At least `SESSION_SECRET` and `BASE_URL` must be set.
+   If your proxy is already in a network with another name (e.g. `nginx`), skip this and set `PROXY_NETWORK=nginx` in `.env`.
+3. Put `docker-compose.yml` into a folder, copy `.env.template` next to it as `.env` and fill it in (see [Configuration](configuration.md)). At least `SESSION_SECRET`, `BASE_URL` and the three database passwords (`POSTGRES_PASSWORD`, `POSTGRES_OWNER_PASSWORD`, `POSTGRES_APP_PASSWORD`) must be set.
 4. Start:
    ```bash
    docker compose up -d
    ```
-   The server listens on port `3000` inside the `nginx` network. Point your proxy at `hochciv-multiplayer:3000` for the whole site (`/`, `/api/`, `/client/`, `/socket.io/` with WebSocket upgrade). `nginx-example.conf` shows the required locations and headers; it proxies to `127.0.0.1:3000`, so when Nginx runs as a container in the `nginx` network, replace that with `hochciv-multiplayer:3000` (the compose file publishes no host port).
+   The server listens on port `3000` inside the `proxy` network. Point your proxy at `hochciv-multiplayer:3000` for the whole site (`/`, `/api/`, `/client/`, `/socket.io/` with WebSocket upgrade). `nginx-example.conf` shows the required locations and headers; it proxies to `127.0.0.1:3000`, so when Nginx runs as a container in the `proxy` network, replace that with `hochciv-multiplayer:3000` (the compose file publishes no host port).
 5. Register your account in the game, then make it superadmin (needed for the OAuth settings):
    ```bash
    docker exec hochciv-multiplayer node elevate.js <your-username> superadmin
@@ -38,9 +38,10 @@ Optional next steps:
 |---|---|---|
 | `hochciv-multiplayer` | `peterswode/hochciv-multiplayer:${HOCHCIV_IMAGE_TAG:-latest}` | the server |
 | `hochciv-db` | `postgres:15-alpine` | accounts, matches, Rundenspiele, sessions; data in the Docker volume `pgdata` or the folder in `POSTGRES_DATA` |
+| `hochciv-db-setup` | as the server | one-shot at every `docker compose up`: the database roles of the server (exits after a few seconds – `Exited (0)` is normal) |
 | `hochciv-watchtower` | `nickfedor/watchtower` | updates `hochciv-multiplayer` when a new image is published (scope `hochciv`) |
 
-The database schema is created and updated by the server at start (`sequelize.sync({ alter: true })`); there are no migration scripts to run. See [Database](../reference/database.md).
+The database schema comes from migrations, which the server container applies before the server starts; there is nothing to run by hand. The server itself connects with a role that can read and write rows but not change the schema. See [Roles and migrations](../reference/database.md#roles-and-migrations).
 
 ## Updating
 
@@ -52,9 +53,26 @@ The database schema is created and updated by the server at start (`sequelize.sy
 
 Live games are kept in memory: recreating the container ends running live games – also when Watchtower does it. Rundenspiele are in the database and continue.
 
+### Switching to the database roles (from 2026-11)
+
+Until 2026-11 the server used the database superuser and changed the schema itself. To switch an existing installation (staging the same way, with `-f docker-compose.staging.yml` and the `staging` names):
+
+1. Back up the database: `docker exec hochciv-db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup-$(date +%F).sql` (the superuser's name is `POSTGRES_USER` from `.env`)
+2. Add two new, different passwords to `.env` – letters and digits only, e.g. from `openssl rand -hex 24`:
+   ```
+   POSTGRES_OWNER_PASSWORD=…
+   POSTGRES_APP_PASSWORD=…
+   ```
+   `POSTGRES_PASSWORD` stays the superuser's existing password.
+3. Replace `docker-compose.yml` with the current one.
+4. `docker compose pull && docker compose up -d`
+5. Check: `docker logs hochciv-db-setup` ends with `[DB setup] Done`; `docker logs hochciv-multiplayer` shows `[DB] Schema is current.` and no `[DB] Schema:` warning.
+
+Back: the previous `docker-compose.yml` and `docker compose up -d` – the superuser can still do everything, the roles stay unused.
+
 ### Older installations
 
-An installation from before the Watchtower (or with the database in a folder) can switch to the current `docker-compose.yml` without losing data: keep its `.env` and add `POSTGRES_DATA=./postgres` (the folder it used) and `PROXY_NETWORK=proxy` (if the proxy network has that name). `CORE_REPO_URL`, `CORE_REPO_BRANCH` and `CORE_REPO_COMMIT` are no longer used – the game ships in the image. Then `docker compose up -d`.
+An installation from before the Watchtower (or with the database in a folder) can switch to the current `docker-compose.yml` without losing data: keep its `.env` and add `POSTGRES_DATA=./postgres` (the folder it used) and, if its proxy network has another name than `proxy`, `PROXY_NETWORK`. `CORE_REPO_URL`, `CORE_REPO_BRANCH` and `CORE_REPO_COMMIT` are no longer used – the game ships in the image. Then `docker compose up -d`.
 
 ## Health check
 
