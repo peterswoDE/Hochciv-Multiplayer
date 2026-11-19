@@ -10,3 +10,4 @@ secrets.env
 node_modules
 public
 public_bundled
+security

@@ -53,7 +53,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
             && document.getElementById('screen-game').classList.contains('show'), null, { timeout: 60000 });
         await myTurn();
         await a.evaluate(() => { if (typeof closeModal === 'function') closeModal(); if (typeof closeSheet === 'function') closeSheet(); });
-        ok(await a.evaluate(() => typeof endTurnAsk === 'function' && APP_VERSION === 'v109'), 'game v109 with the end-turn dialog');
+        ok(await a.evaluate(() => typeof endTurnAsk === 'function' && +APP_VERSION.slice(1) >= 109), 'game v109 or newer with the end-turn dialog');
 
         // something is left: plenty of science and coins (locally – the dialog only reads them)
         const before = await a.evaluate(() => {

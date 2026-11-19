@@ -7003,3 +7003,34 @@ beendet ohne Frage, der nächste Mensch wird wieder gefragt, „Zug beenden" im 
 schließt, ohne Reste und ohne Kostenloses keine Frage, „Noch offen: Grow for free." auf Englisch.
 Von Hand (Chromium): Auswahl an Englands Grenze, Scheiben aller vier Reiche, Fenster und Welt auf
 iPad- und Telefongröße.
+
+## Sklaverei 4 (v110)
+
+Anweisung des Autors (18.11.), wörtlich: „reduce the amount of coins that you get when using slavery
+to 4". Ohne Rückfrage umgesetzt – eindeutig bis auf eine Auslegung, die unten steht und als offener
+Punkt 73 in `UEBERGABE.md`.
+
+* **4 Münzen je geopferter Bevölkerung** (`SLAVERY_COINS = 4`, `js/data.js`; v84–v109 7, bis v83 10).
+  Sonst bleibt alles: einmal je Stadt und Runde, nie die letzte Bevölkerung, obsolet mit der ersten
+  Technologie der Moderne.
+* Die Konstante lesen die Regel (`sacrifice`), die Sammelaktion „In allen Städten opfern"
+  (`sacrificeAll`), der Knopf im Stadtblatt und unter „Fähigkeiten" („+4🪙"), Protokoll und Meldung.
+  Fest geschrieben steht die Zahl nur im Techtext: `TECHS` („Stadtbevölkerung opfern → 4 Münzen …")
+  und `DATA_EN.tech` („Sacrifice city population → 4 coins …").
+* **KI, Bots, Erstes Spiel, Marathon:** Die KI probiert das Opfern auf Kopien aus und sieht die 4 von
+  selbst; ihr fester Zuschlag für die Technologie (`kiTechBonus`: 2) ist nicht nachgestellt, wie in
+  v84. Bots opfern nicht. Das Erste Spiel hat keinen Schritt mit Sklaverei. Der Marathon vervielfacht
+  Forschungskosten, nicht die Sklaverei – auch dort 4.
+* **Auslegung (zum Ändern angeboten): laufende Partien.** Die Zahl steht nicht im Spielstand; eine
+  gespeicherte Partie bekommt nach dem Update beim nächsten Opfern 4 – wie in v84 beim Schritt von 10
+  auf 7. Bei 7 blieben alte Partien nur über eine Marke im Spielstand, wie `S.oldTree` für den alten
+  Techtree.
+* Die Spieltipps nennen keine Zahl („Sklaverei bringt früh viele Münzen …") und bleiben.
+
+### Abgesichert (v110)
+
+`test.js`: eine geopferte Bevölkerung bringt 4 Münzen, `SLAVERY_COINS` ist 4; der Techtext nennt
+„4 Münzen" und – neu – englisch „4 coins" (bis v109 nur deutsch geprüft; gegengeprüft: mit „7 coins"
+im englischen Text schlägt genau diese Assertion an). Die übrigen Tests zur Sklaverei rechnen mit
+`SLAVERY_COINS` (alle Städte: je Stadt so viel; `smoke.js`: Knopf „+4🪙", Vorrat danach) und sind
+unverändert.

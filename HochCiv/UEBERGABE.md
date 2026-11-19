@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 18.11., `sw.js` v109)
+# Hochzeivilization — Projekt-Übergabe (Stand 19.11., `sw.js` v110)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v109)
+## Letzte Sitzungen auf einen Blick (v61 → v110)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -64,6 +64,10 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v107 | Fünf Anweisungen des Autors, drei Rückfragen vorab: **Wikinger haben die Navigation immer verfügbar** (nach dem Wurf dazu, `CIV_TECH`, `civTechAfterRoll`; auch in laufenden Partien); **Maschinengewehr +3** Verteidigung je Bevölkerung (`MG_DEFENSE`); **Forschung vor dem Legen mit allen Reichen** (Marken wie im Spiel, ohne Hilfszeile); **Fähigkeitswahl** auf der Plättchenkarte, wenn alle Reiche ausgelost sind – rückwärts in der Zugfolge, Vorrat so groß wie die Zahl der Wählenden, die Zivilisation kommt mit, gewürfelt ist schon (`pickNew`, `pickApply`, `kiPickAbility`; Bildschirm des Drafts, `startPick`); **experimenteller Plättchenmodus aus 14 Dreiecken** statt zehn Sechsecken: die zehn der Vierer-Karte offen, vier Startdreiecke außen an jeder zweiten Kante, je 8 Felder auseinander (`TILE_SHAPES.tri14`), als eigene Karte statt Häkchen; die Sechsecke sind entfernt | Regel + Modus + Oberfläche |
 | v108 | Sechs Anweisungen des Autors, ohne Rückfrage: **Hauptstadt** verteidigt mit 1 mehr je Bevölkerung (`CAPITAL_DEFENSE`, `defensePerPop`); **Wirkungen getauscht** – Eisenverarbeitung ↔ Stahl, Gewehre ↔ Panzer, die Zahlen jetzt in `TECHS` neben ihrem Text (`machtPreis`, `machtVerlust`; `powerPrice`, `powerDecay`); **Kosten** Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 (wie bis v83); **Flankieren mit Raketentechnik** auch aus 1 und 2 Feldern auf einer Linie (`hexOpposite`; gemeldet als Fehler); **offline vom Home-Bildschirm** (gemeldet): in WebKit nachgestellt – ein gescheiterter erster Einbau wurde erst beim Kaltstart wiederholt, offline bekam ein fehlendes Skript HTML. Jetzt nachgeholt, sobald die App sichtbar oder online wird; Ausliefern nur aus dem eigenen Cache, HTML nur für Seiten; im Menü „nur online", solange kein Service Worker die Seite hält | Regel + Fehler + Auslieferung |
 | v109 | Vier Anweisungen des Autors, ohne Rückfrage: **Auswahl** auf der Karte weiß mit dunklem Rand (bis v108 dunkelrot wie Englands Grenze); **Stadtscheiben** mit einem Hauch der Reichsfarbe (`cityFill`, 0,18); **Zug beenden?** einmal je Zug, wenn der verfallende Vorrat noch etwas kauft oder Kostenloses offen ist (`unspent`, `endTurnAsk`; ersetzt die Meldung „Nochmal tippen"); **Welt** mit dem Einkommen des nächsten Zugs je Reich als ∑ wie im Technologiebogen | Oberfläche |
+| v110 | Anweisung des Autors, ohne Rückfrage: **Sklaverei 4 Münzen** je geopferter Bevölkerung (`SLAVERY_COINS`; v84–v109 7, bis v83 10). Regel, „In allen Städten opfern", Knopf und Protokoll lesen die Konstante; fest steht die Zahl nur im Techtext, deutsch und englisch – `test.js` prüft jetzt beide | Regel |
+
+Neu in v110: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Sklaverei 4 (v110)"), Punkt 31 ergänzt, der offene Punkt 73.
 
 Neu in v109: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Auswahl · getönte Städte · Zug beenden? · Einkommen in der Welt (v109)"), zwei
@@ -267,7 +271,7 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 | `js/ui/editor.js` | 34 | Karteneditor |
 | `js/ui/boot.js` | 311 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
 | `js/firstgame.js` | 1460 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 8134 | **2027 Assertions**, `node test.js` |
+| `test.js` | 8135 | **2027 Assertions**, `node test.js` |
 | `smoke.js` | 4844 | **176 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
@@ -296,6 +300,14 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v110 auf einen Blick.** Eine Anweisung des Autors, ohne Rückfrage umgesetzt: **Sklaverei bringt
+  4 Münzen** je geopferter Bevölkerung (`SLAVERY_COINS` in `js/data.js`; v84–v109 7, bis v83 10).
+  `sacrifice` und damit „In allen Städten opfern" (`sacrificeAll`), der Knopf („+4🪙"), Protokoll und
+  Meldung lesen die Konstante; fest geschrieben steht die Zahl nur im Techtext (`TECHS`,
+  `DATA_EN.tech`). Die KI sieht die 4 über ihre Probezüge auf Kopien, Bots opfern nicht, das Erste
+  Spiel hat keinen Schritt mit Sklaverei. Gilt sofort, auch in laufenden Partien (Punkt 73).
+  · **Tests:** `test.js` pinnt 4 Münzen je Opfer und prüft den Techtext deutsch **und** englisch (bis
+    v109 nur deutsch); `smoke.js` liest `SLAVERY_COINS` und blieb unverändert.
 - **v109 auf einen Blick.** Vier Anweisungen des Autors zur Oberfläche, ohne Rückfrage umgesetzt.
   · **Auswahl:** weißer Ring mit dunklem Rand, zwei Lagen (`OVERLAY.sel` in `drawMap`, `markHexes`
     zeichnet Listen von Lagen). Bis v108 dunkelrot (#9d3b2f, die Farbe der Leiste) – neben Englands
@@ -2367,7 +2379,7 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
 31. **Sklaverei 7 und die drei Militärkosten nicht gemessen (v84).** Die KI rechnet mit den
    neuen Werten (sie probiert Aktionen auf Kopien aus); ihr fester Zuschlag für die
    Technologie Sklaverei (`kiTechBonus` 2) ist nicht nachgestellt. Messreihen zur Balance gab
-   es diesmal keine.
+   es diesmal keine. **Sklaverei seit v110 überholt:** 4 Münzen, ebenso nicht gemessen (Punkt 73).
 32. **Militärsiege im Marathon selten (v84, gemessen).** In 32 Marathonpartien der KI (v84) endeten 2
    militärisch, 22 mit der Singularität und 8 wirtschaftlich; dieselben 8 Startwerte der
    Stufe Schwer endeten in v83 viermal militärisch, jetzt keinmal. Eine erste Hauptstadt fiel
@@ -2683,6 +2695,14 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    bewegliche Armeen schon mit einem Punkt; Straßen, Kopien und Felder zählen auch nicht. (d) Die
    Auswahl ist weiß statt einer neuen Akzentfarbe. (e) Das Einkommen in der Welt zeigen alle Reiche,
    auch Bots und die KI – ablesbar war es schon an der Karte.
+73. **Sklaverei 4 – nicht gemessen, eine Auslegung (v110).** Wie in v84 (Punkt 31) rechnet die KI mit
+   dem neuen Wert, weil sie das Opfern auf Kopien ausprobiert; ihr fester Zuschlag für die
+   Technologie (`kiTechBonus` 2) stammt noch aus der Zeit der 10 Münzen und ist weiter nicht
+   nachgestellt. Ob er noch passt, ist nicht gemessen, ebenso wenig die Balance (messbar mit
+   `tools_ki.js`, gepaart gegen v109 auf denselben Startwerten). Auslegung (zum Ändern angeboten): Die 4
+   gilt sofort auch in laufenden und gespeicherten Partien – die Zahl steht nicht im Spielstand, wie
+   schon in v84. Alte Partien bei 7 zu lassen hieße, sie dort festzuhalten (wie `S.oldTree` den alten
+   Techtree).
 
 ## Arbeitsweise, die der Autor schätzt
 

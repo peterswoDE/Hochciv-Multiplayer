@@ -5,6 +5,7 @@
 ## Operating a server
 
 * Never commit `.env` or `secrets.env`; they are excluded from Git and from the Docker build.
+* Audit reports, credentials and other sensitive security notes go into `security/`, which is excluded from Git and from the Docker build.
 * Use a unique `SESSION_SECRET` and database password per installation (production and staging differ). The server refuses to start with a missing or publicly known secret.
 * The game code in `HochCiv*/` runs on your server and in your players' browsers – review changes to it like server code.
 * Only superadmins can grant admin rights or change OAuth settings; admins manage normal users only ([Administration](../operations/administration.md)). Changes that could take over an account – a new password, removing second factors, roles, deleting an account – and the OAuth settings need a recent login of the admin (password or authenticator), and every admin change is written to the log (`[Admin] <who> <what>`).

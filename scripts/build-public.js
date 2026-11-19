@@ -2,7 +2,7 @@
  * Builds public/ from the game that ships with this repository – nothing is downloaded:
  *
  *   HochCiv/      → public/       the current game, served at /
- *   HochCiv-v108/ → public/v108/  the versions deployed before: only for Rundenspiele that were
+ *   HochCiv-v109/, HochCiv-v108/ → public/v109/, public/v108/  the versions deployed before: only for Rundenspiele that were
  *   HochCiv-v107/ → public/v107/
  *   HochCiv-v106/ → public/v106/
  *   HochCiv-v100/ → public/v100/
@@ -23,6 +23,7 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'public');
 const GAMES = [
     { from: 'HochCiv', to: '' },
+    { from: 'HochCiv-v109', to: 'v109' },
     { from: 'HochCiv-v108', to: 'v108' },
     { from: 'HochCiv-v107', to: 'v107' },
     { from: 'HochCiv-v106', to: 'v106' },

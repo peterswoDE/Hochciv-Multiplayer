@@ -9,3 +9,5 @@ npm-debug.log
 *.txt
 instructions.md
 secrets.env
+# Sensitive security material (audits, credentials) – local only
+security/

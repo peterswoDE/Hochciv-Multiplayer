@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v109';
+const APP_VERSION = 'v110';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -116,7 +116,7 @@ const TECHS = [
   { k: 'navigation', n: 'Navigation', f: 3, c: 1, e: 'Bewegung über Meer' },
   { k: 'demokratie', n: 'Demokratie', f: 3, c: 3, e: 'Armeekosten 4 statt 5 × Anzahl' },
   { k: 'wallfahrt', n: 'Wallfahrt', f: 3, c: 4, wo: true, e: 'Je eigenem Weltwunder +3 auf alle Erträge' },
-  { k: 'sklaverei', n: 'Sklaverei', f: 3, c: 5, e: 'Stadtbevölkerung opfern → 7 Münzen · wird in der Moderne obsolet' },
+  { k: 'sklaverei', n: 'Sklaverei', f: 3, c: 5, e: 'Stadtbevölkerung opfern → 4 Münzen · wird in der Moderne obsolet' },
   { k: 'rittertum', n: 'Rittertum', f: 3, c: 6, e: '1 Bevölkerungsverlust beim Erobern' },
   { k: 'kundschafterei', n: 'Kundschafterei', f: 3, c: 7, e: '1 Tech/Runde kopieren (2× Kosten in Münzen)' },
   { k: 'buerokratie', n: 'Bürokratie', f: 3, c: 10, e: 'Hauptstadt produziert doppelt',
@@ -173,7 +173,7 @@ const GENE_SCI_PER_FOOD = 4;
 // Siegschwellen des Wirtschaftssiegs: VICTORY_THRESHOLDS weiter unten (seit v101 je Spielart)
 const BOT_RESEARCH_TWICE = true;
 const SLAVERY_OBSOLETE_IN_MODERN = true;
-const SLAVERY_COINS = 7;     // Sklaverei: Münzen je geopferter Bevölkerung (bis v83: 10)
+const SLAVERY_COINS = 4;     // Sklaverei: Münzen je geopferter Bevölkerung (v84–v109: 7, bis v83: 10)
 /* Seit v97 (Anweisung des Autors):
    · Rabatte je Zeitalter – Antike, Mittelalter, Industrialisierung, Moderne und an fünfter Stelle
      die Singularität (techCost): Griechenlands Günstige Forschung 1/1/2/2/5 (bis v96 1/2/3/4/5),

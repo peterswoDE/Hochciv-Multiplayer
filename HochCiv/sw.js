@@ -1,7 +1,7 @@
 /* Offline-Cache. Nach Änderungen an den Dateien: node tools_version.js – zählt VERSION hoch und
    setzt BUILD_HASH. Ohne passenden BUILD_HASH übernimmt die App eine neue Fassung nicht (v106). */
-const VERSION = 'hochciv-v109';
-const BUILD_HASH = '1425828abbb8';   // von tools_version.js
+const VERSION = 'hochciv-v110';
+const BUILD_HASH = '0d3bfdb293fd';   // von tools_version.js
 /* Was zwischengespeichert wird: die festen Dateien hier, die Skripte aus index.html – dort
    steht ihre Liste als <script>-Tags, und nur dort (v102). */
 const STATIC = [

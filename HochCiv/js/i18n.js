@@ -125,7 +125,7 @@ const DATA_EN = {
     navigation: ['Navigation', 'Movement across sea'],
     demokratie: ['Democracy', 'Army cost 4 instead of 5 × count'],
     wallfahrt: ['Pilgrimage', '+3 to all yields per wonder you own'],
-    sklaverei: ['Slavery', 'Sacrifice city population → 7 coins · becomes obsolete in the Modern Age'],
+    sklaverei: ['Slavery', 'Sacrifice city population → 4 coins · becomes obsolete in the Modern Age'],
     rittertum: ['Chivalry', 'Only 1 population lost when conquering'],
     kundschafterei: ['Scouting', 'Copy 1 tech per round (2× its cost in coins)'],
     // dritte Stelle (v96): der ganze Text für den Regelbogen, wo die Kachel kürzer ist (`voll`)

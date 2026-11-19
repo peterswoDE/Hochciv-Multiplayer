@@ -1221,8 +1221,9 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const c = capitalOf(S, 0); c.pop = 4;
   const vorher = S.players[0].res.coins;
   eq(sacrifice(S, 0, c), null, 'erstes Opfern klappt');
-  eq([S.players[0].res.coins - vorher, SLAVERY_COINS], [7, 7], 'eine geopferte Bevölkerung bringt 7 Münzen (v84, vorher 10)');
-  eq(TECH_BY_KEY.sklaverei.e.includes(SLAVERY_COINS + ' Münzen'), true, 'der Techbogen nennt die 7 Münzen');
+  eq([S.players[0].res.coins - vorher, SLAVERY_COINS], [4, 4], 'eine geopferte Bevölkerung bringt 4 Münzen (v110; v84–v109 7, davor 10)');
+  eq([TECH_BY_KEY.sklaverei.e.includes(SLAVERY_COINS + ' Münzen'), DATA_EN.tech.sklaverei[1].includes(SLAVERY_COINS + ' coins')],
+    [true, true], 'der Techbogen nennt die 4 Münzen, deutsch und englisch');
   eq(typeof sacrifice(S, 0, c), 'string', 'zweites Opfern in derselben Runde wird abgelehnt');
   eq(c.pop, 3, 'nur eine Bevölkerung geopfert');
 }
