@@ -29,8 +29,11 @@ civs.forEach((c, i) => {
   if (schluessel.has(c.k)) fehler.push(`Schlüssel ${c.k} doppelt`);
   schluessel.add(c.k);
   if (!/^#[0-9a-f]{6}$/i.test(c.color || '')) fehler.push(`${c.k}: color ist kein #rrggbb`);
-  if (!Array.isArray(c.abilities) || c.abilities.length !== 3)
-    fehler.push(`${c.k}: braucht genau drei Fähigkeiten`);
+  // Experimentelle Reiche (v111, `exp`) dürfen eine bis drei Fähigkeiten haben, die übrigen genau drei
+  const anzahlOk = c.exp ? c.abilities && c.abilities.length >= 1 && c.abilities.length <= 3
+    : c.abilities && c.abilities.length === 3;
+  if (!Array.isArray(c.abilities) || !anzahlOk)
+    fehler.push(`${c.k}: braucht ${c.exp ? 'eine bis drei' : 'genau drei'} Fähigkeiten`);
   else {
     if (c.abilities[0].k !== 'basis') fehler.push(`${c.k}: die erste Fähigkeit muss 'basis' heißen`);
     c.abilities.forEach(a => {
@@ -50,10 +53,12 @@ zeilen.push('/* Zivilisationen – ERZEUGT aus data/civs.json, nicht von Hand ä
 zeilen.push('   Neues Reich oder Änderung: data/civs.json bearbeiten, dann `node tools_civs.js`.');
 zeilen.push('   Die Reihenfolge hier ist die Anzeigereihenfolge; ORDER unten ist die Zugfolge.');
 zeilen.push('   Die Regeln zu den Fähigkeiten stehen in js/engine.js, nicht hier. */');
-zeilen.push('const CIVS = [');
-civs.forEach(c => {
+// Grundreiche in CIVS, experimentelle (v111, `exp`) in EXP_CIVS – CIVS bleibt „die vier": so lesen
+// es Aufbau, Marathon, Regelbogen und die Tests. Nachschlagen (CIV_BY_KEY) und ORDER kennen alle.
+const eintrag = c => {
   zeilen.push('  {');
-  zeilen.push(`    k: ${j(c.k)}, n: ${j(c.n)}, sym: ${j(c.sym)}, color: ${j(c.color)},`);
+  zeilen.push(`    k: ${j(c.k)}, n: ${j(c.n)}, sym: ${j(c.sym)}, color: ${j(c.color)},` +
+    (c.exp ? ' exp: true,' : '') + (c.wo ? ' wo: true,' : ''));
   zeilen.push(`    ability: ${j(c.abilities[0].e)},`);
   zeilen.push('    abilities: [');
   c.abilities.forEach(a => {
@@ -61,14 +66,24 @@ civs.forEach(c => {
   });
   zeilen.push('    ],');
   zeilen.push('  },');
-});
+};
+zeilen.push('const CIVS = [');
+civs.filter(c => !c.exp).forEach(eintrag);
 zeilen.push('];');
+zeilen.push('/* Experimentelle Zivilisationen (v111, Feld `exp`): im Aufbau nur mit dem Häkchen');
+zeilen.push('   „Experimentelle Zivilisationen", nie im Marathon. `wo`: wirkt über Weltwunder, nur in');
+zeilen.push('   Partien mit Weltwundern. Was eine Partie anbietet, sagt civKeysFor in js/engine.js. */');
+zeilen.push('const EXP_CIVS = [');
+civs.filter(c => c.exp).forEach(eintrag);
+zeilen.push('];');
+zeilen.push('const ALL_CIVS = CIVS.concat(EXP_CIVS);');
 zeilen.push('const CIV_BY_KEY = {};');
-zeilen.push('CIVS.forEach(c => { CIV_BY_KEY[c.k] = c; });');
-zeilen.push('/* Alle Schlüssel in Anzeigereihenfolge. Der Aufbau braucht sie an mehreren');
+zeilen.push('ALL_CIVS.forEach(c => { CIV_BY_KEY[c.k] = c; });');
+zeilen.push('/* Die Schlüssel der Grundreiche in Anzeigereihenfolge. Der Aufbau braucht sie an mehreren');
 zeilen.push('   Stellen (Vorauswahl, Auslosung, Tausch beim „Nochmal spielen"). Wer die Liste');
 zeilen.push('   verändern will, nimmt eine Kopie: CIV_KEYS.slice(). */');
 zeilen.push('const CIV_KEYS = CIVS.map(c => c.k);');
+zeilen.push('const EXP_CIV_KEYS = EXP_CIVS.map(c => c.k);');
 zeilen.push('/* Zugreihenfolge (Feld `order` in der JSON) – nicht die Reihenfolge oben,');
 zeilen.push('   die ist die Anzeigereihenfolge im Aufbau und im Regelbogen. */');
 zeilen.push(`const ORDER = ${j(zugfolge.map(c => c.k))};`);

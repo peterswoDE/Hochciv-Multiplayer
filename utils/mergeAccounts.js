@@ -75,6 +75,8 @@ async function mergeInto(into, from) {
         into.discordId = discordId;
         await into.save({ transaction });
     });
+    // the statistics and profiles read the seats' accounts (utils/facts.js listeners)
+    require('./facts').changed();
 
     // Live games in memory: the seat now belongs to the merged account
     for (const s of sessions.getAllSessions().values()) {

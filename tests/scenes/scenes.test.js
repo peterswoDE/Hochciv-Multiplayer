@@ -92,6 +92,7 @@ function unit() {
         return { marks, same, human };
     };
     const holder = {}, S = game();
+    const dice = S.seed;   // drawn at random for each game (engine-adapter.js createGame)
     ok(!!engine.attachScenes(S, holder), 'unit: a scene log is attached');
     ok(!JSON.stringify(S).includes('frames') && !Object.keys(S).some(k => /scene/i.test(k)), 'unit: the log is not part of the state');
     const { marks, same, human } = play(S, holder, 24);
@@ -102,8 +103,12 @@ function unit() {
     ok(holder.scenes.frames.every((f, i) => f.n === holder.scenes.n0 + i + 1), 'unit: frames numbered without gaps');
     ok(holder.scenes.frames.filter(f => f.t === 'a').every(f => typeof f.m === 'string' && f.pi >= 0), 'unit: actions carry their text and empire');
     const S2 = game();
+    S2.seed = dice;
     play(S2, null, 24);
-    ok(JSON.stringify(S) === JSON.stringify(S2), 'unit: the game is the same with and without recording');
+    // without the log's language parts (e.t, utils/logtext.js): its memory of outputs is shared by
+    // all games and emptied when full, so whether a tech name is marked depends on earlier games
+    const plain = X => JSON.stringify(X, (k, v) => (k === 't' && Array.isArray(v) ? undefined : v));
+    ok(plain(S) === plain(S2), 'unit: the game is the same with and without recording');
 
     // battles: a long game until there is one
     const S3 = game(), h3 = {};

@@ -182,7 +182,6 @@ function mapLimits(pick, custom) {
   if (custom) return { min: MIN_PLAYERS, max: custom.maxPlayers || (custom.spawns || []).length || 4, marathon: !!custom.marathon };
   if (pick === 'plaettchen' || pick === 'random') return { min: MIN_PLAYERS, max: MAX_PLAYERS, marathon: false };
   if (pick === 'marathon') return { min: 4, max: 4, marathon: true };
-  if (pick === 'plaettchen14') return { min: 4, max: 4, marathon: false };   // 14 Dreiecke (v107)
   return { min: MIN_PLAYERS, max: 4, marathon: false };
 }
 /* Die Spielkarte einer eigenen Karte für n Reiche: die Startpunkte als Hauptstädte nach Platz
@@ -273,6 +272,18 @@ function abilEffect(a, S) {
       GREEK_DISCOUNT.map(n => n * MARATHON_DISCOUNT_FACTOR).join('/'));
   return a ? a.e : '';
 }
+/* Welche Zivilisationen eine Partie anbietet (v111, Anweisung des Autors): die vier Grundreiche,
+   mit `exp` dazu die experimentellen – die mit Weltwunder-Wirkung (Feld `wo`: Aztekenreich,
+   Ägypten) nur, wenn auch Weltwunder zugeschaltet sind (`wo`). Aufbau, Auslosung und die
+   Fähigkeitswahl der Plättchenkarte lesen hier; der Marathon bleibt bei den vier (ALL_ABILITIES). */
+function civKeysFor(opts) {
+  const exp = !!(opts && opts.exp), wo = !!(opts && opts.wo);
+  return CIVS.concat(exp ? EXP_CIVS.filter(c => !c.wo || wo) : []).map(c => c.k);
+}
+// Ihre Fähigkeiten als Schlüssel „Zivilisation:Fähigkeit"
+function abilityIdsFor(opts) {
+  return civKeysFor(opts).flatMap(k => CIV_BY_KEY[k].abilities.map(a => k + ':' + a.k));
+}
 
 /* Machtwert: Bots haben immer ihre Gesamtbevölkerung als Macht.
    Zuschläge (Wikinger "Kriegerkultur", Zeusstatue) erhöhen den Machtwert,
@@ -297,6 +308,30 @@ function powerOf(S, pi) {
   if (p.kind === 'barbar') return 0;
   if (p.kind === 'bot') return popOf(S, pi);
   return p.power + powerBonus(S, pi);
+}
+/* Roms „Legion" (v111, Anweisung des Autors): eine Armee hat LEGION_BONUS_PCT % Macht mehr je
+   angrenzender eigener Armee, abgerundet – bei Macht 5 mit zwei Nachbarn 10, mit einem 7. Gezählt
+   werden echte Armeen, nicht die unbewegliche des Burgenbaus. `base` ist der Machtwert, mit dem
+   gerechnet wird (in der Kampfphase der vom Anfang der Phase, v94), ohne ihn der jetzige. Ohne
+   Legion ist es der Machtwert selbst. Das Reich steht vorneweg: Legion gibt es nur zu Rom (nicht im
+   Marathon), und der Vergleich spart in der KI, die das sehr oft fragt, die Liste der Fähigkeiten. */
+const hasLegion = p => !!p && p.civ === 'rom' && hasAbil(p, 'rom', 'basis');
+function armyPower(S, army, base) {
+  const oi = army.owner;
+  const b = base != null ? base : powerOf(S, oi);
+  if (!hasLegion(S.players[oi])) return b;
+  let n = 0;
+  for (const a of S.armies)
+    if (a !== army && a.owner === oi && hexDistance(a.r, a.c, army.r, army.c) === 1) n++;
+  return Math.floor(b * (100 + LEGION_BONUS_PCT * n) / 100);
+}
+/* Was diese Armeen zusammen an Macht einbringen (Angriff auf eine Stadt, Verteidigung, Beute): je
+   Armee der Machtwert – mit Legion jede ihren eigenen (armyPower). Ohne Stapeln (COMBAT) die stärkste. */
+function stackPower(S, pi, armies, base, stacks) {
+  if (!armies.length) return 0;
+  if (!hasLegion(S.players[pi])) return base * (stacks ? armies.length : 1);
+  const werte = armies.map(a => armyPower(S, a, base));
+  return stacks ? werte.reduce((x, v) => x + v, 0) : Math.max(...werte);
 }
 
 /* ------------------------------------------------------------ Neues Spiel */
@@ -446,11 +481,15 @@ function rollAvailability(S, pi, field, age) {
     (list.filter(t => p.avail[t.k]).map(t => t.n).join(', ') || '—'));
 }
 /* CIV_TECH (v107): nach dem Wurf kommt dazu, was der Zivilisation immer verfügbar ist – den
-   Wikingern die Navigation. `field` null heißt alle Felder: vorab gewürfelt (newGame) und in
-   laufenden Partien (migrateState). */
+   Wikingern die Navigation –, ABIL_TECH (v111) dasselbe je Fähigkeit: Roms Via Appia das Rad.
+   `field` null heißt alle Felder: vorab gewürfelt (newGame) und in laufenden Partien
+   (migrateState). */
 function civTechAfterRoll(p, field, age) {
-  const t = TECH_BY_KEY[CIV_TECH[p.civ]];
-  if (t && t.age === age && (field == null || t.f === field)) p.avail[t.k] = true;
+  const keys = [CIV_TECH[p.civ]].concat(abilitiesOf(p).map(a => ABIL_TECH[a]));
+  for (const k of keys) {
+    const t = TECH_BY_KEY[k];
+    if (t && t.age === age && (field == null || t.f === field)) p.avail[t.k] = true;
+  }
 }
 /* Aufbau 3 und die Wunderstapel VORZIEHEN (v66).
    Was am Anfang verfügbar ist, hängt allein an den Würfeln, nicht an der Karte. Im
@@ -479,6 +518,14 @@ function migrateState(S) {
     if (p.freeTechsUsed === undefined && typeof p.freeTechUsed === 'number') p.freeTechsUsed = 1;
   // Gründungen je Zug (v84–v99, für die Grenze im Marathon) – seit v100 ohne Grenze, ungenutzt
   for (const p of S.players || []) { delete p.foundRound; delete p.foundCount; }
+  /* Zivilisationen, die es nicht mehr gibt (v112: Atlantis, nur in v111): ohne Eintrag stünde das
+     Reich als „Barbaren" da (civOf). Es spielt unter einer Grundzivilisation weiter, die sonst niemand
+     am Tisch hat (Name, Zeichen, Farbe), und ohne Fähigkeit – die leere Liste in p.drafted. */
+  for (const p of S.players || []) {
+    if (p.kind === 'barbar' || CIV_BY_KEY[p.civ]) continue;
+    p.civ = CIV_KEYS.find(k => !S.players.some(q => q.civ === k)) || CIV_KEYS[0];
+    p.drafted = [];
+  }
   // Wikinger (v107): Navigation immer verfügbar – auch in Partien, die vorher begonnen haben
   for (const p of S.players || []) if (p.avail) civTechAfterRoll(p, null, 0);
   // Kopieren (v105): je Weg die Runde der letzten Kopie – bis v104 nur das Internet
@@ -520,6 +567,7 @@ function doResearch(S, pi, tk) {
   const cost = techCost(S, pi, tech);
   if (!pay(S, pi, 'sci', cost)) return T('Nicht genug Wissenschaft.');
   applyTech(S, pi, tech, T('%s Wissenschaft', cost));
+  usaBonus(S, pi);                       // USA (v111)
   return null;
 }
 /* Technologie eintragen (bezahlt oder gratis) samt Folgewirkungen.
@@ -626,11 +674,17 @@ function useBackPick(S, pi, tk) {
    verschiedener Felder addieren sich. Bis v87 addierte jede Technologie ihren Zuwachs.
    Addiert in `y` (ohne `y`: in ein neues [0, 0, 0]) und gibt es zurück – tileYield läuft in
    der KI sehr oft, deshalb ohne Zwischenfeld. */
+/* Deutschlands „Ingenieurskunst" (v111, Anweisung des Autors): die Glieder einer Kette addieren
+   sich – jedes erforschte bringt, was sein Text nennt. Mathematik (Wald 1) und Elektrizität (2)
+   geben dem Wald zusammen 3 Wissenschaft, mit Künstlicher Intelligenz 6. Das Reich steht vorneweg
+   wie bei hasLegion: tileYield läuft in der KI sehr oft. */
 const NO_CHAINS = [];
+const yieldsAddUp = p => p.civ === 'deutschland' && hasAbil(p, 'deutschland', 'basis');
 function yieldBonus(p, on, y = [0, 0, 0]) {
+  const alle = yieldsAddUp(p);
   for (const chain of YIELD_CHAINS[on] || NO_CHAINS)
     for (let i = chain.length - 1; i >= 0; i--)
-      if (has(p, chain[i].k)) { for (let j = 0; j < 3; j++) y[j] += chain[i].y[j]; break; }
+      if (has(p, chain[i].k)) { for (let j = 0; j < 3; j++) y[j] += chain[i].y[j]; if (!alle) break; }
   return y;
 }
 function tileYield(S, pi, t) {
@@ -730,9 +784,8 @@ function cityAtSea(S, city) {
 function armyDefenseValue(S, army) {
   const oi = army.owner;
   const rng = projectRange(S, oi);
-  let helpers = 0;
-  for (const a of armiesOf(S, oi)) if (hexDistance(a.r, a.c, army.r, army.c) <= rng) helpers++;
-  return powerOf(S, oi) * (COMBAT.defenseStacks ? helpers : 1);
+  const helfer = armiesOf(S, oi).filter(a => hexDistance(a.r, a.c, army.r, army.c) <= rng);
+  return stackPower(S, oi, helfer, powerOf(S, oi), COMBAT.defenseStacks);   // Legion: je Armee (v111)
 }
 function raidYield(S, pi) {
   const p = S.players[pi];
@@ -743,14 +796,14 @@ function raidYield(S, pi) {
     if (city.owner === pi) continue;
     const atk = attackersOn(S, pi, city);
     if (!atk.length) continue;
-    const diff = attackValue(S, pi, atk.length) - defenseValue(S, city);
+    const diff = attackValue(S, pi, atk.length, null, atk) - defenseValue(S, city);
     if (diff > 0) { out.sum += diff; out.parts.push(T('Stadt %s/%s: +%s', city.r, city.c, diff)); }
   }
   for (const enemy of S.armies) {
     if (enemy.owner === pi) continue;
     const atk = armiesOf(S, pi).filter(a => hexDistance(a.r, a.c, enemy.r, enemy.c) <= rng);
     if (!atk.length) continue;
-    const diff = attackValue(S, pi, atk.length) - armyDefenseValue(S, enemy);
+    const diff = attackValue(S, pi, atk.length, null, atk) - armyDefenseValue(S, enemy);
     if (diff > 0) { out.sum += diff; out.parts.push(T('Armee %s/%s: +%s', enemy.r, enemy.c, diff)); }
   }
   return out;
@@ -827,9 +880,10 @@ function incomeTotal(S, pi, view) {
   // an der Hauptstadt hängen. Grundregel, gilt also auch für Bots.
   // Mit Bürokratie doppelt (v86). Die Übersicht sagt seit v88 nicht mehr dazu, warum
   // (Anweisung des Autors; v86/v87 hing „(Bürokratie ×2)" am Zeilennamen).
+  // Roms Via Appia (v111): Handelsrouten bringen das Doppelte
   const tr = tradeRoutes(S, pi);
   if (tr.bonus) {
-    const b = tr.bonus * buro;
+    const b = tr.bonus * buro * (p.civ === 'rom' && isAbil(p, 'viaappia') ? VIA_APPIA_TRADE : 1);
     if (view) view.extra.push({ name: T('Handelsrouten'), glyph: '🛤', count: tr.count, y: [b, b, b] });
     for (let i = 0; i < 3; i++) total[i] += b;
   }
@@ -1199,6 +1253,11 @@ function beginTurn(S) {
     log(S, 'act', ausgleich === 1 ? T('Startausgleich: +1 Münze (%s. in der Zugfolge).', platz)
       : T('Startausgleich: +%s Münzen (%s. in der Zugfolge).', ausgleich, platz));
   }
+  // Maya „Kakaobohnen" (v111): im allerersten Zug MAYA_START_COINS Münzen zusätzlich, wie der Ausgleich
+  if (S.round === 1 && p.civ === 'maya' && hasAbil(p, 'maya', 'basis')) {
+    p.res.coins += MAYA_START_COINS;
+    log(S, 'act', T('%s: +%s Münzen im ersten Zug.', abilInfo(p).n, MAYA_START_COINS));
+  }
   // 2 Macht reduzieren. Zuschläge aus Armeen/Zeusstatue erhöhen den Verlust,
   // können aber selbst nicht verloren gehen.
   if (p.kind !== 'bot' && powerOf(S, S.cur) > 0) {
@@ -1432,8 +1491,11 @@ function paidGrowthAvailable(S, pi, city) {
    oder Ereignis) damit für 0; mit den Kolonisten zusammen (Marathon) zählt das Doppelte der
    kleineren Stadt. */
 const GROW_ABIL_FACTOR = { gruenden: 2 };
+// Venedigs „Lagunenrepublik" (v111): Gründen geht nicht, Wachsen kostet nichts, beanspruchen wie Kolonialismus
+const isVenice = p => !!p && p.civ === 'venedig' && hasAbil(p, 'venedig', 'basis');
 function growPrice(S, pi, city) {
   const p = S.players[pi];
+  if (isVenice(p)) return { food: 0, coins: 0 };         // Venedig (v111): Wachstum kostet nichts
   const f = abilitiesOf(p).reduce((m, a) => Math.max(m, GROW_ABIL_FACTOR[a.slice(a.indexOf(':') + 1)] || 1), 1);
   const n = Math.max(0, city.pop - (isAbil(p, 'siedler') ? 1 : 0));   // Siedlertrecks: eine kleiner
   return {
@@ -1492,6 +1554,16 @@ function canGrowPaid(S, pi, city) {
     : cost.food ? T('Zu wenig Nahrung.') : T('Zu wenig Münzen.');
   return null;
 }
+/* USA „Amerikanischer Traum" (v111, Anweisung des Autors): nach jeder Forschung (doResearch, nicht
+   nach kostenlosen oder kopierten Technologien), Stadtgründung, jedem Wachstumsschritt (auch
+   kostenlos, auch „Alle Städte wachsen"), Armee- und Weltwunderbau USA_ACTION_COINS Münze. Nicht
+   für Geschenktes: Wachstum und Armeen aus Wundern, eroberte Städte. */
+function usaBonus(S, pi) {
+  const p = S.players[pi];
+  if (p.civ !== 'usa' || !hasAbil(p, 'usa', 'basis')) return;
+  p.res.coins += USA_ACTION_COINS;
+  log(S, 'info', T('%s: +%s Münze.', abilInfo(p).n, USA_ACTION_COINS));
+}
 /* mode: 'free' erzwingt kostenloses Wachstum (nur wenn Kontingent offen),
    'paid' erzwingt bezahltes Wachstum, sonst automatisch (gratis zuerst). */
 function growCity(S, pi, city, mode) {
@@ -1500,6 +1572,7 @@ function growCity(S, pi, city, mode) {
     const blocked = growBlockReason(S, pi, city); if (blocked) return blocked;
     city.pop++; city.grown = (city.grown || 0) + 1; city.freeUsed = (city.freeUsed || 0) + 1;
     log(S, 'act', T('%s: Stadt wächst kostenlos auf %s.', civOf(S.players[pi]).n, city.pop));
+    usaBonus(S, pi);
     return null;
   }
   if (mode === 'paid') {
@@ -1508,6 +1581,7 @@ function growCity(S, pi, city, mode) {
     if (!payAll(S, pi, cost)) return 'Zu wenig Mittel.';    // zahlt alles oder nichts
     city.pop++; city.grown = (city.grown || 0) + 1;   // freeUsed bleibt: bezahltes Wachstum verbraucht das Gratis-Kontingent nicht
     log(S, 'act', T('%s: Stadt wächst auf %s (%s Nahrung, %s Münzen).', civOf(S.players[pi]).n, city.pop, cost.food, cost.coins));
+    usaBonus(S, pi);
     return null;
   }
   const err = canGrow(S, pi, city); if (err) return err;
@@ -1517,6 +1591,7 @@ function growCity(S, pi, city, mode) {
   if (c.free) city.freeUsed = (city.freeUsed || 0) + 1;
   log(S, 'act', T('%s: Stadt wächst auf %s', civOf(S.players[pi]).n, city.pop) +
     (c.free ? ' (kostenlos).' : T('(%s Nahrung, %s Münzen).', c.food, c.coins)));
+  usaBonus(S, pi);
   return null;
 }
 /* Kostenloses Sofortwachstum aus Wundereffekten. Zählt nicht gegen das Rundenkontingent,
@@ -1767,6 +1842,7 @@ function canFound(S, pi, r, c) {
   return null;
 }
 function foundSiteError(S, pi, r, c) {
+  if (isVenice(S.players[pi])) return T('Venedig gründet keine Städte.');       // v111
   const t = terrainAt(S, r, c);
   if (!t || isOff(t)) return T('Kein Feld.');
   if (!TERRAIN[t].land) return T('Nicht auf Meer.');
@@ -1795,14 +1871,23 @@ function foundCity(S, pi, r, c) {
   if (S.bought[pi]) S.bought[pi] = claimsApart(S, pi, r, c);   // eigene Ansprüche werden Felder der Stadt (v104)
   log(S, 'act', T('%s: Stadt gegründet auf %s/%s (%s Nahrung, Bevölkerung %s).', civOf(S.players[pi]).n, r, c, cost, pop));
   claimOrphanWonders(S, pi, city);      // Wunder, die ohne Stadt auf dem Feld stehen
+  usaBonus(S, pi);                       // USA (v111)
   return null;
 }
 function armyCost(S, pi) {
   const p = S.players[pi];
   let n = armiesOf(S, pi).length + 1;
   if (hasAbil(p, 'wikinger', 'basis')) n = Math.max(0, n - 1);   // eine Armee zählt nicht mit
+  n = Math.max(0, n - aztecFreeArmies(S, pi));                   // Aztekenreich (v111): je Wunder eine
   const mult = has(p, 'nationalismus') ? 2 : has(p, 'demokratie') ? 4 : 5;
   return mult * n;
+}
+/* Aztekenreich „Blumenkriege" (v111, Anweisung des Autors): je eigenem Weltwunder zählt eine Armee
+   nicht für die Baukosten – mit zwei Wundern kosten die ersten beiden Armeen 0, die dritte 5 (ohne
+   Demokratie/Nationalismus). Verlorene Wunder zählen nicht mehr. Nur mit Weltwundern wählbar. */
+function aztecFreeArmies(S, pi) {
+  const p = S.players[pi];
+  return p.civ === 'azteken' && hasAbil(p, 'azteken', 'basis') ? wondersOf(S, pi).length : 0;
 }
 /* Bezahloptionen für Armeen und Macht. Bürgerkrieg erlaubt in dieser Runde, beides
    auch mit Nahrung zu zahlen (siehe rates(): foodToCoins 1:1).
@@ -1851,6 +1936,7 @@ function buildArmy(S, pi, city) {
   if (!pay(S, pi, 'coins', cost, payOpts(S, pi))) return T('Zu wenig Münzen (%s nötig).', cost);
   S.armies.push({ id: S.nextId++, owner: pi, r: city.r, c: city.c, mp: moveAllowance(S, pi), born: S.round });
   log(S, 'act', T('%s: Armee gebaut (%s Münzen) – muss die Stadt noch verlassen.', civOf(S.players[pi]).n, cost));
+  usaBonus(S, pi);                       // USA (v111)
   return null;
 }
 // Macht: Preis in Münzen und Verlust zu Zugbeginn (1/…) – die beste eigene Technologie zählt (TECHS)
@@ -1954,25 +2040,49 @@ function sacrificeAll(S, pi) {
    Gespeichert wird weiter in S.bought – der Name stammt aus der Zeit des Kaufens; so passen alte
    Spielstände ohne Umbau. Gezählt wird je Runde (p.claimRound, p.claimCount): jedes Reich zieht
    einmal je Runde, „je Zug" und „je Runde" sind dasselbe. Was nicht genutzt wird, verfällt. */
+/* Wie viele Felder je Runde: Kolonialismus COLONY_CLAIMS, Venedig (v111) VENICE_CLAIMS – beides
+   zusammen addiert sich (Wahl des Autors: Wirkungen stapeln), Venedig mit Kolonialismus also 6. */
+function claimMax(S, pi) {
+  const p = S.players[pi];
+  return (has(p, 'kolonialismus') ? COLONY_CLAIMS : 0) + (isVenice(p) ? VENICE_CLAIMS : 0);
+}
 function claimsLeft(S, pi) {
   const p = S.players[pi];
-  if (!has(p, 'kolonialismus')) return 0;
-  return COLONY_CLAIMS - (p.claimRound === S.round ? p.claimCount || 0 : 0);
+  const max = claimMax(S, pi);
+  if (!max) return 0;
+  return max - (p.claimRound === S.round ? p.claimCount || 0 : 0);
 }
 function claimTile(S, pi, r, c) {
   const p = S.players[pi];
-  if (!has(p, 'kolonialismus')) return T('Kolonialismus nicht erforscht.');
+  if (!claimMax(S, pi)) return T('Kolonialismus nicht erforscht.');
   // X ist kein Feld – beansprucht würde es über S.bought doch wieder zum Gebiet (v73)
   const t = terrainAt(S, r, c);
   if (!t || isOff(t)) return T('Kein Feld.');
   if (cityAt(S, r, c)) return T('Dort steht eine Stadt.');
   if (S.players.some((_, i) => controlledTiles(S, i).has(key(r, c))))
     return T('Nur herrenlose Felder können beansprucht werden.');
-  if (claimsLeft(S, pi) <= 0) return T('Diese Runde schon %s Felder beansprucht.', COLONY_CLAIMS);
+  if (claimsLeft(S, pi) <= 0) return T('Diese Runde schon %s Felder beansprucht.', claimMax(S, pi));
   if (p.claimRound !== S.round) { p.claimRound = S.round; p.claimCount = 0; }
   p.claimCount++;
   (S.bought[pi] = S.bought[pi] || []).push(key(r, c));
   log(S, 'act', T('%s: Feld %s/%s beansprucht.', civOf(p).n, r, c));
+  return null;
+}
+/* Chinas „Mandat des Himmels" (v111, Anweisung des Autors): einmal je Partie sofort das Einkommen
+   einsammeln – zusätzlich, also das Einkommen dieser Runde ein zweites Mal, gerechnet mit dem Stand
+   von jetzt (income: Ereignisse und Tadsch Mahal zählen mit). Wie zu Zugbeginn nie unter 0, ein
+   Nahrungsdefizit zählt kein zweites Mal. Vermerkt als Runde in p.incomeNowUsed. Steht nicht unter
+   den kostenlosen Aktionen, nach denen das Zugende fragt (freeActions): wann, ist hier die Wahl. */
+const incomeNowOpen = p => !!p && p.civ === 'china' && hasAbil(p, 'china', 'basis') && p.incomeNowUsed == null;
+function collectIncomeNow(S, pi) {
+  const p = S.players[pi];
+  if (!(p.civ === 'china' && hasAbil(p, 'china', 'basis'))) return T('Das kann nur China.');
+  if (p.incomeNowUsed != null) return T('Schon eingesammelt – einmal je Partie.');
+  const inc = income(S, pi);
+  const dazu = { sci: Math.max(0, inc.sci), food: Math.max(0, inc.food), coins: Math.max(0, inc.coins) };
+  p.res.sci += dazu.sci; p.res.food += dazu.food; p.res.coins += dazu.coins;
+  p.incomeNowUsed = S.round;
+  log(S, 'act', T('%s sammelt sofort Einkommen ein: %s Wissenschaft, %s Nahrung, %s Münzen.', civOf(p).n, dazu.sci, dazu.food, dazu.coins));
   return null;
 }
 /* Technologien anderer Reiche kopieren (v105, Anweisung des Autors): drei Wege, jeder EINMAL JE
@@ -2072,14 +2182,24 @@ function attackersOn(S, pi, city) {
   return armiesOf(S, pi).filter(a => hexDistance(a.r, a.c, city.r, city.c) <= rng);
 }
 /* `pow` (v94): der Machtwert, mit dem gerechnet wird – in der Kampfphase der vom Anfang der
-   Phase (combatPhase), sonst der jetzige. */
-function attackValue(S, pi, count, pow) {
+   Phase (combatPhase), sonst der jetzige. `armies` (v111): die angreifenden Armeen selbst – mit
+   Roms Legion greift jede mit ihrem eigenen Machtwert an (armyPower); ohne sie zählt nur `count`
+   (so rechnet die KI mit gedachten Armeen). */
+function attackValue(S, pi, count, pow, armies) {
   const p = S.players[pi];
   if (count <= 0) return 0;
-  let per = pow != null ? pow : powerOf(S, pi);
-  if (has(p, 'belagerung')) per += SIEGE_BONUS;      // v88: 3 (vorher 5)
-  if (has(p, 'dynamit')) per *= 2;
-  return per * (COMBAT.attackStacks ? count : 1);
+  const base = pow != null ? pow : powerOf(S, pi);
+  const je = m => {
+    let per = m;
+    if (has(p, 'belagerung')) per += SIEGE_BONUS;      // v88: 3 (vorher 5)
+    if (has(p, 'dynamit')) per *= 2;
+    return per;
+  };
+  if (armies && armies.length && hasLegion(p)) {
+    const werte = armies.map(a => je(armyPower(S, a, base)));
+    return COMBAT.attackStacks ? werte.reduce((x, v) => x + v, 0) : Math.max(...werte);
+  }
+  return je(base) * (COMBAT.attackStacks ? count : 1);
 }
 /* Verteidigung je Bevölkerung: 1, in der Hauptstadt CAPITAL_DEFENSE mehr (v108), mit Maschinengewehr
    MG_DEFENSE mehr (v107: 3, bis v106 2). Mit der Großen Mauer zählt die Gesamtbevölkerung – auch für beide Zuschläge. */
@@ -2095,9 +2215,13 @@ function defenseValue(S, city, pow, helpersIn) {
   let d = base * defensePerPop(S, city);
   if (has(o, 'stadtmauern')) d += 5;
   if (has(o, 'burgenbau')) d += macht;                   // virtuelle Armee in der Stadt
+  const rng = projectRange(S, oi);
+  if (hasLegion(o)) {                                    // Legion (v111): jede Armee mit ihrem Wert
+    d += stackPower(S, oi, armiesOf(S, oi).filter(a => hexDistance(a.r, a.c, city.r, city.c) <= rng), macht, COMBAT.defenseStacks);
+    return d;
+  }
   let helpers = helpersIn;
   if (helpers == null) {
-    const rng = projectRange(S, oi);
     helpers = 0;
     for (const a of armiesOf(S, oi))
       if (hexDistance(a.r, a.c, city.r, city.c) <= rng) helpers++;
@@ -2145,14 +2269,15 @@ function powerView(S) {
   const cities = S.cities.map(city => ({
     city, def: defenseValue(S, city),
     atk: alive.filter(e => e !== city.owner).map(e => {
-      const n = attackersOn(S, e, city).length;
-      return n ? { pi: e, v: attackValue(S, e, n) } : null;
+      const atk = attackersOn(S, e, city);
+      return atk.length ? { pi: e, v: attackValue(S, e, atk.length, null, atk) } : null;
     }).filter(Boolean),
   }));
+  // Legion (v111): je Armee ihr eigener Wert (armyPower, flankPower)
   const armies = S.armies.map(army => ({
-    army, pow: powerOf(S, army.owner),
+    army, pow: armyPower(S, army),
     flank: alive.filter(e => e !== army.owner && canFlank(S, e, army, spots[e]))
-      .map(e => ({ pi: e, v: powerOf(S, e) })),
+      .map(e => ({ pi: e, v: flankPower(S, e, army, spots[e], powerOf(S, e)) })),
   }));
   return { cities, armies };
 }
@@ -2187,7 +2312,7 @@ function combatPhase(S, pi, rec) {
     const sk = pi + '|' + city.id;
     const atk = attackersOn(S, pi, city);
     if (!atk.length) { delete S.sieges[sk]; continue; }
-    const a = attackValue(S, pi, atk.length, macht[pi]), d = defenseValue(S, city, macht[city.owner]);
+    const a = attackValue(S, pi, atk.length, macht[pi], atk), d = defenseValue(S, city, macht[city.owner]);
     const e = rec ? combatEntry(S, {
       art: 'stadt', pi, gegner: city.owner, r: city.r, c: city.c, a, d, sieg: a > d,
       von: atk.map(x => [x.r, x.c]),
@@ -2213,7 +2338,8 @@ function combatPhase(S, pi, rec) {
   const flankSpots = flankSpotsOf(S, pi);
   for (const enemy of S.armies.slice()) {
     if (enemy.owner === pi || !canFlank(S, pi, enemy, flankSpots)) continue;
-    const a = macht[pi], d = macht[enemy.owner];
+    // Legion (v111): Angreifer mit der stärksten flankierenden Armee, die geflankte mit ihrer
+    const a = flankPower(S, pi, enemy, flankSpots, macht[pi]), d = armyPower(S, enemy, macht[enemy.owner]);
     if (rec) rec.push(combatEntry(S, {
       art: 'flanke', pi, gegner: enemy.owner, r: enemy.r, c: enemy.c, a, d, sieg: a > d,
       von: flankersOf(S, pi, enemy, flankSpots),
@@ -2231,6 +2357,18 @@ function flankersOf(S, pi, enemy, spots) {
     const d = hexDistance(r, c, enemy.r, enemy.c);
     return d >= 1 && d <= rng;
   });
+}
+/* Mit welcher Macht ein Reich flankiert: mit seinem Machtwert `base` – mit Roms Legion (v111) mit
+   der stärksten Armee unter den Flankierern (armyPower); eine Burgenbau-Stadt darunter zählt mit
+   dem Machtwert selbst. Die geflankte Armee verteidigt mit armyPower. */
+function flankPower(S, pi, enemy, spots, base) {
+  if (!hasLegion(S.players[pi])) return base;
+  let best = 0;
+  for (const [r, c] of flankersOf(S, pi, enemy, spots)) {
+    const a = S.armies.find(x => x.owner === pi && x.r === r && x.c === c);
+    best = Math.max(best, a ? armyPower(S, a, base) : base);
+  }
+  return best;
 }
 /* Ein Kampfeintrag samt Kartenstand DAVOR: Städte, Armeen, Wunder und die Reiche (für
    Farben und Grenzen) – genug, um die Karte so zu zeichnen, wie sie vor diesem Kampf stand. */

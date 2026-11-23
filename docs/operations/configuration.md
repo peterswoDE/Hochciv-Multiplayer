@@ -24,7 +24,10 @@ Settings that change at runtime (maintenance mode, registration switch, OAuth pr
 | `PROXY_NETWORK` | no | Docker network of the reverse proxy (default `proxy`); production and staging must use the same one. |
 | `HOCHCIV_IMAGE_TAG` | no | Image version to run (default `latest`), e.g. a release tag like `v1.4.2`. |
 | `WATCHTOWER_POLL_INTERVAL` | production, staging | How often Watchtower looks for a new image (`latest` or `staging`), in seconds (default 300). |
-| `POSTGRES_DATA` | production | Where the database keeps its data: the Docker volume `pgdata` (default) or a folder such as `./postgres`. |
+| `POSTGRES_DATA` | production, staging | Where the database keeps its data: the Docker volume `pgdata` (default) or a folder such as `./data/postgres`. See [Data next to the compose file](deployment.md#data-next-to-the-compose-file). |
+| `PROMETHEUS_DATA` | production, staging | Prometheus' data: the volume `prometheus-data` (default) or a folder such as `./data/prometheus`. |
+| `GRAFANA_DATA` | production, staging | Grafana's data: the volume `grafana-data` (default) or a folder such as `./data/grafana`. |
+| `MONITORING_CONFIG` | production, staging | The copy of `monitoring/` Prometheus and Grafana read: the volume `monitoring-config` (default) or a folder such as `./data/monitoring`. |
 
 ## Set by the compose files
 
@@ -51,6 +54,7 @@ These have sensible defaults and are normally left alone. The tests in `tests/` 
 | `ASYNC_TIMEOUT_MS` | 7 days | Rundenspiele: when the KI takes over a seat, for 7 days per turn; 1 and 3 days per turn scale it (see [Rundenspiele](../reference/rundenspiele.md)). |
 | `ASYNC_SWEEP_MS` | 10 minutes | Rundenspiele: how often the server checks for reminders and timeouts. |
 | `REPLAY_KEEP_DAYS` | `180` | Replays older than this are deleted. |
+| `BOT_REPLAY_KEEP_DAYS` | `30` | Matches only bots played (bot accounts and KI, no person): their replays and per-round statistics are deleted after this many days. Result, facts and MMR stay. |
 | `REPORT_KEEP_YEARS` | `3` | Chat reports about guests or deleted accounts are deleted after this time. |
 
 ## Fixed limits (`config.js`)

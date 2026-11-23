@@ -6,6 +6,8 @@ services:
     image: postgres:15-alpine
     container_name: hochciv-db
     restart: unless-stopped
+    # pg_stat_statements: the slowest queries for the dashboards (needs a restart of the database)
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=top"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hochciv}
       # The superuser – only for the database itself, backups and hochciv-db-setup. Only used
@@ -18,7 +20,8 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      # A named volume, or a folder (POSTGRES_DATA=./postgres in .env, for an existing installation)
+      # A named volume, or a folder next to this file (POSTGRES_DATA=./data/postgres in .env);
+      # see docs/operations/deployment.md#data-next-to-the-compose-file
       - ${POSTGRES_DATA:-pgdata}:/var/lib/postgresql/data
     networks:
       - internal
@@ -57,6 +60,8 @@ services:
     depends_on:
       hochciv-db-setup:
         condition: service_completed_successfully
+      monitoring-setup:
+        condition: service_completed_successfully
     # The server needs no Linux capabilities and no privilege changes; limits keep a runaway
     # process (or a flood) from taking the whole host down
     security_opt:
@@ -94,8 +99,123 @@ services:
       - MAIL_LOG_CODES=${MAIL_LOG_CODES:-}
       # Push notifications of the Android app (Firebase service account key, base64) – optional
       - FCM_SERVICE_ACCOUNT=${FCM_SERVICE_ACCOUNT:-}
+      # Monitoring (docs/operations/monitoring.md): Grafana for the admin page; the figures for
+      # Prometheus on METRICS_PORT inside the internal network
+      - GRAFANA_URL=${GRAFANA_URL-http://grafana:3000}
+      - METRICS_PORT=9464
+      # the dashboards of this release into the monitoring volume (utils/monitoringSync.js)
+      - MONITORING_SYNC_DIR=/monitoring
     networks:
-      - nginx
+      nginx:
+      internal:
+        # Prometheus finds the server under this name (monitoring/prometheus/prometheus.yml)
+        aliases:
+          - hochciv-app
+    volumes:
+      - ${MONITORING_CONFIG:-monitoring-config}:/monitoring
+
+  # ── Monitoring (docs/operations/monitoring.md) ──────────────────────────────────────────────
+  # Prometheus collects the server's figures (utils/metrics.js) and the database's; Grafana shows
+  # them in the admin page (tab "Leistung"), proxied by the server for admins only. None of them
+  # is reachable from outside: internal network only, no published ports.
+  monitoring-setup:
+    # One-shot: copies the Prometheus and Grafana configuration (monitoring/ in the image) into a
+    # volume, so the host needs no files besides this one. The server (uid 1000) may write it and
+    # copies its own monitoring/ there at every start, so Watchtower updates bring new dashboards
+    image: peterswode/hochciv-multiplayer:${HOCHCIV_IMAGE_TAG:-latest}
+    container_name: hochciv-monitoring-setup
+    restart: "no"
+    user: "0"
+    entrypoint: ["sh", "-c", "rm -rf /monitoring/* && cp -r /app/monitoring/. /monitoring/ && chown -R 1000:1000 /monitoring && chmod -R a+rX /monitoring && ([ $$(stat -c %u /prometheus-data) = 65534 ] || chown -R 65534:65534 /prometheus-data) && ([ $$(stat -c %u /grafana-data) = 472 ] || chown -R 472:0 /grafana-data)"]
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    volumes:
+      - ${MONITORING_CONFIG:-monitoring-config}:/monitoring
+      # gives the data folders to the users of Prometheus (65534) and Grafana (472) – a folder
+      # Docker creates for a bind mount belongs to root
+      - ${PROMETHEUS_DATA:-prometheus-data}:/prometheus-data
+      - ${GRAFANA_DATA:-grafana-data}:/grafana-data
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: hochciv-prometheus
+    restart: unless-stopped
+    depends_on:
+      monitoring-setup:
+        condition: service_completed_successfully
+    command:
+      - --config.file=/monitoring/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${MONITORING_CONFIG:-monitoring-config}:/monitoring:ro
+      # a named volume, or a folder (PROMETHEUS_DATA=./data/prometheus, owned by uid 65534)
+      - ${PROMETHEUS_DATA:-prometheus-data}:/prometheus
+    networks:
+      - internal
+
+  postgres-exporter:
+    # The database's figures, including the slowest queries (pg_stat_statements)
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: hochciv-postgres-exporter
+    restart: unless-stopped
+    depends_on:
+      hochciv-db-setup:
+        condition: service_completed_successfully
+    command: ["--collector.stat_statements"]
+    environment:
+      # the app role, which may read the statistics views (pg_monitor, scripts/db-setup.js)
+      - DATA_SOURCE_NAME=postgresql://hochciv_app:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}@hochciv-db:5432/${POSTGRES_DB:-hochciv}?sslmode=disable
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: hochciv-grafana
+    restart: unless-stopped
+    depends_on:
+      monitoring-setup:
+        condition: service_completed_successfully
+    environment:
+      # served by the game server under /admin/grafana/ (utils/grafana.js)
+      - GF_SERVER_ROOT_URL=${BASE_URL:-http://localhost:3000}/admin/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SECURE=true
+      # no login of its own: the game server sets the admin's name and role
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_HEADERS=Role:X-WEBAUTH-ROLE
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
+      - GF_LIVE_MAX_CONNECTIONS=0
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+      - GF_PATHS_PROVISIONING=/monitoring/grafana/provisioning
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/monitoring/grafana/dashboards/hochciv.json
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${MONITORING_CONFIG:-monitoring-config}:/monitoring:ro
+      # a named volume, or a folder (GRAFANA_DATA=./data/grafana, owned by uid 472)
+      - ${GRAFANA_DATA:-grafana-data}:/var/lib/grafana
+    networks:
       - internal
 
   watchtower:
@@ -123,3 +243,6 @@ networks:
 
 volumes:
   pgdata:
+  monitoring-config:
+  prometheus-data:
+  grafana-data:

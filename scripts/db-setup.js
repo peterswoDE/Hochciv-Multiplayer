@@ -74,7 +74,7 @@ async function main() {
             SELECT c.relname, c.relkind FROM pg_class c
             WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = ANY($1)
               AND c.relowner <> (SELECT oid FROM pg_roles WHERE rolname = $2)
-              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype IN ('a', 'i'))`,
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype IN ('a', 'i', 'e'))`,
         [kinds, OWNER])).rows;
         for (const o of await objects(['r', 'p', 'v', 'm', 'f'])) { await exec(`ALTER ${o.relkind === 'v' ? 'VIEW' : o.relkind === 'm' ? 'MATERIALIZED VIEW' : 'TABLE'} public.%I OWNER TO %I`, o.relname, OWNER); moved++; }
         for (const o of await objects(['S'])) { await exec('ALTER SEQUENCE public.%I OWNER TO %I', o.relname, OWNER); moved++; }
@@ -92,6 +92,13 @@ async function main() {
         await exec('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I', OWNER, APP);
         // … but not the migration log
         await exec('REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON schema_migrations FROM %I', APP);
+        // Monitoring (docs/operations/monitoring.md): the postgres-exporter reads the statistics
+        // views as the app role (pg_monitor: read-only), the slowest queries from
+        // pg_stat_statements – only there when the database was started with it preloaded
+        await exec('GRANT pg_monitor TO %I', APP);
+        const preload = (await q("SELECT current_setting('shared_preload_libraries') AS v")).rows[0].v || '';
+        if (preload.split(',').map(s => s.trim()).includes('pg_stat_statements')) await q('CREATE EXTENSION IF NOT EXISTS pg_stat_statements');
+        else console.log('[DB setup] pg_stat_statements is not preloaded – no query statistics (docker-compose.yml: command)');
         await q('COMMIT');
         console.log('[DB setup] Done');
     } catch (err) {

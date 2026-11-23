@@ -49,9 +49,9 @@
    Startwerten reproduzierbar: gleiche Befehlszeile, gleiche Zahlen.
    alterbaum (v82): die Partien laufen im alten Techtree (bis v81 Standard, heute nur noch
    im Tutorial) – zum Vergleich mit Messungen von vor v82.
-   dreiecke14 (v107): bei vier Reichen der experimentelle Plättchenmodus (14 Dreiecke, die
-   Startplättchen außen; v99–v106 hieß der Schalter sechsecke und legte zehn Sechsecke), etwa
-   `node tools_ki.js selbst 100 reiche=4 dreiecke14`.
+   dreiecke14 (v107–v110): bei vier Reichen der damals experimentelle Plättchenmodus (14
+   Dreiecke, die Startplättchen außen; v99–v106 hieß der Schalter sechsecke). Seit v111 ist er
+   die Plättchenkarte zu viert – der Schalter ändert nichts mehr und wird ignoriert.
    reihenfolge, kampflaenge (v90): Messhaken zur Kampfphase, siehe unten.          */
 const fs = require('fs'), vm = require('vm');
 for (const f of ['js/data.js', 'js/civs.js', 'js/i18n.js', 'js/hex.js', 'js/tiles.js', 'js/engine.js',
@@ -139,7 +139,7 @@ function partie(players, seed, start, vorbereiten) {
     seed, players, duel: players.length === 2, events: flag('events'), eventMode: 'hard',
     wonders: flag('wonders'), startPlayer: start, oldTree: flag('alterbaum'),
   };
-  const plan = tilePlan(players.map(p => p.civ), seed, { shape: flag('dreiecke14') ? 'tri14' : null });
+  const plan = tilePlan(players.map(p => p.civ), seed);
   const setup = rollSetup(Object.assign({}, cfg));
   const rnd = mapRng(seed + 12345);
   plan.seats.forEach(seat => {

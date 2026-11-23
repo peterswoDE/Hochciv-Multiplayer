@@ -40,13 +40,16 @@ const DATA_EN = {
   },
   maps: ['Original map (12 × 18)'],
   shapes: {
-    hex6: 'Tile map (6 triangles)', tri9: 'Tile map (9 triangles)',
-    strip10: 'Tile map (10 triangles)', strip14: 'Tile map (14 triangles)',
-    strip18: 'Tile map (18 triangles)', tri14: 'Tile map (14 triangles)',
+    tri8: 'Tile map (8 triangles)', tri9: 'Tile map (9 triangles)',
+    tri14: 'Tile map (14 triangles)', strip14: 'Tile map (14 triangles)',
+    strip18: 'Tile map (18 triangles)',
   },
   civ: {
     griechenland: 'Greece', england: 'England', russland: 'Russia',
     wikinger: 'Vikings', barbaren: 'Barbarians',
+    // experimentelle Zivilisationen (v111)
+    rom: 'Rome', venedig: 'Venice', azteken: 'Aztec Empire', aegypten: 'Egypt', deutschland: 'Germany',
+    maya: 'Maya', china: 'China', usa: 'USA',
   },
   /* Fähigkeiten je Zivilisation – die Schlüssel wiederholen sich (immer 'basis' zuerst),
      deshalb nach Zivilisation geschachtelt. */
@@ -67,9 +70,35 @@ const DATA_EN = {
       siedler: ['Settler treks', 'Cities are founded with 2 population and grow at the price of a city one size smaller'],
     },
     wikinger: {
-      basis: ['Seafarers', 'Free army at the start; one army does not count towards army build costs'],
+      basis: ['Berserkers', 'Free army at the start; one army does not count towards army build costs'],
       kampfertrag: ['Raids', 'An army next to an enemy army or city yields 1 science, food and coin per point of superiority'],
       armeemacht: ['Warrior culture', 'Each of your armies grants +1 power – with Castles each of your cities as well'],
+    },
+    // experimentelle Zivilisationen (v111)
+    rom: {
+      basis: ['Legion', 'Each army has +50% power (rounded down) per adjacent army of your own'],
+      viaappia: ['Via Appia', 'The Wheel (roads) can always be researched; trade routes yield double'],
+    },
+    venedig: {
+      basis: ['Lagoon republic', 'Claim an unowned hex 3 times per round as with Colonialism (6 times together with it). Founds no cities. Population growth costs nothing'],
+    },
+    azteken: {
+      basis: ['Flower wars', 'For each wonder you own, one army does not count towards army build costs'],
+    },
+    aegypten: {
+      basis: ['Pharaohs', 'World wonders cost 1 coin less per technology researched'],
+    },
+    deutschland: {
+      basis: ['Engineering', 'Yield technologies add up: Mathematics and Electricity together make forest yield 3 science'],
+    },
+    maya: {
+      basis: ['Cacao beans', 'Starts with 10 extra coins (in the first turn)'],
+    },
+    china: {
+      basis: ['Mandate of Heaven', 'Once per game: collect your income immediately, in addition to the income at the start of your turn'],
+    },
+    usa: {
+      basis: ['American dream', '+1 coin after every research, city founding, growth, army and world wonder built'],
     },
   },
   tech: {
@@ -125,7 +154,7 @@ const DATA_EN = {
     navigation: ['Navigation', 'Movement across sea'],
     demokratie: ['Democracy', 'Army cost 4 instead of 5 × count'],
     wallfahrt: ['Pilgrimage', '+3 to all yields per wonder you own'],
-    sklaverei: ['Slavery', 'Sacrifice city population → 4 coins · becomes obsolete in the Modern Age'],
+    sklaverei: ['Slavery', 'Sacrifice city population → 5 coins · becomes obsolete in the Modern Age'],
     rittertum: ['Chivalry', 'Only 1 population lost when conquering'],
     kundschafterei: ['Scouting', 'Copy 1 tech per round (2× its cost in coins)'],
     // dritte Stelle (v96): der ganze Text für den Regelbogen, wo die Kachel kürzer ist (`voll`)
@@ -256,9 +285,9 @@ function snapshotGerman() {
     maps: MAPS.map(m => m.name),
     shapes: Object.fromEntries(Object.values(TILE_SHAPES).map(s => [s.key, s.name])),
     // Barbaren gehören dazu, sonst bleibt ihr Name beim Zurückschalten englisch
-    civ: Object.fromEntries(CIVS.map(c => [c.k, c.n])
+    civ: Object.fromEntries(ALL_CIVS.map(c => [c.k, c.n])
       .concat(typeof BARB_CIV === 'object' ? [[BARB_CIV.k, BARB_CIV.n]] : [])),
-    abil: Object.fromEntries(CIVS.map(c => [c.k, Object.fromEntries(c.abilities.map(a => [a.k, pair(a)]))])),
+    abil: Object.fromEntries(ALL_CIVS.map(c => [c.k, Object.fromEntries(c.abilities.map(a => [a.k, pair(a)]))])),
     // Technologien mit dem ganzen Text für den Regelbogen an dritter Stelle (`voll`, v96)
     tech: Object.fromEntries(TECHS.map(t => [t.k, pair(t).concat(t.voll != null ? [t.voll] : [])])
       .concat([['singularitaet', pair(SINGULARITY)]])),
@@ -282,7 +311,7 @@ function applyDataLang() {
   EVENT_MODES.forEach(m => { m.n = D.evmode[m.k] || m.n; });
   MAPS.forEach((m, i) => { m.name = D.maps[i] || m.name; });
   Object.values(TILE_SHAPES).forEach(s => { s.name = D.shapes[s.key] || s.name; });
-  CIVS.forEach(c => {
+  ALL_CIVS.forEach(c => {             // samt den experimentellen (v111)
     c.n = D.civ[c.k] || c.n;
     c.abilities.forEach(a => set(a, D.abil[c.k] && D.abil[c.k][a.k]));
   });
@@ -365,8 +394,9 @@ const UI_EN = {
   'Spiel beginnen': 'Start game',
   'Plättchenkarte: die offenen Dreiecke liegen gleich, das eigene legt jede*r selbst – Lage wählen, Hauptstadt setzen, verdeckt.':
     'Tile map: the open triangles are placed right away, your own one you place yourself – choose an orientation, set the capital, face down.',
-  'Experimentell, vier Reiche: alle zehn Dreiecke liegen offen, die vier Startdreiecke außen an jeder zweiten Kante.':
-    'Experimental, four empires: all ten triangles lie open, the four start triangles outside them on every other edge.',
+  'Startdreiecke': 'Start triangles',
+  'Die inneren Dreiecke liegen alle offen, die Startdreiecke außen daran: zu zweit an zwei gegenüberliegenden Kanten des Sechsecks, zu dritt an jeder zweiten, zu viert an jeder zweiten Außenkante der zehn.':
+    'The inner triangles all lie open, the start triangles outside them: with two empires on two opposite edges of the hexagon, with three on every other edge, with four on every other outer edge of the ten.',
   'Zufall': 'Random',
   'Zufällig': 'Random',
   'Zufällige Zivilisation': 'Random civilisation',
@@ -763,8 +793,6 @@ const UI_EN = {
     '%s – up to 4 empires',
   'Plättchenkarte – 2 bis 8 Reiche':
     'Tile map – 2 to 8 empires',
-  '%s – 4 Reiche, experimentell':
-    '%s – 4 empires, experimental',
   'Marathon – Zufallskarte, 4 Reiche':
     'Marathon – random map, 4 empires',
   '%s (eigene Karte, bis %s Reiche, Marathon)':
@@ -1511,11 +1539,28 @@ const UI_EN = {
   'Wirtschaftssieg über %s der Weltbevölkerung (Theologie %s, Vereinte Nationen %s).':
     'Economic victory above %s of the world population (Theology %s, United Nations %s).',
   'Immer die Plättchenkarte.': 'Always the tile map.',
-  'Immer die Plättchenkarte aus sechs Dreiecken.': 'Always the tile map of six triangles.',
+  'Immer die Plättchenkarte aus acht Dreiecken.': 'Always the tile map of eight triangles.',
   'Vier Reiche auf einer Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter das %s-Fache, die Singularität %s; Griechenlands Rabatt und die Wissenschaftliche Methode zählen %s-fach. Der Militärsieg verlangt %s eroberte Hauptstädte. Vor dem ersten Zug draften alle ihre Fähigkeiten: je zwei, in Schlangenreihenfolge.':
     'Four empires on a random map, four times the size of the original map. Technologies cost %s times as much per age, the Singularity %s; Greece\'s discount and the Scientific Method count %s times. A military victory needs %s conquered capitals. Before the first turn everyone drafts their abilities: two each, in snake order.',
   'Jeder Platz wählt frei, auch zweimal dieselbe Zivilisation; Doppelte bekommen Ziffern und eine eigene Farbe. Gezogen wird in der Reihenfolge der Plätze.':
     'Every seat chooses freely, even the same civilisation twice; duplicates get numerals and a colour of their own. Turns follow the order of the seats.',
+  // v111: experimentelle Zivilisationen
+  'Experimentelle Zivilisationen': 'Experimental civilisations',
+  'Experimentell': 'Experimental',
+  'Experimentelle Zivilisationen — im Aufbau zuschaltbar, nicht im Marathon':
+    'Experimental civilisations — can be switched on in the setup, not in the Marathon',
+  '(nur mit Weltwundern)': '(only with world wonders)',
+  'Venedig gründet keine Städte.': 'Venice founds no cities.',
+  '%s: +%s Münze.': '%s: +%s coin.',
+  '%s: +%s Münzen im ersten Zug.': '%s: +%s coins in the first turn.',
+  'Das kann nur China.': 'Only China can do that.',
+  'Schon eingesammelt – einmal je Partie.': 'Already collected – once per game.',
+  '%s sammelt sofort Einkommen ein: %s Wissenschaft, %s Nahrung, %s Münzen.':
+    '%s collects income right away: %s science, %s food, %s coins.',
+  'sammelt Einkommen sofort ein': 'collects income right away',
+  'Einkommen sofort einsammeln': 'Collect income now',
+  'einmal je Partie, zusätzlich zum Einkommen zu Zugbeginn': 'once per game, in addition to the income at the start of your turn',
+  'In Runde %s eingesammelt.': 'Collected in round %s.',
 };
 const MISSING = new Set();
 /* Übersetzt einen deutschen Satz. Platzhalter `%s` werden der Reihe nach ersetzt. */

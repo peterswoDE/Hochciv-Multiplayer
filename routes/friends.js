@@ -10,7 +10,7 @@
  * Live invitations go over Socket.IO ('friends:invite', sockets/friends.js).
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const friends = require('../utils/friends');
 
 const router = express.Router();

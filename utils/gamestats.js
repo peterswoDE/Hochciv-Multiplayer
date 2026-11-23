@@ -26,27 +26,67 @@ const { Op } = require('sequelize');
 const { Game } = require('../models');
 const engine = require('../engine-adapter');
 const Facts = require('./facts');
+const GamePlayers = require('./gameplayers');
 
-const CACHE_MS = 60 * 1000;
+// All matches are read once and kept for ten minutes. A stored match is added to the cache in
+// place (Facts.onChange with its id) – until now every finished match threw the whole cache away,
+// and with bots playing around the clock the table was read again on nearly every request.
+// Without an id (deletions, merges) the cache is dropped.
+const CACHE_MS = 10 * 60 * 1000;
+const ATTRS = ['id', 'version', 'matchDate', 'facts', 'participants'];
 let cache = null;            // { at, rows }
-Facts.setOnChange(() => { cache = null; });
+let loading = null;          // the load in progress, shared by the requests waiting for it
+let gen = 0;                 // bumped on every drop, so a load started before it is not kept
 
-/** The facts of all matches, newest first (cached for a minute). */
+const toRow = g => ({
+    id: g.id, date: g.matchDate, ver: g.version,
+    solo: Array.isArray(g.participants) && g.participants.some(p => p && p.solo),     // a single-player game (F28)
+    f: Facts.markAccounts(Facts.markPlayerBots(g.facts, g.participants), g.participants),
+});
+const usable = x => x.f && x.f.p && x.f.p.length;
+const newestFirst = (a, b) => (new Date(b.date) - new Date(a.date)) || (a.id < b.id ? 1 : -1);
+
+async function patch(gameId) {
+    const g = await Game.findByPk(gameId, { attributes: ATTRS });
+    if (!cache) return;
+    const rest = cache.rows.filter(x => x.id !== gameId);
+    if (g && g.facts) {
+        const x = toRow(g);
+        if (usable(x)) rest.push(x);
+        rest.sort(newestFirst);
+    }
+    cache.rows = rest;
+}
+
+Facts.onChange(gameId => {
+    if (!gameId || !cache) { cache = null; gen++; return; }
+    patch(gameId).catch(() => { cache = null; gen++; });
+});
+
+/** Matches → rows, newest first. */
+async function load(where) {
+    const list = await Game.findAll({ where: Object.assign({ facts: { [Op.ne]: null } }, where || {}), attributes: ATTRS, order: [['matchDate', 'DESC']] });
+    return list.map(toRow).filter(usable);
+}
+
+/** The facts of all matches, newest first (cached). */
 async function rows() {
     if (cache && Date.now() - cache.at < CACHE_MS) return cache.rows;
-    const list = await Game.findAll({
-        where: { facts: { [Op.ne]: null } },
-        attributes: ['id', 'version', 'matchDate', 'facts', 'participants'],
-        order: [['matchDate', 'DESC']],
-    });
-    const out = list.map(g => ({
-        id: g.id, date: g.matchDate, ver: g.version,
-        solo: Array.isArray(g.participants) && g.participants.some(p => p && p.solo),     // a single-player game (F28)
-        f: Facts.markAccounts(Facts.markPlayerBots(g.facts, g.participants), g.participants),
-    }))
-        .filter(x => x.f && x.f.p && x.f.p.length);
-    cache = { at: Date.now(), rows: out };
-    return out;
+    if (!loading) {
+        const mine = gen;
+        loading = load().then(out => {
+            if (mine === gen) cache = { at: Date.now(), rows: out };
+            return out;
+        }).finally(() => { loading = null; });
+    }
+    return loading;
+}
+
+/** One account's matches only (F23): from game_players, without reading all matches. */
+async function rowsOf(userId) {
+    if (cache && Date.now() - cache.at < CACHE_MS) return cache.rows;
+    const ids = await GamePlayers.gameIdsOf(userId, { limit: 100000 });
+    return ids.length ? load({ id: ids }) : [];
 }
 
 /** Names of nations, abilities, techs and wonders – German and English – from the current game. */
@@ -54,7 +94,7 @@ let namesCache = null;
 function names() {
     if (namesCache) return namesCache;
     const get = n => { try { return engine.engineConst(n); } catch (_) { return undefined; } };
-    const CIVS = get('CIVS') || [], WONDERS = get('WONDERS') || [];
+    const CIVS = get('ALL_CIVS') || get('CIVS') || [], WONDERS = get('WONDERS') || [];
     // the Singularity is a technology of its own outside TECHS
     const TECHS = (get('TECHS') || []).concat(get('SINGULARITY') ? [get('SINGULARITY')] : []);
     const EN = get('DATA_EN') || {}, ageOfCost = get('ageOfCost');
@@ -210,7 +250,7 @@ function aggregate(all, q, detail) {
 }
 
 async function overall(q, detail) {
-    return aggregate(await rows(), q, detail);
+    return aggregate(await (q && q.user ? rowsOf(String(q.user)) : rows()), q, detail);
 }
 
 module.exports = { aggregate, overall, rows, names, modeOf, SEATS: Object.keys(SEATS) };

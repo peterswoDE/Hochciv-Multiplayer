@@ -8,7 +8,7 @@
  * The plain top 100 by MMR stays at GET /api/leaderboard (routes/api.js).
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const seasons = require('../utils/seasons');
 
 const router = express.Router();

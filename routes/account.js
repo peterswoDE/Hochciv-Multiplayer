@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const { sequelize, User, Game, Passkey } = require('../models');
 const totp = require('../utils/totp');
 const { sendMail } = require('../utils/mailer');
@@ -9,6 +9,7 @@ const { deleteAccount } = require('../utils/deleteAccount');
 const reports = require('../utils/reports');
 const terms = require('../utils/terms');
 const presets = require('../utils/presets');
+const GamePlayers = require('../utils/gameplayers');
 const {
     EMAIL_RE, MIN_PASSWORD_LENGTH, isAuthenticated, noBots, secondFactors, markAuthenticated, requireRecentAuth,
     str, validPassword, issueCode, mayIssueCode, consumeCode, destroyOtherSessions,
@@ -206,14 +207,12 @@ router.post('/confirm-email', rateLimit, async (req, res) => {
 // the AI took over their seat after the 7-day timeout (stored as replacedUserId)
 router.get('/history', async (req, res) => {
     try {
-        const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: req.user.id }]))}::jsonb`;
-        const games = await Game.findAll({
-            where: sequelize.literal(`(${has('dbUserId')} OR ${has('replacedUserId')})`),
+        const ids = await GamePlayers.gameIdsOf(req.user.id, { limit: 50 });
+        const games = ids.length ? GamePlayers.inOrder(ids, await Game.findAll({
+            where: { id: ids },
             // with a stored replay? (the dialog then links it, client/account-common.js)
             attributes: { include: [[sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay']] },
-            order: [['matchDate', 'DESC']],
-            limit: 50
-        });
+        })) : [];
         res.json(games);
     } catch (err) {
         console.error(err);

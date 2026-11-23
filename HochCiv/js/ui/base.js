@@ -3,7 +3,13 @@
    Reihenfolge steht in index.html (die einzige Liste). */
 /* Hochzeivilization – Oberfläche */
 const $ = id => document.getElementById(id);
-const SYM = { star: '★', cross: '✕', square: '■', triangle: '▲', skull: '☠' };
+/* Zeichen der Zivilisationen. Seit v111 auch die der experimentellen – nur Zeichen ohne
+   Emoji-Fassung (Geometrische Formen, Dingbats), sonst malte Safari sie bunt. */
+const SYM = {
+  star: '★', cross: '✕', square: '■', triangle: '▲', skull: '☠',
+  circle: '●', diamond: '◆', spark: '✦', hexagon: '⬢', plus: '✚', flower: '✿',
+  lozenge: '❖', tridown: '▼',
+};
 const HEX = 30;
 let S = null, ui = { sel: null, army: null, mode: null, botTimer: null };
 let editMap = null, edTool = 'G';

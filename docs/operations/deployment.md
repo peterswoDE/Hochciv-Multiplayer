@@ -74,6 +74,53 @@ Back: the previous `docker-compose.yml` and `docker compose up -d` – the super
 
 An installation from before the Watchtower (or with the database in a folder) can switch to the current `docker-compose.yml` without losing data: keep its `.env` and add `POSTGRES_DATA=./postgres` (the folder it used) and, if its proxy network has another name than `proxy`, `PROXY_NETWORK`. `CORE_REPO_URL`, `CORE_REPO_BRANCH` and `CORE_REPO_COMMIT` are no longer used – the game ships in the image. Then `docker compose up -d`.
 
+### Data next to the compose file
+
+By default the data is in Docker volumes (`/var/lib/docker/volumes/<project>_<volume>`). To keep it in folders next to `docker-compose.yml` instead, set in `.env`:
+
+```
+POSTGRES_DATA=./data/postgres
+PROMETHEUS_DATA=./data/prometheus
+GRAFANA_DATA=./data/grafana
+MONITORING_CONFIG=./data/monitoring
+```
+
+| Folder | Contents | Back up |
+|---|---|---|
+| `data/postgres` | the database: accounts, matches, replays, Rundenspiele, settings | yes (better: `pg_dump`) |
+| `data/prometheus` | metric history (`PROMETHEUS_RETENTION`) | no |
+| `data/grafana` | Grafana's own users and saved dashboard copies | optional |
+| `data/monitoring` | copy of `monitoring/` from the image, rewritten at every start | no |
+
+On a new installation that is all. `monitoring-setup` gives the Prometheus and Grafana folders to their users (65534 and 472); Postgres takes care of its own.
+
+**Moving an existing installation** (staging the same way, with `-f docker-compose.staging.yml` on every `docker compose` and `hochciv-staging-db`):
+
+```sh
+cd /path/to/the/folder/with/docker-compose.yml
+docker exec hochciv-db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup-$(date +%F).sql
+docker compose down                                   # stops everything, the volumes stay
+P=$(docker compose config | sed -n 's/^name: //p')    # the volumes are named <project>_<volume>
+docker volume ls | grep "^local *${P}_"               # check: pgdata, prometheus-data, grafana-data
+mkdir -p data
+for v in pgdata:postgres prometheus-data:prometheus grafana-data:grafana; do
+  docker run --rm -v "${P}_${v%%:*}:/from:ro" -v "$PWD/data/${v#*:}:/to" alpine cp -a /from/. /to/
+done
+```
+
+`cp -a` keeps the owners the containers need. Then add the four lines above to `.env` and start again:
+
+```sh
+docker compose up -d
+docker logs hochciv-multiplayer --tail 20             # [DB] Schema is current.
+```
+
+Check that accounts and matches are there (log in, open a profile) and the admin tab **Leistung** shows data. The old volumes stay untouched until you remove them – keep them a few days, then `docker volume rm ${P}_pgdata ${P}_prometheus-data ${P}_grafana-data ${P}_monitoring-config`.
+
+Back: remove the four lines from `.env` and `docker compose up -d` – the containers use the old volumes again (without what happened in between).
+
+If `.env` already has `POSTGRES_DATA=./postgres` (older installations), the database is already next to the compose file: leave the `pgdata` step out of the loop and either keep `./postgres` or, while everything is stopped, `mv postgres data/postgres` and set `POSTGRES_DATA=./data/postgres`.
+
 ## Health check
 
 `GET /health` answers `{ ok: true, uptime }` – useful for the proxy or an uptime monitor.

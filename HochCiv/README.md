@@ -48,7 +48,7 @@ hochladen, vorher `node tools_version.js`.
 | Kosten (v82) | Jeder Knopf zeigt, was **tatsächlich** abgeht: fehlt Nahrung oder Wissenschaft, steht dort auch der Rest in Münzen (bzw. was sonst einspringt) – Gründen für 10 Nahrung mit 8 im Vorrat zeigt **8🌾 4🪙**. Reicht es gar nicht oder wird nichts umgetauscht, steht der Preis selbst da. Im Technologiebogen gilt das für die Kacheln, die man gerade erforschen kann; die Karte im Gründungsmodus zeigt weiter den Preis (zum Vergleichen). Bis v101 ließ sich mit **Kosten ohne Umtausch anzeigen** wie bis v81 überall nur der Preis zeigen; den Schalter gibt es seit v102 nicht mehr |
 | Techtree (v82) | Seit v82 gibt es einen Techtree – den früheren „alternativen": Mathematik 1, Astronomie 2, Philosophie 3, Schrift 4 · Bewässerung 1, Landwirtschaft 5 · in der Forschung der Industrialisierung Chemie 11, Biologie 12, Wissenschaftliche Methode 15. Das Häkchen im Aufbau ist weg. Der alte (Schrift 1, Mathematik 2 … Landwirtschaft 1, Bewässerung 5, Wiss. Methode 11, Chemie 12, Biologie 15) gilt nur noch in Partien, die vor v82 mit ihm begonnen wurden – dort nennen Weltblatt und Regelbogen ihn. Im Militär der Antike seit v108 wieder **Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5** wie bis v83 (v84–v107: Stadtmauern 2, Eisenverarbeitung 4, Belagerungsmaschinen 5). Quelle: die Kosten in `TECHS`, die alten in `OLD_TECH_COSTS` (`js/data.js`) |
 | Technologiekosten (v105) | Getauscht bzw. gedreht, jeweils im selben Zeitalter: **Theologie 8, Bürokratie 10** (vorher 10, 8) · **Militärgericht 11, Nationalismus 13** (13, 11) · **Stahl 7, Burgenbau 8** (8, 7) · **Kunstdünger 11, Dampfmaschine 13, Eisenbahn 14** (14, 11, 13). Die Leitern im Bogen folgen den Kosten. Der alte Techtree (Spielstände von vor v82) behält die alten |
-| Ertragstechnologien (v88, v103) | Technologien, die einem Gelände oder jeder Bevölkerung etwas bringen, **zählen nicht zusammen – es gilt die beste**: Mit Mathematik bringt Wald 1 Wissenschaft, mit Elektrizität 2, mit Künstlicher Intelligenz 3, auch mit allen dreien (bis v87 brachte jede +1, zusammen also auch 3). Ebenso Papier → Biologie (Grasland), Fischerei → Segeln → Containerlogistik (Meer: zuletzt 2 Nahrung und 2 Münzen), Landwirtschaft → Grüne Revolution (Grasland: 2 Nahrung, 1 Münze), Schrift → Universitätswesen und Fließband → Robotik (Bevölkerung: je 3). Ketten verschiedener Felder betreffen verschiedene Erträge (auf Grasland Papier die Wissenschaft, Landwirtschaft die Nahrung); dazu kommt der Große Leuchtturm; Russlands Taiga ist seit v95 eine Untergrenze (siehe Taiga). **Die Techtexte nennen seit v103, was das Feld damit insgesamt bringt**, samt Grundertrag: „Wald bringt 2 Wissenschaft", „Grasland bringt 2 Nahrung", „Bevölkerung bringt je 2 Wissenschaft" (v88–v102 „Wald: +2 Wissenschaft" – das las sich, als stapelten sie). Der Regelbogen sagt die Regel unter der Geländetabelle |
+| Ertragstechnologien (v88, v103) | Technologien, die einem Gelände oder jeder Bevölkerung etwas bringen, **zählen nicht zusammen – es gilt die beste**: Mit Mathematik bringt Wald 1 Wissenschaft, mit Elektrizität 2, mit Künstlicher Intelligenz 3, auch mit allen dreien (bis v87 brachte jede +1, zusammen also auch 3). Ebenso Papier → Biologie (Grasland), Fischerei → Segeln → Containerlogistik (Meer: zuletzt 2 Nahrung und 2 Münzen), Landwirtschaft → Grüne Revolution (Grasland: 2 Nahrung, 1 Münze), Schrift → Universitätswesen und Fließband → Robotik (Bevölkerung: je 3). Ketten verschiedener Felder betreffen verschiedene Erträge (auf Grasland Papier die Wissenschaft, Landwirtschaft die Nahrung); dazu kommt der Große Leuchtturm; Russlands Taiga ist seit v95 eine Untergrenze (siehe Taiga). **Die Techtexte nennen seit v103, was das Feld damit insgesamt bringt**, samt Grundertrag: „Wald bringt 2 Wissenschaft", „Grasland bringt 2 Nahrung", „Bevölkerung bringt je 2 Wissenschaft" (v88–v102 „Wald: +2 Wissenschaft" – das las sich, als stapelten sie). Der Regelbogen sagt die Regel unter der Geländetabelle. Ausnahme seit v111: bei der experimentellen Zivilisation **Deutschland** addieren sich die Glieder (Mathematik und Elektrizität: Wald 3 Wissenschaft) |
 | Maschinengewehr (v107) | **+3** Verteidigung je Bevölkerung (bis v106 +2): eine Stadt verteidigt mit dem Vierfachen ihrer Bevölkerung, die Hauptstadt mit dem Fünffachen. Zahl in `MG_DEFENSE` (`js/data.js`) |
 | Hauptstadt (v108) | Verteidigt mit **1 mehr je Bevölkerung** als andere Städte – ohne Maschinengewehr mit der doppelten Bevölkerung. Mit der Großen Mauer zählt dafür die Gesamtbevölkerung, wie für alles andere. Zahl in `CAPITAL_DEFENSE` (`js/data.js`) |
 | Macht (v108) | Wirkungen getauscht: **Eisenverarbeitung** Machtverlust 1/3 und **Stahl** 4 Münzen = 1 Macht (bis v107 umgekehrt), **Gewehre** Machtverlust 1/4 und **Panzer** 3 Münzen = 1 Macht (bis v107 umgekehrt). Es zählt die beste eigene; ohne kostet Macht 5 Münzen und halbiert sich zu Zugbeginn. Die Zahlen stehen in `TECHS` neben ihrem Text (`machtPreis`, `machtVerlust`), die Grundwerte in `POWER_PRICE`, `POWER_DECAY` |
@@ -56,14 +56,15 @@ hochladen, vorher `node tools_version.js`.
 | Belagerungsmaschinen / Singularität (v88) | **Belagerungsmaschinen** geben seit v88 **+3** Angriff je Armee gegen Städte (vorher +5; Dynamit verdoppelt danach). Die **Singularität** kostet **120** Wissenschaft (vorher 100; Griechenland −5, Wissenschaftliche Methode −10, Kreml +50 wie bisher), im Marathon weiter 300 |
 | Reiche | Erst die Karte, dann **2 bis 8 Reiche** – so viele, wie die Karte zulässt: Originalkarte 2–4, Plättchenkarte 2–8, **Marathon** (Zufallskarte 24 × 36, teurere Technologien, Fähigkeiten im Draft) genau 4, eigene Karten so viele, wie sie Startpunkte haben. Zu zweit ist es ein Duell (Wirtschaftssieg erst über 3/4), zu viert seit v101 schon über 4/7 – siehe Spielende. Ab fünf Reichen sitzen Zivilisationen mehrfach („England II“, eigene Farbe). **Zufällige Nationen für alle** lost jedem Platz Zivilisation und Fähigkeit aus |
 | Mensch / KI | Je Platz im Aufbau (Bots stehen nicht mehr zur Wahl; laufende Partien spielen sie weiter). Die **KI** spielt nach den Regeln für Menschen: sie bezahlt alles, hat ihre Zivilisationsfähigkeit, Ereignisse treffen sie, und sie legt ihr Startplättchen verdeckt selbst. Stufe Leicht/Mittel/Schwer für alle KI gemeinsam – gleiche Regeln, nur übersieht und verrechnet sich die leichtere Stufe öfter; im Duell gemessen Leicht zwischen den Bots Prinz und König, Mittel etwas über König, Schwer etwas über David. Seit v96 erforscht die KI die **Wissenschaftliche Methode vor den übrigen Technologien eines Zugs** (sie verbilligt alles danach) und plant neu, sobald eine Forschung sie verfügbar macht. **Bots** spielen nach den Bot-Regeln (Würfelproben, Macht = Bevölkerung) und haben ihre eigene Schwierigkeit. Ab Werk sind die Gegner KI |
-| Zivilisationen | Auf der Plättchenkarte und auf eigenen Karten darf jeder Platz frei wählen, auch mehrmals dieselbe (Doppelgänger bekommen Ziffern und eine eigene Farbe – erst eine freie Zivilisationsfarbe, ab fünf Reichen eine von vier weiteren). Auf den festen Karten und dem Standard-Marathon sitzt jede genau einmal. Zivilisation und Fähigkeit lassen sich auch auslosen. Bei ausgelostem Reich steht die Fähigkeit zwangsläufig ebenfalls auf Zufall |
+| Zivilisationen | Auf der Plättchenkarte und auf eigenen Karten darf jeder Platz frei wählen, auch mehrmals dieselbe (Doppelgänger bekommen Ziffern und eine eigene Farbe – erst eine freie Zivilisationsfarbe, ab fünf Reichen eine von vier weiteren). Auf den festen Karten und dem Standard-Marathon sitzt jede genau einmal. Mit dem Häkchen **Experimentelle Zivilisationen** (v111) stehen dort acht weitere zur Wahl (siehe eigener Abschnitt). Zivilisation und Fähigkeit lassen sich auch auslosen. Bei ausgelostem Reich steht die Fähigkeit zwangsläufig ebenfalls auf Zufall |
+| **Experimentelle Zivilisationen** (v111) | Häkchen im Aufbau, ab Werk aus; es steht nur, wo die Zivilisation wählbar ist (Plättchenkarte und eigene Karten – nicht auf den festen Karten, nicht im Marathon). Dann stehen in der Auswahl unter „Experimentell“ **Rom** (Legion oder Via Appia), **Venedig**, **Aztekenreich**, **Ägypten**, **Deutschland**, **Maya**, **China** und die **USA** (v111 auch Atlantis, seit v112 entfernt); Auslosung und Fähigkeitswahl nehmen sie mit. **Aztekenreich und Ägypten wirken über Weltwunder und stehen nur mit Weltwundern zur Wahl** – wer sie gewählt hat und die Weltwunder abwählt, fällt auf die Vorauswahl zurück. Regeln im eigenen Abschnitt |
 | **Fähigkeiten wählen** (v107) | Sind auf der Plättchenkarte **alle** Reiche ausgelost, wählt vor dem Legen jedes seine Fähigkeit – und mit ihr die Zivilisation – **rückwärts in der Zugfolge** aus einem Vorrat mit genau so vielen verschiedenen Fähigkeiten, wie gewählt wird; der Startspieler bekommt die letzte. Die Starttechnologien sind dann schon gewürfelt und stehen bei jedem Platz, links liegen die offenen Plättchen. Die Plätze stehen in der Reihenfolge des Aufbaus, vorn ihr Platz in der Zugfolge. Die KI wählt sofort, Bots wählen nicht (ihr Reich bleibt ausgelost); zwei Fähigkeiten eines Reichs ergeben Doppelgänger. Hat kein Mensch eine Wahl, geht es gleich ans Legen |
 | Startspieler | frei wählbar oder zufällig – **„Zufällig“ ist seit v99 immer die Vorgabe**, bis man etwas anderes wählt. **Startausgleich** (seit v85, Werte seit v98): im allerersten Zug bekommen der Zweite, Dritte und Vierte in der Zugfolge **2, 4 bzw. 6 Münzen** dazu – zu zweit der Zweite **4**, zu dritt 2 und 4 (bis v97 1/2/3, zu zweit 1); ab fünf Reichen weiter bis 14 für den Achten. Gezählt ab dem Startspieler; Bots bekommen nichts (sie zahlen nichts). Zahlen in `START_BONUS_COINS` und `START_BONUS_DUEL` (`js/data.js`) |
 | Fähigkeit sehen | Im Blatt **Fähigkeiten** (Name, Wirkung, bei der Freien Forschung je kostenloser Forschung ein Punkt, gefüllt solange offen) und in der Welt, die alle Reiche mit Fähigkeit und Wirkung listet – seit v99 **in Zugfolge**, durchnummeriert ab dem Startspieler. Im Marathon stehen dort beide gedrafteten. In der Kopfzeile steht sie seit v102 nicht mehr |
-| Karte | Originalkarte, **Plättchenkarte** (die Zufallskarte), seit v107 die experimentelle **Plättchenkarte (14 Dreiecke)** (nur vier Reiche), Marathon oder eine eigene aus „Meine Karten“. Die **große Karte** (15 × 24) ist seit v99 entfernt; laufende Partien darauf spielen weiter |
+| Karte | Originalkarte, **Plättchenkarte** (die Zufallskarte), (zu viert seit v111 die aus 14 Dreiecken – v107–v110 stand sie als „experimentell“ eigens in der Liste), Marathon oder eine eigene aus „Meine Karten“. Die **große Karte** (15 × 24) ist seit v99 entfernt; laufende Partien darauf spielen weiter |
 | Karteneditor | Werkzeuge **Malen** (im Ziehen, Pinsel 1/7/19 Felder), **Füllen**, **Verschieben**; **Rückgängig/Wiederholen**; neue Karte aus einer Vorlage oder leer. Einstellungen der Karte: Name, **Max. Reiche** (= Zahl der Startpunkte, 2–8), **Marathonregeln**, Größe bis 48 × 48. Gelände malen, Startpunkte 1…N setzen; unten steht laufend, ob die Karte spielbar ist und was fehlt. **Speichern** legt sie in „Meine Karten“ (mit Anmeldung im Spielerkonto), **Veröffentlichen** gibt ihr einen 6-stelligen Code, mit dem jeder sie laden kann. Spielen weniger Reiche, als die Karte Startpunkte hat, beginnen sie an denen, die am weitesten auseinanderliegen |
 | Plättchenkarte | Zufallskarte aus Dreiecken zu 15 Feldern. Vor dem Spiel legt jedes Reich verdeckt sein eigenes Startdreieck: Lage wählen (drei), Hauptstadt setzen. Nach dem letzten beginnt gleich das Spiel (bis v98 kam dazwischen ein eigener Schritt mit „Spiel beginnen“). Beim Legen stehen **Forschung** und seit v99 **Welt** zur Ansicht. **Rötlich umrandet** sind Startfelder, bei denen ein anderes Feld – auch in einer anderen Lage – von einem Ertrag mehr und von keinem weniger bringt |
-| **Experimenteller Plättchenmodus** (v107) | Bei vier Reichen die Karte **Plättchenkarte (14 Dreiecke)**: die zehn Dreiecke der Vierer-Karte liegen alle offen, die **vier Startdreiecke außen** an jeder zweiten Außenkante – oben, rechts, unten, links, benachbarte je 8 Felder auseinander (siehe Karten). v99–v106 war es ein Häkchen mit zehn Sechsecken; sie sind entfernt |
+| **Startdreiecke außen** (v107, überall seit v111) | Auf jeder Plättchenkarte liegen die inneren Dreiecke **alle offen** und die **Startdreiecke außen** daran: zu viert 14 Dreiecke (zehn offen, die vier Startdreiecke an jeder zweiten Außenkante, benachbarte je 8 Felder auseinander – v107–v110 der „experimentelle Plättchenmodus“, daneben die Form aus 10 mit Startplätzen in der Form), zu dritt wie bisher 9, **zu zweit seit v111 8**: das Sechseck aus sechs offenen Dreiecken, die beiden Startdreiecke an **gegenüberliegenden Kanten** (oben links und unten rechts, siehe Karten). v99–v106 gab es zu viert ein Häkchen mit zehn Sechsecken; sie sind entfernt. Ab fünf Reichen (Mehrspieler-Erweiterung) der längere Streifen aus 14 bzw. 18 Dreiecken mit Startplätzen an Ober- und Unterkante |
 | **Welt** (Reichsname ▾ in der Kopfzeile) | Die Reiche in Zugfolge mit ihren Fähigkeiten und, seit v109, unter jedem Namen das **Einkommen des nächsten Zugs** als ∑ 🔬 🌾 🪙 – dieselbe Summe wie im Technologiebogen; dazu Ereignis dieser Runde, eigene und fremde Weltwunder, verfügbarer Wunder-Pool |
 | 🌾 in der Kopfzeile | Städte füttern (nur mit Gentechnik oder Massenmedien) |
 | Weltwunder bauen | im Stadtblatt, wenn die Erweiterung an ist |
@@ -73,7 +74,7 @@ hochladen, vorher `node tools_version.js`.
 | Karte | fest und immer vollständig sichtbar – kein Zoomen, kein Schieben. Im Hochformat dreht die App sich selbst quer (im ☰-Menü abschaltbar) |
 | **Forschen** | Technologiebogen; erforschbares ist rot umrandet — durchgezogen heißt bezahlbar, gestrichelt zu teuer. Kopieren (Spionage/Kundschafterei/Internet), Freie Forschung und Rückschau stehen seit v87 unter **Fähigkeiten** (vorher unten in diesem Fenster) |
 | Atomwaffen | Zielfeld antippen → *Atomschlag* im Aktionsblatt (einmal pro Runde) |
-| Sklaverei / Kolonialismus | im Aktionsblatt der Stadt bzw. eines herrenlosen Feldes; Sklaverei für alle Städte auf einmal unter **Fähigkeiten**. Sklaverei bringt seit v110 **4 Münzen** je geopferter Bevölkerung (v84–v109: 7, davor 10). **Kolonialismus** beansprucht seit v103 **dreimal je Runde kostenlos** ein herrenloses Feld (`COLONY_CLAIMS`; bis v102 kaufen für 3 Münzen): Knopf **Feld beanspruchen**, rechts die Ansprüche dieser Runde als Punkte (gefüllt = offen); was nicht genutzt wird, verfällt. **Auf und neben einem fremden beanspruchten Feld wird seit v104 nicht gegründet** (wie neben einer gegnerischen Armee; bis v103 ging es, und das Feld gehörte danach beiden); wer neben einem eigenen gründet, macht es zu einem gewöhnlichen Feld der neuen Stadt. Ein so beanspruchtes Feld darf seit v84 auch **ohne Siedlerweg** besiedelt werden (übers Meer, über fremdes Gebiet hinweg), sofern sonst alles passt; die Entfernung zählt dann wie mit der Luftwaffe als Luftlinie. Gibt es einen Weg, gilt der Weg. Seit v96 **zählen diese Felder zur Hauptstadt**: mit Bürokratie bringen sie das Doppelte, wo sie auch liegen (nicht ohne Hauptstadt; bei einer Revolution produzieren sie weiter, wie die Handelsrouten) |
+| Sklaverei / Kolonialismus | im Aktionsblatt der Stadt bzw. eines herrenlosen Feldes; Sklaverei für alle Städte auf einmal unter **Fähigkeiten**. Sklaverei bringt seit v111 **5 Münzen** je geopferter Bevölkerung (v110: 4, v84–v109: 7, davor 10). **Kolonialismus** beansprucht seit v103 **dreimal je Runde kostenlos** ein herrenloses Feld (`COLONY_CLAIMS`; bis v102 kaufen für 3 Münzen; die experimentelle Zivilisation **Venedig** seit v111 auch ohne ihn, mit ihm zusammen sechsmal): Knopf **Feld beanspruchen**, rechts die Ansprüche dieser Runde als Punkte (gefüllt = offen); was nicht genutzt wird, verfällt. **Auf und neben einem fremden beanspruchten Feld wird seit v104 nicht gegründet** (wie neben einer gegnerischen Armee; bis v103 ging es, und das Feld gehörte danach beiden); wer neben einem eigenen gründet, macht es zu einem gewöhnlichen Feld der neuen Stadt. Ein so beanspruchtes Feld darf seit v84 auch **ohne Siedlerweg** besiedelt werden (übers Meer, über fremdes Gebiet hinweg), sofern sonst alles passt; die Entfernung zählt dann wie mit der Luftwaffe als Luftlinie. Gibt es einen Weg, gilt der Weg. Seit v96 **zählen diese Felder zur Hauptstadt**: mit Bürokratie bringen sie das Doppelte, wo sie auch liegen (nicht ohne Hauptstadt; bei einer Revolution produzieren sie weiter, wie die Handelsrouten) |
 | Ökologie / Bürokratie | **Ökologie** bringt seit v86 je 2 Bevölkerung **des ganzen Reichs** +1 auf alle drei Erträge, einmal abgerundet (vorher je Stadt: vier Städte mit je 1 Bevölkerung brachten nichts, jetzt +2). **Bürokratie** verdoppelt die Hauptstadt samt Umland und seit v86 auch **Handelsrouten, Ökologie und den Nahrungsposten der Gentechnik**, seit v96 auch die **per Kolonialismus beanspruchten Felder** (bis v102 gekauft). Die Ertragsübersicht zeigt die verdoppelten Zahlen seit v88 ohne Zusatz am Namen (v86/v87: „Handelsrouten (Bürokratie ×2)"). Die **Kachel** im Technologiebogen sagt seit v96 nur „Hauptstadt produziert doppelt" (wie der gedruckte Bogen); was alles mitverdoppelt wird, steht im **Regelbogen** („Regeln & Technologien", Feld `voll` der Technologie) |
 | Handelsrouten (v96) | Jede eigene Stadt außer der Hauptstadt, die über einen durchgehenden Weg mit ihr verbunden ist, bringt **+1** auf alle drei Erträge, über durchgehende **Eisenbahn +4** (bis v95 +2; gemischte Strecken zählen als Straße), mit Bürokratie doppelt. Die Zahlen stehen in `TRADE_ROAD_BONUS`/`TRADE_RAIL_BONUS` (`js/data.js`); Regelbogen und Straßenknöpfe lesen sie |
 | Fähigkeiten und Methode (v97) | Sechs Anweisungen des Autors. **Siedlertrecks** (Russland): Städte beginnen mit 2 Bevölkerung und wachsen zum Preis einer um 1 kleineren Stadt – von 2 auf 3 für 1 🌾 und 1 🪙; eine Stadt mit 1 Bevölkerung wächst damit für 0. **Fruchtbarkeit** (Russland): Wachsen kostet keine Nahrung, dazu **ein bezahltes Wachstum mehr** je Stadt und Runde (wie Keramik). **Günstige Forschung** (Griechenland): **1/1/2/2/5** weniger je Zeitalter (bis v96 1/2/3/4/5). **Freie Forschung** (Griechenland): in v97–v98 **zweimal je Partie** eine verfügbare Technologie aus jedem Zeitalter, ohne die Singularität – seit v99 siehe die nächste Zeile. **Wissenschaftliche Methode**: **−2/−3/−4/−5/−10** (bis v96 −2/−4/−6/−8/−10); der alte Techtree (Spielstände von vor v82) behält die alte. **Kriegerkultur** (Wikinger): **+1** Macht je Armee, mit Burgenbau auch je Stadt (bis v96 +2). Zahlen in `GREEK_DISCOUNT`, `METHOD_DISCOUNT`, `OLD_METHOD_DISCOUNT`, `WARRIOR_POWER` (`js/data.js`) |
@@ -178,10 +179,9 @@ gezogen und zu einer Form zusammengelegt:
 
 | Reiche | Form | Größe |
 |---|---|---|
-| 2 | Sechseck aus 6 Dreiecken, 4 offen, 2 verdeckt | 11 × 11, 90 Felder |
-| 3 | großes Dreieck aus 9 Dreiecken, 6 offen | 16 × 16, 135 Felder |
-| 4 | gestrecktes Sechseck aus 10 Dreiecken, 6 offen (Startplätze: die zwei oberen und die zwei unteren) | 10 × 18, 150 Felder |
-| 4, experimentell | dieselben 10 Dreiecke, alle offen, dazu 4 Startdreiecke außen | 20 × 23, 210 Felder |
+| 2 | Sechseck aus 6 Dreiecken, alle offen, dazu 2 Startdreiecke außen an gegenüberliegenden Kanten (seit v111; bis v110 saßen die Reiche auf zwei der sechs) | 11 × 16, 120 Felder |
+| 3 | großes Dreieck aus 9 Dreiecken: das Sechseck offen, 3 Startdreiecke außen | 16 × 16, 135 Felder |
+| 4 | gestrecktes Sechseck aus 10 Dreiecken, alle offen, dazu 4 Startdreiecke außen (seit v111 die einzige Form zu viert; bis v110 auch die 10 allein mit Startplätzen in der Form, 10 × 18) | 20 × 23, 210 Felder |
 
 Bei zwei und drei Reichen bleibt **genau in der Mitte ein Feld frei** – dort ist kein
 Feld, da führt kein Weg durch. Das ist rechnerisch unvermeidlich (6 · 15 = 91 − 1) und
@@ -190,9 +190,10 @@ bleibt bewusst offen.
 Jedes Reich legt sein eigenes Dreieck selbst und verdeckt: **Drehen** wählt eine der drei
 Lagen, ein Tipp auf ein markiertes Feld setzt die Hauptstadt. Gesperrt sind nur Felder,
 die einem fremden Startdreieck näher als 2 Felder liegen oder deren Umland sich mit dem
-einer möglichen fremden Hauptstadt ein echtes Feld teilen könnte (gelegt wird blind). Im
-1 gegen 1 dürfen sich die Hauptstädte deshalb an der Mitte bis auf 2 nahe kommen – ihr
-einziger gemeinsamer Nachbar ist das Loch. Bots drehen zufällig und setzen auf eines der
+einer möglichen fremden Hauptstadt ein echtes Feld teilen könnte (gelegt wird blind). Seit
+v111 liegen alle Startdreiecke außen und weit genug auseinander, dass keines dieser Felder
+gesperrt ist – jedes Feld eines Startdreiecks darf Hauptstadt sein (bis v110 durften sich die
+Hauptstädte im 1 gegen 1 an der Mitte bis auf 2 nahe kommen). Bots drehen zufällig und setzen auf eines der
 drei mittigen Felder. Erst wenn alle fertig sind, wird aufgedeckt – und seit v99 beginnt
 damit gleich die Partie.
 
@@ -210,11 +211,12 @@ Neue Plättchen kommen in `js/tiles.js`, `TILE_POOL` – fünf Zeilen zu 5/4/3/2
 Meer nur am Rand liegt und dass die drei mittigen Felder Land sind und jedes davon im
 ersten Zug mindestens 4 Nahrung bringt.
 
-### Experimenteller Plättchenmodus: 14 Dreiecke (v107)
+### Zu viert: 14 Dreiecke (v107, seit v111 die Plättchenkarte zu viert)
 
-Nur bei vier Reichen, als eigene Karte im Aufbau. Die zehn Dreiecke der Vierer-Karte liegen **alle
-offen** – gezogen und gedreht wie die offenen sonst –, die **vier Startdreiecke** legen die Reiche
-**außen** an, an jede zweite der acht Außenkanten, Kante an Kante mit je einem offenen Dreieck:
+v107–v110 als „experimenteller Plättchenmodus“ eine eigene Karte im Aufbau, seit v111 (Anweisung des
+Autors) die Plättchenkarte zu viert – die Form aus nur zehn Dreiecken ist weg. Die zehn inneren Dreiecke
+liegen **alle offen** – gezogen und gedreht wie die offenen sonst –, die **vier Startdreiecke** legen die
+Reiche **außen** an, an jede zweite der acht Außenkanten, Kante an Kante mit je einem offenen Dreieck:
 
 ```
     ▲
@@ -226,7 +228,7 @@ offen** – gezogen und gedreht wie die offenen sonst –, die **vier Startdreie
 | | |
 |---|---|
 | Startplätze | oben links, rechts oben, unten rechts, links unten (`seatSets` `[10, 11, 12, 13]`); gezogen wird im Uhrzeigersinn. Benachbarte Startdreiecke liegen alle **8 Felder** auseinander, gegenüberliegende 11 und 19 – die gespiegelte Wahl gäbe auf dem Sechseckgitter abwechselnd 6 und 9. Jedes Feld eines Startdreiecks ist als Hauptstadt erlaubt |
-| Karte | 14 von 20 Plättchen, 20 × 23, 210 Felder; alles eine Zeile tiefer als die Vierer-Karte, damit die oberste Feldzeile gerade bleibt |
+| Karte | 14 von 20 Plättchen, 20 × 23, 210 Felder; alles eine Zeile tiefer als die frühere Vierer-Karte aus 10, damit die oberste Feldzeile gerade bleibt |
 | Legen | wie auf jeder Plättchenkarte: drei Lagen, Hauptstadt setzen, verdeckt |
 
 Gemessen (KI gegen KI, je 400 Partien, Regeln von v107): Der Startspieler gewinnt auf den 14 Dreiecken
@@ -235,7 +237,19 @@ gewinnen je 24–26 %. Mehr Partien enden mit der Singularität. Einzelheiten in
 Abschnitt v107.
 
 Bis v106 bestand der Modus aus zehn Sechsecken zu 19 Feldern (schräg 3/4/3, Häkchen
-„Sechseck-Plättchen"); sie sind seit v107 entfernt. Laufende Partien darauf spielen weiter.
+„Sechseck-Plättchen"); sie sind seit v107 entfernt. Laufende Partien darauf spielen weiter – wie
+seit v111 die auf der Form aus 10 Dreiecken und auf dem Sechseck zu zweit (die Karte steckt im
+Spielstand); „Nochmal spielen“ legt die heutige Form.
+
+### Zu zweit: 8 Dreiecke (v111)
+
+Anweisung des Autors: wie zu viert liegen die sechs Dreiecke des Sechsecks **alle offen** (samt dem
+Loch in der Mitte), die **zwei Startdreiecke außen an gegenüberliegenden Kanten** – oben links
+(dasselbe Dreieck wie zu dritt) und, an der Mitte gespiegelt, unten rechts. Diagonal statt oben und
+unten: so bleibt die Karte 11 Zeilen hoch und wird breiter (11 × 16, 120 Felder), denn das Spiel steht
+immer quer – oben und unten gäbe 21 Zeilen. Die Startdreiecke liegen 12 Felder auseinander, jedes ihrer
+Felder darf Hauptstadt sein. Bis v110 saßen die beiden auf zwei gegenüberliegenden der sechs Dreiecke
+(das Paar wurde gelost), vier lagen offen.
 
 ### Flüsse und Inseln auf der Karte (v99)
 
@@ -246,6 +260,39 @@ verbunden, damit drei aneinanderliegende keinen Kreis zeichnen (`riverLines` in 
 Bis v98 war ein Flussfeld blau wie das Meer, nur dunkler. Eine **Insel** ist ein Eiland mit
 Strand und Grün, rundum ein schmaler Wasserrand – das Feld trägt die Meerfarbe. An den
 Regeln ändert beides nichts.
+
+## Experimentelle Zivilisationen (v111)
+
+Anweisung des Autors: acht Zivilisationen hinter dem Häkchen **Experimentelle Zivilisationen** im
+Aufbau (ab Werk aus). Es steht nur, wo die Zivilisation wählbar ist – Plättchenkarte, drei Reiche,
+Duell –, nicht auf den festen Karten (dort hat jedes der vier Grundreiche seinen Startstern) und nicht
+im Marathon. In der Auswahl stehen sie unter „Experimentell“; Auslosung, „Nochmal spielen“ und die
+Fähigkeitswahl der Plättchenkarte nehmen sie mit. Ihre Fähigkeit hat einen eigenen Namen (vorgegeben
+waren nur Legion und Via Appia, die übrigen sind ein Vorschlag von v111):
+
+| Zivilisation | Fähigkeit | Wirkung |
+|---|---|---|
+| Rom | Legion | Jede Armee hat **+50 % Macht** (abgerundet) je angrenzender eigener Armee – im Angriff auf Städte, in der Verteidigung, beim Flankieren (die stärkste Flankierende zählt) und bei der Beute |
+| Rom | Via Appia | Das **Rad** (Straßen) ist immer erforschbar, was der Würfel auch zeigt; **Handelsrouten bringen doppelt** |
+| Venedig | Lagunenrepublik | **3× je Runde ein herrenloses Feld beanspruchen** wie mit Kolonialismus (mit ihm zusammen 6×); **gründet keine Städte** (die Hauptstadt hat es von Anfang an); **Wachstum kostet nichts** (die Zahl der Schritte je Runde bleibt) |
+| Aztekenreich | Blumenkriege | Je eigenem Weltwunder zählt eine Armee nicht für die Baukosten: mit zwei Wundern kosten die ersten beiden Armeen 0, die dritte 5 — **nur mit Weltwundern** |
+| Ägypten | Pharaonen | Weltwunder kosten **1 Münze weniger je erforschter Technologie** (auch geschenkter), nie unter 0 — **nur mit Weltwundern** |
+| Deutschland | Ingenieurskunst | **Ertragstechnologien addieren sich**: Mathematik + Elektrizität bringen Wald 3 Wissenschaft, mit Künstlicher Intelligenz 6; Schrift + Universitätswesen je Bevölkerung 4 |
+| Maya | Kakaobohnen | **10 Münzen zusätzlich im ersten Zug** |
+| China | Mandat des Himmels | **Einmal je Partie sofort das Einkommen einsammeln** – zusätzlich, im Blatt **Fähigkeiten** |
+| USA | Amerikanischer Traum | **+1 Münze** nach jeder Forschung, Stadtgründung, jedem Wachstumsschritt, Armee- und Weltwunderbau |
+
+Wo eine Fähigkeit eine Technologie trifft, **stapeln sich die Wirkungen** (Wahl des Autors): Venedig
+mit Kolonialismus 6 Felder je Runde. Die Zahlen stehen in `js/data.js` (`LEGION_BONUS_PCT`,
+`VIA_APPIA_TRADE`, `VENICE_CLAIMS`, `EGYPT_WONDER_DISCOUNT`, `MAYA_START_COINS`, `USA_ACTION_COINS`), die
+Reiche in `data/civs.json` (Feld `exp`, `wo` für die mit Weltwunder-Wirkung). Die KI spielt sie mit;
+Chinas Einsammeln nutzt sie ab Runde 4.
+
+**Atlantis** (v111: gründet nur auf dem Meer, Städte produzieren doppelt) gewann in v111 alle 12
+KI-Partien gegen Venedig, Rom (Legion) und China (Plätze reihum, 10 Wirtschaftssiege) und ist seit
+v112 **wieder entfernt** (Anweisung des Autors). Ein Spielstand von v111 mit Atlantis lädt weiter: das
+Reich spielt als freie Grundzivilisation ohne Fähigkeit weiter, „Nochmal spielen" lost den Platz neu
+aus. Die übrigen Aufstellungen von v111 (je 8 Partien, ohne Platzwechsel) gaben kein klares Bild.
 
 ## Marathon (v83)
 

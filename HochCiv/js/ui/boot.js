@@ -113,9 +113,8 @@ function boot() {
       startPlayer: startWahl === 'zufall'
         ? Math.floor(Math.random() * players.length) : +startWahl,
       events: recipe.events, eventMode: recipe.eventMode,
-      wonders: recipe.wonders,
+      wonders: recipe.wonders, expCivs: recipe.expCivs,             // experimentelle (v111)
       seatOrder: platzNummern(pick, players.length, setupRandom),     // Zugfolge nach Plätzen (v90)
-      tileShape: tileShapeOf(pick),                                 // 14 Dreiecke (v107)
     };
     endTutorialPanel();
     beginFromPick(cfg, pick);
@@ -257,9 +256,9 @@ function rulesModal() {
     </table>
     <p style="font-size:13px;margin:6px 0 4px">${T('Ertragstechnologien nennen, was ein Feld bzw. jede Bevölkerung damit insgesamt bringt. Für dasselbe Gelände und denselben Ertrag zählt nur die beste: Mit Mathematik bringt Wald 1 Wissenschaft, mit Elektrizität 2, mit Künstlicher Intelligenz 3 – auch mit allen dreien.')}</p>
     <p class="sub">${T('Zivilisationen — je drei wählbare Fähigkeiten (Bots haben keine)')}</p>
-    ${CIVS.map(c => `<p style="font-size:13px;margin:6px 0"><b>${SYM[c.sym]} ${c.n}</b><br>` +
-      c.abilities.map((a, j) => `<span style="color:var(--ink-soft)">${j === 0 ? T('Grund') : T('Alt. %s', j + 1)}:</span> ${abilEffect(Object.assign({ civ: c.k }, a), S)}`).join('<br>') +
-      '</p>').join('')}
+    ${CIVS.map(civRuleHTML).join('')}
+    <p class="sub">${T('Experimentelle Zivilisationen — im Aufbau zuschaltbar, nicht im Marathon')}</p>
+    ${EXP_CIVS.map(civRuleHTML).join('')}
     <p class="sub">${T('Weltwunder (Erweiterung)')}</p>
     <p style="font-size:13px;margin:4px 0">${T('Kosten 10/20/30/40 … für das 1./2./3./4. Wunder. Stufe 2 muss seltener sein als Stufe 1, Stufe 3 seltener als Stufe 2. Je Stadt zwei Wunder. Ein Wunder der Stufe 3 gewinnt zu Beginn des nächsten Zuges.')}</p>
     <p class="sub">${T('Ereignisse (Erweiterung)')}</p>
@@ -280,6 +279,14 @@ function rulesModal() {
     <div class="rule-tech"><span class="c">${techBase(S, SINGULARITY)}</span><b>${SINGULARITY.n}</b>
       <i>${SINGULARITY.e}</i></div>`);
 }
+// Eine Zivilisation im Regelbogen: Name, je Fähigkeit ihr Text – experimentelle (v111) mit dem
+// Hinweis, wenn es sie nur mit Weltwundern gibt
+function civRuleHTML(c) {
+  return `<p style="font-size:13px;margin:6px 0"><b>${SYM[c.sym]} ${c.n}</b>` +
+    (c.wo ? ` <span style="color:var(--ink-soft)">${T('(nur mit Weltwundern)')}</span>` : '') + '<br>' +
+    c.abilities.map((a, j) => `<span style="color:var(--ink-soft)">${j === 0 ? T('Grund') : T('Alt. %s', j + 1)}:</span> ${abilEffect(Object.assign({ civ: c.k }, a), S)}`).join('<br>') +
+    '</p>';
+}
 /* Die Spielarten in den Regeln (v102): was bis v101 als Hinweis unter dem Aufbau stand. Alle
    Zahlen kommen aus den Tabellen (VICTORY_THRESHOLDS, MARATHON_…) – kein Bruch steht hier fest. */
 function spielartenHtml() {
@@ -288,12 +295,12 @@ function spielartenHtml() {
     victoryLabels(m).base, victoryLabels(m).theologie, victoryLabels(m).un);
   return zeile(T('Vier Reiche'), sieg('vier')) +
     zeile(T('Drei Reiche'), T('Immer die Plättchenkarte.') + ' ' + sieg('drei')) +
-    zeile(T('1 gegen 1'), T('Immer die Plättchenkarte aus sechs Dreiecken.') + ' ' + sieg('duell')) +
+    zeile(T('1 gegen 1'), T('Immer die Plättchenkarte aus acht Dreiecken.') + ' ' + sieg('duell')) +
     zeile(T('Marathon'), T('Vier Reiche auf einer Zufallskarte, viermal so groß wie die Originalkarte. Technologien kosten je Zeitalter das %s-Fache, die Singularität %s; Griechenlands Rabatt und die Wissenschaftliche Methode zählen %s-fach. Der Militärsieg verlangt %s eroberte Hauptstädte. Vor dem ersten Zug draften alle ihre Fähigkeiten: je zwei, in Schlangenreihenfolge.',
       MARATHON_TECH_FACTOR.join('/'), MARATHON_SINGULARITY, MARATHON_DISCOUNT_FACTOR, MARATHON_CAPITALS)) +
     zeile(T('Plättchenkarte'), T('Plättchenkarte: die offenen Dreiecke liegen gleich, das eigene legt jede*r selbst – Lage wählen, Hauptstadt setzen, verdeckt.').replace(/^[^:]*:\s*/, '') + ' ' +
       T('Jeder Platz wählt frei, auch zweimal dieselbe Zivilisation; Doppelte bekommen Ziffern und eine eigene Farbe. Gezogen wird in der Reihenfolge der Plätze.')) +
-    zeile(TILE_SHAPES.tri14.name, T('Experimentell, vier Reiche: alle zehn Dreiecke liegen offen, die vier Startdreiecke außen an jeder zweiten Kante.')) +
+    zeile(T('Startdreiecke'), T('Die inneren Dreiecke liegen alle offen, die Startdreiecke außen daran: zu zweit an zwei gegenüberliegenden Kanten des Sechsecks, zu dritt an jeder zweiten, zu viert an jeder zweiten Außenkante der zehn.')) +
     zeile(T('KI'), T('Die KI spielt nach denselben Regeln wie ein Mensch: sie bezahlt alles, hat ihre Zivilisationsfähigkeit, und Ereignisse treffen sie.'));
 }
 function download(name, text) {

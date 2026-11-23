@@ -80,6 +80,8 @@ function hudStand() {
    die Karte Erträge und Kosten; ein Tipp auf ein Feld öffnet das Gründungsblatt. */
 function toggleFoundMode() {
   if (!S || S.over || isAuto(P(S))) return;
+  // Venedig gründet nicht (v111) – statt eines Gründungsmodus ohne ein einziges Feld der Grund
+  if (isVenice(P(S)) && ui.mode !== 'found') return toast(T('Venedig gründet keine Städte.'));
   const an = ui.mode !== 'found';
   ui.mode = an ? 'found' : null;
   if (an) ui.army = null;
@@ -294,14 +296,14 @@ function openTile(r, c) {
         btn('Armee bewegen', army.born === S.round ? T('muss die Stadt noch verlassen') : '', mp(army),
           () => { ui.army = army; closeSheet(); redraw(); toast(T('Zielfeld antippen')); }, army.mp <= 0);
     } else {
-      const atk = attackersOn(S, pi, city).length;
+      const atk = attackersOn(S, pi, city);           // die Armeen selbst: Legion (v111) je Armee
       const sk = S.sieges[pi + '|' + city.id] || 0;
-      rows.push(`<p class="sub">${T('Deine Armeen in Reichweite: %s · Angriffswert %s', atk, attackValue(S, pi, atk))}
+      rows.push(`<p class="sub">${T('Deine Armeen in Reichweite: %s · Angriffswert %s', atk.length, attackValue(S, pi, atk.length, null, atk))}
         ${sk ? ' · ' + T('Belagerung %s/2', sk) : ''}</p>`);
     }
   } else if (army) {
     const owner = civOf(S.players[army.owner]);
-    head = `<h3>${T('Armee')} · ${owner.n}</h3><p class="sub">${T('Angriffswert %s', powerOf(S, army.owner))} · ${mp(army)}</p>`;
+    head = `<h3>${T('Armee')} · ${owner.n}</h3><p class="sub">${T('Angriffswert %s', armyPower(S, army))} · ${mp(army)}</p>`;
     if (army.owner === pi)
       btn('Armee bewegen', army.halted ? T('Kontrollzone – hält bis zum nächsten Zug') : '', '',
         () => { ui.army = army; closeSheet(); redraw(); toast(T('Zielfeld antippen')); }, army.mp <= 0);
@@ -309,10 +311,11 @@ function openTile(r, c) {
     /* Kolonialismus (v103): kostenlos, COLONY_CLAIMS-mal je Runde. Rechts stehen statt eines
        Preises die Ansprüche dieser Runde als Punkte (gefüllt = offen); sind sie verbraucht, ist
        der Knopf gesperrt und alle Punkte leer – ein Satz dazu wäre doppelt. */
-    if (has(p, 'kolonialismus')) {
+    // Venedig (v111) beansprucht auch ohne Kolonialismus, mit ihm zusammen doppelt (claimMax)
+    if (claimMax(S, pi)) {
       const owned = S.players.some((_, i) => controlledTiles(S, i).has(key(r, c)));
       const offen = claimsLeft(S, pi);
-      btn('Feld beanspruchen', owned ? T('nur herrenlose Felder') : '', pips(offen, COLONY_CLAIMS),
+      btn('Feld beanspruchen', owned ? T('nur herrenlose Felder') : '', pips(offen, claimMax(S, pi)),
         act(() => claimTile(S, pi, r, c)), owned || !offen);
     }
   }

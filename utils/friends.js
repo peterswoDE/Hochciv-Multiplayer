@@ -15,6 +15,7 @@
 const { Op } = require('sequelize');
 const { sequelize, User, Game, Friendship } = require('../models');
 const presence = require('./presence');
+const GamePlayers = require('./gameplayers');
 const sessions = require('../sessions');
 
 const MAX_FRIENDS = 200;                 // friends and open requests together
@@ -52,8 +53,8 @@ function invitesOf(userId) {
 
 /** Accounts the player met in their last games, who are not friends (or asked) yet. */
 async function suggestionsFor(user, related) {
-    const has = `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: user.id }]))}::jsonb`;
-    const games = await Game.findAll({ where: sequelize.literal(has), attributes: ['participants', 'matchDate'], order: [['matchDate', 'DESC']], limit: 20 });
+    const gameIds = await GamePlayers.gameIdsOf(user.id, { limit: 20, own: true });
+    const games = gameIds.length ? GamePlayers.inOrder(gameIds, await Game.findAll({ where: { id: gameIds }, attributes: ['id', 'participants', 'matchDate'] })) : [];
     const seen = new Map();
     for (const g of games) {
         for (const p of g.participants || []) {

@@ -53,7 +53,7 @@
             const gc = MP.gameConfig || {}, cnt = MP.lobbyCounts();
             return {
                 map: gc.mapKey === 'random' ? 'tiles' : gc.mapKey, customName: gc.mapKey === 'eigene' && gc.customMap ? gc.customMap.name : undefined,
-                hexTiles: !!gc.hexTiles, events: !!gc.events, eventMode: gc.eventMode || 'hard', wonders: !!gc.wonders,
+                hexTiles: !!gc.hexTiles, events: !!gc.events, eventMode: gc.eventMode || 'hard', wonders: !!gc.wonders, expCivs: !!gc.expCivs,
                 total: cnt.total, ki: cnt.ki, randomCivs: MP.lobbyModes(gc).civMode === 'random', difficulty: MP.kiLevel(gc.difficulty),
                 civMode: MP.lobbyModes(gc).civMode, turnOrder: MP.lobbyModes(gc).turnOrder,
                 turnTime: gc.turnTime || 0, playerBots: gc.playerBots === true, playerBotLimit: gc.playerBotLimit || null,
@@ -65,7 +65,7 @@
             const f = ASYNC.form;
             return {
                 map: f.mapKey === 'plaettchen' ? 'tiles' : f.mapKey, customName: f.mapKey === 'eigene' ? f.customName : undefined,
-                hexTiles: !!f.hexTiles, events: !!f.events, eventMode: f.eventMode || 'hard', wonders: !!f.wonders,
+                hexTiles: !!f.hexTiles, events: !!f.events, eventMode: f.eventMode || 'hard', wonders: !!f.wonders, expCivs: !!f.expCivs,
                 total: f.playerCount, ki: f.kiCount, randomCivs: f.civMode === 'random', difficulty: f.difficulty,
                 civMode: f.civMode || 'fixed', turnOrder: f.turnOrder || 'classic',
                 turnDays: f.turnDays || 7, playerBots: !!f.playerBots, playerBotLimit: f.playerBotLimit ? +f.playerBotLimit : null,
@@ -84,7 +84,7 @@
             if (s.map === 'eigene') { const m = this.customMap(s); if (m) Object.assign(c, { mapKey: 'eigene', customMap: m }); }
             // the classic map ('0') left the selection – such a preset gets the tile map
             else if (has('map')) c.mapKey = s.map === 'tiles' || s.map === '0' ? 'random' : s.map;
-            ['hexTiles', 'events', 'eventMode', 'wonders', 'randomCivs', 'difficulty', 'turnTime', 'playerBots', 'playerBotLimit', 'isPublic']
+            ['hexTiles', 'events', 'eventMode', 'wonders', 'expCivs', 'randomCivs', 'difficulty', 'turnTime', 'playerBots', 'playerBotLimit', 'isPublic']
                 .forEach(k => { if (has(k)) c[k] = s[k]; });
             // nation mode and turn order (F34); a preset from before them has randomCivs only
             if (has('civMode')) c.civMode = s.civMode;
@@ -114,7 +114,7 @@
             ASYNC.readForm(false);
             if (s.map === 'eigene') { if (this.customMap(s)) Object.assign(f, { mapKey: 'eigene', customName: s.customName }); }
             else if (has('map')) f.mapKey = s.map === 'tiles' || s.map === '0' ? 'plaettchen' : s.map;
-            ['hexTiles', 'events', 'eventMode', 'wonders', 'difficulty', 'turnDays', 'playerBots', 'isPublic'].forEach(k => { if (has(k)) f[k] = s[k]; });
+            ['hexTiles', 'events', 'eventMode', 'wonders', 'expCivs', 'difficulty', 'turnDays', 'playerBots', 'isPublic'].forEach(k => { if (has(k)) f[k] = s[k]; });
             if (has('playerBotLimit')) f.playerBotLimit = s.playerBotLimit ? String(s.playerBotLimit) : '';
             if (has('civMode')) f.civMode = s.civMode;
             else if (has('randomCivs')) f.civMode = s.randomCivs ? 'random' : 'fixed';

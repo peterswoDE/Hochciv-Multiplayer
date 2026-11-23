@@ -66,6 +66,8 @@ async function deleteAccount(user, { io = null, byAdmin = null } = {}) {
         await challenge.removeUser(user.id, transaction);
         await user.destroy({ transaction });
     });
+    // the statistics and profiles read the seats' accounts (utils/facts.js listeners)
+    require('./facts').changed();
     await destroyOtherSessions(sequelize, user.id);
 
     // Chat reports keep the conversation, without the name; nobody blocks the account any more

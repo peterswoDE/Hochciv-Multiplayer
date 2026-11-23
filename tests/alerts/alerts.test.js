@@ -65,7 +65,7 @@ const hasAlert = (p, kind, ms = 10000) => p.waitForFunction(k => ALERTS.log.some
         await a.evaluate(() => MP.host());
         await a.waitForSelector('#mp-p-civ-0');
         await a.selectOption('#mp-p-civ-0', 'griechenland');
-        await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 0 }));
+        await a.evaluate(() => MP.socket.emit('lobby:config', { playerCount: 2, kiCount: 0, mapKey: '0' }));   // a fixed map: no start tiles to place first
         await a.waitForFunction(() => MP.gameConfig.playerCount === 2);
         const cred = await a.evaluate(() => ({ code: MP.joinCode, pw: MP.password }));
         await b.evaluate(c => MP.joinWith(c.code, c.pw, 'AlertGuest'), cred);

@@ -103,7 +103,9 @@ function startPick() {
   const st = placeState;
   const { ordered, startIdx } = seatingOrder(st.cfg);
   st.zug = ordered.slice(startIdx).concat(ordered.slice(0, startIdx)).map(pc => st.cfg.players.indexOf(pc));
-  st.D = pickNew(st.zug.filter(i => st.cfg.players[i].pick), st.cfg.seed + 2);
+  // Der Vorrat samt experimentellen Fähigkeiten, wenn das Häkchen gesetzt war (v111)
+  st.D = pickNew(st.zug.filter(i => st.cfg.players[i].pick), st.cfg.seed + 2,
+    { exp: !!st.cfg.expCivs, wo: !!st.cfg.wonders });
   $('dr-title').textContent = T('Fähigkeiten wählen');
   $('dr-note').hidden = true;
   $('dr-go').hidden = true;
@@ -136,7 +138,9 @@ function drawPick() {
     const wer = civ ? `${SYM[civ.sym]} ${esc(civ.n)}${kindTag(pl) ? `<small>${esc(kindTag(pl))}</small>` : ''}`
       : `🎲 ${pl.kind === 'ki' ? T('KI') : T('Mensch')}`;
     // Bots würfeln ihre Forschung frei – Verfügbarkeiten gibt es bei ihnen nicht
-    const p = { civ: civ && civ.k, avail: Object.assign({}, st.setup.avail[i]) };
+    // mit der gewählten Fähigkeit: Roms Via Appia hat das Rad immer (ABIL_TECH, v111)
+    const p = { civ: civ && civ.k, kind: pl.kind, ability: gew ? gew.k : undefined,
+      avail: Object.assign({}, st.setup.avail[i]) };
     civTechAfterRoll(p, null, 0);
     const techs = pl.kind === 'bot' ? '' : antike.filter(t => p.avail[t.k]).map(t => t.n).join(', ');
     return `<div class="dr-pl${i === cur ? ' now' : ''}"><h4>${st.zug.indexOf(i) + 1}. ${wer}</h4>` +

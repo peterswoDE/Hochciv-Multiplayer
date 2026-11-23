@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v109/, HochCiv-v108/, HochCiv-v107/, HochCiv-v106/, HochCiv-v100/ and HochCiv-v98/ the versions deployed before it. Every version gets its own sandbox
+ * HochCiv-v110/, HochCiv-v108/ and HochCiv-v107/ the versions deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -36,12 +36,9 @@ const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
    (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
-    v109: path.resolve(__dirname, 'HochCiv-v109', 'js'),
+    v110: path.resolve(__dirname, 'HochCiv-v110', 'js'),
     v108: path.resolve(__dirname, 'HochCiv-v108', 'js'),
     v107: path.resolve(__dirname, 'HochCiv-v107', 'js'),
-    v106: path.resolve(__dirname, 'HochCiv-v106', 'js'),
-    v100: path.resolve(__dirname, 'HochCiv-v100', 'js'),
-    v98: path.resolve(__dirname, 'HochCiv-v98', 'js'),
 };
 const OLD_VERSIONS = Object.keys(GAME_DIRS).filter(v => v !== 'current');
 // Rundenspiele from before the version was recorded were started on v83. Its folder is gone, so
@@ -87,6 +84,8 @@ function makeAdapter(engineDir, label) {
             // Expose CIVS and other consts directly into sandbox if needed
             try {
                 sandbox.CIVS = vm.runInContext('CIVS', sandbox);
+                // v111: the experimental nations too – for lookups (CIVS stays the base nations)
+                sandbox.ALL_CIVS = vm.runInContext('typeof ALL_CIVS !== "undefined" ? ALL_CIVS : CIVS', sandbox);
                 sandbox.APP_VERSION = vm.runInContext('typeof APP_VERSION !== "undefined" ? APP_VERSION : "Unknown"', sandbox);
                 sandbox.victoryScore = vm.runInContext('typeof victoryScore === "function" ? victoryScore : null', sandbox);
             } catch (e) { }
@@ -135,7 +134,7 @@ function makeAdapter(engineDir, label) {
            number in all; older configs: 4, or exactly the lobby without KI / in a duel. Fixed
            maps take the nations nobody has, the others any nation (also twice). */
         const want = cfg.playerCount || (cfg.duel || cfg.noKi ? players.length : 4);
-        const allCivs = (E.CIVS || []).map(c => c.k);
+        const allCivs = civsFor(cfg).map(c => c.k);
         const freeMap = cfg.mapKey === 'eigene' || cfg.mapKey === 'plaettchen' || cfg.mapKey === 'random';
         for (let i = 0; players.length < want && i < 64; i++) {
             const free = allCivs.filter(c => !players.some(p => p.civ === c));
@@ -493,7 +492,7 @@ function makeAdapter(engineDir, label) {
 
     /** A random ability of `civ` – KI players get one like humans (bots play without). */
     function randomAbility(civ) {
-        const def = (engineConst('CIVS') || []).find(c => c.k === civ);
+        const def = civDef(civ);
         const list = def && def.abilities && def.abilities.length ? def.abilities : [{ k: 'basis' }];
         return list[Math.floor(Math.random() * list.length)].k;
     }
@@ -570,7 +569,7 @@ function makeAdapter(engineDir, label) {
      * Mutates the lobby-style players ({ civ, roman, color, mappedName }).
      */
     function assignDoubles(players) {
-        const CIVS = E.CIVS || [];
+        const CIVS = allCivs();
         if (typeof E.markDoubles === 'function') {
             // up to eight empires – Roman numerals and colours from the engine (markDoubles)
             E.markDoubles(players);
@@ -756,20 +755,36 @@ function makeAdapter(engineDir, label) {
     }
 
     /**
-     * A lobby choice of nation and ability that exists in this engine: a nation of CIVS (or
+     * The nations a game with this config offers: the base nations (CIVS), with expCivs also the
+     * experimental ones – those that work through wonders only with wonders (the game's
+     * civKeysFor). Engines before v111 know only CIVS.
+     */
+    function civsFor(cfg) {
+        const base = engineConst('CIVS') || [];
+        const keysFor = engineConst('civKeysFor'), byKey = engineConst('CIV_BY_KEY');
+        if (!CivDraft.expCivsOn(cfg) || typeof keysFor !== 'function' || !byKey) return base;
+        return keysFor({ exp: true, wo: !!(cfg && cfg.wonders) }).map(k => byKey[k]).filter(Boolean);
+    }
+
+    /** Every nation this engine knows (lookups: names, abilities, colours). */
+    const allCivs = () => engineConst('ALL_CIVS') || engineConst('CIVS') || [];
+    const civDef = k => allCivs().find(c => c.k === k) || null;
+
+    /**
+     * A lobby choice of nation and ability that this game offers: a nation of civsFor(cfg) (or
      * 'random'), and one of its abilities, 'basis' or 'random'. Returns an error text or null.
      */
-    function checkCivChoice(civ, ability) {
+    function checkCivChoice(civ, ability, cfg) {
         const RANDOM = ['random', 'zufall'];
         if (RANDOM.includes(civ)) return RANDOM.includes(ability) || ability === 'basis' ? null : 'Unbekannte Fähigkeit.';
-        const def = (engineConst('CIVS') || []).find(c => c.k === civ);
-        if (!def) return 'Unbekannte Nation.';
+        const def = civsFor(cfg).find(c => c.k === civ);
+        if (!def) return civDef(civ) ? 'Diese Nation gibt es in diesem Spiel nicht.' : 'Unbekannte Nation.';
         if (ability === 'basis' || RANDOM.includes(ability)) return null;
         return (def.abilities || []).some(a => a.k === ability) ? null : 'Diese Fähigkeit gehört nicht zu der Nation.';
     }
 
     return {
-        createGame, applyAction, stateForPlayer, checkCivChoice, stateIndexOf, rollSetup,
+        createGame, applyAction, stateForPlayer, checkCivChoice, civsFor, allCivs, civDef, stateIndexOf, rollSetup,
         marathonAvailable, startDraft, draftPick, isDraftDone, finishDraft, draftPayload,
         advanceDraft, assignDoubles, isAutoPlayer, kiLevelFor, randomAbility, checkCustomMap,
         engineConst, turnOrderSlots, peekNext, advanceWithoutBegin, applyLateAbility, autoTurn,

@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'tab-admin-users': () => loadUsers(),
         'tab-admin-reports': () => { loadAdminReports(false); loadAdminWords(); },
         'tab-admin-oauth': () => loadOAuthConfig(),
+        'tab-admin-perf': () => loadPerf(),
     };
     const openFromHash = ACC.tabs(id => {
         current = id;
@@ -588,6 +589,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- OAuth Config (Super Admin) ---
     let oauthLoaded = false;
+    // Performance: the Grafana dashboard in a frame (kiosk: without Grafana's own menus), loaded once
+    async function loadPerf() {
+        const frame = document.getElementById('admin-perf-frame');
+        if (frame.src) return;
+        let on = false;
+        try { on = (await (await fetch('/api/admin/monitoring', { credentials: 'include' })).json()).enabled; } catch (_) { /* off */ }
+        document.getElementById('admin-perf-off').hidden = on;
+        document.getElementById('admin-perf-open').hidden = !on;
+        if (!on) return;
+        const theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        frame.src = `/admin/grafana/d/hochciv-overview/?orgId=1&kiosk&theme=${theme}`;
+        frame.hidden = false;
+    }
+
     async function loadOAuthConfig() {
         if (oauthLoaded) return;          // keep what is being typed when the section is opened again
         try {

@@ -141,7 +141,7 @@ async function store(user, body) {
     if (dup) return { ok: true, id: dup.id, duplicate: true };
     const { S, ver, t, rounds, cid, hotseat } = c;
     const E = engine.forVersion(ver).getEngine();
-    const civName = k => { const x = (E.CIVS || []).find(v => v.k === k); return x ? x.n : k; };
+    const civName = k => { const x = (E.ALL_CIVS || E.CIVS || []).find(v => v.k === k); return x ? x.n : k; };
     const participants = [], statsPlayers = [];
     S.players.forEach((p, i) => {
         statsPlayers.push({ civ: p.civ, slot: i, name: p.kind === 'human' && !hotseat ? user.username : null, roman: p.roman || null, color: p.color || null, kind: p.kind });
@@ -171,7 +171,7 @@ async function store(user, body) {
         stats: rounds.length ? { players: statsPlayers, rounds, events: [] } : null,
         facts,
     });
-    Facts.changed();
+    Facts.changed(game.id);
     return { ok: true, id: game.id };
 }
 

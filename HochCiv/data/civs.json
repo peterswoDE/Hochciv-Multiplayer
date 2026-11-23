@@ -5,13 +5,18 @@
     "das die App lädt. `node test.js` prüft, dass beide zusammenpassen.",
     "",
     "Pflichtfelder je Reich: k (Schlüssel, nur Kleinbuchstaben), n (Name), sym (Zeichen",
-    "aus SYM in js/ui.js: star, cross, square, triangle, skull), color (#rrggbb) und drei",
-    "Fähigkeiten. Die erste Fähigkeit ist immer die Grundfähigkeit und heißt 'basis';",
-    "die beiden anderen tragen eigene Schlüssel, die im Code über isAbil(p, '…') geprüft",
-    "werden. Ein neues Reich mit neuen Fähigkeitsschlüsseln braucht also zusätzlich Code",
-    "in js/engine.js – die Regeln stehen nicht in dieser Datei.",
+    "aus SYM in js/ui/base.js), color (#rrggbb) und drei Fähigkeiten. Die erste Fähigkeit",
+    "ist immer die Grundfähigkeit und heißt 'basis'; die beiden anderen tragen eigene",
+    "Schlüssel, die im Code über isAbil(p, '…') geprüft werden. Ein neues Reich mit neuen",
+    "Fähigkeitsschlüsseln braucht also zusätzlich Code in js/engine.js – die Regeln stehen",
+    "nicht in dieser Datei.",
     "",
-    "order = Zugreihenfolge (kleinste Zahl zuerht). Englische Namen und Wirkungstexte",
+    "Experimentelle Reiche (v111): \"exp\": true – im Aufbau nur mit dem Häkchen",
+    "„Experimentelle Zivilisationen“ wählbar, nie im Marathon. Sie haben eine bis drei",
+    "Fähigkeiten (die erste wieder 'basis'). \"wo\": true heißt: die Fähigkeit wirkt über",
+    "Weltwunder – das Reich gibt es nur in Partien mit Weltwundern.",
+    "",
+    "order = Zugreihenfolge (kleinste Zahl zuerst). Englische Namen und Wirkungstexte",
     "stehen in js/i18n.js unter DATA_EN.civ und DATA_EN.abil."
   ],
   "civs": [
@@ -58,9 +63,100 @@
       "color": "#6f4f8f",
       "order": 4,
       "abilities": [
-        { "k": "basis", "n": "Seefahrer", "e": "Kostenlose Armee am Start; eine Armee zählt nicht für Baukosten von Armeen" },
+        { "k": "basis", "n": "Berserker", "e": "Kostenlose Armee am Start; eine Armee zählt nicht für Baukosten von Armeen" },
         { "k": "kampfertrag", "n": "Beutezüge", "e": "Steht eine Armee neben einer gegnerischen Armee oder Stadt, bringt sie je Punkt Überlegenheit 1 Wissenschaft, Nahrung und Münze" },
         { "k": "armeemacht", "n": "Kriegerkultur", "e": "Jede eigene Armee gibt +1 Macht – mit Burgenbau auch jede eigene Stadt" }
+      ]
+    },
+    {
+      "k": "rom",
+      "n": "Rom",
+      "sym": "circle",
+      "color": "#b55a1e",
+      "order": 5,
+      "exp": true,
+      "abilities": [
+        { "k": "basis", "n": "Legion", "e": "Jede Armee hat +50 % Macht (abgerundet) je angrenzender eigener Armee" },
+        { "k": "viaappia", "n": "Via Appia", "e": "Das Rad (Straßen) ist immer erforschbar; Handelsrouten bringen doppelt" }
+      ]
+    },
+    {
+      "k": "venedig",
+      "n": "Venedig",
+      "sym": "diamond",
+      "color": "#17807a",
+      "order": 6,
+      "exp": true,
+      "abilities": [
+        { "k": "basis", "n": "Lagunenrepublik", "e": "3× pro Runde ein herrenloses Feld beanspruchen wie mit Kolonialismus (mit ihm zusammen 6×). Gründet keine Städte. Bevölkerungswachstum kostet nichts" }
+      ]
+    },
+    {
+      "k": "azteken",
+      "n": "Aztekenreich",
+      "sym": "spark",
+      "color": "#9c7a10",
+      "order": 7,
+      "exp": true,
+      "wo": true,
+      "abilities": [
+        { "k": "basis", "n": "Blumenkriege", "e": "Je eigenem Weltwunder zählt eine Armee nicht für die Baukosten von Armeen" }
+      ]
+    },
+    {
+      "k": "aegypten",
+      "n": "Ägypten",
+      "sym": "hexagon",
+      "color": "#b03a86",
+      "order": 8,
+      "exp": true,
+      "wo": true,
+      "abilities": [
+        { "k": "basis", "n": "Pharaonen", "e": "Weltwunder kosten 1 Münze weniger je erforschter Technologie" }
+      ]
+    },
+    {
+      "k": "deutschland",
+      "n": "Deutschland",
+      "sym": "plus",
+      "color": "#404040",
+      "order": 9,
+      "exp": true,
+      "abilities": [
+        { "k": "basis", "n": "Ingenieurskunst", "e": "Ertragstechnologien addieren sich: Mathematik und Elektrizität bringen Wald zusammen 3 Wissenschaft" }
+      ]
+    },
+    {
+      "k": "maya",
+      "n": "Maya",
+      "sym": "flower",
+      "color": "#5f8a1a",
+      "order": 11,
+      "exp": true,
+      "abilities": [
+        { "k": "basis", "n": "Kakaobohnen", "e": "Startet mit 10 Münzen zusätzlich (im ersten Zug)" }
+      ]
+    },
+    {
+      "k": "china",
+      "n": "China",
+      "sym": "lozenge",
+      "color": "#c43a3a",
+      "order": 12,
+      "exp": true,
+      "abilities": [
+        { "k": "basis", "n": "Mandat des Himmels", "e": "Einmal je Partie: sofort das Einkommen einsammeln, zusätzlich zum Einkommen zu Zugbeginn" }
+      ]
+    },
+    {
+      "k": "usa",
+      "n": "USA",
+      "sym": "tridown",
+      "color": "#34408f",
+      "order": 13,
+      "exp": true,
+      "abilities": [
+        { "k": "basis", "n": "Amerikanischer Traum", "e": "+1 Münze nach jeder Forschung, Stadtgründung, jedem Wachstum, Armee- und Weltwunderbau" }
       ]
     }
   ],

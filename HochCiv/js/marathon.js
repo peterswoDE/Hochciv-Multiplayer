@@ -202,6 +202,7 @@ function marathonMap(seed) {
    also 1-2-3-4-4-3-2-1; der Letzte wählt aus den letzten zwei.
    Eine Fähigkeit, die man schon hat, darf man nur nehmen, wenn nichts anderes mehr übrig
    ist – doppelt wirkt sie nicht doppelt (abilitiesOf). */
+// Die zwölf Fähigkeiten der vier Grundreiche – die experimentellen (v111, EXP_CIVS) gibt es im Marathon nicht
 const ALL_ABILITIES = CIVS.flatMap(c => c.abilities.map(a => c.k + ':' + a.k));
 function draftDrafters(V) {
   const order = [];
@@ -287,6 +288,11 @@ const KI_DRAFT_BASE = {
   'griechenland:gratistech': 5, 'griechenland:basis': 4, 'griechenland:rueckschau': 7,
   'wikinger:armeemacht': 2.5, 'wikinger:basis': 4, 'wikinger:kampfertrag': 5,
   'russland:siedler': 5.5, 'russland:wachstum': 7, 'russland:basis': 0,
+  /* Experimentelle Zivilisationen (v111) – nur für die Fähigkeitswahl der Plättchenkarte (im Marathon
+     gibt es sie nicht). GESCHÄTZT, nicht gemessen: etwa so stark wie die Fähigkeit, die ihnen am
+     nächsten kommt (Ingenieurskunst wie Fruchtbarkeit, die USA wie Kolonisten …). */
+  'rom:basis': 3, 'rom:viaappia': 4, 'venedig:basis': 4, 'azteken:basis': 3, 'aegypten:basis': 4.5,
+  'deutschland:basis': 6, 'maya:basis': 3, 'china:basis': 3.5, 'usa:basis': 5.5,
 };
 function kiDraftValue(V, pi, id, mine) {
   if (mine.includes(id)) return -5;                  // doppelt wirkt nichts
@@ -331,13 +337,16 @@ function kiDraftPick(V, D, pi) {
    Legen jedes Reich eine Fähigkeit – rückwärts in der Zugfolge, aus einem Vorrat mit genau so
    vielen Fähigkeiten, wie gewählt wird; der Startspieler bekommt die letzte. Mit der Fähigkeit
    kommt ihre Zivilisation (Wahl des Autors), zwei aus einem Reich ergeben also Doppelgänger wie
-   zwei ausgeloste. Gezogen ohne Zurücklegen aus allen zwölf. Die Starttechnologien sind dann schon
+   zwei ausgeloste. Gezogen ohne Zurücklegen aus allen zwölf (v111: samt den experimentellen). Die Starttechnologien sind dann schon
    gewürfelt (Wahl des Autors). Bots wählen nicht – sie haben keine Fähigkeit, ihr Reich bleibt
    ausgelost; wählt nur einer, gibt es nichts zu wählen. Reihenfolge und Wahl wie beim Draft
-   (draftCurrent, draftOptions, draftPick), `order` sind die Wählenden in Zugfolge. */
+   (draftCurrent, draftOptions, draftPick), `order` sind die Wählenden in Zugfolge.
+   `opts` (v111): {exp, wo} aus dem Aufbau – mit dem Häkchen „Experimentelle Zivilisationen" kommen
+   deren Fähigkeiten in den Vorrat, die mit Weltwunder-Wirkung nur in Partien mit Weltwundern
+   (abilityIdsFor). Ohne `opts` die zwölf der Grundreiche. */
 const pickWanted = players => players.every(p => p.civ === 'zufall') && players.filter(p => p.kind !== 'bot').length > 1;
-function pickNew(order, seed) {
-  const rnd = mapRng(seed), pool = ALL_ABILITIES.slice();
+function pickNew(order, seed, opts) {
+  const rnd = mapRng(seed), pool = opts ? abilityIdsFor(opts) : ALL_ABILITIES.slice();
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]];
   }

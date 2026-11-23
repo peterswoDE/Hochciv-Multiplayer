@@ -63,7 +63,7 @@ router.post('/verify-totp', async (req, res) => {
     }
 });
 
-router.delete('/totp/:id?', async (req, res) => {
+router.delete('/totp{/:id}', async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id);
         const tokenId = req.params.id;

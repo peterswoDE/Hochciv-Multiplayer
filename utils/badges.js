@@ -11,6 +11,7 @@
  */
 const { sequelize, Game, SeasonResult } = require('../models');
 const engine = require('../engine-adapter');
+const GamePlayers = require('./gameplayers');
 
 const VICTORIES = ['military', 'science', 'economy', 'culture'];
 const TIER_ORDER = ['bronze', 'silber', 'gold', 'platin', 'diamant'];
@@ -23,8 +24,9 @@ function nationKeys() {
 }
 
 async function badgesOf(userId) {
-    const has = `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: userId }]))}::jsonb`;
-    const games = await Game.findAll({ where: sequelize.literal(has), attributes: ['participants', 'facts'], order: [['matchDate', 'DESC']], limit: MAX_GAMES });
+    // the account's own seats (not the ones the KI took over), from game_players
+    const ids = await GamePlayers.gameIdsOf(userId, { limit: MAX_GAMES, own: true });
+    const games = ids.length ? await Game.findAll({ where: { id: ids }, attributes: ['participants', 'facts'] }) : [];
     let played = 0, wins = 0, wonders = 0, duelWins = 0;
     const victories = new Set(), wonWith = new Set();
     const solo = { wins: 0, hardest: false, victories: new Set() };

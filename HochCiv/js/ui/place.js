@@ -12,7 +12,7 @@ let placeState = null;
 
 function startPlacement(cfg) {
   const seed = Math.floor(Math.random() * 2 ** 31);
-  const plan = tilePlan(cfg.players.map(p => p.civ), seed, { shape: cfg.tileShape });
+  const plan = tilePlan(cfg.players.map(p => p.civ), seed);
   if (!plan) return toast(T('Für diese Spielerzahl gibt es keine Plättchenkarte.'));
   /* Erst würfeln, dann legen (v66): Was jedes Reich zu Beginn erforschen kann und welche
      Wunder im Stapel liegen, hängt nicht an der Karte – also steht es schon fest, bevor

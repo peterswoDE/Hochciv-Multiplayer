@@ -9,15 +9,42 @@
  * client/profile.js – new profile content goes there and here.
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const { sequelize, User, Game } = require('../models');
 const engine = require('../engine-adapter');
 const seasons = require('../utils/seasons');
 const { badgesOf } = require('../utils/badges');
+const GamePlayers = require('../utils/gameplayers');
+const Facts = require('../utils/facts');
 
 const router = express.Router();
 const PAGE = 30;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// What depends on the matches (the page of matches, the numbers, the badges) is kept for a
+// minute: a bot's profile is opened often and has thousands of matches. A stored match drops the
+// entries of its accounts at once (Facts.onChange), so results show right away; without an id
+// (deletions, merges, a closed season) everything goes. The account itself is read every time.
+const CACHE_MS = 60 * 1000, CACHE_MAX = 500;
+const cache = new Map();          // `${userId}:${offset}` / `${userId}:badges` → { at, value }
+const cached = key => { const c = cache.get(key); return c && Date.now() - c.at < CACHE_MS ? c.value : null; };
+function remember(key, value) {
+    if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
+    cache.set(key, { at: Date.now(), value });
+    return value;
+}
+async function once(key, load) {
+    const hit = cached(key);
+    return hit || remember(key, await load());
+}
+function forget(userIds) {
+    const ids = new Set(userIds);
+    for (const key of [...cache.keys()]) if (ids.has(key.split(':')[0])) cache.delete(key);
+}
+Facts.onChange(gameId => {
+    if (!gameId) { cache.clear(); return; }
+    GamePlayers.usersOf(gameId).then(forget, () => cache.clear());
+});
 
 const limit = rateLimitLib({
     windowMs: 60 * 1000,
@@ -29,7 +56,7 @@ const limit = rateLimitLib({
 
 /** Display name of a civ key ("griechenland" → "Griechenland"), the key if unknown. */
 function civName(key) {
-    const civs = (engine.getEngine() || {}).CIVS || [];
+    const civs = engine.allCivs();       // also the experimental nations (v111)
     const c = civs.find(x => x.k === key);
     return c ? c.n : key || null;
 }
@@ -78,30 +105,31 @@ router.get('/:userId', limit, async (req, res) => {
             ? await User.findByPk(user.ownerId, { attributes: ['id', 'username'] }) : null;
 
         const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
-        const has = field => `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ [field]: user.id }]))}::jsonb`;
-        const { count, rows } = await Game.findAndCountAll({
-            where: sequelize.literal(`(${has('dbUserId')} OR ${has('replacedUserId')})`),
-            // the statistics themselves are loaded per match when opened
-            attributes: { exclude: ['stats'], include: [
-                [sequelize.literal('"stats" IS NOT NULL'), 'hasStats'],
-                [sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay'],
-            ] },
-            order: [['matchDate', 'DESC']],
-            offset,
-            limit: PAGE,
+        // the account's matches and numbers from game_players (utils/gameplayers.js)
+        const { list, counts } = await once(`${user.id}:${offset}`, async () => {
+            const [ids, counts] = await Promise.all([GamePlayers.gameIdsOf(user.id, { limit: PAGE, offset }), GamePlayers.countsOf(user.id)]);
+            const rows = ids.length ? GamePlayers.inOrder(ids, await Game.findAll({
+                where: { id: ids },
+                // the statistics themselves are loaded per match when opened
+                attributes: { exclude: ['stats', 'facts'], include: [
+                    [sequelize.literal('"stats" IS NOT NULL'), 'hasStats'],
+                    [sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay'],
+                ] },
+            })) : [];
+            return { list: rows.map(g => gameEntry(g, user.id)), counts };
         });
-
+        const count = counts.total;
         // the tiles count multiplayer games; single-player games (F28) have their own numbers
-        const soloSql = `"participants"::jsonb @> '[{"solo": true}]'::jsonb`;
-        const wonSql = `"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: user.id, isWinner: true }]))}::jsonb`;
-        const [wins, soloGames, soloWins] = await Promise.all([
-            Game.count({ where: sequelize.literal(`${wonSql} AND NOT ${soloSql}`) }),
-            Game.count({ where: sequelize.literal(`${has('dbUserId')} AND ${soloSql}`) }),
-            Game.count({ where: sequelize.literal(`${wonSql} AND ${soloSql}`) }),
-        ]);
+        const { wins, soloGames, soloWins } = counts;
 
         // season tier and badges (F10) – only with the first page
-        const extra = offset ? {} : { ...(await seasons.profileOf(user)), ...(await badgesOf(user.id)) };
+        // (the season badges follow the closed seasons: their list, read fresh, is part of the key)
+        let extra = {};
+        if (!offset) {
+            const season = await seasons.profileOf(user);
+            const closed = (season.seasons || []).map(s => s.id).join(',');
+            extra = { ...season, ...(await once(`${user.id}:badges:${closed}`, () => badgesOf(user.id))) };
+        }
         res.json({
             ...extra,
             id: user.id,
@@ -116,7 +144,7 @@ router.get('/:userId', limit, async (req, res) => {
             isBotAccount: user.accountType === 'bot',
             ...(user.accountType === 'bot' ? { description: user.botDescription } : {}),
             owner: owner ? { id: owner.id, username: owner.username } : null,
-            games: { total: count, offset, pageSize: PAGE, list: rows.map(g => gameEntry(g, user.id)) },
+            games: { total: count, offset, pageSize: PAGE, list },
         });
     } catch (err) {
         console.error('[Profile]', err);

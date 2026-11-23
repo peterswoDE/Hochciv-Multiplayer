@@ -25,6 +25,15 @@ Each test is a plain Node script in `tests/<area>/` that talks to a running serv
 
 Tests create their own test accounts and delete them afterwards.
 
+### Running them all
+
+```bash
+node tests/run-all.js                 # every test that works with the default settings, one after another
+node tests/run-all.js security maps   # only the tests whose path contains one of the words
+```
+
+The server limits logins and other requests per minute, so tests run back to back would run into `429`. The runner therefore resets every rate limit before each test (`POST /api/test/reset`, which also drops the server's caches of match statistics, so matches a test writes straight into the database count at once). That endpoint only exists with `TEST_HOOKS=on`, which `docker-compose.local.yml` sets, and never with `NODE_ENV=production`. The limits themselves still apply within a test, so the tests that expect a `429` keep working. At the end it prints which tests failed, with their failing lines, and which tests it skipped because they need other server settings (the last column below). With a filter, those run too – start the server for them first.
+
 | Test | Covers | Server started with |
 |---|---|---|
 | `account/pages.test.js` | account and admin pages: own pages, sections in the address, admin page only for admins, iframe break-out, phone width | default |
@@ -55,7 +64,7 @@ Tests create their own test accounts and delete them afterwards.
 | `resign/resign.test.js` | resigning: when it ends the game, a ranked live duel (MMR, match record), a live game with KI, Rundenspiele | default |
 | `ready/ready.test.js` | lobby ready check: status column, the count on the start button, settings clear the ticks, the host's question, English | default |
 | `placement/world.test.js` | the "Welt" button while start tiles are placed in a live game | default |
-| `placement/hex.test.js` | the experimental tile mode in lobbies and Rundenspiele (since v107: 14 triangles with four empires) | default |
+| `placement/hex.test.js` | the tile map shapes in lobbies and Rundenspiele (14 triangles with four empires; no experimental entry since v111) | default |
 | `rematch/rematch.test.js` | rematch of a live game | default |
 | `report/report.test.js` | in-game player list: turn order and positions; the player report (score, rank, victory progress, empire, abilities, read-only tech tree, trend via `game:trend` without income), English | default |
 | `replay/replay.test.js` | replays | default |

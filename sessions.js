@@ -39,7 +39,7 @@ function cleanKey(key, fallback) {
  * startPlayer (weekly challenge), matchmaking. Unknown keys from a client are dropped.
  */
 const HOST_CONFIG_KEYS = new Set([
-    'mapKey', 'customMap', 'hexTiles', 'events', 'eventMode', 'wonders', 'difficulty', 'ranked',
+    'mapKey', 'customMap', 'hexTiles', 'expCivs', 'events', 'eventMode', 'wonders', 'difficulty', 'ranked',
     'playerCount', 'kiCount', 'noKi', 'civMode', 'randomCivs', 'turnOrder', 'turnTime',
     'playerBots', 'playerBotLimit', 'isPublic',
 ]);
@@ -423,6 +423,7 @@ function sessionSummary(s) {
         events: !!cfg.events,
         eventMode: cfg.eventMode === 'easy' ? 'easy' : 'hard',
         wonders: !!cfg.wonders,
+        expCivs: CivDraft.expCivsOn(cfg),
         hexTiles: !!cfg.hexTiles && (cfg.mapKey === 'random' || cfg.mapKey === 'plaettchen'),
         ranked: !!cfg.ranked,
         turnTime: cfg.turnTime || 0,

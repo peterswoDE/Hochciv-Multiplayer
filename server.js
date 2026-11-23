@@ -17,6 +17,11 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcryptjs');
 const { sequelize, User } = require('./models');
+// Performance figures for Prometheus / Grafana (utils/metrics.js, docs/operations/monitoring.md)
+const Metrics = require('./utils/metrics');
+const Grafana = require('./utils/grafana');
+require('./utils/monitoringSync').syncOnStart();
+Metrics.instrumentSequelize(sequelize);
 const { Op } = require('sequelize');
 const { refreshOAuthStrategies } = require('./utils/oauth');
 const { str } = require('./utils/auth');
@@ -99,13 +104,22 @@ const pgPool = new pg.Pool({ connectionString: dbUrl });
 
 // gzip for pages and API answers – scripts and styles are gzipped once (utils/assets.js);
 // Socket.IO handles its own traffic before Express
+app.use(Metrics.httpMiddleware);
 app.use(compression());
 app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
 // Changing requests only from this site's pages (utils/origin.js): staging is the same site
 app.use(checkOrigin);
 // JSON bodies up to 20 KB – a finished single-player game (routes/solo.js, F28) up to 2 MB
 const jsonSmall = express.json({ limit: '20kb' }), jsonSolo = express.json({ limit: '2mb' });
-app.use((req, res, next) => (req.path.startsWith('/api/solo/') ? jsonSolo : jsonSmall)(req, res, next));
+app.use((req, res, next) => {
+    // Grafana's requests go through untouched (utils/grafana.js)
+    if (req.path.startsWith(Grafana.PREFIX + '/')) return next();
+    // Express 5 leaves req.body undefined without a JSON body; the routes expect {} (as in Express 4)
+    return (req.path.startsWith('/api/solo/') ? jsonSolo : jsonSmall)(req, res, err => {
+        if (req.body === undefined) req.body = {};
+        next(err);
+    });
+});
 app.disable('x-powered-by');
 app.use((req, res, next) => {
     res.set({
@@ -140,7 +154,7 @@ app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__di
 app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
-// The older versions (/v109/, /v108/, /v107/, /v106/, /v100/, /v98/ – Rundenspiele started on them) get the same no-op service
+// The older versions (/v110/, /v108/, /v107/ – Rundenspiele started on them) get the same no-op service
 // worker and Activity bridge
 const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
 app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
@@ -196,6 +210,9 @@ app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
 
+// The Grafana dashboards of the admin page (tab "Leistung"), for admins only
+app.use(Grafana.PREFIX, Grafana.proxy);
+
 // Database schema: migrations (migrations/, utils/migrate.js). In Docker entrypoint.sh has applied
 // them already with the owner role – this finds nothing to do; the server's own role (DATABASE_URL)
 // can't change the schema. Waits for the database at a cold start.
@@ -228,6 +245,17 @@ process.on('unhandledRejection', err => console.error('[Process] Unhandled rejec
 
 // Health check
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
+
+// Local tests only (tests/run-all.js, docs/development/testing.md): forgets every rate-limit counter,
+// so each test starts with a full budget, and the caches of what was read from matches, so matches a
+// test wrote straight into the database count at once. Never in production, whatever the environment says.
+if (process.env.TEST_HOOKS === 'on' && process.env.NODE_ENV !== 'production') {
+    console.warn('[Test] TEST_HOOKS=on – POST /api/test/reset resets all rate limits and match caches');
+    app.post('/api/test/reset', async (_req, res) => {
+        require('./utils/facts').changed();
+        res.json({ limiters: await require('./utils/rateLimit').resetAll() });
+    });
+}
 
 // REST API
 const authRoutes = require('./routes/auth');
@@ -298,6 +326,8 @@ registerAsync(io);
 require('./sockets/match')(io);
 // Friends: online status and live invitations (sockets/friends.js)
 require('./sockets/friends')(io);
+Metrics.instrumentGame({ io, sessions: require('./sessions'), sequelize });
+Metrics.serve();
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

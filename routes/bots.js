@@ -12,7 +12,7 @@
  * Creating and renewing a token, and handing a bot over, need a recent login (requireRecentAuth).
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const { sequelize, User } = require('../models');
 const { BOT_DESCRIPTION_MAX_LENGTH } = require('../config');
 const Bots = require('../utils/bots');

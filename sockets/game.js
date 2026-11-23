@@ -231,6 +231,7 @@ module.exports = function registerHandlers(io) {
                 if (newConfig.playerBotLimit !== undefined) newConfig.playerBotLimit = int(newConfig.playerBotLimit, 1, 8) || null;
                 if (newConfig.isPublic !== undefined) newConfig.isPublic = newConfig.isPublic === true;
                 if (newConfig.hexTiles !== undefined) newConfig.hexTiles = newConfig.hexTiles === true;
+                if (newConfig.expCivs !== undefined) newConfig.expCivs = newConfig.expCivs === true;
             }
             // A custom map comes from the host's browser: only a checked, clean copy is kept
             if (newConfig && newConfig.customMap !== undefined) {
@@ -242,6 +243,12 @@ module.exports = function registerHandlers(io) {
             if (updated) {
                 ack({ ok: true });
                 io.to(sessionId).emit('lobby:config:update', updated);
+                // a nation the game no longer offers (experimental ones switched off, another map,
+                // no wonders) becomes a random one
+                const offered = new Set(engine.civsFor(updated).map(c => c.k));
+                const out = session.players.filter(p => p.civ && p.civ !== 'random' && p.civ !== 'zufall' && !offered.has(p.civ));
+                out.forEach(p => { p.civ = 'random'; p.ability = 'random'; });
+                if (out.length) io.to(sessionId).emit('lobby:player:updated', publicPlayers(session));
                 // ready check (F17): new settings have to be confirmed again
                 if (session.players.some(p => p.ready)) {
                     session.players.forEach(p => { p.ready = false; });
@@ -266,7 +273,7 @@ module.exports = function registerHandlers(io) {
                 const civ = updates.civ !== undefined ? updates.civ : me.civ;
                 const ability = updates.civ !== undefined && updates.civ !== me.civ ? 'basis'
                     : (updates.ability !== undefined ? updates.ability : me.ability);
-                const bad = engine.checkCivChoice(civ, ability);
+                const bad = engine.checkCivChoice(civ, ability, session.gameConfig);
                 if (bad) return ack({ error: bad });
             }
 
@@ -320,7 +327,7 @@ module.exports = function registerHandlers(io) {
             if (session.status !== 'civdraft' || !session.civDraft) return ack({ error: 'Kein Draft aktiv.' });
             sessions.recordActivity(sessionId);
             const err = CivDraft.pick(session.civDraft.D, myIndex(), String(data.id),
-                data.ability == null ? null : String(data.ability), engine.getEngine().CIVS || [], Math.random);
+                data.ability == null ? null : String(data.ability), engine.civsFor(session.gameConfig), Math.random);
             if (err) return ack({ error: err });
             ack({ ok: true });
             advanceCivDraft(io, session);
@@ -730,7 +737,7 @@ function startGame(io, session) {
     // Every seat's nation and ability exist and belong together: the lobby checks updates, but a
     // seat also gets them when it is created or joins (REST), and the engine only compares keys
     for (const p of session.players) {
-        const bad = engine.checkCivChoice(p.civ, p.ability);
+        const bad = engine.checkCivChoice(p.civ, p.ability, gc);
         if (bad) return `${p.name || 'Spieler'}: ${bad}`;
     }
 
@@ -776,7 +783,7 @@ function startGame(io, session) {
 function launch(io, session, { freeCivs, isPlaettchen, isMarathon }) {
     // Sync resolveRandom & nameDoubles on server before progressing so all clients align natively
     const engineApi = engine.getEngine();
-    const CIVS = engineApi.CIVS || [];
+    const CIVS = engine.civsFor(session.gameConfig);       // with the experimental ones, if switched on
     const allCivs = CIVS.map(c => c.k).filter(k => k !== 'random' && k !== 'zufall');
     const pick = list => list[Math.floor(Math.random() * list.length)];
     // Random nations: fixed maps take one nobody has; free maps the least used ones, so
@@ -896,7 +903,7 @@ function arrangeSeats(io, session, mode) {
 function startCivDraft(io, session, opts) {
     const gc = session.gameConfig;
     const D = CivDraft.newDraft({
-        mode: gc.civMode, n: session.players.length, civs: engine.getEngine().CIVS || [],
+        mode: gc.civMode, n: session.players.length, civs: engine.civsFor(gc),
         // a fixed map has one start point per nation; Marathon drafts the abilities afterwards
         uniqueCivs: !opts.freeCivs, noAbility: opts.isMarathon, rnd: Math.random,
     });
@@ -908,7 +915,7 @@ function startCivDraft(io, session, opts) {
 /** After a pick: the KI and forced picks, then the next pick's clock – or the game. */
 function advanceCivDraft(io, session) {
     const cd = session.civDraft;
-    const civs = engine.getEngine().CIVS || [];
+    const civs = engine.civsFor(session.gameConfig);
     CivDraft.settle(cd.D, civs, Math.random, seat => engine.isAutoPlayer(session.players[seat]));
     if (CivDraft.done(cd.D)) return finishCivDraft(io, session);
     cd.deadline = Date.now() + civDraftPickMs(session);
@@ -922,7 +929,7 @@ function civDraftTimeout(io, session) {
     cd.deadline = null;                             // once
     const seat = CivDraft.current(cd.D);
     const p = session.players[seat] || {};
-    CivDraft.autoPick(cd.D, engine.getEngine().CIVS || [], Math.random);
+    CivDraft.autoPick(cd.D, engine.civsFor(session.gameConfig), Math.random);
     console.log(`[Turn timer] Session ${session.id}: draft time up, a random nation for ${p.name || seat}`);
     advanceCivDraft(io, session);
 }

@@ -22,7 +22,7 @@
  */
 const express = require('express');
 const crypto = require('crypto');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const { OAuthProvider, User } = require('../models');

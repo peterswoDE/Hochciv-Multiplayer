@@ -32,6 +32,19 @@ function modesOf(cfg) {
 }
 
 /**
+ * Experimental nations (game v111) for a config: switched on (expCivs), on a map with free
+ * nations (tile map, custom maps) and not in the Marathon – as the game's setup offers them.
+ * Which nations that are is the engine's (engine-adapter.js civsFor).
+ */
+function expCivsOn(cfg) {
+    cfg = cfg || {};
+    const custom = cfg.mapKey === 'eigene';
+    const free = cfg.mapKey === 'plaettchen' || cfg.mapKey === 'random' || custom;
+    const marathon = cfg.mapKey === 'marathon' || !!(custom && cfg.customMap && cfg.customMap.marathon);
+    return !!cfg.expCivs && free && !marathon && !cfg.ranked;
+}
+
+/**
  * Positions for `n` seats: perm[pos] = seat. `wishes[seat]` is the position a seat asked for
  * (0-based, only with mode 'pick'); a position asked for twice goes to the first who asked,
  * everybody without a valid wish gets a free position at random.
@@ -133,4 +146,4 @@ function payload(D) {
         pool: D.pool.map(e => ({ ...e })), picks: JSON.parse(JSON.stringify(D.picks)) };
 }
 
-module.exports = { CIV_MODES, TURN_ORDERS, isDraft, modesOf, arrange, shuffle, newDraft, pick, autoPick, settle, current, done, payload };
+module.exports = { CIV_MODES, TURN_ORDERS, isDraft, modesOf, expCivsOn, arrange, shuffle, newDraft, pick, autoPick, settle, current, done, payload };

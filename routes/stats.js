@@ -13,7 +13,7 @@
  * variant with more detail is GET /api/admin/stats (routes/admin.js).
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const GameStats = require('../utils/gamestats');
 
 const router = express.Router();

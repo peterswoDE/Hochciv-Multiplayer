@@ -9,7 +9,8 @@
  * Unit: ISO weeks (also week 53 and the turn of the year), week bounds and the week's setup. A
  * starts this week's challenge from the multiplayer menu: a Rundenspiel alone against three KI
  * with the week's nation, ability, map and settings and the week's fixed dice (the same tech
- * availability and events in every attempt), A's turn, labelled in the list. Leaving,
+ * availability and events in every attempt) – on the week's tile map (from 2026-W48) after placing
+ * the start tile –, A's turn, labelled in the list. Leaving,
  * cancelling and a self-made "challenge" through the
  * normal API are refused. A resigns – a loss with A's points; other results (wins) rank above it
  * (fewer rounds first, each player's best attempt once). A plays again (a new attempt) and starts
@@ -105,7 +106,22 @@ function unit() {
         const text = await p.textContent('#ch-box');
         ok(/Deine Nation/.test(text) && /3 KI/.test(text) && /Woche \d+\/\d{4}/.test(text), 'the page: setup, opponents, week', text.replace(/\s+/g, ' ').slice(0, 160));
         await p.click('#ch-start');
-        await p.waitForFunction(() => typeof ASYNC !== 'undefined' && ASYNC.view && ASYNC.view.config && ASYNC.view.config.challenge && typeof S !== 'undefined' && S, null, { timeout: 20000 });
+        // from TILE_MAP_FROM (2026-W48) on the week's tile map: an attempt starts with placing the start
+        // tile, and resigning only works once the game runs
+        const placeStart = async () => {
+            if (guest.setup.mapKey !== 'plaettchen') return;
+            await p.waitForFunction(() => document.getElementById('screen-place').classList.contains('show') && placeState, null, { timeout: 20000 });
+            ok(await p.evaluate(() => ASYNC.view.status === 'placement'), 'tile map: the attempt starts with placing the start tile');
+            await p.evaluate(() => {
+                const st = placeState, seat = st.queue[st.at];
+                const opts = placeOptions(st.plan, seat, st.o);
+                const [r, c] = slotRC(st.plan, seat.slot)[opts.indexOf(true)];
+                plTap(r, c);
+            });
+            await p.click('#pl-ok');
+        };
+        await placeStart();
+        await p.waitForFunction(() => typeof ASYNC !== 'undefined' && ASYNC.view && ASYNC.view.config && ASYNC.view.config.challenge && ASYNC.view.status === 'playing' && typeof S !== 'undefined' && S, null, { timeout: 30000 });
         const v = await p.evaluate(() => ({ cfg: ASYNC.view.config, seats: ASYNC.view.seats.map(s => s.kind + ':' + s.civ + ':' + s.ability), my: MP.isMyTurn(), id: ASYNC.view.id, status: ASYNC.view.status, fixedDice: S.fixedDice }));
         const mine = v.seats.find(s => s.startsWith('human:'));
         ok(v.status === 'playing' && v.my && v.cfg.challenge === week && !v.cfg.isPublic && !v.cfg.ranked && v.seats.filter(s => s.startsWith('ki:')).length === 3
@@ -159,6 +175,10 @@ function unit() {
         ok(/Dein Ergebnis: Platz \d+ · \d+ Punkte, kein Sieg/.test(await p.textContent('#ch-result')) && await p.$(`.ch-table tr.rk-me[data-user="${A.id}"]`)
             && /2 Versuch\(e\) beendet/.test(await p.textContent('#ch-attempts')) && await p.$('#ch-continue') && !(await p.$('#ch-start')),
             'the page: own result, own row marked, attempts, continue and start over');
+        await p.click('#ch-continue');
+        await placeStart();
+        await p.waitForFunction(id => ASYNC.view && ASYNC.view.id === id && ASYNC.view.status === 'playing', third.body.asyncId, { timeout: 30000 });
+        await p.evaluate(() => ASYNC.close());
         await api('POST', `/api/async/${third.body.asyncId}/resign`);
         await rowOf(third.body.asyncId);
         await p.evaluate(() => CHALLENGE.open());

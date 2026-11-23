@@ -54,10 +54,10 @@ async function hashes(page) {
     const old = require('../../engine-adapter').OLD_VERSIONS[0];
     if (old) await hashes(`/${old}/`);
 
-    const ui = own.find(u => u.startsWith('js/ui.js'));
-    const plain = await fetch(`${BASE}/js/ui.js`);
+    const ui = own.find(u => u.startsWith('js/engine.js'));
+    const plain = await fetch(`${BASE}/js/engine.js`);
     ok(plain.headers.get('cache-control') !== YEAR, 'without a hash the file is checked again', plain.headers.get('cache-control'));
-    const stale = await fetch(`${BASE}/js/ui.js?v=000000000000`);
+    const stale = await fetch(`${BASE}/js/engine.js?v=000000000000`);
     ok(stale.status === 200 && stale.headers.get('cache-control') !== YEAR, 'with an old hash the file is checked again', stale.headers.get('cache-control'));
     const page = await fetch(`${BASE}/`);
     ok(page.headers.get('cache-control') !== YEAR, 'index.html itself is checked again', page.headers.get('cache-control'));

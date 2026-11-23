@@ -6,7 +6,7 @@
  * Bodies up to 2 MB (server.js lets this path past the usual 20 KB limit).
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const { isAuthenticated, noBots } = require('../utils/auth');
 const solo = require('../utils/solo');
 

@@ -11,3 +11,6 @@ instructions.md
 secrets.env
 # Sensitive security material (audits, credentials) – local only
 security/
+
+# data folders of a host installation run from this folder (POSTGRES_DATA=./data/…)
+/data/

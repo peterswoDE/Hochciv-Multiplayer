@@ -1,16 +1,17 @@
 /**
- * The experimental tile mode (hexTiles) in multiplayer (sockets/game.js, async/logic.js, mp.js)
- * against the local docker setup. Since game v107 it is the tile map of 14 triangles with four
- * empires and the usual tile map with any other number (v99–v106: hexagons for every number):
+ * The tile map's shapes in multiplayer (sockets/game.js, async/logic.js, mp.js) against the local
+ * docker setup. Since game v111 four empires always play the 14 triangles with the start triangles
+ * outside, two the 8 triangles; v107–v110 had that as an experimental entry (hexTiles), v99–v106
+ * hexagons. The entry is gone; older Rundenspiele keep their stored hexTiles for their engine:
  *
  *   docker compose -f docker-compose.local.yml up -d --build
  *   npm i --no-save playwright-core
  *   node tests/placement/hex.test.js [http://localhost:3000]
  *
- * Live: the option shows on the tile map only, and a game of 2, 3, 4, 6 and 8 empires (one human,
+ * Live: no experimental entry in the map picker, and a game of 2, 3, 4, 6 and 8 empires (one human,
  * the rest KI) places a triangle in three rotations and starts on its map – 14 triangles with four.
- * Rundenspiel: four empires through the form's config get the 14-triangle plan, and a fixed map
- * ignores the option.
+ * Rundenspiel: no experimental entry in the form, four empires on the tile map get the 14-triangle
+ * plan, and a fixed map ignores an old hexTiles option.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -43,7 +44,7 @@ function makeUser() {
             .then(u => { console.log(u.id); process.exit(0); })`);
     return { name, id };
 }
-const FORM = { 2: 'hex6', 3: 'tri9', 4: 'tri14', 6: 'strip14', 8: 'strip18' };
+const FORM = { 2: 'tri8', 3: 'tri9', 4: 'tri14', 6: 'strip14', 8: 'strip18' };
 
 // the first allowed capital in the current rotation, as a tap on the map
 const place = () => {
@@ -65,12 +66,10 @@ async function live(browser, errors, n) {
     await page.fill('#mp-n', 'Hex' + n);
     await page.evaluate(() => MP.host());
     await page.waitForSelector('#mp-p-civ-0');
-    // the experimental tile mode is its own entry in the map picker
+    // since v111 there is no experimental entry in the map picker any more
+    if (n === 2) ok(!(await page.$$eval('#mp-set-map option', o => o.map(x => x.value))).includes('random-hex'), 'no experimental entry in the picker');
     await page.selectOption('#mp-set-map', 'random');
     await page.waitForFunction(() => MP.gameConfig.mapKey === 'random' && !MP.gameConfig.hexTiles);
-    await page.selectOption('#mp-set-map', 'random-hex');
-    await page.waitForFunction(() => MP.gameConfig.mapKey === 'random' && MP.gameConfig.hexTiles === true);
-    if (n === 2) ok(await page.$eval('#mp-set-map', el => el.value) === 'random-hex', 'the picker shows the experimental entry');
     await page.evaluate(n => MP.socket.emit('lobby:config', { playerCount: n, kiCount: n - 1, difficulty: 'leicht' }), n);
     await page.waitForFunction(n => MP.gameConfig.playerCount === n, n);
     await page.evaluate(() => MP.startGame());
@@ -99,20 +98,20 @@ async function rundenspiel(browser, errors, user, second, ids) {
     const rest = body => page.evaluate(body => fetch('/api/async', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body), credentials: 'include' }).then(r => r.json()), body);
 
-    // the form: the option comes with the tile map
+    // the form: one tile map entry, no experimental one (since v111)
     await page.evaluate(() => ASYNC.newGame());
     await page.waitForSelector('#mpa-map');
-    ok((await page.$$eval('#mpa-map option', o => o.map(x => x.value).join())).includes('plaettchen,plaettchen-hex'), 'form: tile map and experimental tile mode are two entries');
-    await page.selectOption('#mpa-map', 'plaettchen-hex');
+    const werte = await page.$$eval('#mpa-map option', o => o.map(x => x.value));
+    ok(werte.includes('plaettchen') && !werte.includes('plaettchen-hex'), 'form: the tile map without an experimental entry', werte.join());
+    await page.selectOption('#mpa-map', 'plaettchen');
     const fr = await page.evaluate(() => { ASYNC.readForm(false); return { m: ASYNC.form.mapKey, h: ASYNC.form.hexTiles }; });
-    ok(fr.m === 'plaettchen' && fr.h === true, 'form: the experimental entry is the tile map with hexTiles', JSON.stringify(fr));
+    ok(fr.m === 'plaettchen' && fr.h === false, 'form: the tile map without hexTiles', JSON.stringify(fr));
     await page.evaluate(() => closeModal());
 
-    const r = await rest({ config: { mapKey: 'plaettchen', hexTiles: true, civMode: 'random', playerCount: 4, kiCount: 2, difficulty: 'leicht', isPublic: true } });
+    const r = await rest({ config: { mapKey: 'plaettchen', civMode: 'random', playerCount: 4, kiCount: 2, difficulty: 'leicht', isPublic: true } });
     const id = r.id || (r.game && r.game.id);
-    ok(!!id, 'Rundenspiel in the experimental tile mode created', JSON.stringify(r).slice(0, 200));
+    ok(!!id, 'Rundenspiel on the tile map created', JSON.stringify(r).slice(0, 200));
     ids.push(id);
-    ok(sql(`SELECT data->'config'->>'hexTiles' FROM async_games WHERE id = '${id}'`) === 'true', 'Rundenspiel: the option is stored');
     const ctx2 = await browser.newContext({ locale: 'de-DE' });
     await ctx2.request.post(BASE + '/api/auth/login', { data: { username: second.name, password: PASSWORD } });
     const joined = await ctx2.request.post(`${BASE}/api/async/${id}/join`, { data: {} });

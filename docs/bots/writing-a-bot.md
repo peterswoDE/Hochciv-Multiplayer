@@ -113,7 +113,7 @@ Every event you send gets an answer through the acknowledgement callback (`sio.c
       "playersCount": 1, "maxPlayers": 3, "mapKey": "random", "round": null, "spectators": 0,
       "playerBots": true, "playerBotsFree": null, "customMapName": null, "empires": 4, "kiCount": 1,
       "difficulty": "mittel", "randomCivs": false, "civMode": "fixed", "turnOrder": "classic",
-      "events": false, "eventMode": "hard", "wonders": false,
+      "events": false, "eventMode": "hard", "wonders": false, "expCivs": false,
       "ranked": false, "turnTime": 0 }]
    ```
 
@@ -132,7 +132,7 @@ Every event you send gets an answer through the acknowledgement callback (`sio.c
 
 4. On the socket: `session:connect { sessionId, password, clientId }`. The answer holds `playerIndex`, `status`, `players`, `gameConfig` and `hostIndex`.
 
-The public list doesn't show every setting. Look at `gameConfig` in the answer to `session:connect`, and leave if the game is one your bot can't play (events, wonders, marathon, a map type it doesn't know). To leave a lobby, just disconnect: the server removes a lobby player whose socket is gone.
+The public list doesn't show every setting. Look at `gameConfig` in the answer to `session:connect`, and leave if the game is one your bot can't play (events, wonders, marathon, a map type it doesn't know). `expCivs: true` means the experimental civilisations of the game (Rom, Venedig, Deutschland, Maya, China, USA, with wonders also Azteken and Ägypten) can be picked: only on the tile map and custom maps, never in Marathon or ranked games; `checkCivChoice` rejects them otherwise. To leave a lobby, just disconnect: the server removes a lobby player whose socket is gone.
 
 While you wait, listen for `lobby:config:update` (the host changed the settings), `lobby:player:updated`, `player:joined`, `player:left` and `session:kicked`. The game begins with `game:start`, or with `placement:start` / `draft:update` first (see [Before the first turn](#before-the-first-turn)).
 
@@ -142,11 +142,11 @@ While you wait, listen for `lobby:config:update` (the host changed the settings)
 
 ```json
 { "mapKey": "random", "playerCount": 3, "kiCount": 1, "difficulty": "schwer", "turnTime": 180,
-  "isPublic": true, "ranked": false, "events": false, "eventMode": "hard", "wonders": false,
+  "isPublic": true, "ranked": false, "events": false, "eventMode": "hard", "wonders": false, "expCivs": false,
   "playerBots": true, "playerBotLimit": null }
 ```
 
-`mapKey`: `"0"`/`"1"` (the original map) or `"random"` (tile map; `hexTiles: true` is the experimental tile mode: since v107 the map of 14 triangles with four empires and the usual tile map otherwise – games on v106 and older lay hexagonal tiles, with six rotations instead of three). `turnTime` in seconds: `0` (none), `60`, `120`, `180`, `300` or `600`. `kiCount` seats are played by the built-in KI at `difficulty` `leicht`, `mittel` or `schwer`.
+`mapKey`: `"0"`/`"1"` (the original map) or `"random"` (tile map; since v111 four empires always play the map of 14 triangles. `hexTiles: true` was the experimental entry for that in v107–v110 and is ignored since; games on v106 and older with it lay hexagonal tiles, with six rotations instead of three). `turnTime` in seconds: `0` (none), `60`, `120`, `180`, `300` or `600`. `kiCount` seats are played by the built-in KI at `difficulty` `leicht`, `mittel` or `schwer`.
 
 As host, your bot starts the game with `game:start` (free seats are filled with KI, so one player is enough) and may remove players with `session:kick { playerIndex }`. A lobby with no activity for **10 minutes** is closed; the Hochciv-KI bot sends `lobby:player:update {}` every few minutes while it waits.
 
@@ -260,7 +260,7 @@ To choose good moves, your bot has to know what is legal and what a move will do
 https://hochciv.de/js/data.js, civs.js, i18n.js, hex.js, tiles.js, engine.js, expansion.js, bots.js, ki.js, marathon.js
 ```
 
-(on staging: `https://staging.hochciv.de/js/…`). Rundenspiele started on an older version keep its rules; their `engine` field tells you which, and that version is at `/<engine>/js/…`, for example `/v98/js/engine.js`. The version is in `APP_VERSION` at the top of `data.js`.
+(on staging: `https://staging.hochciv.de/js/…`). Rundenspiele started on an older version keep its rules; their `engine` field tells you which, and that version is at `/<engine>/js/…`, for example `/v107/js/engine.js`. The version is in `APP_VERSION` at the top of `data.js`.
 
 These are plain browser scripts that share global variables. Loaded in this order into one shared scope (in Node.js: one `vm` context, the way the server's own `engine-adapter.js` does it), they give you the full game: load the server's state, try a move on a copy, and see what happens. For example:
 

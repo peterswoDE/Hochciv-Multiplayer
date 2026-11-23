@@ -7034,3 +7034,178 @@ Punkt 73 in `UEBERGABE.md`.
 im englischen Text schlägt genau diese Assertion an). Die übrigen Tests zur Sklaverei rechnen mit
 `SLAVERY_COINS` (alle Städte: je Stadt so viel; `smoke.js`: Knopf „+4🪙", Vorrat danach) und sind
 unverändert.
+
+## Experimentelle Zivilisationen, Plättchenkarten, Berserker, Sklaverei 5 (v111)
+
+Anweisungen des Autors (22.11.), wörtlich: „rename vikings “seefahrer” to “berserker”" · „slavery
+yields 5 coins per sacrificed population." · „make the “experimental 4p tile mode” the default one,
+remove the checkbox" · „for 2p games in tile mode, use two additional tiles on opposite sides that
+are the starting tiles" · „Make a checkbox for experimental civs that includes the following" – zehn
+Einträge (unten) – · „Stelle sicher, dass die Länder mit Weltwunder-effekten nur verfügbar sind, wenn
+auch Weltwunder aktiviert sind."
+
+Vorab gefragt (die Antworten des Autors): Rom steht zweimal da – **eine Zivilisation mit zwei
+Fähigkeiten** wie die übrigen, nicht zwei Reiche. Atlantis gründet auf dem Wasser – **die Hauptstadt
+setzt es wie alle aufs Land**, nur Gegründetes kommt aufs Meer (ein Startplättchen, Weite Ebene, hat gar
+kein Meer). Wo eine Fähigkeit eine Technologie trifft, **stapeln die Wirkungen**: Venedig mit
+Kolonialismus 6 Felder je Runde, Atlantis mit Bürokratie in der Hauptstadt ×4.
+
+### Berserker, Sklaverei 5
+
+* Die Grundfähigkeit der Wikinger heißt **Berserker** (data/civs.json, englisch „Berserkers"), die
+  Wirkung bleibt (Gratisarmee, eine Armee zählt nicht für die Baukosten).
+* `SLAVERY_COINS = 5` (v110 4, v84–v109 7, bis v83 10); Techtext deutsch und englisch, `test.js` wie
+  in v110. Gilt sofort auch in laufenden Partien (die Zahl steht nicht im Spielstand).
+
+### Plättchenkarten: die Startdreiecke außen
+
+* „Den experimentellen Plättchenmodus zum Standard, das Häkchen weg": ein Häkchen war es nur bis
+  v106, seit v107 ein eigener Eintrag „Plättchenkarte (14 Dreiecke)" in der Kartenliste. Der Eintrag
+  ist weg, und zu viert **ist** die Plättchenkarte jetzt die aus 14 Dreiecken – die Form aus 10 mit
+  den Startplätzen in der Form (`strip10`) gibt es nicht mehr. `TILE_SHAPES[4]` ist die frühere
+  `tri14`; `tilePlan` kennt je Spielerzahl eine Form (`opts.shape` ist weg). Ein Rezept von v107–v110
+  mit `plaettchen14` wird `plaettchen` (recipeNow), legt also dieselbe Form; v99–v106 `hexTiles` ebenso.
+* Zu zweit **8 Dreiecke** (`tri8`): die sechs Dreiecke des Sechsecks liegen alle offen (samt Loch in
+  der Mitte), die zwei Startdreiecke außen an **gegenüberliegenden Kanten** – oben links (dasselbe
+  Dreieck wie zu dritt) und, an der Mitte gespiegelt, unten rechts. Diagonal statt oben und unten:
+  oben und unten gäbe eine Karte von 21 Zeilen mit ungerader oberster Zeile, diagonal bleibt sie 11
+  hoch (11 × 16, 120 Felder) – das Spiel steht immer quer. Fest, nicht gelost (bis v110 wurde gelost,
+  welches der drei gegenüberliegenden Paare die Spieler bekamen). Die Startdreiecke liegen 12 Felder
+  auseinander; jedes ihrer Felder darf Hauptstadt sein, wie zu dritt und zu viert.
+* Damit haben alle drei Formen die Startdreiecke außen. Regelbogen: „1 gegen 1 · Immer die
+  Plättchenkarte aus acht Dreiecken" und eine Zeile „Startdreiecke". Laufende Partien auf den alten
+  Formen spielen weiter (die Karte steckt im Spielstand; die Legephase wird nie gespeichert).
+* Zu viert rechnet die KI auf 210 statt 150 Feldern – gemessen dieselbe Zeit je Partie wie v110 auf
+  derselben Form (sechs KI-Partien zu viert 20,4 s gegen 20,9 s, gleiche Partien), aber mehr als auf der
+  früheren Form aus 10.
+
+### Experimentelle Zivilisationen
+
+* **Daten:** neun Reiche in data/civs.json mit `"exp": true`, Aztekenreich und Ägypten zusätzlich mit
+  `"wo": true`; eine bis drei Fähigkeiten (die erste `basis`). tools_civs.js schreibt sie als
+  `EXP_CIVS` neben `CIVS` – `CIVS` und `CIV_KEYS` bleiben die vier Grundreiche, wie Aufbau, Marathon,
+  Regelbogen, Editor und Tests sie lesen; `ALL_CIVS`, `CIV_BY_KEY` und `ORDER` kennen alle.
+  Zeichen (Geometrische Formen und Dingbats ohne Emoji-Fassung, sonst malte Safari sie bunt):
+  ● ◆ ✦ ⬢ ✚ ◉ ✿ ❖ ▼; Farben je eigen. `order` 5–13 (hinter den vier) – wirkt nur ohne Platzfolge,
+  also nirgends, wo sie wählbar sind.
+* **Aufbau:** Häkchen „Experimentelle Zivilisationen" unter den Weltwundern, ab Werk aus. Es steht
+  nur, wo die Zivilisation wählbar ist (Plättchenkarte, drei Reiche, Duell); auf den festen Karten
+  hat jedes Grundreich seinen Startstern, im Marathon werden Fähigkeiten der vier gedraftet. Die
+  Auswahl je Platz zeigt die experimentellen in einer Gruppe „Experimentell". Was zur Wahl steht, sagt
+  `civKeysFor({exp, wo})` (js/engine.js): **Aztekenreich und Ägypten nur mit Weltwundern** – wer eines
+  gewählt hat und dann die Weltwunder abwählt, fällt auf die Vorauswahl des Platzes zurück, ebenso
+  jede experimentelle, wenn das Häkchen fällt. Auslosung (`resolveRandom(…, opts)`), Rezept
+  (`expCivs`, „Nochmal spielen") und die Fähigkeitswahl der Plättchenkarte (`pickNew(…, opts)`,
+  `abilityIdsFor`) lesen dasselbe. Die USA bleiben ohne Weltwunder wählbar: nur einer ihrer fünf
+  Auslöser hängt an Weltwundern.
+* **Namen der Fähigkeiten:** vorgegeben waren nur Legion und Via Appia. Gewählt (zum Ändern
+  angeboten): Venedig „Lagunenrepublik", Aztekenreich „Blumenkriege", Ägypten „Pharaonen",
+  Deutschland „Ingenieurskunst", Atlantis „Versunkenes Reich", Maya „Kakaobohnen", China „Mandat des
+  Himmels", USA „Amerikanischer Traum".
+
+Die zehn Fähigkeiten, je mit Regel und Auslegung:
+
+1. **Rom – Legion**, „armeen haben +50% macht (abrunden) pro angrenzender eigener armee":
+   `armyPower` = ⌊Macht × (100 + 50 × Nachbarn) / 100⌋, Nachbarn = eigene echte Armeen im Abstand 1
+   (`LEGION_BONUS_PCT`). Bisher hatte jedes Reich einen Machtwert für alle Armeen; mit Legion zählt
+   jede Armee ihren eigenen: im Angriff auf Städte (`attackValue(…, armies)`), in der Verteidigung von
+   Städten (`defenseValue`) und Armeen (`armyDefenseValue`, für die Beutezüge), beim Flankieren
+   (`flankPower`: die stärkste Flankierende; eine Burgenbau-Stadt darunter mit dem Machtwert selbst)
+   und für die Geflankte; die Machtansicht und das Feldblatt zeigen dieselben Werte. In der
+   Kampfphase mit dem festgehaltenen Machtwert (v94), die Nachbarn wie die Stellung zum Zeitpunkt
+   des Kampfs. Die KI plant Angriffe weiter mit einem Wert je Armee (Punkt 75 in UEBERGABE.md).
+2. **Rom – Via Appia**, „straßen sind immer forschbar. Erhält doppeltes einkommen durch
+   handelsrouten": das Rad (Straßen) ist immer verfügbar, was der Würfel auch zeigt (`ABIL_TECH`,
+   wie die Navigation der Wikinger über `CIV_TECH`) – nicht geschenkt. Handelsrouten bringen das
+   Doppelte (`VIA_APPIA_TRADE`), mit Bürokratie das Vierfache.
+3. **Venedig**, „kann 3 felder pro runde in besitz nehmen (wie kolonialismus). Kann keine Städte
+   gründen. Bevölkerungswachstum ist kostenlos": `claimMax` = 3 (`VENICE_CLAIMS`), mit Kolonialismus
+   6; dieselben Felder wie mit Kolonialismus (zählen zur Hauptstadt, mit Bürokratie doppelt).
+   `foundSiteError` meldet „Venedig gründet keine Städte." (auch der Knopf Gründen; das Zugende fragt
+   nicht nach Gründungen). Die Hauptstadt hat es von Anfang an; erobern darf es. Wachstum kostet weder
+   Nahrung noch Münzen, die Zahl der Schritte je Runde und die Nahrungsgrenze bleiben.
+4. **Aztekenreich**, „pro wunder zählt eine armee nicht in die kosten (e.g. with two wonders, the
+   first two armies cost 0, the third one 5 etc.)": `aztecFreeArmies` zieht die Zahl der eigenen
+   Wunder von der Armeezahl der Kosten ab, wie die eine Armee der Berserker – genau das Beispiel des
+   Autors. Verlorene Wunder zählen nicht mehr. Nur mit Weltwundern.
+5. **Ägypten**, „weltwunder kosten 1 weniger pro erforschter technologie": `wonderCost` − 1 Münze je
+   Technologie in `p.techs` (`EGYPT_WONDER_DISCOUNT`), auch geschenkte, nie unter 0. Nur mit
+   Weltwundern.
+6. **Deutschland**, „einkommenstechnologien sind kumulativ (e.g. mathematik + elektrizität erhöht
+   wissenschaft durch wald um 3)": in `yieldBonus` zählt jedes erforschte Glied einer Kette, was sein
+   Text nennt – Mathematik 1 + Elektrizität 2 = 3, mit Künstlicher Intelligenz 6; Schrift +
+   Universitätswesen je Bevölkerung 1 + 1 + 2 = 4. Für alle anderen gilt weiter die beste (v88).
+7. **Atlantis**, „städte müssen auf wasser gegründet werden. Städte produzieren doppelt": gegründet
+   nur auf Meer (Fluss und Insel sind Land), erreichbar wie jedes Ziel über einen Nachbarn auf dem
+   Siedlerweg, ohne Navigation also an der Küste; die Hauptstadt an Land (Rückfrage). „Doppelt"
+   (`cityFactor`, `ATLANTIS_CITY_FACTOR`): alles, was die Bürokratie für die Hauptstadt verdoppelt,
+   für jede Stadt – Felder (auch beanspruchte), Bevölkerung samt ihrem Nahrungsverbrauch (das Netto
+   doppelt, wie bei der Bürokratie), Handelsrouten, Ökologie, Gentechnik; nicht die Wallfahrt. Mit
+   Bürokratie die Hauptstadt ×4 (Rückfrage: stapeln). Die KI sucht Siedelplätze auf dem Meer
+   (`kiSiteOk`).
+8. **Maya**, „startet mit 10 coins extra": im allerersten Zug 10 Münzen dazu (`MAYA_START_COINS`),
+   wie der Startausgleich – der Vorrat verfällt zum Zugende.
+9. **China**, „kann einmal pro spiel sofort einkommen einsammeln": `collectIncomeNow` – das Einkommen
+   dieser Runde noch einmal, mit dem Stand von jetzt, Nahrung nie unter 0, einmal je Partie
+   (`p.incomeNowUsed`). Knopf „Einkommen sofort einsammeln" im Blatt Fähigkeiten, mit einem Punkt an
+   der Karte der Fähigkeit. Das Zugende fragt nicht danach – der Zeitpunkt ist die Wahl. Die KI zählt
+   übrige Ressourcen nicht (kiValue) und sähe im Einsammeln nie etwas; sie sammelt deshalb nach fester
+   Regel ab Runde 4 ein (`KI_CHINA_ROUND`, geschätzt: KI gegen KI endet im Median in Runde 6) oder
+   sofort, wenn die Partie mit dieser Runde endet.
+10. **USA**, „immer wenn die USA eine Technologie forschen, eine Stadt gründen,
+    Bevölkerungswachstum machen, eine Armee bauen oder ein Weltwunder bauen erhalten sie danach 1
+    münze": `usaBonus` nach `doResearch` (nicht nach geschenkten oder kopierten Technologien),
+    `foundCity`, jedem Schritt von `growCity` (auch kostenlos, auch „Alle Städte wachsen"),
+    `buildArmy` und `buildWonder` (`USA_ACTION_COINS`). Nicht für Wachstum und Armeen aus Wundern und
+    nicht für eroberte Städte.
+
+### Abgesichert (v111)
+
+`test.js`: welche Reiche und Fähigkeiten mit und ohne Häkchen und Weltwunder zur Wahl stehen (auch
+im Vorrat der Fähigkeitswahl), die Zahlen in den Texten deutsch und englisch, je Fähigkeit ihre Regel
+(Legion mit 0/1/2 Nachbarn, Angriff, Verteidigung, Flanke in beide Richtungen; Rad und Handelsrouten;
+Venedigs Felder, Gründen, Wachstum, KI; die Armeekosten des Beispiels; Wunderkosten; Wald und
+Bevölkerung Deutschlands; Atlantis auf Meer und Land, Einkommen doppelt, ×4 mit Bürokratie; Maya im
+ersten und zweiten Zug; China einmal, KI ab Runde 4; USA nach allen fünf Aktionen), die Formen zu
+zweit (gegenüber, an der Mitte gespiegelt, 11 × 16) und zu viert, drei KI-Partien mit experimentellen
+Reichen bis zum Ende (Venedig gründet nie, Atlantis nur auf dem Meer). `smoke.js`: das Häkchen (wo es
+steht, welche Reiche es bringt, Rückfall ohne Weltwunder, Rom mit zwei Fähigkeiten, Auslosung,
+Englisch), Chinas Knopf, Venedigs Gründen und Beanspruchen, der Regelbogen.
+
+### Gemessen (v111)
+
+KI gegen KI, Stufe Mittel, 14 Dreiecke, Startwerte 901–912, Plätze reihum (jedes Reich dreimal auf
+jedem Platz): **Atlantis gewann 12 von 12** gegen Venedig, Rom (Legion) und China, 10 davon
+Wirtschaftssiege; Atlantis gründete 79 Städte auf dem Meer (Rom 43, China 42 an Land), Venedig keine
+(es beanspruchte 147 Felder, gut 12 je Partie), China sammelte in allen 12 in Runde 4 ein. Ohne
+Platzwechsel (der Startspieler fest), je
+8 Partien: Deutschland 1, Maya 1, USA 4, Rom mit Via Appia 2; mit Weltwundern Aztekenreich 0, Ägypten 2
+gegen Griechenland 6 und England 0 – zu klein und durch den Startspieler verzerrt für eine Aussage.
+Gemessen mit einer Wegwerf-Schleife nach dem Muster von `tools_ki.js` (tilePlan, kiPlaceSeat, kiTurn).
+
+## Atlantis entfernt (v112)
+
+Anweisung des Autors (22.11.), wörtlich: „Please fully remove Atlantis again." Ohne Rückfrage
+umgesetzt. Anlass war die Messung aus v111: Atlantis gewann 12 von 12 KI-Partien (Abschnitt v111).
+
+* **Entfernt:** das Reich aus data/civs.json (damit aus `EXP_CIVS`, `ALL_CIVS`, `CIV_BY_KEY`, `ORDER`
+  – die übrigen behalten ihr Feld `order`, die Lücke bei 10 ist ohne Wirkung), die Regeln
+  (`cityFactor` und seine Faktoren in `tileYieldAt` und `incomeBreakdown`, das Gründen auf dem Meer in
+  `foundSiteError`, `isAtlantis`, `ATLANTIS_CITY_FACTOR`), die KI (`kiSiteOk` wieder nur Land, der
+  Grundwert in `KI_DRAFT_BASE`), die englischen Texte (`DATA_EN.civ`, `DATA_EN.abil`, die Meldung zum
+  Gründen) und das Zeichen ◉ (`ring` in SYM). Einkommen und Gründen rechnen wieder genau wie bis v110;
+  von v111 bleibt dort nur der Faktor der Via Appia an den Handelsrouten.
+* **Experimentell** sind damit acht Reiche mit neun Fähigkeiten: mit Häkchen ohne Weltwunder zehn
+  Zivilisationen zur Wahl, mit Weltwundern zwölf.
+* **Spielstände von v111** (Auslegung, zum Ändern angeboten): Ohne Eintrag stünde ein Reich von
+  Atlantis als „Barbaren" da (`civOf` fällt auf `BARB_CIV` zurück) – lauffähig, aber irreführend.
+  `migrateState` macht aus jeder Zivilisation, die es nicht mehr gibt, die erste Grundzivilisation,
+  die sonst niemand am Tisch hat (Name, Zeichen, Farbe), ohne Fähigkeit (`p.drafted = []`, wie ein
+  Draft ohne Wahl). Seine Städte auf dem Meer bleiben stehen; neue gründet es nur noch an Land.
+  „Nochmal spielen" mit einem Rezept von v111 lost einen solchen Platz neu aus (`recipeNow`). Die
+  Regel nennt Atlantis nicht – sie gilt für jede entfernte Zivilisation.
+* **Tests:** `test.js` – nichts von Atlantis übrig (Reich, Zugfolge, Fähigkeit, Englisch, KI-Grundwert,
+  Konstante), die Zahl der Reiche und Fähigkeiten, der Spielstand von v111 (freie Grundzivilisation
+  ohne Fähigkeit, Gründen wieder nur an Land, ein zweites `migrateState` ändert nichts); die KI-Partie
+  mit vier experimentellen Reichen spielt jetzt mit Deutschland statt Atlantis. `smoke.js` – die
+  Auswahl im Aufbau (zehn ohne, zwölf mit Weltwundern, kein Atlantis) und das alte Rezept.

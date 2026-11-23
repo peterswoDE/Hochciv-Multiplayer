@@ -14,7 +14,7 @@
  */
 const express = require('express');
 const zlib = require('zlib');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const { Game, Replay } = require('../models');
 const GameStats = require('../utils/gamestats');
 

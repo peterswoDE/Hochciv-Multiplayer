@@ -51,8 +51,14 @@ const recipeOhneBots = rec => Object.assign({}, rec, {
 /* Rezepte von vor v107: das Häkchen „Sechseck-Plättchen" (v99–v106) – seit v107 die
    Plättchenkarte aus 14 Dreiecken, die es nur zu viert gibt. */
 function recipeNow(rec) {
-  if (rec.hexTiles && rec.mapPick === 'plaettchen' && (rec.n || (rec.players || []).length) === 4) rec.mapPick = 'plaettchen14';
+  /* v107–v110 stand die Plättchenkarte aus 14 Dreiecken als eigene Karte in der Liste
+     („plaettchen14", v99–v106 das Häkchen „Sechseck-Plättchen") – seit v111 ist sie die
+     Plättchenkarte zu viert. */
+  if (rec.mapPick === 'plaettchen14') rec.mapPick = 'plaettchen';
   delete rec.hexTiles;
+  // Zivilisationen, die es nicht mehr gibt (v112: Atlantis aus v111), werden neu ausgelost
+  for (const p of rec.players || [])
+    if (p.civ !== 'zufall' && !CIV_BY_KEY[p.civ]) { p.civ = 'zufall'; p.ability = 'zufall'; }
   return rec;
 }
 // Plättchenkarten und eigene Karten: dort darf ein Reich doppelt sitzen
@@ -102,14 +108,14 @@ function beginFromPick(cfg, pick) {
 function startFromRecipe(rec) {
   recipeNow(rec);
   const frei = recipeFrei(rec);
-  const players = nameDoubles(resolveRandom(JSON.parse(JSON.stringify(rec.players)), frei));
+  const players = nameDoubles(resolveRandom(JSON.parse(JSON.stringify(rec.players)), frei,
+    { exp: !!rec.expCivs, wo: !!rec.wonders }));          // experimentelle (v111) wie beim ersten Mal
   const cfg = {
     players, duel: players.length === 2, recipe: rec,
     startPlayer: rec.start === 'zufall' ? Math.floor(Math.random() * players.length)
       : Math.min(players.length - 1, Math.max(0, +rec.start || 0)),
-    events: rec.events, eventMode: rec.eventMode, wonders: rec.wonders,
+    events: rec.events, eventMode: rec.eventMode, wonders: rec.wonders, expCivs: !!rec.expCivs,
     seatOrder: platzNummern(rec.mapPick, players.length, rec.randomCivs),   // wie beim ersten Mal (v90)
-    tileShape: tileShapeOf(rec.mapPick),                               // 14 Dreiecke (v107)
     // Ein Rezept aus v70–v81 kann noch altTree tragen – egal: jede neue Partie läuft seit
     // v82 im (einzigen) Techtree, auch „Nochmal spielen" nach einer alten Partie.
   };

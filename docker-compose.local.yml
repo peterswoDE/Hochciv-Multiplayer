@@ -7,6 +7,8 @@ services:
     image: postgres:15-alpine
     container_name: hochciv-db
     restart: unless-stopped
+    # pg_stat_statements: the slowest queries for the dashboards
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=top"]
     environment:
       POSTGRES_USER: hochciv
       POSTGRES_PASSWORD: password123
@@ -68,6 +70,8 @@ services:
       # Turn timer tests: TURN_TIMER_SCALE=0.05 docker compose -f docker-compose.local.yml up -d
       # makes a 60-second turn last 3 seconds (tests/timer/turn-timer.test.js)
       - TURN_TIMER_SCALE=${TURN_TIMER_SCALE:-1}
+      # tests/run-all.js resets the rate limits before each test and match caches (POST /api/test/reset, server.js)
+      - TEST_HOOKS=on
       # … and TURN_TIMER_AFK_AFTER=2 lets the KI keep a seat after two missed turns (default 3)
       - TURN_TIMER_AFK_AFTER=${TURN_TIMER_AFK_AFTER:-3}
       # Matchmaking tests (tests/match/match.test.js): groups of 2-3 form after this wait, confirm within this time
@@ -81,6 +85,13 @@ services:
       - CHAT_MUTE_MS=${CHAT_MUTE_MS:-300000}
       # No popup for the terms of use in the browser tests, except tests/terms (TERMS_CHECK=on)
       - TERMS_CHECK=${TERMS_CHECK:-off}
+      # Monitoring (docs/operations/monitoring.md): Grafana under /admin/grafana/, figures on 9464
+      - GRAFANA_URL=${GRAFANA_URL-http://grafana:3000}
+      - METRICS_PORT=9464
+    networks:
+      default:
+        aliases:
+          - hochciv-app
     env_file:
       - path: secrets.env
         required: false
@@ -97,12 +108,9 @@ services:
       - ./maps:/app/maps
       # the game itself (rebuilt into public/ at every start)
       - ./HochCiv:/app/HochCiv
-      - ./HochCiv-v109:/app/HochCiv-v109
+      - ./HochCiv-v110:/app/HochCiv-v110
       - ./HochCiv-v108:/app/HochCiv-v108
       - ./HochCiv-v107:/app/HochCiv-v107
-      - ./HochCiv-v106:/app/HochCiv-v106
-      - ./HochCiv-v100:/app/HochCiv-v100
-      - ./HochCiv-v98:/app/HochCiv-v98
       - ./scripts:/app/scripts
       - ./migrations:/app/migrations
       - ./config.js:/app/config.js
@@ -112,5 +120,61 @@ services:
       # The Discord Activity bundle is built into the image – changes to activity/bridge.js need --build
       - ./activity:/app/activity
 
+  # ── Monitoring (docs/operations/monitoring.md) – the configuration straight from monitoring/
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: hochciv-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/monitoring/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring:/monitoring:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: hochciv-postgres-exporter
+    restart: unless-stopped
+    depends_on:
+      hochciv-db-setup:
+        condition: service_completed_successfully
+    command: ["--collector.stat_statements"]
+    environment:
+      - DATA_SOURCE_NAME=postgresql://hochciv_app:app123@hochciv-db:5432/hochciv?sslmode=disable
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: hochciv-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SERVER_ROOT_URL=http://localhost:3000/admin/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_HEADERS=Role:X-WEBAUTH-ROLE
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
+      - GF_LIVE_MAX_CONNECTIONS=0
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+      - GF_PATHS_PROVISIONING=/monitoring/grafana/provisioning
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/monitoring/grafana/dashboards/hochciv.json
+    volumes:
+      - ./monitoring:/monitoring:ro
+      - grafana-data:/var/lib/grafana
+
 volumes:
   pgdata:
+  prometheus-data:
+  grafana-data:

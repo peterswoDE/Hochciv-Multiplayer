@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 19.11., `sw.js` v110)
+# Hochzeivilization — Projekt-Übergabe (Stand 23.11., `sw.js` v112)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v110)
+## Letzte Sitzungen auf einen Blick (v61 → v112)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -65,6 +65,15 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v108 | Sechs Anweisungen des Autors, ohne Rückfrage: **Hauptstadt** verteidigt mit 1 mehr je Bevölkerung (`CAPITAL_DEFENSE`, `defensePerPop`); **Wirkungen getauscht** – Eisenverarbeitung ↔ Stahl, Gewehre ↔ Panzer, die Zahlen jetzt in `TECHS` neben ihrem Text (`machtPreis`, `machtVerlust`; `powerPrice`, `powerDecay`); **Kosten** Eisenverarbeitung 2, Belagerungsmaschinen 4, Stadtmauern 5 (wie bis v83); **Flankieren mit Raketentechnik** auch aus 1 und 2 Feldern auf einer Linie (`hexOpposite`; gemeldet als Fehler); **offline vom Home-Bildschirm** (gemeldet): in WebKit nachgestellt – ein gescheiterter erster Einbau wurde erst beim Kaltstart wiederholt, offline bekam ein fehlendes Skript HTML. Jetzt nachgeholt, sobald die App sichtbar oder online wird; Ausliefern nur aus dem eigenen Cache, HTML nur für Seiten; im Menü „nur online", solange kein Service Worker die Seite hält | Regel + Fehler + Auslieferung |
 | v109 | Vier Anweisungen des Autors, ohne Rückfrage: **Auswahl** auf der Karte weiß mit dunklem Rand (bis v108 dunkelrot wie Englands Grenze); **Stadtscheiben** mit einem Hauch der Reichsfarbe (`cityFill`, 0,18); **Zug beenden?** einmal je Zug, wenn der verfallende Vorrat noch etwas kauft oder Kostenloses offen ist (`unspent`, `endTurnAsk`; ersetzt die Meldung „Nochmal tippen"); **Welt** mit dem Einkommen des nächsten Zugs je Reich als ∑ wie im Technologiebogen | Oberfläche |
 | v110 | Anweisung des Autors, ohne Rückfrage: **Sklaverei 4 Münzen** je geopferter Bevölkerung (`SLAVERY_COINS`; v84–v109 7, bis v83 10). Regel, „In allen Städten opfern", Knopf und Protokoll lesen die Konstante; fest steht die Zahl nur im Techtext, deutsch und englisch – `test.js` prüft jetzt beide | Regel |
+| v111 | Anweisungen des Autors (22.11.), drei Rückfragen (Rom, Hauptstadt von Atlantis, Stapeln): **Berserker** statt Seefahrer (Grundfähigkeit der Wikinger); **Sklaverei 5 Münzen**; **zu viert immer die 14 Dreiecke** (der Eintrag „experimentell" und die Form aus 10 fallen weg); **zu zweit 8 Dreiecke** – das Sechseck offen, die Startdreiecke außen an gegenüberliegenden Kanten; Häkchen **Experimentelle Zivilisationen** mit neun Reichen und zehn Fähigkeiten (Rom: Legion/Via Appia, Venedig, Aztekenreich, Ägypten, Deutschland, Atlantis, Maya, China, USA), Aztekenreich und Ägypten nur mit Weltwundern | Regel, Oberfläche |
+| v112 | Anweisung des Autors, ohne Rückfrage: **Atlantis ganz entfernt** (aus v111 – gewann dort 12 von 12 KI-Partien): Zivilisation, Regeln (Gründen auf dem Meer, Städte doppelt), KI, Texte, Zeichen und Tests. Ein Spielstand von v111 mit Atlantis lädt weiter (das Reich spielt als freie Grundzivilisation ohne Fähigkeit, `migrateState`), „Nochmal spielen" lost den Platz neu aus (`recipeNow`) | Regel |
+
+Neu in v112: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Atlantis entfernt (v112)"), Punkte 74 und 75 ergänzt.
+
+Neu in v111: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Experimentelle Zivilisationen, Plättchenkarten, Berserker, Sklaverei 5 (v111)"), Punkt 73
+ergänzt, die offenen Punkte 74 und 75.
 
 Neu in v110: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Sklaverei 4 (v110)"), Punkt 31 ergänzt, der offene Punkt 73.
@@ -246,37 +255,37 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1388 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
-| `data/civs.json` | 69 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
-| `js/civs.js` | 54 | ERZEUGT: `CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 567 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/i18n.js` | 1435 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `data/civs.json` | 165 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
+| `js/civs.js` | 118 | ERZEUGT: `CIVS` (die vier), seit v111 `EXP_CIVS` (experimentelle, Felder `exp`/`wo`) und `ALL_CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
+| `js/data.js` | 581 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 161 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
-| `js/tiles.js` | 360 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4, seit v107 `tri14`), `SHAPE_BY_KEY`, Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2365 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
-| `js/expansion.js` | 524 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
+| `js/tiles.js` | 353 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4: `tri8`, `tri9`, `tri14` – seit v111 je Spielerzahl eine, alle mit den Startdreiecken außen), `SHAPE_BY_KEY`, Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
+| `js/engine.js` | 2504 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/expansion.js` | 531 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 487 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
-| `js/ki.js` | 1944 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
+| `js/ki.js` | 1953 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
-| `js/marathon.js` | 360 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`); **Fähigkeitswahl der Plättchenkarte** (v107: `pickWanted`, `pickNew`, `kiPickAbility`, `pickApply`) |
-| `js/ui/base.js` | 181 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
+| `js/marathon.js` | 369 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`); **Fähigkeitswahl der Plättchenkarte** (v107: `pickWanted`, `pickNew`, `kiPickAbility`, `pickApply`) |
+| `js/ui/base.js` | 187 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
 | `js/ui/map.js` | 567 | SVG-Karte (`drawMap`), Geländezeichen, Erträge im Gründungsmodus, Machtringe, Flüsse, Kampfbilder, `attachTaps` |
-| `js/ui/game.js` | 427 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
-| `js/ui/sheets.js` | 317 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
+| `js/ui/game.js` | 430 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
+| `js/ui/sheets.js` | 327 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
 | `js/ui/turns.js` | 407 | Zugende, KI- und Bot-Züge, Kampf- und Zug-Nachspiel (Szenen, Satz, laufender Vorrat), Bot-Blatt |
-| `js/ui/end.js` | 178 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
+| `js/ui/end.js` | 183 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
 | `js/ui/world.js` | 227 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
-| `js/ui/setup.js` | 335 | die eine Vorliebe (`prefs.anim`, `setAnim`); Aufbau: Spielart, Plätze (eine Zeile, Fähigkeitswahl mit Wirkung), Karte, Startspieler, Rezept, Doppelte |
+| `js/ui/setup.js` | 358 | die eine Vorliebe (`prefs.anim`, `setAnim`); Aufbau: Spielart, Plätze (eine Zeile, Fähigkeitswahl mit Wirkung), Karte, Startspieler, Rezept, Doppelte |
 | `js/ui/place.js` | 241 | Legephase der Plättchenkarte: würfeln, wählen lassen (`startPick`) oder legen (`placeBegin`), Forschung mit allen Reichen, Welt |
-| `js/ui/draft.js` | 150 | Fähigkeiten wählen: Draft des Marathons, seit v107 die Fähigkeitswahl der Plättchenkarte (`startPick`, `pickAdvance`, `drawPick`) auf demselben Bildschirm |
+| `js/ui/draft.js` | 154 | Fähigkeiten wählen: Draft des Marathons, seit v107 die Fähigkeitswahl der Plättchenkarte (`startPick`, `pickAdvance`, `drawPick`) auf demselben Bildschirm |
 | `js/ui/editor.js` | 34 | Karteneditor |
-| `js/ui/boot.js` | 311 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
+| `js/ui/boot.js` | 318 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
 | `js/firstgame.js` | 1460 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 8135 | **2027 Assertions**, `node test.js` |
-| `smoke.js` | 4844 | **176 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `test.js` | 8445 | **2117 Assertions**, `node test.js` |
+| `smoke.js` | 4952 | **179 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 75 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
-| `tools_civs.js` | 82 | `data/civs.json` → `js/civs.js` |
+| `tools_civs.js` | 97 | `data/civs.json` → `js/civs.js` |
 | `tools_ki.js` | 493 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase); seit v101 die Modi `freie` (Freie Forschung: Regel von v100 und vier Arten zu wählen, gepaart) und `wirtschaft` (Siegschwellen zu viert v100 gegen v101, gepaart); seit v107 der Schalter `dreiecke14` (bis v106 `sechsecke`) und in `selbst` die Siege nach Platz in der Zugfolge |
 | `tools_startplaettchen_dump.js` / `tools_startplaettchen_pdf.py` | 34 / 176 | Druckbogen `Startplaettchen.pdf` aus `js/tiles.js` (A4 quer, 3 Seiten, Spieloptik, verzahnt mit 4 mm Luft, ohne Umriss) |
 | `ANNAHMEN.md` | — | **Alle Regelauslegungen und Entscheidungen.** Bei Regelfragen zuerst hier nachsehen. |
@@ -300,6 +309,39 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v112 auf einen Blick.** Eine Anweisung des Autors, ohne Rückfrage umgesetzt: **Atlantis ist ganz
+  entfernt** – aus `data/civs.json` (und damit `EXP_CIVS`, `ORDER`), die Regeln (`cityFactor`, das
+  Gründen auf dem Meer in `foundSiteError`, `ATLANTIS_CITY_FACTOR`), die KI (`kiSiteOk`,
+  `KI_DRAFT_BASE`), die englischen Texte und das Zeichen ◉. Einkommen und Gründen rechnen wieder wie
+  bis v110; experimentell sind jetzt acht Reiche mit neun Fähigkeiten. Ein Spielstand von v111 mit
+  Atlantis lädt weiter: `migrateState` macht aus einer Zivilisation, die es nicht mehr gibt, die erste
+  Grundzivilisation, die sonst niemand am Tisch hat, ohne Fähigkeit (leere Liste in `p.drafted`) –
+  ohne das stünde das Reich als „Barbaren" da; `recipeNow` lost einen solchen Platz bei „Nochmal
+  spielen" neu aus. **Tests:** `test.js` prüft, dass nichts von Atlantis übrig ist, und den alten
+  Spielstand; `smoke.js` die Auswahl (zehn ohne, zwölf mit Weltwundern) und das alte Rezept.
+- **v111 auf einen Blick.** Anweisungen des Autors, drei Rückfragen vorab (Rom eine Zivilisation mit
+  zwei Fähigkeiten; Atlantis setzt die Hauptstadt wie alle aufs Land; Wirkungen stapeln):
+  · **Berserker** heißt die Grundfähigkeit der Wikinger (bis v110 Seefahrer), englisch „Berserkers".
+  · **Sklaverei 5 Münzen** je geopferter Bevölkerung (`SLAVERY_COINS`; v110 4, v84–v109 7, bis v83 10).
+  · **Plättchenkarten**: zu viert immer die **14 Dreiecke** (`TILE_SHAPES[4]`, v107–v110 der Eintrag
+    „experimentell" neben der Form aus 10; `plaettchen14` in alten Rezepten wird `plaettchen`), zu
+    zweit **8 Dreiecke** (`tri8`): das Sechseck offen, die Startdreiecke außen oben links und unten
+    rechts, 11 × 16, 12 Felder auseinander (bis v110 `hex6`). Alle drei Formen haben damit die
+    Startdreiecke außen; `tilePlan` kennt je Spielerzahl eine Form (`opts.shape` ist weg).
+  · **Experimentelle Zivilisationen**: Häkchen im Aufbau (`setup-expciv`, ab Werk aus, nur wo die
+    Zivilisation wählbar ist), `EXP_CIVS` neben `CIVS` (die vier bleiben `CIVS`/`CIV_KEYS`;
+    `ALL_CIVS`, `CIV_BY_KEY` und `ORDER` kennen alle), Auswahl über `civKeysFor({exp, wo})`, Auslosung
+    (`resolveRandom(…, opts)`), Rezept (`expCivs`) und Fähigkeitswahl (`pickNew(…, opts)`) gleich.
+    Aztekenreich und Ägypten (Feld `wo`) nur mit Weltwundern. Regeln: Legion (`armyPower`, `stackPower`,
+    `flankPower`; Angriff, Verteidigung, Flanke, Beute, Machtansicht), Via Appia (`ABIL_TECH`,
+    Handelsrouten ×2), Venedig (`claimMax`, kein Gründen, Wachstum 0), Aztekenreich
+    (`aztecFreeArmies`), Ägypten (`wonderCost`), Deutschland (`yieldBonus`), Atlantis
+    (`foundSiteError`, `cityFactor`), Maya (`beginTurn`), China (`collectIncomeNow`, Knopf im Blatt
+    Fähigkeiten), USA (`usaBonus`). Die KI spielt alle (Siedelplätze, Armeekosten, Chinas Einsammeln
+    ab Runde 4); Grundwerte für die Fähigkeitswahl geschätzt. Regelbogen mit eigenem Abschnitt.
+  · **Gemessen:** Atlantis gewann 12 von 12 KI-Partien (Plätze reihum, Punkt 75).
+  · **Tests:** `test.js` je Regel, die Formen zu zweit und zu viert, drei KI-Partien mit
+    experimentellen Reichen; `smoke.js` Häkchen und Auswahl, Chinas Knopf, Venedig, Regelbogen.
 - **v110 auf einen Blick.** Eine Anweisung des Autors, ohne Rückfrage umgesetzt: **Sklaverei bringt
   4 Münzen** je geopferter Bevölkerung (`SLAVERY_COINS` in `js/data.js`; v84–v109 7, bis v83 10).
   `sacrifice` und damit „In allen Städten opfern" (`sacrificeAll`), der Knopf („+4🪙"), Protokoll und
@@ -1346,10 +1388,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 2027 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2117 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (176 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (179 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -2702,7 +2744,41 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    `tools_ki.js`, gepaart gegen v109 auf denselben Startwerten). Auslegung (zum Ändern angeboten): Die 4
    gilt sofort auch in laufenden und gespeicherten Partien – die Zahl steht nicht im Spielstand, wie
    schon in v84. Alte Partien bei 7 zu lassen hieße, sie dort festzuhalten (wie `S.oldTree` den alten
-   Techtree).
+   Techtree). **Seit v111 überholt:** 5 Münzen (Anweisung des Autors), ebenso nicht gemessen und
+   ebenso sofort auch in laufenden Partien.
+74. **Getroffene Auslegungen (v111)** – zum Ändern angeboten. Vorab gefragt und vom Autor entschieden:
+   Rom ist **eine** Zivilisation mit zwei Fähigkeiten; Atlantis setzt seine **Hauptstadt aufs Land**,
+   nur Gegründetes kommt aufs Meer; **Wirkungen stapeln** (Venedig mit Kolonialismus 6 Felder,
+   Atlantis mit Bürokratie in der Hauptstadt ×4). Ohne Rückfrage: (a) „Wasser" ist Meer – Fluss und
+   Insel sind Land. (b) Atlantis „produziert doppelt" wie die Bürokratie für die Hauptstadt, nur für
+   jede Stadt: Felder, Bevölkerung (samt ihrem Nahrungsverbrauch, also das Netto doppelt),
+   Handelsrouten, Ökologie, Gentechnik – nicht die Wallfahrt. (c) Legion: echte Armeen, Nachbarn nur
+   eigene echte; beim Flankieren zählt die stärkste Flankierende, die Geflankte verteidigt mit ihrem
+   Wert; eine Burgenbau-Stadt zählt mit dem Machtwert selbst. (d) Via Appia: „Straßen immer
+   forschbar" heißt das Rad immer verfügbar, nicht geschenkt. (e) Venedig behält seine Hauptstadt;
+   Wachstum kostet nichts, die Schritte je Runde bleiben. (f) Ägypten zählt jede erforschte
+   Technologie, auch geschenkte; nie unter 0. (g) Aztekenreich: verlorene Wunder zählen nicht mehr.
+   (h) China sammelt **zusätzlich** ein, mit dem Stand von jetzt, Nahrung nie unter 0; das Zugende
+   fragt nicht danach (eine Wahl des Zeitpunkts, keine vergessene Aktion). (i) USA: nur Forschung
+   (nicht geschenkte oder kopierte), Gründung, jeder Wachstumsschritt, Armee- und Wunderbau; die USA
+   gibt es auch ohne Weltwunder – nur einer der Auslöser hängt an ihnen. (j) Maya: im ersten Zug, wie
+   der Startausgleich. (k) Namen der Fähigkeiten außer Legion und Via Appia, Zeichen, Farben und das
+   Feld `order` (5–13, wirkt nur ohne Platzfolge, also nirgends, wo sie wählbar sind) gewählt. (l) Nicht
+   im Marathon und nicht auf den festen Karten (dort fehlt das Häkchen; die festen Karten haben je
+   Grundreich einen Startstern). (m) Zu zweit diagonal und fest, nicht gelost: oben und unten wäre die
+   Karte 21 Zeilen hoch, das Spiel steht immer quer. **Seit v112 überholt, was Atlantis betrifft:**
+   Atlantis ist entfernt (Anweisung des Autors) – die Hauptstadt an Land, (a), (b) und ×4 mit Bürokratie
+   gelten nicht mehr.
+75. **Experimentelle Zivilisationen – kaum gemessen (v111).** Gemessen nur: KI gegen KI (Mittel, 14
+   Dreiecke, Plätze reihum) gewann **Atlantis 12 von 12** Partien gegen Venedig, Rom (Legion) und China,
+   10 davon Wirtschaftssiege – mit Abstand die stärkste Fähigkeit. Zwei weitere Aufstellungen (je 8
+   Partien, ohne Platzwechsel, der Startspieler fest) gaben kein klares Bild. Geschätzt, nicht
+   gemessen: die Grundwerte der KI für die Fähigkeitswahl (`KI_DRAFT_BASE`), Chinas Runde 4
+   (`KI_CHINA_ROUND`). Nicht nachgestellt: die KI plant Angriffe weiter mit einem Machtwert je Armee –
+   Roms Legion schlägt stärker zu, als sie rechnet (die Kampfphase selbst rechnet richtig); ihre
+   Forschungswerte (`kiTechBonus`) kennen weder Venedigs Kolonialismus noch das Rad der Via Appia.
+   **Seit v112:** Atlantis ist nach dieser Messung entfernt (Anweisung des Autors); für die übrigen
+   acht gilt das Übrige weiter.
 
 ## Arbeitsweise, die der Autor schätzt
 

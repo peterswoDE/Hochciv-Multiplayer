@@ -49,6 +49,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const inServer = (code, env = {}) => execFileSync('docker', ['exec', '-i', '-w', '/app',
     ...Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v}`]), CONTAINER, 'node', '-'], { input: code }).toString().trim();
 const sql = q => execFileSync('docker', ['exec', 'hochciv-db', 'psql', '-U', 'hochciv', '-d', 'hochciv', '-tAc', q]).toString().trim();
+// Matches written here from another process (inServer) don't reach the server's caches of match
+// statistics; the local server's test hook drops them (TEST_HOOKS=on, docker-compose.local.yml).
+const forgetCaches = () => fetch(BASE + '/api/test/reset', { method: 'POST' }).catch(() => null);
 const PASSWORD = 'Test-' + crypto.randomBytes(6).toString('hex');
 function makeUser(role = 'user') {
     const name = 'ovr_' + crypto.randomBytes(3).toString('hex');
@@ -205,6 +208,7 @@ function personalMatch() {
 
 async function personal(browser, errors, me) {
     try {
+        await forgetCaches();
         const d = await (await fetch(`${BASE}/api/stats/player/${me.id}?seats=all&mode=duel`)).json();
         ok(d.query.seats === 'user' && d.games === 1 && d.seats === 1 && d.winners.won.seats === 1 && d.victory.science === 1 && d.civs.length === 1 && d.civs[0].k === 'england',
             'GET /api/stats/player/:id: only the account\'s seat in its matches', JSON.stringify({ q: d.query, games: d.games, seats: d.seats }));
@@ -256,7 +260,8 @@ async function rundenspiel() {
         ok(src === 'replay', 'Rundenspiel: its facts come from the replay', src);
         const f = JSON.parse(sql(`SELECT facts FROM games WHERE id = '${out.game.id}'`));
         ok(f.n === 2 && f.p.every(p => p.pos && p.t) && f.p.filter(p => p.won).length >= 1 && f.r === out.round, 'Rundenspiel: positions, techs, winner', JSON.stringify({ n: f.n, r: f.r, win: f.win }));
-        // facts changed → the cache is dropped; the API counts the match (its seats were taken over by the KI)
+        // the API counts the match (its seats were taken over by the KI)
+        await forgetCaches();
         const all = await (await fetch(`${BASE}/api/stats?seats=all`)).json();
         ok(all.games >= 1 && all.seats >= 2 && all.names && all.civs.length, 'GET /api/stats: counts the matches', `${all.games} matches`);
         const ver = await (await fetch(`${BASE}/api/stats?seats=all&mode=duel&ver=${f.ver}`)).json();

@@ -814,8 +814,9 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   eq(A.players.map((p, i) => { const c = capitalOf(A, i); const e = map.capitals[p.slot]; return c.r === e.r && c.c === e.c; }),
     [true, true, true], 'jede Hauptstadt steht auf dem Startfeld ihres Platzes');
   const vier = CIVS.map(c => ({ civ: c.k, kind: 'bot' }));
-  eq(newGame({ seed: 3, map: MAP_ORIGINAL, players: vier }).players.map(p => p.civ), ORDER.slice(),
+  eq(newGame({ seed: 3, map: MAP_ORIGINAL, players: vier }).players.map(p => p.civ), ORDER.filter(k => CIV_KEYS.includes(k)),
     'klassisch: Russland → Griechenland → England → Wikinger');
+  eq(ORDER.slice(0, 4), ['russland', 'griechenland', 'england', 'wikinger'], 'die experimentellen ziehen hinter den vier (v111)');
 }
 
 /* ==================================================== Bot-Armeeprioritäten
@@ -1221,9 +1222,9 @@ const spotBy = (S, city) => neighbors(city.r, city.c).find(([r, c]) =>
   const c = capitalOf(S, 0); c.pop = 4;
   const vorher = S.players[0].res.coins;
   eq(sacrifice(S, 0, c), null, 'erstes Opfern klappt');
-  eq([S.players[0].res.coins - vorher, SLAVERY_COINS], [4, 4], 'eine geopferte Bevölkerung bringt 4 Münzen (v110; v84–v109 7, davor 10)');
+  eq([S.players[0].res.coins - vorher, SLAVERY_COINS], [5, 5], 'eine geopferte Bevölkerung bringt 5 Münzen (v111; v110 4, v84–v109 7, davor 10)');
   eq([TECH_BY_KEY.sklaverei.e.includes(SLAVERY_COINS + ' Münzen'), DATA_EN.tech.sklaverei[1].includes(SLAVERY_COINS + ' coins')],
-    [true, true], 'der Techbogen nennt die 4 Münzen, deutsch und englisch');
+    [true, true], 'der Techbogen nennt die 5 Münzen, deutsch und englisch');
   eq(typeof sacrifice(S, 0, c), 'string', 'zweites Opfern in derselben Runde wird abgelehnt');
   eq(c.pop, 3, 'nur eine Bevölkerung geopfert');
 }
@@ -3555,8 +3556,8 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   // gedraftet: fremde Fähigkeiten wirken bei jeder Zivilisation
   const E = zwei('england', ['wikinger:basis', 'russland:siedler']);
   const ei = E.players.findIndex(p => p.civ === 'england');
-  eq([armiesOf(E, ei).length, capitalOf(E, ei).pop], [1, 2], 'England mit Seefahrer und Siedlertrecks: Gratisarmee und Hauptstadt mit 2');
-  eq(abilInfos(E.players[ei]).map(a => a.n), ['Seefahrer', 'Siedlertrecks'], 'abilInfos nennt beide');
+  eq([armiesOf(E, ei).length, capitalOf(E, ei).pop], [1, 2], 'England mit Berserker und Siedlertrecks: Gratisarmee und Hauptstadt mit 2');
+  eq(abilInfos(E.players[ei]).map(a => a.n), ['Berserker', 'Siedlertrecks'], 'abilInfos nennt beide');
   eq(hasAbil(E.players[ei], 'england', 'basis'), false, 'die eigene Grundfähigkeit hat England dann nicht');
   const G = zwei('griechenland', ['england:basis', 'wikinger:armeemacht']);
   const gi = G.players.findIndex(p => p.civ === 'griechenland');
@@ -3565,7 +3566,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const W = zwei('wikinger', ['griechenland:basis', 'griechenland:basis']);
   const wi = W.players.findIndex(p => p.kind === 'human');
   eq(techCost(W, wi, TECH_BY_KEY.papier), 5, 'doppelt gedraftet wirkt einfach (Papier 6 − 1, nicht − 2)');
-  eq(armiesOf(W, wi).length, 0, 'Wikinger ohne Seefahrer: keine Gratisarmee');
+  eq(armiesOf(W, wi).length, 0, 'Wikinger ohne Berserker: keine Gratisarmee');
   const K = zwei('russland', ['england:gruenden', 'russland:wachstum']);
   const ki = K.players.findIndex(p => p.civ === 'russland');
   eq(growPrice(K, ki, capitalOf(K, ki)), { food: 0, coins: 2 }, 'Kolonisten und Fruchtbarkeit zusammen: keine Nahrung, doppelte Münzen');
@@ -6395,8 +6396,9 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
       });
       eq(alt.every((f, i) => f.every((v, k) => !v || frei[i][k])), true,
         `${n}P: jedes bis v72 erlaubte Feld bleibt erlaubt`);
+      // seit v111 liegen zu zweit bis viert alle Startplättchen außen: jedes Feld darf Hauptstadt sein (bis v110 zu viert 13)
       if (n <= 4) eq(frei.map(f => f.filter(Boolean).length),
-        set.map(() => ({ 2: 15, 3: 15, 4: 13 })[n]),
+        set.map(() => 15),
         `${n}P: erlaubte Felder je Startplättchen (bis v72: ${alt.map(f => f.filter(Boolean).length).join('/')})`);
       // 5–8 (Mehrspieler-Erweiterung): wie zu viert 13 an den Enden; wer links und rechts einen Nachbarn hat, 12,
       // ein Sitz neben einer freien Lücke 14
@@ -6404,43 +6406,9 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
         `${n}P: erlaubte Felder je Startplättchen ${frei.map(f => f.filter(Boolean).length).join('/')} (mindestens 12)`);
     });
   }
-  // Vier Reiche: gesperrt bleiben genau die Spitze und die Ecke am offenen Mittelplättchen
-  {
-    const sh = TILE_SHAPES[4], set = sh.seatSets[0];
-    const gesperrt = set.map((s, i) => seatFreeCells(sh, set, i)
-      .map((v, k) => v ? null : TRI_IJK[k].join('')).filter(Boolean).sort().join(' '));
-    // (i,j,k): 004 ist die Spitze, 400 und 040 die Ecken der langen Kante
-    eq(gesperrt.every(g => g.split(' ').length === 2 && g.includes('004')), true,
-      `4P: je Startplättchen gesperrt: Spitze + eine Ecke (${gesperrt.join(' | ')})`);
-    // Die gesperrte Ecke: mit der gegenüberliegenden Ecke des Nachbarsitzes teilte sie sich
-    // die Spitze des offenen Mittelplättchens – genau das verhindert Bedingung 2.
-    const ecke = i => slotCells(sh.slots[set[i]])[seatFreeCells(sh, set, i)
-      .findIndex((v, k) => !v && TRI_IJK[k].join('') !== '004')];
-    const [e1, e3] = [ecke(0), ecke(1)];
-    const mitte = nbCube(e1).find(x => nbCube(e3).some(y => y.join() === x.join()));
-    eq(cubeDist(e1, e3), 2, '4P: die beiden oberen Ecken liegen 2 auseinander');
-    eq(!!mitte && slotCells(sh.slots[2]).some(c => c.join() === mitte.join()), true,
-      '4P: ihr gemeinsames Nachbarfeld ist die Spitze des offenen Mittelplättchens');
-  }
-  // Vier Reiche: die Sitze sind die beiden oberen und die beiden unteren Dreiecke,
-  // also die, deren Fünferzeile auf der Ober- bzw. Unterkante der Form liegt.
-  {
-    const sh = TILE_SHAPES[4];
-    const set = sh.seatSets[0];
-    const zeilen = sh.slots.map(sl => slotCells(sl).map(c => cubeToRC(c)[0]));
-    const oben = Math.min(...zeilen.flat()), unten = Math.max(...zeilen.flat());
-    const kante = i => {
-      const z = zeilen[i];
-      const anOben = z.filter(r => r === oben).length, anUnten = z.filter(r => r === unten).length;
-      return anOben === TILE_SIDE ? 'oben' : anUnten === TILE_SIDE ? 'unten' : null;
-    };
-    eq(set.map(kante).sort(), ['oben', 'oben', 'unten', 'unten'],
-      'je zwei Startplättchen liegen mit ihrer breiten Seite oben und unten');
-    eq(sh.slots.map((_, i) => i).filter(i => kante(i)).sort(), set.slice().sort(),
-      'und es sind genau diese vier – keine anderen liegen so');
-    eq(set.includes(2) || set.includes(7), false, 'die beiden mittigen Plättchen bleiben offen');
-  }
-
+  /* Bis v110 standen hier zwei Blöcke zur Form aus zehn Dreiecken zu viert (strip10): welche Felder
+     der Startplättchen gesperrt bleiben und dass sie oben und unten an der Form liegen. Seit v111 sitzt
+     niemand mehr in der Form – sie steht im Block „Plättchenkarte zu viert" weiter unten. */
   // --- Plan, Legen, Karte
   // ab fünf Reichen sitzen Zivilisationen doppelt (Mehrspieler-Erweiterung)
   const civsN = n => Array.from({ length: n }, (_, i) => CIVS[i % CIVS.length].k);
@@ -6586,10 +6554,13 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
     const seat = plan.seats[0];
     const ok = placeOptions(plan, seat, 0);
     const nass = ok.findIndex(v => !v);
+    eq(nass >= 0, true, 'das Startplättchen hat ein gesperrtes Feld');
     eq(placeSeat(plan, seat, 0, nass) !== null, true, 'gesperrtes Feld wird abgelehnt');
     eq(placeSeat(plan, seat, 3, ok.indexOf(true)) !== null, true, 'es gibt nur drei Lagen');
-    eq(placeSeat(plan, seat, 2, ok.indexOf(true)), null, 'erlaubtes Feld wird angenommen');
-    eq([seat.o, seat.cell], [2, ok.indexOf(true)], 'Lage und Feld sind gespeichert');
+    // erlaubt in Lage 2 – bis v110 traf zufällig das erste erlaubte Feld der Lage 0 auch dort
+    const ok2 = placeOptions(plan, seat, 2);
+    eq(placeSeat(plan, seat, 2, ok2.indexOf(true)), null, 'erlaubtes Feld wird angenommen');
+    eq([seat.o, seat.cell], [2, ok2.indexOf(true)], 'Lage und Feld sind gespeichert');
   }
   // Drehen zeigt dasselbe Plättchen, nur anders herum
   {
@@ -6662,25 +6633,27 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
   }
 }
 
-/* ==================================================== Experimenteller Plättchenmodus (v107)
-   Vier Reiche, 14 Dreiecke (Anweisung des Autors; v99–v106 zehn Sechsecke): die zehn der Form zu
-   viert liegen offen, die vier Startdreiecke außen an jeder zweiten Außenkante, je zwei
-   benachbarte gleich weit auseinander. */
+/* ==================================================== Plättchenkarte zu viert (v107, seit v111 die einzige)
+   Vier Reiche, 14 Dreiecke (Anweisung des Autors; v107–v110 als „experimenteller Plättchenmodus"
+   neben der Form aus zehn, v99–v106 zehn Sechsecke): die zehn inneren liegen offen, die vier
+   Startdreiecke außen an jeder zweiten Außenkante, je zwei benachbarte gleich weit auseinander. */
 {
   const K = c => c.join(',');
   const nbCube = c => CUBE_DIRS.map(d => [c[0] + d[0], c[1] + d[1], c[2] + d[2]]);
-  const sh = TILE_SHAPES.tri14, vier = TILE_SHAPES[4];
+  const sh = TILE_SHAPES[4];
   const zellen = sh.slots.flatMap(slotCells);
-  eq([sh.slots.length, zellen.length, new Set(zellen.map(K)).size, sh.holes.length], [14, 210, 210, 0],
+  eq([sh.key, sh.slots.length, zellen.length, new Set(zellen.map(K)).size, sh.holes.length], ['tri14', 14, 210, 210, 0],
     '14 Dreiecke, 210 Felder, keines doppelt, keine Löcher');
-  eq(sh.slots.slice(0, 10).map(sl => sl.t + K([sl.a[0], sl.a[1] + 1, sl.a[2] - 1])), vier.slots.map(sl => sl.t + K(sl.a)),
-    'Platz 0–9: die Form zu viert, eine Zeile tiefer');
+  // die zehn der Form, die es bis v110 auch allein gab (strip10), eine Zeile tiefer
+  const zehn = ['B5,-1,0', 'A6,-6,-4', 'B11,-7,0', 'A12,-12,-4', 'B17,-13,0', 'A0,-5,1', 'B5,-6,5', 'A6,-11,1', 'B11,-12,5', 'A12,-17,1'];
+  eq(sh.slots.slice(0, 10).map(sl => sl.t + K([sl.a[0], sl.a[1] + 1, sl.a[2] - 1])), zehn,
+    'Platz 0–9: die zehn Dreiecke der früheren Form zu viert, eine Zeile tiefer');
   const echt = new Set(zellen.map(K));
   const gesehen = new Set([K(zellen[0])]), offen = [zellen[0]];
   while (offen.length) for (const n of nbCube(offen.pop())) if (echt.has(K(n)) && !gesehen.has(K(n))) { gesehen.add(K(n)); offen.push(n); }
   eq(gesehen.size, 210, 'die Form hängt zusammen');
   eq(Math.min(...zellen.map(c => c[2])) % 2, 0, 'die Form beginnt in einer geraden Zeile');
-  const karte0 = tileMap(tilePlan(['russland', 'griechenland', 'england', 'wikinger'], 1, { shape: 'tri14' }), { show: [] });
+  const karte0 = tileMap(tilePlan(['russland', 'griechenland', 'england', 'wikinger'], 1), { show: [] });
   eq([karte0.rows.length, karte0.rows[0].length], [20, 23], 'Karte 20 × 23');
   // Startdreiecke: je eines an einer Kante der Innenform (5 Felder Kante an Kante), sonst frei
   const innen = new Set(sh.slots.slice(0, 10).flatMap(slotCells).map(K));
@@ -6701,12 +6674,12 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
 
   // --- Plan, Legen, Karte
   const civs4 = ['russland', 'griechenland', 'england', 'wikinger'];
-  const plan = tilePlan(civs4, 7071, { shape: 'tri14' });
+  const plan = tilePlan(civs4, 7071);
   eq([plan.shapeKey, plan.tiles.length, new Set(plan.tiles).size, plan.tiles.every(t => t >= 0 && t < TILE_POOL.length)],
     ['tri14', 14, 14, true], 'Plan: 14 verschiedene Dreiecke aus dem Vorrat');
   eq(plan.ori.every(o => o >= 0 && o < 3), true, 'drei Lagen je Plättchen');
-  eq([tilePlan(civs4.slice(0, 3), 7071, { shape: 'tri14' }).shapeKey, tilePlan(civs4, 7071).shapeKey], ['tri9', 'strip10'],
-    'nur für vier Reiche, ohne den Wunsch die übliche Form');
+  eq([2, 3, 4].map(n => tilePlan(civs4.slice(0, n), 7071).shapeKey), ['tri8', 'tri9', 'tri14'],
+    'je Spielerzahl genau eine Form (v111)');
   const rnd = mapRng(3);
   const setup = rollSetup({ players: civs4.map(c => ({ civ: c, kind: 'ki' })), seed: 7071 });
   eq([0, 1].map(i => kiPlaceSeat(plan, plan.seats[i], { civ: civs4[i], kind: 'ki', ability: 'basis' }, setup)), [null, null], 'die KI legt');
@@ -6795,7 +6768,7 @@ ui = { sel: null, army: null, mode: null, botTimer: null };
       players: civs.map(c => ({ civ: c, kind: 'ki', kiLevel: 'leicht', ability: 'basis' })) });
     eq(S.cities.length, n, `${n} Reiche: die Partie beginnt mit ${n} Hauptstädten`);
   }
-  eq([typeof HEX_POOL, mapLimits('plaettchen14')], ['undefined', { min: 4, max: 4, marathon: false }], 'keine Sechsecke mehr; 14 Dreiecke nur zu viert');
+  eq(typeof HEX_POOL, 'undefined', 'keine Sechsecke mehr');
 }
 
 /* ==================== baseIncome lässt den Spielstand, wie er war
@@ -7338,7 +7311,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   eq(TIPS[0], DATA_EN.tips[0], 'Spieltipps wechseln mit');
   eq(TIPS.some(t => /[äöüß]/.test(t)), false,
     'auf Englisch ist kein deutscher Tipp übrig: ' + (TIPS.find(t => /[äöüß]/.test(t)) || '').slice(0, 40));
-  eq(TILE_SHAPES[2].name, 'Tile map (6 triangles)', 'Kartenformen wechseln');
+  eq(TILE_SHAPES[2].name, 'Tile map (8 triangles)', 'Kartenformen wechseln');
   // techEffect rechnet weiter mit den Duellschwellen, jetzt auf Englisch
   eq(techEffect(TECH_BY_KEY.theologie, { duel: true }), `>${bruch(VT.duell.theologie)} of the population to win`,
     'Duellschwellen auch auf Englisch');
@@ -7410,15 +7383,19 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
    merkt es hier und nicht erst im Spiel.                                            */
 {
   const roh = JSON.parse(fs.readFileSync(__dirname + '/data/civs.json', 'utf8'));
-  eq(roh.civs.map(c => c.k), CIVS.map(c => c.k),
+  eq(roh.civs.map(c => c.k), ALL_CIVS.map(c => c.k),
     'js/civs.js steht in derselben Reihenfolge wie data/civs.json (Anzeigereihenfolge)');
+  eq([CIVS.map(c => c.k), EXP_CIVS.map(c => c.k)], [roh.civs.filter(c => !c.exp).map(c => c.k), roh.civs.filter(c => c.exp).map(c => c.k)],
+    'CIVS sind die Grundreiche, EXP_CIVS die experimentellen (v111)');
+  eq(EXP_CIVS.every(c => c.exp) && CIVS.every(c => !c.exp), true, 'das Feld exp kommt mit');
+  eq(EXP_CIVS.filter(c => c.wo).map(c => c.k), roh.civs.filter(c => c.wo).map(c => c.k), 'das Feld wo kommt mit');
   eq(roh.civs.slice().sort((a, b) => a.order - b.order).map(c => c.k), ORDER,
     'ORDER ist die Zugreihenfolge aus dem Feld order');
   roh.civs.forEach(c => {
     const civ = CIV_BY_KEY[c.k];
     eq([civ.n, civ.sym, civ.color], [c.n, c.sym, c.color], `${c.k}: Name, Zeichen und Farbe`);
     eq(civ.abilities.map(a => [a.k, a.n, a.e]), c.abilities.map(a => [a.k, a.n, a.e]),
-      `${c.k}: drei Fähigkeiten wie in der JSON`);
+      `${c.k}: Fähigkeiten wie in der JSON`);
     eq(civ.ability, c.abilities[0].e, `${c.k}: ability ist die Grundfähigkeit`);
   });
   eq([BARB_CIV.k, BARB_CIV.n, BARB_CIV.color],
@@ -7429,12 +7406,19 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
   eq(new Set(CIVS.map(c => c.color)).size, CIVS.length, 'jede Zivilisation hat eine eigene Farbe');
   eq(CIVS.every(c => c.abilities.length === 3 && c.abilities[0].k === 'basis'), true,
     'je drei Fähigkeiten, die erste ist die Grundfähigkeit');
-  eq(new Set(CIVS.map(c => c.sym)).size, CIVS.length, 'jede Zivilisation hat ein eigenes Zeichen');
+  eq(EXP_CIVS.every(c => c.abilities.length >= 1 && c.abilities.length <= 3 && c.abilities[0].k === 'basis'), true,
+    'experimentelle (v111): eine bis drei Fähigkeiten, die erste ist die Grundfähigkeit');
+  eq(new Set(ALL_CIVS.map(c => c.sym)).size, ALL_CIVS.length, 'jede Zivilisation hat ein eigenes Zeichen');
+  eq(new Set(ALL_CIVS.map(c => c.color)).size, ALL_CIVS.length, 'auch die experimentellen haben je eine eigene Farbe');
+  // SYM steht in der Oberfläche (js/ui/base.js), die dieser Test nur als Text liest
+  const basis = fs.readFileSync(__dirname + '/js/ui/base.js', 'utf8');
+  const symZeile = basis.slice(basis.indexOf('const SYM = {'), basis.indexOf('};', basis.indexOf('const SYM = {')));
+  eq(ALL_CIVS.filter(c => !new RegExp('\\b' + c.sym + ": '").test(symZeile)).map(c => c.k), [], 'jedes Zeichen steht in SYM');
   // Jeder Fähigkeitsschlüssel, der nicht 'basis' ist, muss im Code auch vorkommen –
   // sonst hängt eine Alternative in der Auswahl, ohne etwas zu tun.
   const code = ['js/engine.js', 'js/expansion.js', 'js/bots.js']
     .map(f => fs.readFileSync(__dirname + '/' + f, 'utf8')).join('\n') + uiQuelle();
-  const ohneWirkung = CIVS.flatMap(c => c.abilities.filter(a => a.k !== 'basis').map(a => a.k))
+  const ohneWirkung = ALL_CIVS.flatMap(c => c.abilities.filter(a => a.k !== 'basis').map(a => a.k))
     .filter(k => !code.includes(`'${k}'`));
   eq(ohneWirkung, [], 'jede Alternativfähigkeit wird im Code auch geprüft');
 }
@@ -8355,6 +8339,332 @@ function kiAbwehrLage(popKI, gross) {
   }
   eq(S.round > 6 || !!S.over, true, `acht Reiche (4 KI, 4 Bots): sechs Runden gespielt`);
   eq(langsamster < 8000, true, `langsamster KI-Zug ${langsamster} ms (unter 8 s)`);
+}
+
+/* ============================================ Experimentelle Zivilisationen (v111)
+   Anweisung des Autors (22.11.): ein Häkchen „Experimentelle Zivilisationen" mit Rom (Legion, Via
+   Appia – eine Zivilisation, zwei Fähigkeiten, Wahl des Autors), Venedig, Aztekenreich, Ägypten,
+   Deutschland, Maya, China und den USA (Atlantis aus v111 seit v112 wieder entfernt). Die mit
+   Weltwunder-Wirkung gibt es nur, wenn auch Weltwunder zugeschaltet sind. Je Regel ein Test; die Karte
+   ist klein und hat Hauptstädte nach Platz. */
+{
+  const ROWS = [
+    'MMMMMMMMMMMMM',
+    'MGGGWGGGGGGGM',
+    'MGGGGGGWGGGGM',
+    'MGWGGGGGGGGGM',
+    'MGGGGGGGGGWGM',
+    'MGGGWGGGGGGGM',
+    'MGGGGGGGWGGGM',
+    'MGGGGGGGGGGGM',
+    'MMMMMMMMMMMMM',
+  ];
+  const karte = () => ({ name: 'Test v111', rows: ROWS.slice(), capitals: [{ r: 2, c: 2 }, { r: 6, c: 10 }], random: true });
+  // Platz 0 ist das Reich unter Test (Startspieler), Platz 1 ein zweites Reich (ab Werk ein Bot)
+  const spiel = (civ, ability, extra, zweiter) => newGame(Object.assign({
+    seed: 7, map: karte(), seatOrder: true, startPlayer: 0,
+    players: [{ civ, kind: 'human', ability: ability || 'basis' }, zweiter || { civ: 'griechenland', kind: 'bot' }],
+  }, extra || {}));
+  const armee = (S, owner, r, c) => { const a = { id: S.nextId++, owner, r, c, mp: 0, born: 0 }; S.armies.push(a); return a; };
+  const nb = (r, c) => neighbors(r, c);
+  const gemeinsam = (a, b) => nb(...a).find(([r, c]) => nb(...b).some(([x, y]) => x === r && y === c));
+
+  // --- Welche Reiche zur Wahl stehen
+  eq(civKeysFor({}), CIV_KEYS, 'ohne Häkchen: die vier Grundreiche');
+  eq(civKeysFor({ wo: true }), CIV_KEYS, 'Weltwunder allein bringen keine experimentellen');
+  eq(EXP_CIVS.filter(c => c.wo).map(c => c.k), ['azteken', 'aegypten'], 'Weltwunder-Wirkung: Aztekenreich und Ägypten');
+  eq(civKeysFor({ exp: true }), CIV_KEYS.concat(['rom', 'venedig', 'deutschland', 'maya', 'china', 'usa']),
+    'mit Häkchen ohne Weltwunder: alle experimentellen außer Aztekenreich und Ägypten');
+  eq(civKeysFor({ exp: true, wo: true }), CIV_KEYS.concat(EXP_CIV_KEYS), 'mit Häkchen und Weltwundern: alle zwölf');
+  eq([EXP_CIVS.length, EXP_CIVS.reduce((n, c) => n + c.abilities.length, 0)], [8, 9], 'acht Reiche, neun Fähigkeiten (v112 ohne Atlantis)');
+  eq([CIV_BY_KEY.atlantis, ORDER.includes('atlantis'), abilById('atlantis:basis'), 'atlantis' in DATA_EN.civ, 'atlantis' in KI_DRAFT_BASE,
+    typeof ATLANTIS_CITY_FACTOR], [undefined, false, null, false, false, 'undefined'], 'Atlantis ist ganz entfernt (v112)');
+  eq(CIV_BY_KEY.rom.abilities.map(a => [a.k, a.n]), [['basis', 'Legion'], ['viaappia', 'Via Appia']],
+    'Rom: eine Zivilisation mit Legion und Via Appia (Wahl des Autors)');
+  eq([abilityIdsFor({}).join(), ALL_ABILITIES.length, abilityIdsFor({ exp: true, wo: true }).length], [ALL_ABILITIES.join(), 12, 21],
+    'Fähigkeiten: ohne Häkchen die zwölf, mit allem 21; der Marathon bleibt bei zwölf');
+  eq(abilityIdsFor({ exp: true, wo: true }).filter(id => !(id in KI_DRAFT_BASE)), [], 'jede Fähigkeit hat einen Grundwert für die KI');
+  {
+    let exp = 0, wunder = 0, fremd = 0;
+    for (let s = 1; s <= 120; s++) {
+      const D = pickNew([0, 1, 2, 3], s, { exp: true, wo: false });
+      D.pool.forEach(id => {
+        if (!abilityIdsFor({ exp: true }).includes(id)) fremd++;
+        if (/^(azteken|aegypten):/.test(id)) wunder++;
+        if (EXP_CIV_KEYS.includes(id.split(':')[0])) exp++;
+      });
+    }
+    eq([fremd, wunder, exp > 0], [0, 0, true], 'Fähigkeitswahl mit Häkchen: experimentelle im Vorrat, ohne Weltwunder nie Aztekenreich und Ägypten');
+    const ohne = pickNew([0, 1, 2, 3], 5);
+    eq(ohne.pool.every(id => ALL_ABILITIES.includes(id)), true, 'ohne Angabe: nur die zwölf');
+  }
+
+  // --- Die Zahlen in den Texten: deutsch und englisch dieselben wie die Konstanten
+  {
+    const ab = id => abilById(id).e, en = (c, k) => DATA_EN.abil[c][k][1];
+    eq([ab('rom:basis').includes('+' + LEGION_BONUS_PCT + ' % Macht'), en('rom', 'basis').includes('+' + LEGION_BONUS_PCT + '% power')],
+      [true, true], 'Legion nennt +50 %');
+    eq([ab('venedig:basis').startsWith(VENICE_CLAIMS + '× pro Runde') && ab('venedig:basis').includes((VENICE_CLAIMS + COLONY_CLAIMS) + '×'),
+      en('venedig', 'basis').includes(VENICE_CLAIMS + ' times per round') && en('venedig', 'basis').includes((VENICE_CLAIMS + COLONY_CLAIMS) + ' times')],
+      [true, true], 'Venedig nennt 3 je Runde und 6 mit Kolonialismus');
+    eq([ab('aegypten:basis').includes(EGYPT_WONDER_DISCOUNT + ' Münze weniger'), en('aegypten', 'basis').includes(EGYPT_WONDER_DISCOUNT + ' coin less')],
+      [true, true], 'Ägypten nennt 1 Münze je Technologie');
+    eq([ab('maya:basis').includes(MAYA_START_COINS + ' Münzen'), en('maya', 'basis').includes(MAYA_START_COINS + ' extra coins')],
+      [true, true], 'Maya nennen 10 Münzen');
+    eq([ab('usa:basis').startsWith('+' + USA_ACTION_COINS + ' Münze'), en('usa', 'basis').startsWith('+' + USA_ACTION_COINS + ' coin')],
+      [true, true], 'USA nennen +1 Münze');
+    const wald = YIELD_CHAINS.W.find(ch => ch[0].k === 'mathematik');
+    const summe = wald[0].y[0] + wald[1].y[0];
+    eq([wald[1].k, summe, ab('deutschland:basis').includes(summe + ' Wissenschaft'), en('deutschland', 'basis').includes(summe + ' science')],
+      ['elektrizitaet', 3, true, true], 'Ingenieurskunst nennt 1 + 2 = 3 Wissenschaft im Wald');
+    eq(EXP_CIVS.every(c => DATA_EN.civ[c.k] && c.abilities.every(a => DATA_EN.abil[c.k] && DATA_EN.abil[c.k][a.k])), true,
+      'jede experimentelle Zivilisation und Fähigkeit hat einen englischen Namen und Text');
+  }
+
+  // --- Rom „Legion": +50 % Macht je angrenzender eigener Armee, abgerundet
+  {
+    const S = spiel('rom', 'basis');
+    S.players[0].power = 5;
+    const a1 = armee(S, 0, 4, 6);
+    eq(armyPower(S, a1), 5, 'Legion ohne Nachbarn: der Machtwert');
+    const [r2, c2] = nb(4, 6)[0];
+    const a2 = armee(S, 0, r2, c2);
+    eq([armyPower(S, a1), armyPower(S, a2)], [7, 7], 'ein Nachbar: 5 × 1,5 = 7,5 → 7');
+    const [r3, c3] = gemeinsam([4, 6], [r2, c2]);
+    const a3 = armee(S, 0, r3, c3);
+    eq([a1, a2, a3].map(a => armyPower(S, a)), [10, 10, 10], 'zwei Nachbarn: 5 × 2 = 10');
+    eq([attackValue(S, 0, 3), attackValue(S, 0, 3, null, [a1, a2, a3])], [15, 30], 'Angriff: jede Armee mit ihrem Wert');
+    eq(armyPower(S, a1, 4), 8, 'mit festgehaltenem Machtwert (Kampfphase) gerechnet');
+    const fremd = armee(S, 1, ...nb(r3, c3).find(([r, c]) => ![[4, 6], [r2, c2]].some(([x, y]) => x === r && y === c) && !armyAt(S, r, c)));
+    eq(armyPower(S, a3), 10, 'eine fremde Armee daneben zählt nicht');
+    S.armies = S.armies.filter(a => a !== fremd);
+    const V = spiel('rom', 'viaappia');
+    V.players[0].power = 5;
+    const v1 = armee(V, 0, 4, 6), v2 = armee(V, 0, r2, c2);
+    eq([armyPower(V, v1), attackValue(V, 0, 2, null, [v1, v2])], [5, 10], 'ohne Legion (Via Appia): der Machtwert, wie bisher');
+    // Verteidigung: Armeen in Reichweite der Hauptstadt, jede mit ihrem Wert
+    const D = spiel('rom', 'basis'), cap = capitalOf(D, 0);
+    D.players[0].power = 4;
+    const [n1, n2] = [nb(cap.r, cap.c)[0], null];
+    const d1 = armee(D, 0, ...n1), d2 = armee(D, 0, ...gemeinsam([cap.r, cap.c], n1));
+    const grund = cap.pop * defensePerPop(D, cap);
+    eq(defenseValue(D, cap), grund + 6 + 6, 'Hauptstadt: zwei benachbarte Armeen je 4 × 1,5 = 6');
+    D.players[0].ability = 'viaappia';
+    eq(defenseValue(D, cap), grund + 4 + 4, 'ohne Legion je 4');
+    // Flankieren (mit Taktik von zwei benachbarten Feldern): die stärkste Flankierende gegen die Geflankte
+    const flanke = ability => {
+      const F = spiel('rom', ability, {}, { civ: 'england', kind: 'human', ability: 'basis' });
+      F.players[0].power = 5; F.players[1].power = 6; F.players[0].techs.taktik = true;
+      const ziel = [4, 6];
+      const p1 = nb(...ziel)[0], p2 = gemeinsam(ziel, p1);
+      armee(F, 1, ...ziel); armee(F, 0, ...p1); armee(F, 0, ...p2);
+      combatPhase(F, 0);
+      return F.armies.filter(a => a.owner === 1).length;
+    };
+    eq([flanke('basis'), flanke('viaappia')], [0, 1], 'Flanke: Legion 7 schlägt 6, ohne Legion hält die Armee (5 gegen 6)');
+    // die geflankte Römerarmee verteidigt mit ihrem Wert
+    const G = spiel('england', 'basis', {}, { civ: 'rom', kind: 'human', ability: 'basis' });
+    G.players[0].power = 6; G.players[1].power = 5; G.players[0].techs.taktik = true;
+    const ziel = [4, 6], p1 = nb(...ziel)[0], p2 = gemeinsam(ziel, p1);
+    const p3 = nb(...ziel).find(([r, c]) => ![p1, p2].some(([x, y]) => x === r && y === c));
+    armee(G, 1, ...ziel); armee(G, 1, ...p3); armee(G, 0, ...p1); armee(G, 0, ...p2);
+    combatPhase(G, 0);
+    eq(G.armies.filter(a => a.owner === 1).length, 2, 'geflankte Legion mit Nachbar: 7 gegen 6 – sie hält');
+  }
+
+  // --- Rom „Via Appia": das Rad immer verfügbar, Handelsrouten doppelt
+  {
+    let immer = true, sonstOhne = false;
+    for (let s = 1; s <= 25; s++) {
+      const V = newGame({ seed: s, map: karte(), seatOrder: true, players: [{ civ: 'rom', kind: 'human', ability: 'viaappia' }, { civ: 'griechenland', kind: 'bot' }] });
+      const L = newGame({ seed: s, map: karte(), seatOrder: true, players: [{ civ: 'rom', kind: 'human', ability: 'basis' }, { civ: 'griechenland', kind: 'bot' }] });
+      if (!V.players[0].avail.rad) immer = false;
+      if (!L.players[0].avail.rad) sonstOhne = true;
+    }
+    eq([immer, sonstOhne], [true, true], 'Via Appia: das Rad ist immer verfügbar (Legion nur, wenn gewürfelt)');
+    eq(ABIL_TECH['rom:viaappia'], 'rad', 'über ABIL_TECH, wie die Navigation der Wikinger über CIV_TECH');
+    const route = ability => {
+      const S = spiel('rom', ability);
+      S.cities.push({ id: S.nextId++, owner: 0, r: 2, c: 5, pop: 1, cap: false, grown: 0, born: 0 });
+      S.roads[key(2, 3)] = 1; S.roads[key(2, 4)] = 1;
+      const z = incomeBreakdown(S, 0).extra.find(e => e.glyph === '🛤');
+      return z ? z.y : null;
+    };
+    eq([route('basis'), route('viaappia')], [[1, 1, 1], [2, 2, 2]], 'eine Handelsroute über Straße: +1, mit Via Appia +2');
+  }
+
+  // --- Venedig: beansprucht 3 Felder je Runde (mit Kolonialismus 6), gründet nicht, wächst kostenlos
+  {
+    const S = spiel('venedig'), p = S.players[0];
+    eq([claimMax(S, 0), claimsLeft(S, 0)], [VENICE_CLAIMS, VENICE_CLAIMS], 'Venedig: 3 Felder je Runde, ohne Kolonialismus');
+    eq(claimTile(S, 0, 4, 6), null, 'ein herrenloses Feld beansprucht');
+    eq([claimsLeft(S, 0), isColony(S, 0, 4, 6), controlledTiles(S, 0).has(key(4, 6))], [2, true, true], 'es gehört zum Reich');
+    p.techs.kolonialismus = true;
+    eq([claimMax(S, 0), claimsLeft(S, 0)], [6, 5], 'mit Kolonialismus zusammen 6 (Wirkungen stapeln, Wahl des Autors)');
+    delete p.techs.kolonialismus;
+    eq([foundSiteError(S, 0, 5, 6), canFound(S, 0, 5, 6), foundPossible(S, 0)], [T('Venedig gründet keine Städte.'), T('Venedig gründet keine Städte.'), false],
+      'Venedig gründet keine Städte');
+    const cap = capitalOf(S, 0);
+    eq(growPrice(S, 0, cap), { food: 0, coins: 0 }, 'Wachstum kostet nichts');
+    p.res = { sci: 0, food: 0, coins: 0 };
+    eq([growCity(S, 0, cap), cap.pop], [null, 2], 'wächst ohne jeden Vorrat');
+    eq(growCity(S, 0, cap), T('Diese Runde schon gewachsen.'), '… aber nicht öfter als sonst');
+    eq(kiSitesAll(S, 0, kiContext(S, 0)), [], 'die KI sucht keine Siedelplätze');
+    const G = spiel('griechenland');
+    eq([claimMax(G, 0), claimTile(G, 0, 4, 6)], [0, T('Kolonialismus nicht erforscht.')], 'andere brauchen weiter Kolonialismus');
+    const K = spiel('venedig', 'basis', {}, { civ: 'england', kind: 'ki', kiLevel: 'mittel', ability: 'basis' });
+    K.players[0].kind = 'ki'; K.players[0].kiLevel = 'mittel';
+    kiTurn(K, 0);
+    eq([K.cities.filter(c => c.owner === 0).length, (K.bought[0] || []).length], [1, VENICE_CLAIMS], 'die KI als Venedig: keine Stadt, drei Felder beansprucht');
+  }
+
+  // --- Aztekenreich: je eigenem Weltwunder zählt eine Armee nicht für die Baukosten
+  {
+    const S = spiel('azteken', 'basis', { wonders: true }), cap = capitalOf(S, 0);
+    eq(armyCost(S, 0), 5, 'ohne Wunder: die erste Armee 5');
+    const w = WONDERS.filter(x => x.lvl === 1).slice(0, 2);
+    w.forEach(x => S.wonders.push({ k: x.k, lvl: 1, owner: 0, cityId: cap.id, r: cap.r, c: cap.c }));
+    const kosten = [];
+    for (let i = 0; i < 3; i++) { kosten.push(armyCost(S, 0)); armee(S, 0, ...nb(4, 6)[i]); }
+    eq(kosten, [0, 0, 5], 'zwei Wunder: die ersten beiden Armeen kosten 0, die dritte 5 (Beispiel des Autors)');
+    eq(kiArmyCostNth(S, 0, 1), armyCost(S, 0), 'die KI rechnet dieselben Kosten');
+    const G = spiel('griechenland', 'basis', { wonders: true });
+    w.forEach(x => G.wonders.push({ k: x.k, lvl: 1, owner: 0, cityId: capitalOf(G, 0).id, r: 2, c: 2 }));
+    eq(armyCost(G, 0), 5, 'andere: Wunder ändern an den Armeekosten nichts');
+  }
+
+  // --- Ägypten: Weltwunder kosten 1 Münze weniger je erforschter Technologie, nie unter 0
+  {
+    const S = spiel('aegypten', 'basis', { wonders: true }), p = S.players[0];
+    eq(wonderCost(S, 0), WONDER_STEP, 'ohne Technologie: 10');
+    ['mathematik', 'schrift', 'rad'].forEach(k => { p.techs[k] = true; });
+    eq(wonderCost(S, 0), WONDER_STEP - 3 * EGYPT_WONDER_DISCOUNT, 'drei Technologien: 7');
+    TECHS.slice(0, 14).forEach(t => { p.techs[t.k] = true; });
+    eq(wonderCost(S, 0), 0, 'nie unter 0');
+    const G = spiel('griechenland', 'basis', { wonders: true });
+    ['mathematik', 'schrift', 'rad'].forEach(k => { G.players[0].techs[k] = true; });
+    eq(wonderCost(G, 0), WONDER_STEP, 'andere zahlen weiter 10');
+  }
+
+  // --- Deutschland: Ertragstechnologien addieren sich
+  {
+    const D = spiel('deutschland'), G = spiel('griechenland');
+    [D, G].forEach(S => { S.players[0].techs.mathematik = true; S.players[0].techs.elektrizitaet = true; });
+    eq([tileYield(D, 0, 'W')[0], tileYield(G, 0, 'W')[0]], [3, 2], 'Wald mit Mathematik und Elektrizität: 3 statt 2 Wissenschaft');
+    [D, G].forEach(S => { S.players[0].techs.ki = true; });
+    eq([tileYield(D, 0, 'W')[0], tileYield(G, 0, 'W')[0]], [6, 3], '… mit Künstlicher Intelligenz 6 statt 3');
+    [D, G].forEach(S => { S.players[0].techs.schrift = true; S.players[0].techs.universitaet = true; });
+    eq([cityPopYield(D, 0)[0], cityPopYield(G, 0)[0]], [4, 3], 'je Bevölkerung mit Schrift und Universitätswesen: 4 statt 3');
+    eq([tileYield(D, 0, 'G'), tileYield(G, 0, 'G')], [[0, 1, 0], [0, 1, 0]], 'ohne Ertragstechnologie wie alle');
+  }
+
+  // --- Atlantis (v111) ist seit v112 entfernt: ein Spielstand von v111 mit Atlantis geht weiter (das Rezept prüft smoke.js)
+  {
+    const S = spiel('griechenland', 'basis', {}, { civ: 'england', kind: 'ki', kiLevel: 'mittel', ability: 'basis' });
+    const alt = JSON.parse(JSON.stringify(S));
+    alt.players[0].civ = 'atlantis';                       // so stand es in einem Spielstand von v111
+    const M = migrateState(alt), p = M.players[0];
+    eq([p.civ, abilitiesOf(p), civOf(p).n !== BARB_CIV.n], ['griechenland', [], true],
+      'ein Reich von Atlantis spielt als die erste freie Grundzivilisation ohne Fähigkeit weiter, nicht als Barbaren');
+    eq([foundSiteError(M, 0, 0, 6), foundSiteError(M, 0, 5, 6)], [T('Nicht auf Meer.'), null], 'gegründet wird wieder nur auf Land');
+    eq(migrateState(M).players.map(q => q.civ), ['griechenland', 'england'], 'ein zweites Mal ändert nichts');
+  }
+
+  // --- Maya: im ersten Zug 10 Münzen zusätzlich
+  {
+    const M = spiel('maya'), G = spiel('griechenland');
+    eq(M.players[0].res.coins - G.players[0].res.coins, MAYA_START_COINS, 'Maya: im ersten Zug 10 Münzen mehr');
+    M.round = 2; beginTurn(M);
+    eq(M.players[0].res.coins, income(M, 0).coins, 'ab dem zweiten Zug nur das Einkommen');
+  }
+
+  // --- China: einmal je Partie sofort das Einkommen einsammeln
+  {
+    const S = spiel('china'), p = S.players[0];
+    const inc = income(S, 0), vor = Object.assign({}, p.res);
+    eq(incomeNowOpen(p), true, 'zu Beginn offen');
+    eq(collectIncomeNow(S, 0), null, 'China sammelt ein');
+    eq([p.res.sci - vor.sci, p.res.food - vor.food, p.res.coins - vor.coins], [inc.sci, Math.max(0, inc.food), inc.coins],
+      'genau das Einkommen noch einmal dazu');
+    eq([collectIncomeNow(S, 0), incomeNowOpen(p), p.incomeNowUsed], [T('Schon eingesammelt – einmal je Partie.'), false, 1], 'nur einmal je Partie');
+    eq(collectIncomeNow(spiel('griechenland'), 0), T('Das kann nur China.'), 'andere können das nicht');
+    eq(freeActions(spiel('china'), 0), freeActions(spiel('griechenland'), 0),
+      'das Zugende fragt nicht danach (eine Frage der Wahl, keine vergessene Aktion)');
+    const ki = round => {
+      const K = spiel('china');
+      K.players[0].kind = 'ki'; K.players[0].kiLevel = 'mittel';
+      K.round = round;
+      kiTurn(K, 0);
+      return K.players[0].incomeNowUsed;
+    };
+    eq([ki(1), ki(KI_CHINA_ROUND)], [undefined, KI_CHINA_ROUND], 'die KI sammelt ab Runde 4 ein (geschätzt)');
+  }
+
+  // --- USA: +1 Münze nach Forschung, Gründung, Wachstum, Armee- und Weltwunderbau
+  {
+    const lauf = civ => {
+      const S = spiel(civ, 'basis', { wonders: true }), p = S.players[0], cap = capitalOf(S, 0);
+      p.res = { sci: 100, food: 100, coins: 100 };
+      p.avail.mathematik = true;
+      const fehler = [doResearch(S, 0, 'mathematik'), growCity(S, 0, cap), foundCity(S, 0, 5, 6), buildArmy(S, 0, cap),
+        buildWonder(S, 0, cap, availableWonders(S).find(w => w.lvl === 1).k)];
+      return { fehler, coins: p.res.coins };
+    };
+    const U = lauf('usa'), G = lauf('griechenland');
+    eq([U.fehler, G.fehler], [[null, null, null, null, null], [null, null, null, null, null]], 'beide forschen, wachsen, gründen, bauen eine Armee und ein Wunder');
+    eq(U.coins - G.coins, 5 * USA_ACTION_COINS, 'die USA haben danach 5 Münzen mehr');
+  }
+
+  // --- Plättchenkarte zu zweit (v111): das Sechseck offen, die Startdreiecke außen gegenüber
+  {
+    const K = c => c.join(',');
+    const sh = TILE_SHAPES[2], set = sh.seatSets[0];
+    eq([sh.key, sh.slots.length, sh.seatSets.length, set], ['tri8', 8, 1, [6, 7]], 'acht Dreiecke, gesessen wird auf den beiden äußeren');
+    const h = sh.holes[0], spiegel = c => [2 * h[0] - c[0], 2 * h[1] - c[1], 2 * h[2] - c[2]];
+    const b = new Set(slotCells(sh.slots[7]).map(K));
+    eq(slotCells(sh.slots[6]).map(spiegel).every(c => b.has(K(c))), true, 'die beiden liegen einander gegenüber (an der Mitte gespiegelt)');
+    eq(K(sh.slots[6].a), K(TILE_SHAPES[3].slots[7].a), 'oben links dasselbe Dreieck wie zu dritt');
+    const innen = new Set(sh.slots.slice(0, 6).flatMap(slotCells).map(K));
+    const nbCube = c => CUBE_DIRS.map(d => [c[0] + d[0], c[1] + d[1], c[2] + d[2]]);
+    eq(set.map(s => slotCells(sh.slots[s]).filter(c => nbCube(c).some(n => innen.has(K(n)))).length), [5, 5],
+      'jedes liegt mit 5 Feldern an einer Kante des Sechsecks');
+    const abstand = Math.min(...slotCells(sh.slots[6]).flatMap(a => slotCells(sh.slots[7]).map(c => cubeDist(a, c))));
+    eq([abstand, set.map((_, i) => seatFreeCells(sh, set, i).filter(Boolean).length)], [12, [15, 15]],
+      '12 Felder auseinander, jedes Feld darf Hauptstadt sein');
+    const karte0 = tileMap(tilePlan(['russland', 'england'], 1), { show: [] });
+    eq([karte0.rows.length, karte0.rows[0].length], [11, 16], 'Karte 11 × 16 – quer, das Spiel steht immer quer');
+  }
+
+  // --- KI-Partien mit experimentellen Reichen enden regulär
+  {
+    const gegruendet = [];
+    const partie = (civs, n, seed, wonders) => {
+      const plan = tilePlan(civs.map(c => c[0]), seed);
+      const players = civs.map(([civ, ability]) => ({ civ, kind: 'ki', kiLevel: 'mittel', ability }));
+      const setup = rollSetup({ players, seed, wonders });
+      plan.seats.forEach((st, i) => { if (kiPlaceSeat(plan, st, players[i], setup)) botPlaceSeat(plan, st, mapRng(seed)); });
+      const S = newGame({ seed, map: tileMap(plan), seatOrder: true, startPlayer: 0, avail: setup.avail, wpool: setup.wpool, wonders, players });
+      let runden = 0;
+      const alt = LOG_HOOK;
+      LOG_HOOK = (S2, e) => {
+        const m = S2 === S && /^(.*): Stadt gegründet auf (\d+)\/(\d+)/.exec(e.m);
+        if (m) gegruendet.push({ S, wer: m[1], t: terrainAt(S, +m[2], +m[3]) });
+      };
+      try { while (!S.over && runden++ < 400) { kiTurn(S, S.cur); if (S.over) break; endTurn(S); } }
+      finally { LOG_HOOK = alt; }
+      return S;
+    };
+    const A = partie([['rom', 'basis'], ['venedig', 'basis'], ['deutschland', 'basis'], ['china', 'basis']], 4, 1111, false);
+    eq(!!A.over, true, `vier experimentelle auf 14 Dreiecken: die Partie endet (${A.over ? A.over.how : 'offen'}, Runde ${A.round})`);
+    const von = (S, civ) => gegruendet.filter(g => g.S === S && g.wer === CIV_BY_KEY[civ].n);
+    eq(von(A, 'venedig').length, 0, 'Venedig gründet keine Stadt');
+    console.log(`       KI-Partien v111: ${[A].map(S => S.over.how + ' R' + S.round).join(', ')} · Gründungen ` +
+      ['rom', 'venedig', 'deutschland', 'china'].map(k => k + ' ' + von(A, k).length).join(', '));
+    const B = partie([['azteken', 'basis'], ['aegypten', 'basis']], 2, 2222, true);
+    eq(!!B.over, true, `Aztekenreich gegen Ägypten auf 8 Dreiecken mit Weltwundern endet (${B.over ? B.over.how : 'offen'}, Runde ${B.round})`);
+    const C = partie([['deutschland', 'basis'], ['maya', 'basis'], ['usa', 'basis'], ['rom', 'viaappia']], 4, 3333, false);
+    eq(!!C.over, true, `Deutschland, Maya, USA, Rom (Via Appia) auf 14 Dreiecken endet (${C.over ? C.over.how : 'offen'}, Runde ${C.round})`);
+  }
 }
 
 (async () => {

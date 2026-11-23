@@ -2,11 +2,8 @@
  * Builds public/ from the game that ships with this repository – nothing is downloaded:
  *
  *   HochCiv/      → public/       the current game, served at /
- *   HochCiv-v109/, HochCiv-v108/ → public/v109/, public/v108/  the versions deployed before: only for Rundenspiele that were
+ *   HochCiv-v110/, HochCiv-v108/ → public/v110/, public/v108/  the versions deployed before: only for Rundenspiele that were
  *   HochCiv-v107/ → public/v107/
- *   HochCiv-v106/ → public/v106/
- *   HochCiv-v100/ → public/v100/
- *   HochCiv-v98/  → public/v98/
  *                                 started on it (mp.js sends their players there)
  *
  * Each copy gets mp.js and the script tags of inject.js. Development files of the game (tests,
@@ -23,12 +20,9 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'public');
 const GAMES = [
     { from: 'HochCiv', to: '' },
-    { from: 'HochCiv-v109', to: 'v109' },
+    { from: 'HochCiv-v110', to: 'v110' },
     { from: 'HochCiv-v108', to: 'v108' },
     { from: 'HochCiv-v107', to: 'v107' },
-    { from: 'HochCiv-v106', to: 'v106' },
-    { from: 'HochCiv-v100', to: 'v100' },
-    { from: 'HochCiv-v98', to: 'v98' },
 ];
 // what the browser needs – everything else in the game folder is development material
 const KEEP = new Set(['index.html', 'sw.js', 'manifest.webmanifest', 'favicon.ico', 'js', 'css', 'data', 'icons']);

@@ -1542,8 +1542,9 @@ step('Verdeckt: sichtbar sind nur die offenen Plättchen und das eigene', () => 
   if (!$('overlay').classList.contains('show')) throw new Error('keine Übergabe-Aufforderung');
   $('pl-gate').onclick();
   const felder = $('pl-map').querySelectorAll('[data-r]').length;
-  // Sechseck: 90 Felder (Mitte bleibt leer), davon 15 für das verdeckte Plättchen
-  if (felder !== 75) throw new Error('sichtbar sind ' + felder + ' Felder statt 75');
+  // Zu zweit (v111): 8 Dreiecke, 120 Felder (Mitte bleibt leer) – 6 offene und das eigene zu sehen,
+  // das fremde Startdreieck nicht (bis v110 das Sechseck allein: 75 von 90)
+  if (felder !== 105) throw new Error('sichtbar sind ' + felder + ' Felder statt 105');
   const hl = $('pl-map').querySelectorAll('[stroke-dasharray="5 4"]').length;
   const erlaubt = legeHelfer.frei().filter(Boolean).length;
   if (hl !== erlaubt) throw new Error(`${hl} Markierungen, aber ${erlaubt} erlaubte Felder`);
@@ -1682,7 +1683,7 @@ step('Bestätigen gibt an die zweite Person weiter', () => {
   $('pl-gate').onclick();
   if (st.plan.seats[0].cell == null) throw new Error('erste Wahl nicht gespeichert');
   const felder = $('pl-map').querySelectorAll('[data-r]').length;
-  if (felder !== 75) throw new Error('das fremde Plättchen ist zu sehen (' + felder + ')');
+  if (felder !== 105) throw new Error('das fremde Plättchen ist zu sehen (' + felder + ')');
 });
 step('Nach dem letzten Plättchen beginnt gleich das Spiel (v99: ohne Schritt „Spiel beginnen“)', () => {
   const rcs = legeHelfer.rcs(), frei = legeHelfer.frei();
@@ -1716,8 +1717,8 @@ step('Nach dem letzten Plättchen beginnt gleich das Spiel (v99: ohne Schritt �
   const geteilt = [...u0].filter(k => u1.has(k));
   if (geteilt.length) throw new Error('Hauptstädte teilen sich Umland: ' + geteilt.join(' '));
   if (G('hexDistance')(a.r, a.c, b.r, b.c) < 2) throw new Error('Hauptstädte zu nah beieinander');
-  if ($('map').querySelectorAll('[data-r]').length !== 90)
-    throw new Error('die Spielkarte zeigt nicht 90 Felder');
+  if ($('map').querySelectorAll('[data-r]').length !== 120)
+    throw new Error('die Spielkarte zeigt nicht 120 Felder (8 Dreiecke, v111)');
   // Das Loch in der Mitte ist wirklich keines: unpassierbar, nicht antippbar
   const mitte = S.map.rows.findIndex(r => r.includes('X') && /[^X]X[^X]/.test(r));
   if (mitte < 0) throw new Error('kein Loch in der Mitte des Sechsecks');
@@ -2019,8 +2020,8 @@ step('Zwei gleiche Reiche spielen auf der Plättchenkarte', () => {
   if (namen[0] === namen[1]) throw new Error('beide heißen gleich: ' + namen.join(','));
   if (G('civOf')(wik[0]).color === G('civOf')(wik[1]).color)
     throw new Error('beide in derselben Farbe');
-  if ($('map').querySelectorAll('[data-r]').length !== 150)
-    throw new Error('die Karte hat nicht 150 Felder');
+  if ($('map').querySelectorAll('[data-r]').length !== 210)
+    throw new Error('die Karte hat nicht 210 Felder (14 Dreiecke, seit v111 zu viert)');
   console.log('       ' + S.players.map(p => G('civOf')(p).n).join(' · '));
 });
 step('Zufall als Zivilisation, Fähigkeit und Startspieler', () => {
@@ -4932,7 +4933,7 @@ step('v97: Siedlertrecks wachsen zum Preis der kleineren Stadt, Fruchtbarkeit zw
 
 /* --- v99 (Anweisungen des Autors): experimenteller Plättchenmodus, Welt in Zugfolge und in der
    Legephase, kein Schritt „Spiel beginnen“ mehr, Flüsse und Inseln neu gezeichnet. */
-step('v99/v107: Aufbau – keine große Karte, „Zufällig“ als Startspieler, 14 Dreiecke als eigene Karte (vier Reiche)', () => {
+step('v99/v107/v111: Aufbau – keine große Karte, „Zufällig“ als Startspieler, zu viert ist die Plättchenkarte die aus 14 Dreiecken', () => {
   G('show')('screen-menu');
   $('m-new').onclick();
   G('setupSetMode')('vier');
@@ -4941,14 +4942,12 @@ step('v99/v107: Aufbau – keine große Karte, „Zufällig“ als Startspieler,
   if (karten.includes('1') || [...$('setup-map').options].some(o => /Große|Large/.test(o.text)))
     throw new Error('die große Karte steht noch im Menü: ' + karten.join(','));
   if ($('setup-start').value !== 'zufall') throw new Error('Startspieler nicht „Zufällig“: ' + $('setup-start').value);
-  // v107: der experimentelle Plättchenmodus ist eine Karte der Liste (bis v106 ein Häkchen)
-  if (!karten.includes('plaettchen14')) throw new Error('keine 14 Dreiecke in der Kartenliste: ' + karten.join(','));
+  // v111: der bis v110 „experimentelle“ Plättchenmodus ist die Plättchenkarte zu viert – kein eigener
+  // Eintrag mehr (v107–v110 einer der Liste, bis v106 ein Häkchen)
+  if (karten.includes('plaettchen14')) throw new Error('14 Dreiecke noch als eigene Karte: ' + karten.join(','));
   if ($('setup-hex-row')) throw new Error('das Häkchen „Sechseck-Plättchen“ steht noch im Aufbau');
-  const opt14 = [...$('setup-map').options].find(o => o.value === 'plaettchen14');
-  if (!/14 (Dreiecke|triangles)/.test(opt14.text)) throw new Error('Name: ' + opt14.text);
-  $('setup-map').value = 'plaettchen14'; $('setup-map').onchange();
-  // nur zu viert: die Zahl der Reiche steht fest
-  if ($('setup-count').value !== '4' || !$('setup-count').disabled) throw new Error('14 Dreiecke nicht auf vier Reiche festgelegt');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  if ($('setup-count').value !== '4') throw new Error('Plättchenkarte nicht zu viert: ' + $('setup-count').value);
   if (!$('setup-list').querySelector('[data-civpick]')) throw new Error('keine freie Zivilisationswahl auf 14 Dreiecken');
   console.log('       Karten: ' + [...$('setup-map').options].map(o => o.text).join(' · ') + ' · Startspieler Zufällig');
 });
@@ -4987,7 +4986,9 @@ step('v107: 14 Dreiecke legen – drei Lagen, Welt in Zugfolge, Bogen mit den Sc
   const S = G('S');
   if (G('placeState') !== null || !$('screen-game').classList.contains('show')) throw new Error('das Spiel beginnt nicht gleich');
   if (S.map.tiles !== 'tri14' || S.cities.length !== 4) throw new Error('keine Partie auf 14 Dreiecken mit vier Hauptstädten');
-  if (S.recipe.mapPick !== 'plaettchen14') throw new Error('„Nochmal spielen“ wüsste nichts von den 14 Dreiecken');
+  if (S.recipe.mapPick !== 'plaettchen') throw new Error('„Nochmal spielen“ wüsste nichts von der Plättchenkarte');
+  // ein Rezept von v107–v110 mit „plaettchen14“ legt wieder die 14 Dreiecke (recipeNow)
+  if (G('recipeNow')({ mode: 'vier', mapPick: 'plaettchen14' }).mapPick !== 'plaettchen') throw new Error('altes Rezept nicht übersetzt');
   // dieselbe Reihenfolge im Spiel
   G('worldModal')();
   const imSpiel = [...$('ov-body').querySelectorAll('.civ-n')].map(e => e.textContent.trim().split(' · ')[0]);
@@ -5186,6 +5187,111 @@ step('v109: Zug beenden mit Resten – einmal je Zug ein Fenster; „Zurück" sp
       throw new Error('Englisch: ' + $('ov-title').textContent + ' · ' + $('ov-body').querySelector('p').textContent);
     $('end-back').onclick();
   } finally { SET('unspent', echt); G('switchLang')('de'); }
+});
+
+/* --- v111 (Anweisungen des Autors): experimentelle Zivilisationen hinter einem Häkchen, Aztekenreich
+   und Ägypten nur mit Weltwundern; China sammelt einmal sofort ein; Venedig gründet nicht. */
+const expSpiel = civs => {
+  const plan = G('tilePlan')(civs.map(c => c[0]), 31), rnd = G('mapRng')(32);
+  plan.seats.forEach(st => G('botPlaceSeat')(plan, st, rnd));
+  SET('S', G('newGame')({ seed: 5, map: G('tileMap')(plan), seatOrder: true, startPlayer: 0, wonders: true,
+    players: civs.map(([civ, ability]) => ({ civ, kind: 'human', ability })) }));
+  G('startGameScreen')(); G('closeModal')(); G('closeSheet')();
+  return G('S');
+};
+step('v111: Häkchen „Experimentelle Zivilisationen“ – nur mit Zivilisationswahl, Aztekenreich und Ägypten nur mit Weltwundern', () => {
+  G('show')('screen-menu');
+  $('m-new').onclick();
+  const row = $('setup-expciv-row'), box = $('setup-expciv'), wo = $('setup-wonders');
+  const civs = () => [...$('setup-list').querySelector('[data-civpick]').options].map(o => o.value).filter(v => v !== 'zufall');
+  // Mehrspieler-Erweiterung: keine Spielart-Knöpfe – Karte und Zahl der Reiche
+  G('setupSetMode')('vier');
+  $('setup-map').value = '0'; $('setup-map').onchange();
+  if (!row.hidden) throw new Error('auf der festen Karte steht das Häkchen');
+  G('setupSetMode')('duell');
+  if (!row.hidden) throw new Error('auf der festen Karte zu zweit steht das Häkchen');
+  G('setupSetMode')('marathon');
+  if (!row.hidden) throw new Error('im Marathon steht das Häkchen');
+  G('setupSetMode')('duell');
+  $('setup-map').value = 'plaettchen'; $('setup-map').onchange();
+  if (row.hidden) throw new Error('im Duell auf der Plättchenkarte fehlt das Häkchen');
+  if (box.checked) throw new Error('ab Werk an');
+  wo.checked = false; wo.onchange();
+  if (civs().join() !== G('CIV_KEYS').join()) throw new Error('ohne Häkchen: ' + civs().join());
+  box.checked = true; box.onchange();
+  const ohneWunder = civs();
+  if (ohneWunder.length !== 10 || ohneWunder.includes('azteken') || ohneWunder.includes('aegypten'))
+    throw new Error('mit Häkchen, ohne Weltwunder: ' + ohneWunder.join());
+  wo.checked = true; wo.onchange();
+  if (civs().length !== 12 || civs().includes('atlantis')) throw new Error('mit Häkchen und Weltwundern: ' + civs().join());
+  if (!$('setup-list').querySelector('optgroup')) throw new Error('keine Gruppe „Experimentell“');
+  // Aztekenreich gewählt, dann Weltwunder aus: der Platz fällt auf die Vorauswahl zurück
+  let sel = $('setup-list').querySelector('[data-civpick]');
+  sel.value = 'azteken'; sel.onchange();
+  if ($('setup-list').children[0].dataset.civ !== 'azteken') throw new Error('Aztekenreich nicht gewählt');
+  wo.checked = false; wo.onchange();
+  if ($('setup-list').children[0].dataset.civ === 'azteken') throw new Error('Aztekenreich bleibt ohne Weltwunder stehen');
+  // Rom: eine Zivilisation, zwei Fähigkeiten zur Wahl (dazu der Zufall)
+  sel = $('setup-list').querySelector('[data-civpick]');
+  sel.value = 'rom'; sel.onchange();
+  const abils = [...$('setup-list').children[0].querySelector('[data-abil]').options].map(o => o.value);
+  if (abils.join() !== 'basis,viaappia,zufall') throw new Error('Rom: ' + abils.join());
+  if (!G('setupRecipe')('plaettchen', 'zufall').expCivs) throw new Error('das Rezept weiß nichts vom Häkchen');
+  // ausgelost wird aus dem, was zur Wahl steht
+  const gezogen = new Set();
+  for (let i = 0; i < 60; i++)
+    gezogen.add(G('resolveRandom')([{ civ: 'zufall', kind: 'human', ability: 'zufall' }], true, { exp: true, wo: false })[0].civ);
+  if (gezogen.has('azteken') || gezogen.has('aegypten') || ![...gezogen].some(k => G('EXP_CIV_KEYS').includes(k)))
+    throw new Error('Auslosung mit Häkchen ohne Weltwunder: ' + [...gezogen].join());
+  G('switchLang')('en');
+  try { if (!/Experimental civilisations/.test(row.textContent)) throw new Error('Englisch: ' + row.textContent.trim()); }
+  finally { G('switchLang')('de'); }
+  box.checked = false; box.onchange();
+  if ($('setup-list').children[0].dataset.civ === 'rom') throw new Error('Rom bleibt ohne Häkchen stehen');
+  // ein Rezept von v111 mit Atlantis (seit v112 entfernt): „Nochmal spielen" lost diesen Platz neu aus
+  const alt = G('recipeNow')({ mode: 'duell', mapPick: 'plaettchen', players: [{ civ: 'atlantis', kind: 'ki', ability: 'basis' }, { civ: 'rom', kind: 'human', ability: 'viaappia' }] });
+  if (alt.players.map(p => p.civ + ':' + p.ability).join() !== 'zufall:zufall,rom:viaappia') throw new Error('Rezept mit Atlantis: ' + JSON.stringify(alt.players));
+  console.log('       zur Wahl: ' + ohneWunder.length + ' ohne, 12 mit Weltwundern · Rom: Legion/Via Appia');
+});
+step('v111: China – „Einkommen sofort einsammeln“ im Fähigkeitenblatt, einmal je Partie', () => {
+  const S = expSpiel([['china', 'basis'], ['russland', 'basis']]);
+  if (S.players[S.cur].civ !== 'china') throw new Error('China ist nicht am Zug');
+  $('a-abil').onclick();
+  const knopf = () => $('sheet').querySelector('[data-label="Einkommen sofort einsammeln"]');
+  if (!knopf() || knopf().disabled) throw new Error('kein offener Knopf');
+  const p = S.players[S.cur], vor = p.res.coins, inc = G('income')(S, S.cur);
+  knopf().onclick();
+  if (p.res.coins !== vor + inc.coins) throw new Error('Münzen ' + vor + ' → ' + p.res.coins + ' statt +' + inc.coins);
+  if (!knopf() || !knopf().disabled) throw new Error('der Knopf ist danach nicht gesperrt');
+  if (!/In Runde 1 eingesammelt/.test(knopf().textContent)) throw new Error('Text: ' + knopf().textContent);
+  G('closeSheet')();
+});
+step('v111: Venedig – Gründen erklärt sich, „Feld beanspruchen“ ohne Kolonialismus', () => {
+  const S = expSpiel([['venedig', 'basis'], ['russland', 'basis']]);
+  $('a-found').onclick();
+  if (G('ui').mode === 'found') throw new Error('Gründungsmodus für Venedig');
+  if (!/Venedig gründet keine Städte/.test($('toast').textContent)) throw new Error('Meldung: ' + $('toast').textContent);
+  const own = new Set();
+  S.players.forEach((_, i) => G('controlledTiles')(S, i).forEach(k => own.add(k)));
+  let ziel = null;
+  S.map.rows.forEach((row, r) => [...row].forEach((t, c) => {
+    if (!ziel && t !== 'X' && !G('cityAt')(S, r, c) && !G('armyAt')(S, r, c) && !own.has(r + ',' + c)) ziel = [r, c];
+  }));
+  G('openTile')(...ziel);
+  const b = $('sheet').querySelector('[data-label="Feld beanspruchen"]');
+  if (!b || b.disabled) throw new Error('kein offener Knopf „Feld beanspruchen“');
+  if (b.querySelectorAll('.pips i.on').length !== G('VENICE_CLAIMS')) throw new Error('nicht drei Punkte');
+  b.onclick();
+  if (!G('isColony')(S, S.cur, ...ziel)) throw new Error('nicht beansprucht');
+  G('closeSheet')();
+  // die Regeln nennen die experimentellen in eigenem Abschnitt, Aztekenreich und Ägypten mit Hinweis
+  G('rulesModal')();
+  const regeln = $('ov-body').textContent;
+  G('closeModal')();
+  if (!/Experimentelle Zivilisationen — im Aufbau zuschaltbar/.test(regeln) || !/Lagunenrepublik|3× pro Runde ein herrenloses Feld/.test(regeln))
+    throw new Error('Regeln ohne die experimentellen');
+  if ((regeln.match(/\(nur mit Weltwundern\)/g) || []).length !== 2) throw new Error('Hinweis „nur mit Weltwundern“ nicht zweimal');
+  if (!/Immer die Plättchenkarte aus acht Dreiecken/.test(regeln)) throw new Error('Duell: nicht acht Dreiecke');
 });
 
 step('kein abgefangener Fehler im Zugablauf', () => {

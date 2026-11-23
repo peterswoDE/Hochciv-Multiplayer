@@ -22,7 +22,7 @@ const terms = require('../utils/terms');
 const playGames = require('../utils/playGames');
 const { disconnectSessions } = require('../utils/detachUser');
 
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 
 // IP limits against brute force – one per group of endpoints, so that one group (e.g. many logins
 // behind a shared address) doesn't lock the others (registration, password reset, second factor)

@@ -398,7 +398,7 @@ async function fromLive(hostUser, session, opts) {
     const mapKey = gc.mapKey === 'random' ? 'plaettchen' : ['0', 'plaettchen', 'marathon', 'eigene'].includes(gc.mapKey) ? gc.mapKey : '0';
     const config = {
         mapKey, civMode: gc.randomCivs ? 'random' : 'fixed', events: !!gc.events, eventMode: gc.eventMode === 'easy' ? 'easy' : 'hard',
-        wonders: !!gc.wonders, hexTiles: !!gc.hexTiles, difficulty: engine.kiLevelFor(gc.difficulty), ranked, isPublic: false,
+        wonders: !!gc.wonders, hexTiles: !!gc.hexTiles, expCivs: !!gc.expCivs, difficulty: engine.kiLevelFor(gc.difficulty), ranked, isPublic: false,
         turnDays: L.TURN_DAYS.includes(opts && opts.turnDays) ? opts.turnDays : 3,
         seed: gc.seed || 0, playerCount: seats.length, humanCount: humans, noKi: false, duel: seats.length === 2,
         playerBots: gc.playerBots === true, playerBotLimit: gc.playerBotLimit || null,

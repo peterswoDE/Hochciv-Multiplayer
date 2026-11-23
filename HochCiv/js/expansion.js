@@ -239,6 +239,12 @@ function wonderCost(S, pi) {
   const idx = wondersOf(S, pi).length + 1;
   const p = S.players[pi];
   const step = (has(p, 'baukraene') && p.kind !== 'bot') ? WONDER_STEP - 2 : WONDER_STEP;
+  // Ägypten „Pharaonen" (v111, Anweisung des Autors): je erforschter Technologie – auch einer
+  // geschenkten – EGYPT_WONDER_DISCOUNT Münze weniger, nie unter 0. Nur mit Weltwundern wählbar.
+  if (p.civ === 'aegypten' && hasAbil(p, 'aegypten', 'basis')) {
+    const techs = Object.keys(p.techs).filter(k => p.techs[k]).length;
+    return Math.max(0, step * idx - EGYPT_WONDER_DISCOUNT * techs);
+  }
   return step * idx;
 }
 /* Pyramidenregel: Stufe 2 muss seltener sein als Stufe 1, Stufe 3 seltener als Stufe 2. */
@@ -314,6 +320,7 @@ function buildWonder(S, pi, city, wk, opts) {
     log(S, 'info', T('%s: Raumfahrt – eine Technologie gratis erforschbar.', civOf(p).n));
   }
   if (!(opts && opts.noEffect)) applyWonderEffect(S, pi, city, w);
+  usaBonus(S, pi);                       // USA (v111): nach jedem Weltwunderbau eine Münze
   if (w.lvl === 3) {
     p.cultureWin = S.round;
     log(S, 'head', T('%s hat ein Weltwunder der Stufe 3 – Kultursieg zu Beginn des nächsten Zuges.', civOf(p).n));

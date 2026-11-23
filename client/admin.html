@@ -25,6 +25,7 @@
             <button class="nav-tab admin-tab" data-target="tab-admin-running" hidden>Laufende Spiele</button>
             <button class="nav-tab admin-tab" data-target="tab-admin-games" hidden>Beendete Spiele</button>
             <button class="nav-tab admin-tab" data-target="tab-admin-stats" hidden>Statistiken</button>
+            <button class="nav-tab admin-tab" data-target="tab-admin-perf" hidden>Leistung</button>
             <button class="nav-tab admin-tab" data-target="tab-admin-users" hidden>Nutzer</button>
             <button class="nav-tab admin-tab" data-target="tab-admin-reports" hidden>Meldungen<span id="admin-reports-badge" class="nav-count"></span></button>
             <button class="nav-tab superadmin-tab" data-target="tab-admin-oauth" hidden>OAuth</button>
@@ -268,6 +269,14 @@
                     </form>
                     <p id="msg-admin-wordcheck" class="acc-msg"></p>
                 </div>
+            </section>
+
+            <!-- Performance: the Grafana dashboards (utils/grafana.js, docs/operations/monitoring.md) -->
+            <section id="tab-admin-perf" class="tab-content">
+                <h1 class="acc-h">Leistung</h1>
+                <p class="acc-lede">Antwortzeiten, Datenbank, Speicher und Verbindungen des Servers (Grafana). <a id="admin-perf-open" href="/admin/grafana/d/hochciv-overview/" target="_blank" rel="noopener">In neuem Tab öffnen</a></p>
+                <p id="admin-perf-off" class="acc-lede" hidden>Das Monitoring ist auf diesem Server nicht eingerichtet (GRAFANA_URL).</p>
+                <iframe id="admin-perf-frame" title="Grafana" style="width:100%;height:calc(100vh - 220px);min-height:520px;border:0;border-radius:12px;background:#111217;" hidden></iframe>
             </section>
 
             <!-- Super admin: OAuth providers -->

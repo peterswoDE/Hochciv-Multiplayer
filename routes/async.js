@@ -13,7 +13,7 @@ function isAuthenticated(req, res, next) {
 }
 router.use(isAuthenticated);
 // per account: creating games and inviting send e-mails and push messages
-router.use(require('express-rate-limit')({
+router.use(require('../utils/rateLimit')({
     windowMs: 60 * 1000,
     max: 60,
     keyGenerator: req => 'u:' + req.user.id,

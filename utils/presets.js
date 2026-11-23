@@ -35,6 +35,7 @@ function cleanSettings(s) {
         events: bool(s.events),
         eventMode: s.eventMode === 'easy' || s.eventMode === 'hard' ? s.eventMode : undefined,
         wonders: bool(s.wonders),
+        expCivs: bool(s.expCivs),
         total: int(s.total, 2, 8),
         ki: int(s.ki, 0, 7),
         randomCivs: bool(s.randomCivs),

@@ -21,6 +21,12 @@ const decompress = promisify(zlib.brotliDecompress);
 const FAST = { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } };       // a frame, during the game
 const SMALL = { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9 } };      // the whole replay, once
 const KEEP_DAYS = Number(process.env.REPLAY_KEEP_DAYS) || 180;
+// Matches only bots played (bot accounts and KI, no person) pile up around the clock: their
+// replays and per-round statistics go sooner. The result, the facts and the MMR stay.
+const BOT_KEEP_DAYS = Number(process.env.BOT_REPLAY_KEEP_DAYS) || 30;
+const BOT_ONLY = `EXISTS (SELECT 1 FROM game_players gp WHERE gp."gameId" = g.id)
+    AND NOT EXISTS (SELECT 1 FROM json_array_elements(g.participants) p
+                    WHERE coalesce(p->>'isBot', 'false') <> 'true' AND coalesce(p->>'botAccount', 'false') <> 'true')`;
 const MAX_FRAMES = 3000;                     // a safety net – real games have a few hundred turns
 
 const turnKey = S => `${S.round}:${S.cur}${S.over ? ':over' : ''}`;
@@ -99,6 +105,13 @@ async function renameInFrames(gameKey, from, to) {
 async function cleanup() {
     try {
         const old = await Replay.destroy({ where: { createdAt: { [Op.lt]: new Date(Date.now() - KEEP_DAYS * 86400000) } } });
+        const botBefore = new Date(Date.now() - BOT_KEEP_DAYS * 86400000);
+        const [, botReplays] = await sequelize.query(`DELETE FROM replays r USING games g
+            WHERE r."gameId" = g.id AND g."matchDate" < :before AND ${BOT_ONLY}`, { replacements: { before: botBefore } });
+        const [, botStats] = await sequelize.query(`UPDATE games g SET stats = NULL
+            WHERE g.stats IS NOT NULL AND g."matchDate" < :before AND ${BOT_ONLY}`, { replacements: { before: botBefore } });
+        const nBot = (botReplays && botReplays.rowCount) || 0, nStats = (botStats && botStats.rowCount) || 0;
+        if (nBot || nStats) console.log(`[Replay] Cleanup: ${nBot} replays and ${nStats} statistics of bot matches older than ${BOT_KEEP_DAYS} days removed.`);
         const [, orphans] = await sequelize.query(`DELETE FROM replay_frames WHERE "gameKey" NOT IN
             (SELECT id FROM async_games WHERE status IN ('setup', 'civdraft', 'placement', 'draft', 'playing'))`);
         if (old || (orphans && orphans.rowCount)) console.log(`[Replay] Cleanup: ${old} old replays, ${orphans ? orphans.rowCount : 0} orphaned frames removed.`);
@@ -113,6 +126,6 @@ function startCleanup() {
 }
 
 module.exports = {
-    addLive, addAsync, save, saveAsync, cleanup, startCleanup, turnKey, KEEP_DAYS,
+    addLive, addAsync, save, saveAsync, cleanup, startCleanup, turnKey, KEEP_DAYS, BOT_KEEP_DAYS,
     renameInReplay, renameInFrames,
 };

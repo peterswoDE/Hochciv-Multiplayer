@@ -14,7 +14,7 @@
  *   POST   /api/maps/:id/unpublish
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const service = require('../maps/service');
 const reports = require('../utils/reports');
 

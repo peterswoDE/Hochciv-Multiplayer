@@ -12,6 +12,8 @@
 const { Op } = require('sequelize');
 const { sequelize, User, Season, SeasonResult } = require('../models');
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const TIERS = [                          // highest first
     { k: 'diamant', min: 1400 },
     { k: 'platin', min: 1250 },
@@ -44,14 +46,15 @@ function quarterOf(date) {
  * Returns Map(userId → { games, wins }).
  */
 async function statsBetween(from, to, userIds) {
+    // the ranked seats (with their MMR change) from game_players (migrations/0003-game-players.js)
+    const ids = userIds ? userIds.filter(id => UUID_RE.test(String(id))) : null;
+    if (ids && !ids.length) return new Map();
     const [rows] = await sequelize.query(`
-        SELECT p->>'dbUserId' AS uid, COUNT(*)::int AS games,
-               SUM(CASE WHEN (p->>'isWinner')::boolean THEN 1 ELSE 0 END)::int AS wins
-        FROM games g, jsonb_array_elements(g.participants::jsonb) p
-        WHERE g."matchDate" >= :from AND g."matchDate" < :to
-          AND p ? 'oldMmr' AND p->>'dbUserId' IS NOT NULL
-          ${userIds ? "AND p->>'dbUserId' IN (:ids)" : ''}
-        GROUP BY 1`, { replacements: { from, to, ids: userIds && userIds.length ? userIds : [''] } });
+        SELECT "userId"::text AS uid, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE won)::int AS wins
+        FROM game_players
+        WHERE ranked AND NOT replaced AND "matchDate" >= :from AND "matchDate" < :to
+          ${ids ? 'AND "userId" IN (:ids)' : ''}
+        GROUP BY 1`, { replacements: { from, to, ids: ids || [] } });
     return new Map(rows.map(r => [r.uid, { games: r.games, wins: r.wins }]));
 }
 
@@ -86,6 +89,8 @@ async function ensureNow(now) {
         await Season.create({ id: q.id, startsAt: q.startsAt, endsAt: q.endsAt }, { transaction });
     });
     console.log(`[Seasons] Season ${latest.id} closed, ${q.id} begins (MMR halfway back to 1000)`);
+    // the profiles' cached badges include the season results (routes/profile.js)
+    require('./facts').changed();
     return Season.findByPk(q.id);
 }
 

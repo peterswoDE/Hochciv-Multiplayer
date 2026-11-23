@@ -59,7 +59,9 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 
 ## `replays` and `replay_frames`
 
-`replays`: `gameId` (the match in `games`), `version`, `frames` (count), `data` – one Brotli-compressed JSON document `{ v, version, names, frames: [state, …] }`, about 15 KB per game. Deleted after `REPLAY_KEEP_DAYS` (180).
+`replays`: `gameId` (the match in `games`), `version`, `frames` (count), `data` – one Brotli-compressed JSON document `{ v, version, names, frames: [state, …] }`, about 15 KB per game. Deleted after `REPLAY_KEEP_DAYS` (180); for matches only bots played after `BOT_REPLAY_KEEP_DAYS` (30), which also clears their `games.stats`.
+
+`game_players` (migrations/0003-game-players.js): one row per account and match – `gameId`, `userId`, `seat`, `replaced` (a seat the KI took over from the account, `replacedUserId`), `won`, `solo`, `ranked` (the seat has an MMR change), `botAccount`, `matchDate`. A trigger on `games` keeps it in step with `participants` (insert, and updates of `participants` or `matchDate`); the rows go with their match. Indexed by (`userId`, `matchDate` DESC), so profiles, badges, seasons, friends' suggestions, the account history and personal statistics read an account's matches without scanning `games` (utils/gameplayers.js). `games` itself has a GIN index on `participants::jsonb` (jsonb_path_ops, for the `@>` lookups that remain: duplicates of single-player games, account deletion and merges) and one on `matchDate`.
 
 `replay_frames`: while a Rundenspiel runs, its turn states wait here (`gameKey`, `seq`, `data`), because Rundenspiele run for days and survive restarts. At the end they become one `replays` row and are deleted. Live games keep their frames in memory.
 

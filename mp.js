@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v109', 'v108', 'v107', 'v106', 'v100', 'v98'];
+const OLD_VERSIONS = ['v110', 'v108', 'v107'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -266,6 +266,21 @@ const MP = {
         const c = this.gameConfig || {};
         const key = c.mapKey === 'random' ? 'plaettchen' : c.mapKey;
         return typeof mapLimits === 'function' ? mapLimits(key, c.customMap) : { min: 2, max: 4, marathon: key === 'marathon' };
+    },
+    /** Experimental civs (game v111+): only on free maps, never in Marathon – like the game (civKeysFor) – and not in ranked games. */
+    expCivsAvailable: function (mapKey, marathon) {
+        return typeof civKeysFor === 'function' && typeof CIV_BY_KEY !== 'undefined'
+            && ['random', 'plaettchen', 'eigene'].includes(mapKey) && !marathon;
+    },
+    /** The civs offered with these settings (Aztecs and Egypt only with wonders). */
+    offeredCivs: function (cfg, marathon) {
+        cfg = cfg || {};
+        if (!cfg.expCivs || cfg.ranked || !this.expCivsAvailable(cfg.mapKey, marathon)) return CIVS;
+        return civKeysFor({ exp: true, wo: !!cfg.wonders }).map(k => CIV_BY_KEY[k]).filter(Boolean);
+    },
+    /** A civ by key, experimental ones included. */
+    civByKey: function (k) {
+        return (typeof CIV_BY_KEY !== 'undefined' && CIV_BY_KEY[k]) || CIVS.find(c => c.k === k) || null;
     },
     /**
      * Empires in all (T) and KI seats (K) of the lobby. Lobbies from before the extension: 4, or –
@@ -1161,8 +1176,8 @@ const MP = {
                     const isMe = p.index === this.lobbyIndex;
                     const isPlayerHost = p.index === this.hostIndex;
                     const civOpts = randomAll ? `<option value="random" selected>${dealtLabel}</option>`
-                        : '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>' + TX('Zufall') + '</option>' + CIVS.map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
-                    const civDef = CIVS.find(c => c.k === (p.civ || 'griechenland'));
+                        : '<option value="random" ' + (p.civ === 'random' ? 'selected' : '') + '>' + TX('Zufall') + '</option>' + MP.offeredCivs(this.gameConfig, this.lobbyLimits().marathon).map(c => `<option value="${c.k}" ${p.civ === c.k ? 'selected' : ''}>${c.n}</option>`).join('');
+                    const civDef = MP.civByKey(p.civ || 'griechenland');
                     let abOpts = '';
                     if (p.civ === 'random') {
                         abOpts = `<option value="random" selected>${TX('Zufall')}</option>`;
@@ -1201,8 +1216,7 @@ const MP = {
           <div class="mp-settings" style="pointer-events:${isHost ? 'all' : 'none'}; opacity:${isHost ? 1 : 0.4}; filter:${isHost ? 'none' : 'grayscale(100%)'}">
               <label class="row"><span>${TX('Karte')}</span>
                 <select id="mp-set-map" onchange="MP.updateLobbyConfig()">
-                  <option value="random" ${this.gameConfig.mapKey === 'random' && !this.gameConfig.hexTiles ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
-                  <option value="random-hex" ${this.gameConfig.mapKey === 'random' && this.gameConfig.hexTiles ? 'selected' : ''}>${TX('Plättchenkarte, experimentell (Dreiecke)')}</option>
+                  <option value="random" ${this.gameConfig.mapKey === 'random' ? 'selected' : ''}>${TX('Plättchenkarte (2–8 Reiche)')}</option>
                   ${typeof marathonMap === 'function' ? `<option value="marathon" ${isMarathon ? 'selected' : ''}>${TX('Marathon (24 × 36)')}</option>` : ''}
                   ${typeof checkCustomMap === 'function' ? `<option value="eigene" ${this.gameConfig.mapKey === 'eigene' ? 'selected' : ''}>${TX('Eigene Karte')}</option>` : ''}
                 </select>
@@ -1210,7 +1224,6 @@ const MP = {
               ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost)
                     : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP.browseMaps()').replace(/ · $/, '')}</p>` : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
-              ${this.gameConfig.mapKey === 'random' && this.gameConfig.hexTiles ? `<p class="hint" style="margin:4px 0 8px">${TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')}</p>` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
               </label>
@@ -1224,6 +1237,9 @@ const MP = {
               <label class="row"><span>${TX('Mit Weltwundern')}</span>
                 <input type="checkbox" id="mp-set-wonders" onchange="MP.updateLobbyConfig()" ${this.gameConfig.wonders ? 'checked' : ''}>
               </label>
+              ${MP.expCivsAvailable(this.gameConfig.mapKey, this.lobbyLimits().marathon) && !this.gameConfig.ranked ? `<label class="row"><span>${TX('Experimentelle Zivilisationen')}</span>
+                <input type="checkbox" id="mp-set-expciv" onchange="MP.updateLobbyConfig()" ${this.gameConfig.expCivs ? 'checked' : ''}>
+              </label>` : ''}
               <label class="row"><span>${TX('Reiche insgesamt')}</span>
                 <select id="mp-set-total" onchange="MP.updateLobbyConfig()">
                   ${Array.from({ length: cnt.lim.max - cnt.lim.min + 1 }, (_, i) => cnt.lim.min + i).map(k => `<option value="${k}" ${k === cnt.total ? 'selected' : ''}>${k}${k === 2 ? ` (${TX('1 gegen 1')})` : ''}</option>`).join('')}
@@ -1480,7 +1496,7 @@ const MP = {
             kind: 'live', map: x.mapKey === 'random' ? 'plaettchen' : String(x.mapKey || '0'),
             customMapName: x.customMapName, empires: x.empires || x.maxPlayers, ki: x.kiCount || 0,
             level: this.kiLevel(x.difficulty), civs: this.lobbyModes(x).civMode,
-            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off', hexTiles: !!x.hexTiles,
+            events: x.events ? x.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: x.wonders ? 'on' : 'off', hexTiles: !!x.hexTiles, expCivs: !!x.expCivs,
             ranked: x.ranked ? 'yes' : 'no', turn: x.turnTime ? 'timed' : 'free', turnTime: x.turnTime || 0,
             bots: x.playerBots ? 'yes' : 'no', free: x.playersCount < x.maxPlayers,
             names: [x.hostName],
@@ -1491,7 +1507,7 @@ const MP = {
             kind: 'async', map: c.mapKey === 'random' ? 'plaettchen' : String(c.mapKey || '0'),
             customMapName: c.customMapName, empires, ki: Math.max(0, empires - (c.humanCount || empires)),
             level: this.kiLevel(c.difficulty), civs: this.lobbyModes(c).civMode,
-            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off', hexTiles: !!c.hexTiles,
+            events: c.events ? c.eventMode === 'easy' ? 'easy' : 'hard' : 'off', wonders: c.wonders ? 'on' : 'off', hexTiles: !!c.hexTiles, expCivs: !!c.expCivs,
             // Rundenspiele have days per turn (F19): fewer than 7 count as "with time limit"
             ranked: c.ranked ? 'yes' : 'no', turn: c.turnDays && c.turnDays < 7 ? 'timed' : 'free', turnTime: 0,
             turnDays: c.turnDays && c.turnDays < 7 ? c.turnDays : 0,
@@ -1525,6 +1541,7 @@ const MP = {
         if (t.events !== 'off') parts.push(t.events === 'easy' ? TX('Ereignisse: leicht') : TX('Ereignisse: hart'));
         if (t.wonders === 'on') parts.push(TX('Weltwunder'));
         if (t.hexTiles) parts.push(TX('Experimenteller Plättchenmodus'));
+        if (t.expCivs) parts.push(TX('Experimentelle Zivilisationen'));
         if (t.turnTime) parts.push(TX('%s Min. pro Zug', t.turnTime / 60));
         if (t.turnDays) parts.push(t.turnDays === 1 ? TX('1 Tag pro Zug') : TX('%s Tage pro Zug', t.turnDays));
         if (t.ranked === 'yes') parts.push('🔥 ' + TX('Gewertet'));
@@ -1590,15 +1607,16 @@ const MP = {
             if ($('mp-set-diff')) $('mp-set-diff').value = diff;
         }
 
-        // the experimental tile mode is its own entry in the map picker: the tile map with hexTiles
-        const mapPick = $('mp-set-map').value, hexPick = mapPick === 'random-hex';
-        const mapKey = hexPick ? 'random' : mapPick;
+        // v107–v110 had an experimental tile-map entry (hexTiles); since v111 four empires always
+        // play the 14-triangle map, so new lobbies no longer set it (older Rundenspiele keep theirs)
+        const mapKey = $('mp-set-map').value;
         const newConfig = {
             mapKey,
             events: $('mp-set-events').checked,
             eventMode: evModeEl ? evModeEl.value : (this.gameConfig.eventMode || 'hard'),
             wonders: $('mp-set-wonders').checked,
-            hexTiles: hexPick,
+            expCivs: $('mp-set-expciv') ? $('mp-set-expciv').checked : !!this.gameConfig.expCivs,
+            hexTiles: false,
             difficulty: diff,
             ranked: isRanked,
             // empires in all and KI seats; "noKi" of older lobbies is replaced by them
@@ -1939,7 +1957,7 @@ const MP = {
     drawCivDraft: function () {
         const d = this.civDraft;
         if (!d) return;
-        const civ = k => CIVS.find(c => c.k === k) || { n: k, abilities: [] };
+        const civ = k => MP.civByKey(k) || { n: k, abilities: [] };
         const abName = (k, a) => (civ(k).abilities.find(x => x.k === a) || { n: a }).n;
         const showAb = !d.noAbility;
         // a Rundenspiel's seat is its slot; a live lobby's the lobby index
@@ -2604,7 +2622,7 @@ const ASYNC = {
     form: null,
 
     esc: t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-    civ: k => (typeof CIVS !== 'undefined' && CIVS.find(c => c.k === k)) || null,
+    civ: k => (typeof CIVS !== 'undefined' && MP.civByKey(k)) || null,
     civLabel: function (k) {
         const c = this.civ(k);
         return c ? `${typeof SYM !== 'undefined' ? SYM[c.sym] + ' ' : ''}${this.esc(c.n)}` : '?';
@@ -2713,16 +2731,18 @@ const ASYNC = {
     showCreate: function () {
         const f = this.form = this.form || {
             mapKey: 'plaettchen', civMode: 'fixed', turnOrder: 'classic', pos: 0, playerCount: 4, kiCount: 2, civ: 'russland', ability: 'basis',
-            events: false, eventMode: 'hard', wonders: false, hexTiles: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
+            events: false, eventMode: 'hard', wonders: false, expCivs: false, hexTiles: false, difficulty: KI_DEFAULT_LEVEL, ranked: false, isPublic: false, invite: '', turnDays: 7,
             playerBots: false, playerBotLimit: '',
         };
-        const civ = this.civ(f.civ) || CIVS[0];
+        let civ = this.civ(f.civ) || CIVS[0];
         // how many empires the chosen map allows (mapLimits in the game's engine.js)
         const custom = f.mapKey === 'eigene' && typeof myMap === 'function' ? myMap(f.customName) : null;
         const lim = typeof mapLimits === 'function' ? mapLimits(f.mapKey, custom) : { min: 2, max: 4, marathon: f.mapKey === 'marathon' };
         f.playerCount = Math.max(lim.min, Math.min(lim.max, f.playerCount || 4));
         f.kiCount = Math.max(0, Math.min(f.playerCount - 2, f.kiCount || 0));
         const marathon = lim.marathon, modes = MP.lobbyModes(f), random = modes.civMode !== 'fixed', positions = modes.turnOrder !== 'classic';
+        const offered = MP.offeredCivs(f, marathon);
+        if (!offered.some(c => c.k === f.civ)) { f.civ = offered[0].k; f.ability = 'basis'; civ = this.civ(f.civ) || CIVS[0]; }
         f.pos = Math.max(0, Math.min(f.playerCount - 1, f.pos || 0));
         const opt = (v, cur, label) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${label}</option>`;
         let hint;
@@ -2750,7 +2770,7 @@ const ASYNC = {
                 <td><b>${this.esc(MP.user ? MP.user.username : '')}</b> (${TX('Host')})</td>
                 <td style="padding: 4px;">
                   ${random ? `<select disabled><option>${{ random: TX('Zufall'), draft: TX('Draft vor dem Start'), randomDraft: TX('Zufallsdraft vor dem Start') }[modes.civMode]}</option></select>` : `<select id="mpa-civ">
-                    ${CIVS.map(c => opt(c.k, f.civ, c.n)).join('')}</select>`}
+                    ${offered.map(c => opt(c.k, f.civ, c.n)).join('')}</select>`}
                   ${random || marathon ? '' : `<br/><select id="mpa-ab" style="margin-top: 4px; font-size: 13px;">
                     ${opt('random', f.ability, TX('Zufall'))}${civ.abilities.map(a => opt(a.k, f.ability, a.n)).join('')}</select>`}
                   ${marathon ? `<small style="display:block; margin-top:4px; font-size:11px; opacity:0.7">${TX('Fähigkeiten: Draft vor dem ersten Zug')}</small>` : ''}
@@ -2766,8 +2786,7 @@ const ASYNC = {
             ${typeof PRESETS !== 'undefined' ? PRESETS.rowHtml('async') : ''}
             <div class="mp-settings">
               <label class="row"><span>${TX('Karte')}</span><select id="mpa-map">
-                ${opt('plaettchen', f.mapKey === 'plaettchen' && f.hexTiles ? '' : f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
-                ${opt('plaettchen-hex', f.mapKey === 'plaettchen' && f.hexTiles ? 'plaettchen-hex' : '', TX('Plättchenkarte, experimentell (Dreiecke)'))}
+                ${opt('plaettchen', f.mapKey, TX('Plättchenkarte (2–8 Reiche)'))}
                 ${typeof marathonMap === 'function' ? opt('marathon', f.mapKey, TX('Marathon (24 × 36)')) : ''}
                 ${typeof checkCustomMap === 'function' ? opt('eigene', f.mapKey, TX('Eigene Karte')) : ''}</select></label>
               ${f.mapKey === 'eigene' ? `<label class="row"><span>${TX('Karte wählen')}</span><select id="mpa-custom">
@@ -2778,11 +2797,11 @@ const ASYNC = {
                 <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}`)}`
                 : typeof MAPBROWSER !== 'undefined' ? note(`${TX('Oder eine Karte anderer Spieler:')} ${MP.browseLink('ASYNC.browseMaps()').replace(/ · $/, '')}`) : ''}
               ${marathon ? note(TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')) : ''}
-              ${f.mapKey === 'plaettchen' && f.hexTiles ? note(TX('Zu viert die Plättchenkarte aus 14 Dreiecken: die Startdreiecke liegen außen. Mit anderer Zahl von Reichen die übliche Plättchenkarte.')) : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
               ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
                 ${opt('hard', f.eventMode, TX('Hart (jede Runde)'))}${opt('easy', f.eventMode, TX('Leicht (selten)'))}</select></label>` : ''}
               <label class="row"><span>${TX('Mit Weltwundern')}</span><input type="checkbox" id="mpa-wonders" ${f.wonders ? 'checked' : ''}></label>
+              ${MP.expCivsAvailable(f.mapKey, marathon) && !f.ranked ? `<label class="row"><span>${TX('Experimentelle Zivilisationen')}</span><input type="checkbox" id="mpa-expciv" ${f.expCivs ? 'checked' : ''}></label>` : ''}
               <label class="row"><span>${TX('Reiche insgesamt')}</span><select id="mpa-total" ${lim.min === lim.max ? 'disabled' : ''}>
                 ${Array.from({ length: lim.max - lim.min + 1 }, (_, i) => lim.min + i).map(n => opt(n, f.playerCount, n + (n === 2 ? ` (${TX('1 gegen 1')})` : ''))).join('')}</select></label>
               <label class="row"><span>${TX('davon KI (feste Plätze)')}</span><select id="mpa-ki">
@@ -2818,12 +2837,11 @@ const ASYNC = {
         const f = this.form, v = id => $(id) ? $(id).value : null, c = id => $(id) ? $(id).checked : false;
         const civBefore = f.civ;
         Object.assign(f, {
-            // 'plaettchen-hex': the experimental tile mode, its own entry in the map picker
-            mapKey: v('mpa-map') === 'plaettchen-hex' ? 'plaettchen' : v('mpa-map'), civMode: v('mpa-civmode') || f.civMode || 'fixed',
+            mapKey: v('mpa-map'), civMode: v('mpa-civmode') || f.civMode || 'fixed',
             turnOrder: v('mpa-order') || f.turnOrder || 'classic', pos: v('mpa-pos') != null ? +v('mpa-pos') : f.pos,
             playerCount: +v('mpa-total') || f.playerCount, kiCount: v('mpa-ki') != null ? +v('mpa-ki') : f.kiCount,
             civ: v('mpa-civ') || f.civ, ability: v('mpa-ab') || f.ability,
-            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), hexTiles: v('mpa-map') === 'plaettchen-hex',
+            events: c('mpa-events'), eventMode: v('mpa-evmode') || f.eventMode, wonders: c('mpa-wonders'), expCivs: $('mpa-expciv') ? c('mpa-expciv') : !!f.expCivs, hexTiles: false,
             difficulty: v('mpa-diff') || f.difficulty, ranked: c('mpa-ranked'), isPublic: c('mpa-public'),
             turnDays: +v('mpa-days') || f.turnDays || 7,
             customName: (v('mpa-custom') || '').startsWith('fav:') ? f.customName
@@ -2889,7 +2907,7 @@ const ASYNC = {
             const r = await this.api('', {
                 config: {
                     mapKey: f.mapKey, civMode: f.civMode, turnOrder: f.turnOrder, playerCount: f.playerCount, kiCount: f.kiCount, events: f.events, eventMode: f.eventMode,
-                    wonders: f.wonders, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked && MP.rankedOk(f.mapKey, f.playerCount), isPublic: f.isPublic, turnDays: f.turnDays || 7,
+                    wonders: f.wonders, expCivs: !!f.expCivs, hexTiles: f.mapKey === 'plaettchen' && f.hexTiles, difficulty: f.difficulty, ranked: f.ranked && MP.rankedOk(f.mapKey, f.playerCount), isPublic: f.isPublic, turnDays: f.turnDays || 7,
                     playerBots: f.playerBots, playerBotLimit: f.playerBots && f.playerBotLimit ? +f.playerBotLimit : null,
                     customMap,
                 },

@@ -11,7 +11,7 @@
  *                                          week's best, the challenger's empire per round (F26)
  */
 const express = require('express');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const challenge = require('../utils/challenge');
 
 const router = express.Router();

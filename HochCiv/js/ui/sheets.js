@@ -199,7 +199,9 @@ function abilSheet(oben) {
      Knöpfe tragen kein „gratis": sie sind als kostenlos hervorgehoben (.opt.free). Die Punkte
      zeichnet pips (base.js) – dieselben stehen seit v103 am Knopf „Feld beanspruchen". */
   abils.forEach(a => {
-    const stand = a.k === 'gratistech' ? pips(freeTechsLeft(p), FREE_TECH_USES) : '';
+    const china = a.civ === 'china' && a.k === 'basis';        // Mandat des Himmels (v111): ein Punkt
+    const stand = a.k === 'gratistech' ? pips(freeTechsLeft(p), FREE_TECH_USES)
+      : china ? pips(p.incomeNowUsed == null ? 1 : 0, 1) : '';
     rows.push(`<div class="abil-card"><b>${esc(a.n)}${stand}</b><small>${esc(abilEffect(a, S))}</small></div>`);
     if (a.k === 'gratistech') {
       // seit v101 zweimal je Partie, höchstens einmal je Runde – alles Erforschbare samt Singularität
@@ -219,6 +221,14 @@ function abilSheet(oben) {
         bp.forEach(t => knopf('Rückschau', 'rueckschau:' + t.k, esc(t.n), techSub(t), '',
           tu(() => useBackPick(S, pi, t.k)), false, true));
       } else notiz(T('Gerade nichts offen. Jede Technologie ab dem Mittelalter, die du erforschst, bringt hier eine kostenlose aus einem früheren Zeitalter desselben Feldes – nur im selben Zug.'));
+    }
+    // China „Mandat des Himmels" (v111): einmal je Partie das Einkommen sofort, zusätzlich
+    if (china) {
+      const offen = p.incomeNowUsed == null, y = income(S, pi);
+      knopf('Einkommen sofort einsammeln', 'einkommen', T('Einkommen sofort einsammeln'),
+        offen ? T('einmal je Partie, zusätzlich zum Einkommen zu Zugbeginn') : T('In Runde %s eingesammelt.', p.incomeNowUsed),
+        offen ? [y.sci, y.food, y.coins].map((n, i) => '+' + Math.max(0, n) + Y_ICON[i]).join(' ') : '—',
+        tu(() => collectIncomeNow(S, pi)), !offen, true);
     }
   });
   if (!abils.length) notiz(T('Bots haben keine Fähigkeit'));

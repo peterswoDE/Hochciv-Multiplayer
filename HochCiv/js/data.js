@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v110';
+const APP_VERSION = 'v112';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -116,7 +116,7 @@ const TECHS = [
   { k: 'navigation', n: 'Navigation', f: 3, c: 1, e: 'Bewegung über Meer' },
   { k: 'demokratie', n: 'Demokratie', f: 3, c: 3, e: 'Armeekosten 4 statt 5 × Anzahl' },
   { k: 'wallfahrt', n: 'Wallfahrt', f: 3, c: 4, wo: true, e: 'Je eigenem Weltwunder +3 auf alle Erträge' },
-  { k: 'sklaverei', n: 'Sklaverei', f: 3, c: 5, e: 'Stadtbevölkerung opfern → 4 Münzen · wird in der Moderne obsolet' },
+  { k: 'sklaverei', n: 'Sklaverei', f: 3, c: 5, e: 'Stadtbevölkerung opfern → 5 Münzen · wird in der Moderne obsolet' },
   { k: 'rittertum', n: 'Rittertum', f: 3, c: 6, e: '1 Bevölkerungsverlust beim Erobern' },
   { k: 'kundschafterei', n: 'Kundschafterei', f: 3, c: 7, e: '1 Tech/Runde kopieren (2× Kosten in Münzen)' },
   { k: 'buerokratie', n: 'Bürokratie', f: 3, c: 10, e: 'Hauptstadt produziert doppelt',
@@ -173,7 +173,7 @@ const GENE_SCI_PER_FOOD = 4;
 // Siegschwellen des Wirtschaftssiegs: VICTORY_THRESHOLDS weiter unten (seit v101 je Spielart)
 const BOT_RESEARCH_TWICE = true;
 const SLAVERY_OBSOLETE_IN_MODERN = true;
-const SLAVERY_COINS = 4;     // Sklaverei: Münzen je geopferter Bevölkerung (v84–v109: 7, bis v83: 10)
+const SLAVERY_COINS = 5;     // Sklaverei: Münzen je geopferter Bevölkerung (v110: 4, v84–v109: 7, bis v83: 10)
 /* Seit v97 (Anweisung des Autors):
    · Rabatte je Zeitalter – Antike, Mittelalter, Industrialisierung, Moderne und an fünfter Stelle
      die Singularität (techCost): Griechenlands Günstige Forschung 1/1/2/2/5 (bis v96 1/2/3/4/5),
@@ -356,6 +356,20 @@ function techsIn(field, age, S) {
    (civTechAfterRoll, js/engine.js) – so gilt dasselbe, wenn das Reich erst nach dem Würfeln
    feststeht (Fähigkeitswahl der Plättchenkarte). */
 const CIV_TECH = { wikinger: 'navigation' };
+/* Dasselbe je Fähigkeit (v111): Roms „Via Appia" hat das Rad (Straßen) immer verfügbar. */
+const ABIL_TECH = { 'rom:viaappia': 'rad' };
+
+/* Experimentelle Zivilisationen (v111, Anweisung des Autors) – ihre Zahlen. Die Texte in
+   data/civs.json und DATA_EN.abil nennen dieselben; ein Test hält sie zusammen. Die Regeln
+   stehen in js/engine.js bzw. js/expansion.js (armyPower, claimMax, growPrice, armyCost,
+   wonderCost, yieldBonus, foundSiteError, incomeBreakdown, beginTurn, collectIncomeNow,
+   usaBonus). Atlantis (v111) ist seit v112 wieder entfernt (Anweisung des Autors). */
+const LEGION_BONUS_PCT = 50;       // Rom „Legion": +50 % Macht je angrenzender eigener Armee, abgerundet
+const VIA_APPIA_TRADE = 2;         // Rom „Via Appia": Handelsrouten bringen das Doppelte
+const VENICE_CLAIMS = 3;           // Venedig: Felder je Runde wie mit Kolonialismus – mit ihm zusammen 6
+const EGYPT_WONDER_DISCOUNT = 1;   // Ägypten: Münzen weniger je erforschter Technologie, nie unter 0
+const MAYA_START_COINS = 10;       // Maya: im ersten Zug zusätzlich
+const USA_ACTION_COINS = 1;        // USA: nach jeder Forschung, Gründung, jedem Wachstum, Armee- und Wunderbau
 
 
 /* Die feste Karte: aus dem gedruckten Bogen ausgemessen. Bis v98 stand daneben eine große

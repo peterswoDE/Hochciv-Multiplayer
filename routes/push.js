@@ -7,7 +7,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 const { User, DeviceToken } = require('../models');
 const push = require('../utils/push');
 

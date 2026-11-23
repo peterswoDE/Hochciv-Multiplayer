@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
-const rateLimitLib = require('express-rate-limit');
+const rateLimitLib = require('../utils/rateLimit');
 
 // Lobbies live in memory – limit how fast one client can create/join them
 const lobbyLimit = rateLimitLib({

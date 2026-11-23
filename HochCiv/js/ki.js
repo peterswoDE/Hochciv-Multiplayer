@@ -169,6 +169,7 @@ function kiArmyCostNth(S, pi, k) {
   const p = S.players[pi];
   let n = armiesOf(S, pi).length + k;
   if (hasAbil(p, 'wikinger', 'basis')) n = Math.max(0, n - 1);
+  n = Math.max(0, n - aztecFreeArmies(S, pi));      // Aztekenreich (v111), wie armyCost
   const mult = has(p, 'nationalismus') ? 2 : has(p, 'demokratie') ? 4 : 5;
   return mult * n;
 }
@@ -1035,6 +1036,7 @@ function kiSites(S, pi, K, memo) {
 }
 function kiSitesAll(S, pi, K) {
   const p = S.players[pi];
+  if (isVenice(p)) return [];                       // Venedig gründet nicht (v111)
   const cap = capitalOf(S, pi) || citiesOf(S, pi)[0];
   if (!cap) return [];
   const fremd = foreignTerritory(S, pi);
@@ -1909,11 +1911,18 @@ function kiPositionArmies(S, pi, K, memo) {
 /* ------------------------------------------------------------------ Zug */
 /* Ein ganzer Zug der KI. Aufgerufen wie botTurn: danach folgt finishTurn (Kampf, Sieg) an
    genau einer Stelle für alle. `notes` sammelt die wichtigsten Gründe fürs Protokoll. */
+const KI_CHINA_ROUND = 4;          // ab dieser Runde sammelt China sein Einkommen sofort ein (geschätzt)
 function kiTurn(S, pi) {
   const p = S.players[pi];
   kiSeedRng(S, pi);
   if (p.dead || S.over) return;
   const notes = [];
+  /* Chinas Mandat des Himmels (v111): übrige Ressourcen zählen in kiValue nicht – das Einsammeln
+     allein sähe also nie nach etwas aus. Deshalb eine feste Regel, GESCHÄTZT, nicht gemessen: ab
+     Runde KI_CHINA_ROUND (KI gegen KI endet im Median in Runde 6, ANNAHMEN.md v107), sonst, wenn
+     die Partie mit dieser Runde endet (angemeldeter Sieg). Danach plant die KI wie immer. */
+  if (incomeNowOpen(p) && (S.round >= KI_CHINA_ROUND || S.endRound === S.round) && !collectIncomeNow(S, pi))
+    notes.push(T('sammelt Einkommen sofort ein'));
   const K = kiContext(S, pi);
   const memo = {};
   kiPlan(S, pi, K, notes, memo);

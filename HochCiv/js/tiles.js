@@ -16,8 +16,9 @@
    so sieht es in einem A-Platz in Lage 0 auch auf der Karte aus (in einem B-Platz um
    180° gedreht, also weiterhin dasselbe Plättchen, nur andersherum gelegt).
 
-   Für vier Reiche gibt es seit v107 den experimentellen Plättchenmodus aus 14 Dreiecken
-   (TILE_SHAPES.tri14); v99–v106 bestand er aus zehn Sechsecken.                         */
+   Seit v111 (Anweisung des Autors) liegen auf jeder Form alle inneren Dreiecke offen und die
+   Startdreiecke außen daran: zu viert 14 Dreiecke (v107–v110 der „experimentelle
+   Plättchenmodus" neben der Form aus 10, v99–v106 zehn Sechsecke), zu zweit 8.          */
 
 const TILE_CELLS = 15;
 const TILE_SIDE = 5;
@@ -86,27 +87,31 @@ function tileTerrain(tile) { return tile.a.join('').split(''); }
      Mitte bleibt ein Feld übrig – es wird nicht gefüllt, dort ist kein Feld. 6 · 15 ist
      immer um eins kleiner als das nächste Sechseck; das Loch ist also zwingend, und es
      bleibt als Loch stehen: ein unpassierbarer Punkt mitten in der Welt.
-     Die beiden Spieler bekommen zwei gegenüberliegende Plättchen, die vier übrigen
-     liegen offen.
+     Alle sechs liegen offen; die beiden Startdreiecke liegen außen an zwei
+     gegenüberliegenden Kanten (seit v111, tri8; bis v110 saßen die Spieler auf zwei
+     gegenüberliegenden der sechs, hex6).
    3 Spieler: dasselbe Sechseck (samt Loch), dazu je ein Dreieck an drei Kanten –
      zusammen ein großes Dreieck aus neun Plättchen.
-   4 Spieler: zwei Reihen zu fünf Dreiecken, zusammen ein gestrecktes Sechseck ohne
-     jedes Loch. Die Spieler sitzen auf den vier Dreiecken, die mit ihrer breiten Seite
-     an der Ober- bzw. Unterkante liegen (je zwei oben und unten) – das sind die vier
-     Ecken der gestreckten Form. Die übrigen sechs liegen offen.
-   4 Spieler, experimentell (tri14): dieselben zehn Dreiecke, alle offen, die vier
-     Startdreiecke außen daran.                                                         */
+   4 Spieler (tri14): zwei Reihen zu fünf Dreiecken, zusammen ein gestrecktes Sechseck ohne
+     jedes Loch, alle offen; die vier Startdreiecke außen daran. Bis v110 gab es daneben die
+     Form aus nur diesen zehn (strip10), die Spieler saßen auf ihren vier Ecken.         */
 const SL = (t, x, y, z) => ({ t, a: [x, y, z] });
 const TILE_SHAPES = {
+  /* Zwei Reiche (v111, Anweisung des Autors): das Sechseck aus sechs offenen Dreiecken samt Loch,
+     die zwei Startdreiecke außen an gegenüberliegenden Kanten – oben links (6, dasselbe wie bei drei
+     Reichen) und, an der Mitte gespiegelt, unten rechts (7). Diagonal statt oben und unten: so
+     bleibt die Karte 11 Zeilen hoch und wird breiter (11 × 16) – das Spiel steht immer quer, oben
+     und unten ergäbe 21 Zeilen. Bis v110 (hex6) saßen die Spieler auf zwei gegenüberliegenden der
+     sechs, das Paar wurde gelost. */
   2: {
-    key: 'hex6', name: 'Plättchenkarte (6 Dreiecke)',
+    key: 'tri8', name: 'Plättchenkarte (8 Dreiecke)',
     slots: [
       SL('A', -5, -1, 2), SL('B', -1, 4, 1), SL('B', 0, -2, 6),
       SL('A', 0, 0, -4), SL('A', 1, -6, 1), SL('B', 5, -1, 0),
+      SL('A', -5, 5, -4), SL('B', 5, -7, 6),
     ],
     holes: [[0, -1, 1]],          // bleibt leer, siehe oben
-    // die drei gegenüberliegenden Paare; gelost wird, welches die Spieler bekommen
-    seatSets: [[0, 5], [4, 1], [2, 3]],
+    seatSets: [[6, 7]],
   },
   3: {
     key: 'tri9', name: 'Plättchenkarte (9 Dreiecke)',
@@ -118,25 +123,14 @@ const TILE_SHAPES = {
     holes: [[0, -1, 1]],          // bleibt leer
     seatSets: [[6, 7, 8]],
   },
+  /* Vier Reiche (v107 als „experimenteller Plättchenmodus", seit v111 die einzige Form zu viert –
+     Anweisung des Autors; v99–v106 zehn Sechsecke): zwei Reihen zu fünf Dreiecken liegen alle offen
+     (Platz 0–9; bis v110 gab es sie auch allein als Form, strip10 – hier eine Zeile tiefer, damit die
+     oberste Feldzeile gerade bleibt). Die vier Startdreiecke liegen außen an jeder zweiten ihrer acht
+     Außenkanten, im Uhrzeigersinn: oben links (10), rechts oben (11), unten rechts (12), links unten
+     (13). Benachbarte Startdreiecke liegen damit alle 8 Felder auseinander, gegenüberliegende 11 und
+     19 (die gespiegelte Wahl gäbe 6 und 9 – Wahl des Autors). Karte 20 × 23, 210 Felder. */
   4: {
-    key: 'strip10', name: 'Plättchenkarte (10 Dreiecke)',
-    slots: [
-      SL('B', 5, -1, 0), SL('A', 6, -6, -4), SL('B', 11, -7, 0), SL('A', 12, -12, -4), SL('B', 17, -13, 0),
-      SL('A', 0, -5, 1), SL('B', 5, -6, 5), SL('A', 6, -11, 1), SL('B', 11, -12, 5), SL('A', 12, -17, 1),
-    ],
-    holes: [],                    // der Streifenverbund deckt lückenlos ab
-    // die beiden oberen und die beiden unteren Dreiecke: 1 und 3 liegen mit ihrer
-    // Fünferzeile an der Oberkante, 6 und 8 an der Unterkante
-    seatSets: [[1, 3, 6, 8]],
-  },
-  /* Experimenteller Plättchenmodus (v107, Anweisung des Autors; v99–v106 zehn Sechsecke): die
-     zehn Dreiecke der Form zu viert liegen alle offen (Platz 0–9, dieselben Plätze eine Zeile
-     tiefer, damit die oberste Feldzeile gerade bleibt). Die vier Startdreiecke liegen außen an
-     jeder zweiten ihrer acht Außenkanten, im Uhrzeigersinn: oben links (10), rechts oben (11),
-     unten rechts (12), links unten (13). Benachbarte Startdreiecke liegen damit alle 8 Felder
-     auseinander, gegenüberliegende 11 und 19 (die gespiegelte Wahl gäbe 6 und 9 – Wahl des
-     Autors). Karte 20 × 23, 210 Felder. */
-  tri14: {
     key: 'tri14', name: 'Plättchenkarte (14 Dreiecke)',
     slots: [
       SL('B', 5, -2, 1), SL('A', 6, -7, -3), SL('B', 11, -8, 1), SL('A', 12, -13, -3), SL('B', 17, -14, 1),
@@ -237,11 +231,10 @@ function seatFreeCells(shape, seats, seatIdx) {
 /* ---------------------------------------------------------------- Kartenplan
    Zieht die Plättchen und verteilt die Sitzplätze. Die Spieler legen danach ihr
    eigenes Plättchen (Lage + Hauptstadt); die offenen liegen sofort fest.            */
-function tilePlan(civs, seed, opts) {
+function tilePlan(civs, seed) {
   const n = civs.length;
-  // `opts.shape`: eine andere Form für diese Spielerzahl (v107: 'tri14' bei vier Reichen)
-  const wahl = SHAPE_BY_KEY[opts && opts.shape];
-  const shape = wahl && wahl.seatSets[0].length === n ? wahl : TILE_SHAPES[n];
+  // Eine Form je Spielerzahl (seit v111; v107–v110 wählte `opts.shape` zu viert die 14 Dreiecke)
+  const shape = TILE_SHAPES[n];
   if (!shape) return null;
   const rnd = mapRng(seed);
   const pool = TILE_POOL.map((_, i) => i);
