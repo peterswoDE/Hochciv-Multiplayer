@@ -85,7 +85,7 @@ const ACC = {
             const color = x.mmrShift > 0 ? 'var(--ok)' : (x.mmrShift < 0 ? 'var(--red)' : 'inherit');
             return `<tr class="${isWinner ? 'won' : ''}"${me && x.dbUserId === me.id ? ' style="font-weight:600"' : ''}>
                 <td>${nameLink(x.name, x.dbUserId)} ${x.isBot ? `<small>(${tx('Bot')})</small>` : ''}${isWinner ? ' 🏆' : ''}</td>
-                <td>${esc(x.civ || '-')}</td>
+                <td>${esc((HC_I18N.lang() === 'en' ? x.civEn : x.civDe) || x.civ || '-')}</td>
                 <td>${esc(d.pop != null ? d.pop : '-')}</td>
                 <td>${esc(d.wonders != null ? d.wonders : '-')}</td>
                 <td>${esc(d.techs != null ? d.techs : '-')}</td>

@@ -1449,6 +1449,7 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
         session.replay = null;
         Facts.storeLater(game.id);                     // overall statistics (utils/facts.js), from the replay
         session.gameRecord = { id: game.id, replay };
+        sessions.noteGameRecord(session);              // session already gone: "Zuschauen" still finds it (#208)
         if (io) io.to(sessionId).emit('game:record', session.gameRecord);
 
         console.log(`[Stats] Successfully processed game ${sessionId}. Ranked: ${isRanked}. History saved.`);

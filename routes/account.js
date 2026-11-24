@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const rateLimitLib = require('../utils/rateLimit');
 const { sequelize, User, Game, Passkey } = require('../models');
+const CivNames = require('../utils/civnames');
 const totp = require('../utils/totp');
 const { sendMail } = require('../utils/mailer');
 const { deleteAccount } = require('../utils/deleteAccount');
@@ -215,7 +216,7 @@ router.get('/history', async (req, res) => {
             // with a stored replay? (the dialog then links it, client/account-common.js)
             attributes: { include: [[sequelize.literal('EXISTS (SELECT 1 FROM replays r WHERE r."gameId" = "Game"."id")'), 'hasReplay']] },
         })) : [];
-        res.json(games);
+        res.json(games.map(CivNames.withNames));       // nation names in both languages (#213)
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Serverfehler' });

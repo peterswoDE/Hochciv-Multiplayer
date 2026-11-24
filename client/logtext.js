@@ -97,6 +97,11 @@ const LOGTEXT = (function () {
     /** The text of log entry e ({ m, t }) in the player's language. */
     function text(e) {
         if (!e || typeof e.m !== 'string' || HC_I18N.lang() === 'de') return e && e.m;
+        // a line the engine writes without T() as a whole first: the server's e.t for it is
+        // accidental (a name in it was a T output a moment before) and would leave the
+        // template's fixed text German, piece by piece
+        const whole = template(e.m);
+        if (whole != null) return whole;
         if (Array.isArray(e.t)) {
             try { return parts(e.t); } catch (_) { /* fall back below */ }
         }
@@ -104,8 +109,6 @@ const LOGTEXT = (function () {
         // message a loose pattern would translate bits of them and leave the rest German
         if (!names) buildNames();
         if (names.has(e.m)) return names.get(e.m);
-        const tp = template(e.m);
-        if (tp != null) return tp;
         const roll = /^(🎲 \d+ — )([\s\S]*)$/.exec(e.m);
         return roll ? roll[1] + literal(HC_I18N.tr(roll[2])) : literal(HC_I18N.tr(e.m));
     }

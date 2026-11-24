@@ -137,6 +137,8 @@
         'Die Challenge startet gerade schon.': 'The challenge is starting already.',
         // seasons, leaderboard, badges (client/ranking.js, client/profile.js)
         'Rangliste': 'Leaderboard',
+        'Discord-Server': 'Discord server',
+        'Tritt unserem Discord-Server bei: Mitspieler finden, Neuigkeiten, Feedback': 'Join our Discord server: find players, news, feedback',
         'Rangliste und Saison': 'Leaderboard and season',
         'Saison %s': 'Season %s',
         'läuft': 'running',
@@ -639,6 +641,8 @@
 
         // ── Spectator mode ───────────────────────────────────────────────────────────────
         'Zuschauen': 'Watch',
+        'Das Spiel ist schon zu Ende.': 'This game has already ended.',
+        'Das Spiel ist schon zu Ende – die Wiederholung wird geöffnet.': 'This game has already ended – opening the replay.',
         'Zuschauer': 'Spectator',
         'Du schaust zu': 'You are watching',
         'Du schaust nur zu.': 'You are only watching.',
@@ -841,6 +845,13 @@
         '„%s" aus dem Browser entfernen? Ihr Code funktioniert dann nicht mehr.': 'Remove "%s" from the browser? Its code stops working.',
         '„%s" aus dem Browser entfernen? Die Karte bleibt im Konto von %s, ihr Code funktioniert nicht mehr.': 'Remove "%s" from the browser? The map stays in the account of %s, its code stops working.',
         'Entfernt': 'Removed',
+        'Gespeichert.': 'Saved.',
+        'Entfernt – der Discord-Knopf ist ausgeblendet.': 'Removed – the Discord button is hidden.',
+        'Kein gültiger Discord-Einladungslink (z. B. https://discord.gg/abc123).': 'Not a valid Discord invite link (e.g. https://discord.gg/abc123).',
+        'Unbekannte Einstellung.': 'Unknown setting.',
+        'Ungültiger Wert.': 'Invalid value.',
+        'Discord-Einladung': 'Discord invite',
+        'Link zum Discord-Server – im Hauptmenü des Spiels und in der Fußzeile. Leer lassen, um ihn auszublenden.': 'Link to the Discord server – in the game’s main menu and the footer. Leave empty to hide it.',
         'Diese Karte ist nicht mehr veröffentlicht.': 'This map is no longer published.',
         'Dafür musst du angemeldet sein.': 'You need to be logged in for that.',
         'Deine eigene Karte kannst du nicht melden.': 'You cannot report your own map.',
@@ -1384,7 +1395,6 @@
         // async/ – turn-based games
         'Die Spiel-Engine ist noch nicht bereit.': 'The game engine is not ready yet.',
         'Ein Rundenspiel braucht mindestens zwei Menschen.': 'A turn-based game needs at least two humans.',
-        'Unbekannte Nation.': 'Unknown nation.',
         'Du bist schon in diesem Spiel.': 'You are already in this game.',
         'Diesem Spiel kann man nicht mehr beitreten.': 'This game can no longer be joined.',
         'Das Spiel ist schon voll.': 'The game is already full.',
@@ -1419,7 +1429,6 @@
         'Zu viele Codes angefordert. Bitte versuche es später erneut.': 'Too many codes requested. Please try again later.',
         'Zu viele offene Einladungen für dieses Spiel.': 'Too many open invitations for this game.',
         'Keine offene Einladung.': 'No open invitation.',
-        'Du spielst in diesem Spiel nicht mit.': 'You are not playing in this game.',
         // maps
         'Zu viele Code-Abfragen. Bitte warte eine Minute.': 'Too many code requests. Please wait a minute.',
         'Karten im Konto gibt es nur mit Anmeldung.': 'Maps in the account need a login.',
@@ -1521,7 +1530,6 @@
         'Verbinde mit dem Spielserver (Socket.IO) …': 'Connecting to the game server (Socket.IO) …',
         'Lobby %s': 'Lobby %s',
         'Keine Lobby': 'No lobby',
-        'Bereit': 'Ready',
         'Fehler: %s – Button erneut drücken': 'Error: %s – press the button again',
         '%s: keine Antwort nach %s s': '%s: no answer after %s s',
         'Konfiguration': 'Configuration',

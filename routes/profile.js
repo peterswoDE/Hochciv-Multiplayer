@@ -16,6 +16,7 @@ const seasons = require('../utils/seasons');
 const { badgesOf } = require('../utils/badges');
 const GamePlayers = require('../utils/gameplayers');
 const Facts = require('../utils/facts');
+const CivNames = require('../utils/civnames');
 
 const router = express.Router();
 const PAGE = 30;
@@ -76,6 +77,7 @@ function gameEntry(g, userId) {
         won: !!me.isWinner && me.dbUserId === userId,
         replaced: me.replacedUserId === userId,
         civ: civName(me.civ),
+        civEn: CivNames.label(me.civ).en || civName(me.civ),     // the client picks by language (#213)
         points: me.points || 0,
         mmrShift: me.mmrShift != null ? me.mmrShift : null,
         players: g.participants.map(p => ({
@@ -84,6 +86,7 @@ function gameEntry(g, userId) {
             isBot: !!p.isBot,
             botAccount: !!p.botAccount,
             civ: civName(p.civ),
+            civEn: CivNames.label(p.civ).en || civName(p.civ),
             points: p.points || 0,
             isWinner: !!p.isWinner,
             mmrShift: p.mmrShift != null ? p.mmrShift : null,

@@ -26,7 +26,7 @@ Admins open the admin page from their account page (*Mein Konto* in the game men
 
 | Section | What it does |
 |---|---|
-| **Übersicht** | Uptime, active lobbies and players online (refreshed every 10 seconds while open). Switches for **maintenance mode** and **registration**. The live lobbies and games in memory: *Schließen* ends a lobby and disconnects everyone in it; *Rundruf* sends a system message to everyone in it. |
+| **Übersicht** | Uptime, active lobbies and players online (refreshed every 10 seconds while open). Switches for **maintenance mode** and **registration**, and the **Discord invite** link. The live lobbies and games in memory: *Schließen* ends a lobby and disconnects everyone in it; *Rundruf* sends a system message to everyone in it. |
 | **Laufende Spiele** | Running live games and Rundenspiele with the game version each one runs on – check this before dropping an old game version ([Updating the game](../development/updating-the-game.md)). |
 | **Beendete Spiele** | Finished matches, newest first, with a player search. |
 | **Statistiken** | The overall statistics with the admin details. |
@@ -39,6 +39,10 @@ Admins open the admin page from their account page (*Mein Konto* in the game men
 * **Maintenance mode** stops new live lobbies, new Rundenspiele, new Discord Activity lobbies and matchmaking. Running games continue. Use it before a server update so no new games start.
 * **Registration** off refuses new accounts (`POST /api/auth/register`); Google/Discord logins of existing accounts still work.
 * Both switches live in memory: a restart turns maintenance mode off and registration on again.
+
+### Discord invite
+
+The **Discord-Einladung** field on *Übersicht* sets the link to the community's Discord server. It accepts `https://discord.gg/<code>`, `discord.gg/<code>` or `https://discord.com/invite/<code>`, and stores it as `https://discord.gg/<code>`. While a link is set, the game's main menu shows a **💬 Discord-Server** button next to *Statistiken* and *Rangliste*, and the footers of the game page and the portal show a *Discord* link. Clear the field and save to hide them. The Discord Activity never shows them. Unlike the switches above, the link is stored in the database (`settings`), so it survives a restart. Review admins can see it but not change it.
 
 ### Bans and deleted accounts
 

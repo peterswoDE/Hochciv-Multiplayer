@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
+const Settings = require('../utils/settings');
 const rateLimitLib = require('../utils/rateLimit');
 
 // Lobbies live in memory – limit how fast one client can create/join them
@@ -79,6 +80,17 @@ router.post('/sessions/preview', lobbyLimit, (req, res) => {
 // ── GET /api/public-sessions — public lobbies and running public games ──────
 router.get('/public-sessions', (req, res) => {
     res.json(sessions.getPublicSessions());
+});
+
+// ── GET /api/settings — what the admin set for every page: the Discord invite link ──
+router.get('/settings', async (req, res) => {
+    try {
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json(await Settings.publicSettings());
+    } catch (err) {
+        console.error('[Settings]', err);
+        res.json({ discordInvite: null });
+    }
 });
 
 // ── GET /api/sessions/:id — session info ────────────────────────────────────

@@ -170,6 +170,73 @@ function limits() {
     sessions.removeSession(r.sessionId);
 }
 
+/** #208: an ended game – still in the store, or gone – leads its spectators to the replay. */
+function ended() {
+    const sessions = require('../../sessions');
+    const r = sessions.createSession({ mapKey: '0' }, { name: 'End', clientId: 'host' });
+    const s = sessions.getSession(r.sessionId);
+    s.status = 'finished';
+    let w = sessions.addSpectator(r.joinCode, r.password, { name: 'W', clientId: 'w' });
+    ok(w.ended === true && w.gameId === null && w.replay === false, 'ended: before the match is stored – "over", no replay yet', JSON.stringify(w));
+    s.gameRecord = { id: 'g-1', replay: true };
+    w = sessions.addSpectator(r.joinCode, r.password, { name: 'W', clientId: 'w' });
+    ok(w.ended && w.gameId === 'g-1' && w.replay === true, 'ended: a finished session gives its replay', JSON.stringify(w));
+    ok(sessions.addSpectator(r.joinCode, r.password, { name: 'Host', clientId: 'host' }).spectator === false, 'ended: a player of the session stays a player');
+    sessions.removeSession(r.sessionId);
+    w = sessions.addSpectator(r.joinCode, r.password, { name: 'W', clientId: 'w' });
+    ok(w.ended && w.gameId === 'g-1' && w.replay === true, 'ended: the code still leads to the replay after the session is gone', JSON.stringify(w));
+    ok(sessions.addSpectator(r.joinCode, '000000', { name: 'X', clientId: 'x' }) === 'Falsches Passwort.', 'ended: wrong password refused');
+
+    // stored only after the session went
+    const r2 = sessions.createSession({ mapKey: '0' }, { name: 'End2', clientId: 'host2' });
+    const s2 = sessions.getSession(r2.sessionId);
+    s2.status = 'finished';
+    sessions.removeSession(r2.sessionId);
+    s2.gameRecord = { id: 'g-2', replay: true };
+    sessions.noteGameRecord(s2);
+    w = sessions.addSpectator(r2.joinCode, r2.password, { name: 'W', clientId: 'w' });
+    ok(w.ended && w.gameId === 'g-2', 'ended: a match stored after the session went is found', JSON.stringify(w));
+
+    // a lobby closed before it ended is not remembered
+    const r3 = sessions.createSession({ mapKey: '0' }, { name: 'Lobby', clientId: 'host3' });
+    sessions.removeSession(r3.sessionId);
+    ok(sessions.addSpectator(r3.joinCode, r3.password, { name: 'W', clientId: 'w' }) === 'Ungültiger Beitrittscode.', 'ended: a closed lobby stays an invalid code');
+    sessions._endedCodes.clear();
+}
+
+/** #208 in the page: "Zuschauen" on an ended game opens the replay, or says it is over. */
+async function endedInPage(browser) {
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    await p.goto(BASE + '/');
+    await p.waitForFunction(() => typeof MP !== 'undefined' && typeof REPLAY !== 'undefined');
+    const res = await p.evaluate(async () => {
+        const out = { opened: null, toasts: [] };
+        const realFetch = window.fetch, realOpen = REPLAY.open, realToast = window.toast;
+        REPLAY.open = id => { out.opened = id; };
+        window.toast = m => out.toasts.push(m);
+        const answer = body => window.fetch = (u, o) => /\/api\/sessions\/watch$/.test(u)
+            ? Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+            : realFetch(u, o);
+        try {
+            answer({ ended: true, gameId: 'abc', replay: true });
+            await MP.watch('ABCDEF', '123456', 'V');
+            out.first = out.opened;
+            out.opened = null;
+            answer({ ended: true, gameId: null, replay: false });
+            await MP.watch('ABCDEF', '123456', 'V');
+            out.active = MP.active || false;
+        } finally {
+            window.fetch = realFetch; REPLAY.open = realOpen; window.toast = realToast;
+        }
+        return out;
+    });
+    ok(res.first === 'abc', 'ended (page): "Zuschauen" opens the replay', JSON.stringify(res));
+    ok(res.opened === null && /schon zu Ende/.test(res.toasts[res.toasts.length - 1] || '') && !res.active,
+        'ended (page): without a replay it says the game is over', JSON.stringify(res));
+    await ctx.close();
+}
+
 async function rundenspiel(browser, errors) {
     const ua = makeUser(), ub = makeUser(), uc = makeUser();
     const ids = [];
@@ -220,6 +287,8 @@ async function rundenspiel(browser, errors) {
     const errors = [];
     try {
         limits();
+        ended();
+        await endedInPage(browser);
         await live(browser, errors);
         await rundenspiel(browser, errors);
         ok(errors.length === 0, 'no page errors', errors.join(' | '));

@@ -18,8 +18,29 @@ function generateJoinCode() {
         code = '';
         for (let i = 0; i < config.JOIN_CODE_LENGTH; i++)
             code += chars[crypto.randomInt(chars.length)];
-    } while (codeIndex.has(code));
+    } while (codeIndex.has(code) || endedCodes.has(code));
     return code;
+}
+
+/*
+ * #208: a live game that has ended and whose session is gone – for a while its code still leads
+ * to the result: "Zuschauen" from a list that was loaded before the end opens the replay (or
+ * says that the game is over) instead of "Ungültiger Beitrittscode.".
+ *   joinCode → { password, passwordGuard, gameRecord: { id, replay } | null, at }
+ */
+const endedCodes = new Map();
+const ENDED_KEEP_MS = 60 * 60 * 1000;
+const GAME_ENDED = 'Das Spiel ist schon zu Ende.';
+
+/** The match was stored after its session had already gone: keep it for the code (#208). */
+function noteGameRecord(session) {
+    const e = session && endedCodes.get(session.joinCode);
+    if (e && e.password === session.password) e.gameRecord = session.gameRecord || null;
+}
+
+/** What a spectator gets for an ended game: the stored match and whether it has a replay. */
+function endedInfo(gameRecord) {
+    return { ended: true, gameId: gameRecord ? gameRecord.id : null, replay: !!(gameRecord && gameRecord.replay), message: GAME_ENDED };
 }
 
 /** Display names are plain text of limited length. */
@@ -191,13 +212,22 @@ function joinSession(joinCode, password, playerInfo, opts) {
 function addSpectator(joinCode, password, info, opts) {
     const clientId = clientIdOf(info);
     if (!clientId) return INVALID_CLIENT;
-    const sessionId = codeIndex.get(String(joinCode || '').toUpperCase());
-    if (!sessionId) return 'Ungültiger Beitrittscode.';
+    const code = String(joinCode || '').toUpperCase();
+    const sessionId = codeIndex.get(code);
+    if (!sessionId) {
+        // ended and gone (#208): the replay, with the same password check as a session
+        const gone = endedCodes.get(code);
+        if (!gone) return 'Ungültiger Beitrittscode.';
+        const pwError = checkPassword(gone, password, clientId, opts);
+        return pwError || endedInfo(gone.gameRecord);
+    }
     const session = sessions.get(sessionId);
     if (!session) return 'Sitzung nicht gefunden.';
     const pwError = checkPassword(session, password, clientId, opts);
     if (pwError) return pwError;
     if (session.players.some(p => p.clientId === clientId)) return { sessionId, spectator: false };
+    // over already (#208): there is nothing left to watch live – the replay instead
+    if (session.status === 'finished') return Object.assign(endedInfo(session.gameRecord), { sessionId });
     if (!session.spectators) session.spectators = [];
     if (session.spectators.some(w => w.clientId === clientId)) return { sessionId, spectator: true };
     // room for a new one: forget spectators who are gone
@@ -253,6 +283,12 @@ function removeSession(sessionId) {
     if (session) {
         codeIndex.delete(session.joinCode);
         sessions.delete(sessionId);
+        if (session.status === 'finished') {
+            endedCodes.set(session.joinCode, {
+                password: session.password, players: [], spectators: [],
+                gameRecord: session.gameRecord || null, at: Date.now(),
+            });
+        }
     }
 }
 
@@ -294,6 +330,7 @@ function cleanup() {
             removeSession(id);
         }
     }
+    for (const [code, e] of endedCodes) if (now - e.at > ENDED_KEEP_MS) endedCodes.delete(code);
 }
 
 // Run cleanup periodically
@@ -563,4 +600,7 @@ module.exports = {
     getPublicSessions,
     recordActivity,
     getAllSessions: () => sessions,
+    GAME_ENDED,
+    noteGameRecord,
+    _endedCodes: endedCodes,      // for tests
 };

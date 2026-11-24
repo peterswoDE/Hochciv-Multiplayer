@@ -158,6 +158,10 @@ td.acc-empty { color: var(--ink-soft); text-align: center; padding: 18px; }
 .acc-setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--rule); }
 .acc-setting:first-of-type { border-top: 0; }
 .acc-setting small { display: block; color: var(--ink-soft); }
+.acc-inline-form { display: flex; gap: 8px; align-items: center; flex: 0 1 360px; min-width: 0; }
+.acc-inline-form input { flex: 1; min-width: 0; }
+.acc-setting-msg { margin: 0 0 8px; font-size: 13px; color: var(--ok); }
+.acc-setting-msg.error { color: var(--red); }
 
 /* bot tokens: shown once */
 .bot-token-box { padding: 12px 14px; border: 1px solid var(--red); border-radius: 10px; margin: 0 0 14px; background: var(--field); }

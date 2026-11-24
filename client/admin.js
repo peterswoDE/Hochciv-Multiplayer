@@ -126,6 +126,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     window.toggleConfig = async (key, val) => { await post('/api/admin/config', { [key]: val }); };
+
+    // Discord invite link (utils/settings.js, stored in the database): loaded once, not with every
+    // 10-second refresh of the overview, so an entry being typed is not overwritten
+    async function loadSettings() {
+        try {
+            const st = await (await fetch('/api/admin/settings')).json();
+            document.getElementById('admin-discord-invite').value = st.discordInvite || '';
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    window.saveDiscordInvite = async ev => {
+        ev.preventDefault();
+        const input = document.getElementById('admin-discord-invite');
+        const msg = document.getElementById('admin-discord-msg');
+        const res = await post('/api/admin/settings', { discordInvite: input.value.trim() });
+        const data = await res.json().catch(() => ({}));
+        msg.hidden = false;
+        msg.classList.toggle('error', !res.ok);
+        if (!res.ok) { msg.textContent = txs(data.error || 'Fehler'); return; }
+        input.value = data.discordInvite || '';
+        msg.textContent = data.discordInvite ? tx('Gespeichert.') : tx('Entfernt – der Discord-Knopf ist ausgeblendet.');
+    };
+    loadSettings();
     window.toggleMaintenance = async () => {
         await post('/api/admin/config', { maintenanceMode: !window._maintenanceMode });
         loadDashboard();

@@ -1812,6 +1812,18 @@ const MP = {
             });
             const data = await res.json();
             if (!res.ok) return toast(data.error ? TXS(data.error) : TX('Fehler beim Beitritt.'));
+            // over already (#208) – fast bot games end before anyone clicks: the replay instead
+            if (data.ended) {
+                if (data.gameId && data.replay) {
+                    toast(TX('Das Spiel ist schon zu Ende – die Wiederholung wird geöffnet.'));
+                    if (typeof REPLAY !== 'undefined') REPLAY.open(data.gameId);
+                    else location.href = '/?replay=' + encodeURIComponent(data.gameId);
+                } else {
+                    toast(TX('Das Spiel ist schon zu Ende.'));
+                    if ($('mph-tabs')) this.hubLoad();               // the stale list: drop the game
+                }
+                return;
+            }
             this.sessionId = data.sessionId;
             this.joinCode = joinCode.toUpperCase();
             this.password = password;
@@ -3280,7 +3292,37 @@ MP.drawLegalFooter = function () {
     footer.innerHTML = `&copy; 2026 Hochciv Multiplayer. ${TX('Alle Rechte vorbehalten.')} |
         ${link('/datenschutzerklaerung.html', TX('Datenschutzerklärung'))} |
         ${link('/nutzungsbedingungen.html', TX('Nutzungsbedingungen'))} |
-        ${link('/impressum.html', TX('Impressum'))}`;
+        ${link('/impressum.html', TX('Impressum'))}${MP.discordInvite ? ' | ' + link(escHtml(MP.discordInvite), 'Discord') : ''}`;
+};
+/* The Discord invite link the admin set (GET /api/settings, utils/settings.js): a button in the
+   main menu next to Statistiken and Rangliste, and a link in the footer. Not in the Discord
+   Activity – the players are in Discord already, and links there need the SDK to open. */
+MP.IN_ACTIVITY = new URLSearchParams(location.search).has('frame_id') || /\.discordsays\.com$/.test(location.hostname);
+MP.loadDiscordInvite = async function () {
+    if (this.IN_ACTIVITY) return;
+    try {
+        const r = await fetch(`${this.serverUrl}/api/settings`);
+        this.discordInvite = r.ok ? ((await r.json()).discordInvite || null) : null;
+    } catch (_) {
+        this.discordInvite = null;
+    }
+    this.drawDiscordButton();
+    this.drawLegalFooter();
+};
+MP.drawDiscordButton = function () {
+    let btn = $('mp-discord-btn');
+    if (!this.discordInvite) { if (btn) btn.remove(); return; }
+    const mNew = $('m-new');
+    if (!btn) {
+        if (!mNew) return;
+        btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.id = 'mp-discord-btn';
+        btn.onclick = () => window.open(MP.discordInvite, '_blank', 'noopener');
+        mNew.parentNode.insertBefore(btn, $('m-continue'));
+    }
+    btn.textContent = '💬 ' + TX('Discord-Server');
+    btn.title = TX('Tritt unserem Discord-Server bei: Mitspieler finden, Neuigkeiten, Feedback');
 };
 /* Main menu: the ways into a game stay big (Erstes Spiel, Spiel fortsetzen, Neues Spiel,
    Multiplayer); tutorial, statistics, editor, rules, settings and loading go into a compact grid
@@ -3316,6 +3358,7 @@ MP.applyLang = function () {
     set('mp-live-btn', TX('Multiplayer'));
     set('mp-overall-btn', TX('Statistiken'));
     set('mp-ranking-btn', '🏆 ' + TX('Rangliste'));
+    if ($('mp-discord-btn')) this.drawDiscordButton();
     set('mp-maps-btn', TX('Karten entdecken'));
     set('mp-players-title', TX('Spieler'));
     set('dc-group-btn', TX('Mit der Discord-Gruppe spielen'));      // activity/bridge.js
@@ -3370,6 +3413,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     MP.arrangeMenu();
     MP.applyLang();
+    MP.loadDiscordInvite();
     // Tap the code box in the HUD to go back to the list (the game goes on)
     const cred = $('mp-cred-wrapper');
     if (cred) cred.addEventListener('click', () => {

@@ -12,6 +12,12 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', () => {
     // The page in the player's language (client/i18n.js): its fixed texts here, messages in showError
     HC_I18N.apply(document);
+    // the Discord invite the admin set (GET /api/settings, utils/settings.js) in the footer
+    fetch('/api/settings').then(r => (r.ok ? r.json() : {})).then(st => {
+        if (!st.discordInvite || !/^https:\/\/discord\.gg\//.test(st.discordInvite)) return;
+        document.getElementById('portal-discord-link').href = st.discordInvite;
+        document.getElementById('portal-discord').hidden = false;
+    }).catch(() => { });
 
     // Views
     const viewLoading = document.getElementById('view-loading');

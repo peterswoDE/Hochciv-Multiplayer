@@ -27,6 +27,7 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `oauth_providers` | `OAuthProvider` | Google/Discord configuration |
 | `reports` | `Report` | Chat reports |
 | `banned_words` | `BannedWord` | Admins' word-filter entries |
+| `settings` | `Setting` | Server settings from the admin panel, one row per `key` (utils/settings.js): `discordInvite` |
 | `session` | – | Login sessions (`connect-pg-simple`) |
 | `schema_migrations` | – | The applied migrations (`name`, `appliedAt`) |
 
@@ -73,6 +74,7 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 * **`passkeys`:** `credentialID`, `credentialPublicKey`, `counter`, `transports`.
 * **`device_tokens`:** `token`, `platform`, `lastSeenAt`, `sessionHash` (SHA-256 of the session id that registered the device, migrations/0004-device-session.js – another account takes the device over only after that login ended).
 * **`reports`:** `kind` (`chat` or `map`), `status`, `source`/`sourceId` (live game or Rundenspiel; for a map `map` and the map's id), reporter and reported (id and name), `reason`, `message`, `context` (the game's chat history from the server's copy; for a map report the map as it was), `auto` (word filter), `matches`, `penalty`, `note`, `handledBy`, `handledAt`. Reports about an existing account are kept as long as it exists; the others for `REPORT_KEEP_YEARS` (3).
+* **`settings`:** `key` (primary key), `value` (text), `updatedBy` (admin username). Read once and kept in memory by utils/settings.js.
 * **`banned_words`:** `word` (normalized: lower case, ä → ae, ß → ss), `kind` (`ban`/`allow`), `match` (`word` – whole word, or `part` – anywhere), `addedBy`.
 
 ## Roles and migrations

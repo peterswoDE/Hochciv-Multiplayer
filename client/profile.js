@@ -16,6 +16,8 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     // texts in the player's language (client/i18n.js)
     const tx = (de, ...args) => HC_I18N.t(de, ...args);
+    // nation name in the player's language: the server sends German (civ) and English (civEn)
+    const civLabel = x => (HC_I18N.lang() === 'en' && x.civEn) || x.civ;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const fmtDate = d => new Date(d).toLocaleDateString(HC_I18N.locale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
     const fmtDateTime = d => new Date(d).toLocaleString(HC_I18N.locale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -230,7 +232,7 @@
         const players = [...g.players].sort((a, b) => b.points - a.points);
         const rows = players.map(p => `<tr class="${p.isWinner ? 'win' : ''}">
                 <td>${p.userId === ownerId ? esc(p.name) : link(p.name, p.userId)}${p.isBot ? ` <small>(${tx('Bot')})</small>` : p.botAccount ? ' 🤖' : ''}</td>
-                <td>${esc(p.civ || '–')}</td>
+                <td>${esc(civLabel(p) || '–')}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.pop) : '–'}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.wonders) : '–'}</td>
                 <td class="hcp-num">${p.scoreDetails ? esc(p.scoreDetails.techs) : '–'}</td>
@@ -240,7 +242,7 @@
             <summary>
               <span>${result}${shift}</span>
               <span class="hcp-sub">${esc(fmtDateTime(g.matchDate))}</span>
-              <span class="hcp-meta">${esc(type)} · ${esc(g.civ || '–')} · ${tx('%s Punkte', esc(g.points))} · ${tx('%s Runden', esc(g.rounds))}</span>
+              <span class="hcp-meta">${esc(type)} · ${esc(civLabel(g) || '–')} · ${tx('%s Punkte', esc(g.points))} · ${tx('%s Runden', esc(g.rounds))}</span>
             </summary>
             <div style="overflow-x:auto"><table class="hcp-table">
               <tr><th>${tx('Spieler')}</th><th>${tx('Nation')}</th><th class="hcp-num">${tx('Bev.')}</th><th class="hcp-num">${tx('Wunder')}</th>

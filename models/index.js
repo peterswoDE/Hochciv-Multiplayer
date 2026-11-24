@@ -24,6 +24,7 @@ const Friendship = require('./Friendship')(sequelize);
 const Season = require('./Season')(sequelize);
 const SeasonResult = require('./SeasonResult')(sequelize);
 const ChallengeResult = require('./ChallengeResult')(sequelize);
+const Setting = require('./Setting')(sequelize);
 
 // Define relationships if needed in the future
 User.hasMany(Game, { foreignKey: 'winnerUsername', sourceKey: 'username' });
@@ -58,4 +59,5 @@ module.exports = {
     Season,
     SeasonResult,
     ChallengeResult,
+    Setting,
 };

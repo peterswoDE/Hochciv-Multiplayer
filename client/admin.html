@@ -71,6 +71,17 @@
                             Registrierung erlauben
                         </label>
                     </div>
+                    <div class="acc-setting acc-setting-discord">
+                        <div>
+                            <strong>Discord-Einladung</strong>
+                            <small>Link zum Discord-Server – im Hauptmenü des Spiels und in der Fußzeile. Leer lassen, um ihn auszublenden.</small>
+                        </div>
+                        <form id="admin-discord-form" class="acc-inline-form" onsubmit="saveDiscordInvite(event)">
+                            <input type="text" inputmode="url" spellcheck="false" id="admin-discord-invite" class="w-lock" placeholder="https://discord.gg/abc123" maxlength="120" autocomplete="off">
+                            <button type="submit" class="btn small w-lock">Speichern</button>
+                        </form>
+                    </div>
+                    <p id="admin-discord-msg" class="acc-setting-msg" hidden></p>
                 </div>
 
                 <div class="acc-card">
