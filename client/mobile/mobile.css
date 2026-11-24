@@ -85,8 +85,8 @@ html.w-narrow .logline{padding:4px 0}
 /* Technologiebogen: eine Spalte je Reiter */
 .m-tabs{display:none}
 /* Tech tree: the yield strip ("Grasland ×4 · Meer ×2 · … · Summe", the game's narrow layout
-   below 720 px – also on an upright phone, where the turned page is wide but the media query
-   measures the unturned width). Its entries keep their width instead of being squeezed into each
+   below 720 px – also on an upright phone; on the kept versions that turn the page (v102–v110) the
+   page is wide there, but the media query measures the unturned width). Its entries keep their width instead of being squeezed into each
    other (the strip scrolls sideways if needed), and the strip stays at the top while the techs
    scroll. With field tabs (w-narrow) the tab bar sits right below it (--m-yield-h, mobile.js). */
 @media (max-width:719px){
@@ -128,9 +128,16 @@ html.w-narrow #screen-menu .menu-wrap{padding-top:12px}
 html.w-narrow .mp-waiting-toast{top:calc(var(--hud-h,54px) + 6px) !important;font-size:13px;padding:4px 12px !important;
   white-space:nowrap}
 
-/* mp.js: Spielerliste unter der Kopfzeile, ausgeklappt fast volle Breite */
+/* mp.js: Spielerliste unter der Kopfzeile, ausgeklappt fast volle Breite – rechts bleibt die Spalte
+   der Zoomknöpfe frei (10 px Rand + 40 px Knopf) */
 html.w-narrow #mp-players-container{top:calc(var(--hud-h,54px) + 8px)}
-html.w-narrow #mp-players-container:not(.mp-log-minimized){left:8px;right:8px;width:auto}
+html.w-narrow #mp-players-container:not(.mp-log-minimized){left:8px;right:58px;width:auto}
+/* mp.js: Zugangsdaten und Zuguhr in der Kopfzeile – auf dem Telefon hochkant ist neben den Vorräten
+   kein Platz, sie stehen dort in einer zweiten Zeile (die Kopfzeile wird höher; --hud-h misst sie) */
+html.w-narrow #screen-game .hud{flex-wrap:wrap;row-gap:2px}
+html.w-narrow #screen-game .hud-civ{flex-basis:0}   /* schrumpft wie bisher, statt die Vorräte umzubrechen */
+html.w-narrow #mp-cred-wrapper{order:5;flex:1 0 100% !important}
+html.w-narrow #mp-cred-wrapper .res{padding:2px 8px !important}
 
 /* ------------------------------------------------------------------ short screens (phone landscape) */
 @media (max-height:520px){

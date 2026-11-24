@@ -42,7 +42,8 @@ const engine = require('./engine-adapter');
         await require('./sockets/game').processGameOverMmr(session, null, session.id, true);
     } else {
         const g = {
-            id: 'score-test', engine: engine.version(), config: { ranked: true }, state: S,
+            id: require('crypto').randomUUID(),     // no row: the result marker (R-18) updates nothing
+            engine: engine.version(), config: { ranked: true }, state: S,
             seats: seats.map(s => ({ slot: s.slot, userId: s.id, name: s.name, civ: s.civ, kind: 'human' })),
         };
         await require('./async/service').processResult(g);

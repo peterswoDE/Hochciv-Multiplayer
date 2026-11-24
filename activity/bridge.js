@@ -11,6 +11,7 @@
  * Globals used from the game / mp.js: MP, $, toast, show.
  */
 import { DiscordSDK } from '@discord/embedded-app-sdk';
+import { allowed } from './handler-shapes';
 
 const params = new URLSearchParams(location.search);
 // Discord starts the Activity with ?frame_id=…&instance_id=…; anywhere else this does nothing.
@@ -278,6 +279,12 @@ function interceptReloads() {
 // mp.js) are blocked. It does allow 'unsafe-eval', so each handler attribute is compiled into
 // a handler function and set as the element's property, which the policy permits. Same
 // semantics: one handler slot per event type, `this` is the element, `return false` cancels.
+// Only handlers whose shape one of our own templates produces are compiled (R-04): the build
+// (activity/build.js) collects the shapes of all on*="…" in mp.js and client/; literals written
+// into a template must match exactly, only a ${…} may be any literal. An attribute that
+// came in through an escaping slip – <img onerror="…"> in a name, say – has another shape and
+// stays dead, as Discord's CSP intends.
+const ALLOWED_HANDLERS = typeof __HANDLER_SHAPES__ !== 'undefined' ? __HANDLER_SHAPES__ : {};
 
 const HANDLER_ATTRS = ['onclick', 'ondblclick', 'onchange', 'oninput', 'onsubmit', 'onkeydown', 'onkeyup',
     'onkeypress', 'onmousedown', 'onmouseup', 'onmouseover', 'onmouseout', 'onmouseenter', 'onmouseleave',
@@ -291,6 +298,13 @@ function compileHandlers(el) {
     for (const attr of HANDLER_ATTRS) {
         const code = el.getAttribute(attr);
         if (code == null || (done && done[attr] === code)) continue;
+        if (!allowed(code, ALLOWED_HANDLERS)) {
+            el[attr] = null;
+            report(`Inline-Handler ${attr} abgelehnt (unbekannte Form): ${code.slice(0, 120)}`, 'error');
+            if (!done) compiled.set(el, done = {});
+            done[attr] = code;
+            continue;
+        }
         try {
             el[attr] = new Function('event', code);
         } catch (err) {

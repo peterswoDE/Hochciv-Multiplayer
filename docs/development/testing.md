@@ -75,6 +75,12 @@ The server limits logins and other requests per minute, so tests run back to bac
 | `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
 | `seasons/seasons.test.js` | seasons, leaderboard and badges: tiers, the running and a closed season, the soft reset, profile badges, the page (it restores seasons and every MMR afterwards) | default |
 | `security/security.test.js` | origin check, TOTP limits, auth fixes | default |
+| `security/params.test.js` | action parameters: coordinates and ids must be integers on the map (R-01); runs without a server | – |
+| `security/continuity.test.js` | live-game continuity (findings R-08 – R-12, R-23, R-24): switching sessions releases the old seat, the lobby grace period, cleanup of empty and paused games, a failed start restores the lobby, the kick ban list, the placement deadline; runs in-process without a server | – |
+| `security/abuse.test.js` | abuse limits (findings R-15 – R-17): the socket event rate limit (burst, refill, error ack, disconnect of a flood), the lobby password lock (newcomers locked out, players of the lobby and the server's own joins not), the size cap of stored single-player games; runs without a server | – |
+| `security/activity-handlers.test.js` | Discord Activity: the bridge's handler allow-list – every handler of `mp.js` and `client/` fits, injected ones (`fetch`, `alert`, appended calls, `javascript:` addresses) do not, the bundle carries the list (R-04); runs without a server | – |
+| `security/ranked.test.js` | ranked integrity: a seat stays with its account after the start (R-02), no timeout penalty in a converted ranked game (R-06), the resign penalty survives the conversion (R-07) | default |
+| `security/quickwins.test.js` | small hardening: clientId and join code checked in `sessions.js` (R-13, R-25), short `SESSION_SECRET` refused in production (R-05), CORS only for allowed origins (R-14), Activity log off (R-21), bot deletion needs a recent login (R-20), `/health` without uptime (R-27) | default |
 | `db/migrations.test.js` | database roles and migrations on an empty database: the setup, every migration, models matching the schema, what the server's role may not do | no server – an empty PostgreSQL (see header); runs on every pull request |
 | `security/regression.test.js` | findings of the security audit of 2026-11-16: passkey login, ranked seats, parallel code guesses, sockets after a password change, invitation e-mails, password-change limit (waits a minute three times for the auth limits) | `TURN_TIMER_SCALE=0.05` |
 | `spectators/spectators.test.js` | spectator mode | default |
@@ -95,7 +101,7 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 
 ## On GitHub
 
-`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`), `db/migrations` against a Postgres service container and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
+`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `security/params`, `security/activity-handlers`, `security/continuity`, `security/abuse`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`), `db/migrations` against a Postgres service container and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
 
 ## Which tests to run
 

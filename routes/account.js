@@ -87,6 +87,8 @@ router.post('/unlink/:provider', rateLimit, async (req, res) => {
             return res.status(400).json({ error: 'Das ist deine einzige Anmeldemöglichkeit. Lege zuerst ein Passwort fest.' });
         }
         user[idField] = null;
+        // a Discord account linked later must be switched on again (and pass the test message)
+        if (idField === 'discordId') user.notifyDiscord = false;
         await user.save();
         res.json({ ok: true, googleLinked: !!user.googleId, discordLinked: !!user.discordId });
     } catch (err) {

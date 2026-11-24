@@ -65,6 +65,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/alerts.js` | Sound and tab alerts (own turn, lobby, start, match found, chat) |
 | `client/ranking.js` | Leaderboard with seasons and tiers (tier and badge display: `client/profile.js`) |
 | `client/challenge.js` | Weekly challenge: week picker, the week's setup, start / play again / continue / start over, own results, leaderboard |
+| `client/victory.js` | The end of a game in full screen (explosion, "<name> gewinnt das Spiel", Sieg / Niederlage), played once per game from the `gameOver()` patch in mp.js |
 | `client/friends.js` | Friends list: the menu tab, lobby invitations, friend names for Rundenspiel invitations, the profile button |
 | `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |

@@ -11,7 +11,8 @@
  *  3. A field selected under a sheet is moved into view next to it.
  *  4. Short screens: the editor starts with its settings folded.
  *  5. Tutorial (up to v101): fields it highlights are brought into view.
- *  Works on the page the game turns by 90° on a phone held upright (html.turn, always since v102).
+ *  Also works on the page the kept versions v102–v110 turn by 90° on a phone held upright (html.turn);
+ *  since the extension's v112 the game runs upright when held upright.
  *
  * Hooks into the game – check these when the game is updated:
  *   drawMap(svg, map, opts)   wrapped: re-applies the zoom after every redraw
@@ -38,8 +39,8 @@
   const MAX_HEX_PX = 130;
   const views = new Map();            // svg -> view {W, H, k, cx, cy, key, auto}
 
-  /* The game turns the page by 90° on a phone held upright (html.turn in portrait, style.css –
-     always since v102). Rects and pointer positions on the screen are then turned against the
+  /* The kept versions v102–v110 turn the page by 90° on a phone held upright (html.turn in
+     portrait, style.css); the current game no longer does. Rects and pointer positions on the screen are then turned against the
      page; everything here works in the page's own frame, so they are converted:
      screen (x, y) = (innerWidth − page y, page x)  ⇔  page (x, y) = (screen y, innerWidth − screen x). */
   const turned = () => document.documentElement.classList.contains('turn') && window.innerHeight > window.innerWidth;

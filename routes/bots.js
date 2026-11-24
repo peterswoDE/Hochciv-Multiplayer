@@ -9,7 +9,8 @@
  *   POST   /api/bots/:id/transfer { username } – hand the bot to another bot creator
  *   DELETE /api/bots/:id             – delete the bot (like an account: its games stay)
  *
- * Creating and renewing a token, and handing a bot over, need a recent login (requireRecentAuth).
+ * Creating and renewing a token, handing a bot over and deleting it need a recent login
+ * (requireRecentAuth).
  */
 const express = require('express');
 const rateLimitLib = require('../utils/rateLimit');
@@ -45,7 +46,7 @@ function botJson(bot, owner) {
         isBanned: bot.isBanned,
         owner: owner ? { id: owner.id, username: owner.username } : null,
         // why it can't play right now (owner banned, role taken away, …), null when it can
-        disabled: Bots.botUsable(bot, owner),
+        disabled: Bots.botBlockedReason(bot, owner),
     };
 }
 
@@ -175,7 +176,7 @@ router.post('/:id/transfer', rateLimit, requireRecentAuth, async (req, res) => {
     }
 });
 
-router.delete('/:id', rateLimit, async (req, res) => {
+router.delete('/:id', rateLimit, requireRecentAuth, async (req, res) => {
     try {
         const bot = await managedBot(req, res);
         if (!bot) return;

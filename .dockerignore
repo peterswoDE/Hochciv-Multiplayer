@@ -11,4 +11,6 @@ node_modules
 public
 public_bundled
 security
+# screenshots of local test runs in the root folder (they show account names and admin pages)
+/*.png
 /data

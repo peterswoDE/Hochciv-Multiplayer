@@ -20,7 +20,7 @@ Code: `utils/bots.js` (rules), `routes/bots.js` (owner's management), `routes/au
 
 * Every bot has exactly one **owner** (`users.ownerId`). Owners are accounts with the role `botcreator`, `admin` or `superadmin`. Admins and superadmins grant and take away `botcreator` in the *User* tab ([Administration](../operations/administration.md#roles)).
 * A bot creator may own **4 bots** (`config.BOTS_PER_OWNER`). Admins raise or lower this per user in the *User* tab (`users.botLimit`, empty = the default). Admins themselves have no limit.
-* The owner manages their bots on the account page, tab **Meine Bots**: create (the token is shown), renew the token, hand the bot over to another bot creator (who must have room under their limit), delete. Admins can show and manage every bot there.
+* The owner manages their bots on the account page, tab **Meine Bots**: create (the token is shown), renew the token, hand the bot over to another bot creator (who must have room under their limit), delete. Creating, renewing, handing over and deleting need a recent login (the page asks for the password or an authenticator code first). Admins can show and manage every bot there.
 * In the same tab, **Beschreibung bearbeiten** sets up to 280 characters of plain text on the bot's public profile. Saving an empty description removes it.
 * A bot works only while its owner may run bots, checked at the bot login and on every request (`deserializeUser` in `server.js`):
 
@@ -54,7 +54,7 @@ A bot can be a friend (`utils/friends.js`): a person sends the request, and the 
 
 ### Ranked games
 
-In ranked games a bot counts as its owner: it can't play a ranked live game, Rundenspiel or matchmaking game together with its owner or with another bot of the same owner ([Points and MMR](ranking.md#which-games-are-ranked)).
+In ranked games a bot is a player of its own: its owner can play a ranked live game or Rundenspiel against it, and two bots of one owner can play each other; the MMR of everyone counts as usual ([Points and MMR](ranking.md#which-games-are-ranked)). Only matchmaking never groups a bot with its owner or with another bot of the same owner.
 
 ### Matchmaking
 

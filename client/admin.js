@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="acc-btns" style="gap:4px;">
                         <button onclick="adminAction('user', '${id}', '${u.isBanned ? 'unban' : 'ban'}')" class="btn small w ${u.isBanned ? '' : 'error'}">${u.isBanned ? tx('Entbannen') : tx('Bannen')}</button>
                         ${isBotUser ? '' : `<button onclick="adminAction('user', '${id}', 'force_password')" class="btn small w">${tx('PW Reset')}</button>
-                        <button onclick="toggleAdminUserMfa('${id}')" class="btn small">${tx('MFA Verwalten')}</button>`}
+                        ${readOnly ? '' : `<button onclick="toggleAdminUserMfa('${id}')" class="btn small">${tx('MFA Verwalten')}</button>`}`}
                         ${u.id === currentUser.id ? '' : `<button onclick="adminDeleteUser('${id}')" class="btn small error w">${tx('Konto löschen')}</button>`}
                     </div>
                     <div id="admin-user-mfa-${id}" class="acc-sub-panel" style="display:none;"></div>

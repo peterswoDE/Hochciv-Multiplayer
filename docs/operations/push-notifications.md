@@ -14,7 +14,7 @@ Without it, push is off and nothing else changes. With it, the log shows `[Push]
 
 ## Devices and players
 
-* **Devices:** the app registers its FCM token with `POST /api/push/token` after login and removes it on logout (`DELETE /api/push/token`). A phone belongs to the account that logged in on it last. Tokens Firebase rejects (app uninstalled) are deleted, as are those of deleted accounts.
+* **Devices:** the app registers its FCM token with `POST /api/push/token` after login and removes it on logout (`DELETE /api/push/token`). A phone belongs to one account at a time; another account takes it over once the login that registered it has ended (logout or expiry) – before that the server answers `409` (the device keeps a SHA-256 of that session id, [Security](../reference/security.md#push-devices)). Tokens Firebase rejects (app uninstalled) are deleted, as are those of deleted accounts.
 * **Players** switch push on or off in the Rundenspiele list (*Push-Nachricht, wenn ich am Zug bin*, shown only in the app; `POST /api/push/notify`). Android's own notification settings work as well. E-mail notifications are switched separately (`POST /api/async/notify`).
 
 ## Tests

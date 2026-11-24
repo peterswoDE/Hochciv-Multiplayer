@@ -123,4 +123,4 @@ If `.env` already has `POSTGRES_DATA=./postgres` (older installations), the data
 
 ## Health check
 
-`GET /health` answers `{ ok: true, uptime }` – useful for the proxy or an uptime monitor.
+`GET /health` answers `{ ok: true }` – useful for the proxy or an uptime monitor.

@@ -15,20 +15,8 @@
 html,body{margin:0;height:100%;overflow:hidden;background:var(--parchment);color:var(--ink);
   font-family:var(--sans);font-size:16px;-webkit-text-size-adjust:100%}
 
-/* ------------------------------------------------ Querformat erzwingen
-   iOS kennt keine Orientierungssperre (weder screen.orientation.lock noch das
-   Manifest-Feld wirken dort). Auf dem iPad hilft nur: die App selbst drehen.
-   Wo eine echte Sperre existiert (Android/Chrome, installiert), greift sie zuerst
-   und dieser Zweig kommt gar nicht zum Tragen.
-   Der 90°-Dreh macht den <body> zum umschließenden Block aller position:fixed-
-   Elemente – Karte, Blatt, Fenster und Toast drehen deshalb geschlossen mit. */
-@media (orientation:portrait){
-  html.turn,html.turn body{overflow:hidden}
-  html.turn body{position:fixed;top:0;left:0;width:100vh;height:100vw;
-    transform-origin:top left;transform:rotate(90deg) translateY(-100vw)}
-  /* Gedreht zeigen die Systemeinfassungen in die falsche Richtung – lieber keine. */
-  html.turn{--safe-t:0px;--safe-b:0px;--fall:105vw}   /* gedreht ist „unten" die kurze Seite */
-}
+/* Bis v112 drehte sich der Spielbildschirm im Hochformat um 90° (html.turn). Seither läuft das
+   Spiel hochkant auch hochkant – siehe initOrientation in base.js. */
 /* Große Bildschirme (v103): die ganze Oberfläche wächst mit dem Fenster. Den Faktor setzt
    syncLayout (base.js): 1 bis 1366 × 720 – also auf jedem iPad –, darüber nach der knapperen
    Seite. Ein Faktor statt einer zweiten Gestaltung; Längen in vh/vw wachsen mit (siehe Konfetti). */
@@ -583,8 +571,7 @@ html.w-side body.tut .toast.show{transform:none}
   vertical-align:0;box-shadow:0 0 0 2px var(--paper)}
 
 /* Die folgenden Klassen setzt syncLayout() auf <html>. Bewusst keine Media Queries:
-   im gedrehten Hochformat (html.turn) misst eine Media Query den ungedrehten Viewport
-   und läge damit um 90° daneben. syncLayout rechnet mit der EFFEKTIVEN Layoutgröße. */
+   syncLayout rechnet mit der Größe der vergrößerten Seite (--ui), die eine Media Query nicht kennt. */
 /* Breit: das Blatt schwebt rechts – und endet 12 px über der Aktionsleiste,
    damit die Menüpunkte unten frei bleiben. */
 html.w-wide .sheet{left:auto;right:12px;bottom:calc(var(--bar-h,58px) + 12px);width:360px;

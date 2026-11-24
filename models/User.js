@@ -164,6 +164,12 @@ module.exports = (sequelize) => {
             defaultValue: true,
             allowNull: false,
         },
+        // ... and as a direct message from the Discord bot (opt-in, needs discordId; utils/discord.js)
+        notifyDiscord: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false,
+        },
         // Chat: players whose messages this user doesn't see (utils/reports.js),
         // [{ id (account) | null, name, at }] – guests are blocked by name
         blockedPlayers: {

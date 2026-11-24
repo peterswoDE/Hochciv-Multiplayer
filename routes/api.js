@@ -45,7 +45,8 @@ router.post('/sessions/join', lobbyLimit, (req, res) => {
         || typeof player.name !== 'string' || typeof player.clientId !== 'string' || !player.name || !player.clientId) {
         return res.status(400).json({ error: 'joinCode, password, player.name und player.clientId sind erforderlich.' });
     }
-    const result = sessions.joinSession(joinCode, password, { ...player, botUserId: botId(req) });
+    // the account, for the host's ban list (R-23)
+    const result = sessions.joinSession(joinCode, password, { ...player, botUserId: botId(req), userId: req.user ? req.user.id : undefined });
     if (typeof result === 'string') {
         return res.status(400).json({ error: result });
     }

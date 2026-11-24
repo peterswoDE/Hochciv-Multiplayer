@@ -332,10 +332,13 @@ function makeAdapter(engineDir, label) {
     /**
      * The engine was written for a trusted local client. Over the network every parameter
      * must be a plain value: keys are short identifiers (never __proto__ & co.), counts are
-     * small positive integers, coordinates/ids are finite numbers.
+     * small positive integers, coordinates/ids are integers. Never strings: the engine finds
+     * armies and cities with ===, so r:'9' slipped past armyAt/cityAt while the map lookup
+     * still read the tile – two armies on one tile (R-01 of the findings report).
      */
     const KEY_PARAMS = ['tech', 'mode', 'kind', 'wonder'];
     const COUNT_PARAMS = ['n', 'amount'];
+    const INT_PARAMS = ['r', 'c', 'cityId', 'armyId', 'target'];
     const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     function checkParams(params) {
         for (const [k, v] of Object.entries(params)) {
@@ -344,6 +347,8 @@ function makeAdapter(engineDir, label) {
                 if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(v) || FORBIDDEN_KEYS.has(v)) return `Ungültiger Parameter: ${k}`;
             } else if (COUNT_PARAMS.includes(k)) {
                 if (!Number.isInteger(v) || v < 1 || v > 100000) return `Ungültiger Parameter: ${k}`;
+            } else if (INT_PARAMS.includes(k)) {
+                if (!Number.isInteger(v) || v < 0 || v > 1e9) return `Ungültiger Parameter: ${k}`;
             } else if (typeof v === 'number') {
                 if (!Number.isFinite(v)) return `Ungültiger Parameter: ${k}`;
             } else if (typeof v !== 'string' || v.length > 100 || FORBIDDEN_KEYS.has(v)) {
@@ -359,6 +364,10 @@ function makeAdapter(engineDir, label) {
         params = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
         const paramErr = checkParams(params);
         if (paramErr) return paramErr;
+        // coordinates must lie on the map
+        const rows = state && state.map && state.map.rows;
+        if (params.r != null && (!rows || params.r >= rows.length)) return 'Ungültiger Parameter: r';
+        if (params.c != null && (!rows || params.c >= rows[params.r ?? 0].length)) return 'Ungültiger Parameter: c';
         // Only the current player may act
         if (state.cur !== pi) return 'Du bist nicht am Zug.';
         if (state.over) return 'Das Spiel ist vorbei.';
@@ -437,6 +446,11 @@ function makeAdapter(engineDir, label) {
                 case 'buyTile':
                     if (typeof E.buyTile !== 'function') return `Unbekannte Aktion: ${action}`;
                     return E.buyTile(state, pi, params.r, params.c);
+
+                // China "Mandat des Himmels" (v111): once per game, collect the income now
+                case 'collectIncomeNow':
+                    if (typeof E.collectIncomeNow !== 'function') return `Unbekannte Aktion: ${action}`;
+                    return E.collectIncomeNow(state, pi);
 
                 case 'coverPop':
                     return E.coverPop(state, pi, params.kind, params.amount);

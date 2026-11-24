@@ -262,6 +262,9 @@ function matchRule() {
         const botHosted = await asyncCreate(ctxB[1], {});
         r = await call(ctxB[2], 'POST', `/api/async/${botHosted.id}/join`, { code: botHosted.joinCode });
         ok(r.body.ok === true, 'Rundenspiel: a bot as host always allows player-bots', r.body.error);
+        const rankedOwn = await asyncCreate(C2, { mapKey: 'plaettchen', playerCount: 2, ranked: true, playerBots: true });
+        r = await call(ctxB[2], 'POST', `/api/async/${rankedOwn.id}/join`, { code: rankedOwn.joinCode });
+        ok(r.body.ok === true, 'Rundenspiel: ranked against your own bot is allowed', r.body.error || JSON.stringify(rankedOwn));
         // invitations of a bot by name
         r = await call(C2, 'POST', `/api/async/${off.id}/invite`, { username: fb.username });
         ok(/keine Spieler-Bots/.test(r.body.error || ''), 'Rundenspiel invite: refused without player-bots', r.body.error);

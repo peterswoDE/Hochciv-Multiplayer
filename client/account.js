@@ -335,13 +335,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         list.innerHTML = tokens.map(t => {
-            let deleteCall = '';
+            // the handler is written out, not built from pieces (R-04: only known handler shapes run in the Activity)
             const id = t.id ? `'${esc(t.id)}'` : 'null';
-            if (t.type === 'totp') deleteCall = `deleteToken('totp', ${id})`;
-            else if (t.type === 'email') deleteCall = `deleteToken('email', null)`;
-            else if (t.type === 'passkey') deleteCall = `deleteToken('passkey', ${id})`;
+            let deleteCall = '';
+            if (t.type === 'totp') deleteCall = `onclick="deleteToken('totp', ${id})"`;
+            else if (t.type === 'email') deleteCall = `onclick="deleteToken('email', null)"`;
+            else if (t.type === 'passkey') deleteCall = `onclick="deleteToken('passkey', ${id})"`;
             return `<div><span>✓ ${esc(txs(t.name))}</span>
-                <button class="btn small error" onclick="${deleteCall}">${tx('Löschen')}</button></div>`;
+                <button class="btn small error" ${deleteCall}>${tx('Löschen')}</button></div>`;
         }).join('');
     }
 
@@ -531,7 +532,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const typed = prompt(tx('Bot „%s“ endgültig löschen? Gib zur Bestätigung seinen Namen ein:', bot.username));
             if (typed === null) return;
             if (typed.trim() !== bot.username) return botMsg(tx('Der Name stimmt nicht – nichts gelöscht.'));
-            res = await fetch(`/api/bots/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+            res = await authFetch(`/api/bots/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
         }
         if (res) data = await res.json().catch(() => ({}));
         if (!res || !res.ok) botMsg(data.error ? txs(data.error) : tx('Netzwerkfehler.'));

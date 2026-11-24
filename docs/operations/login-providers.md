@@ -22,6 +22,15 @@ After logging in or linking an account, players return to the game with a short 
 * An account with a second factor is asked for it once, when a Google/Discord account is linked to it (`/?oauth=mfa` opens the dialog). After that, Google/Discord log in without it.
 * Linking a Discord account that was created by the [Discord Activity](discord-activity.md) merges the Activity account into the real one: game history, Rundenspiele, games played and MMR move over (`utils/mergeAccounts.js`).
 
+## Discord direct messages
+
+Players with a linked Discord account can get their Rundenspiel notifications (your turn, invitations, reminders, takeover, game over) as a direct message from the Hochciv bot – the switch *Discord-Nachricht, wenn ich am Zug bin* below the Rundenspiel list. It is off by default (`users.notifyDiscord`).
+
+* Needs the **bot token** of the Discord application (*Admin-Bereich → OAuth → Discord*, the same field the [Activity](discord-activity.md) uses). Without it the switch is hidden.
+* Discord only lets a bot write to users who share a server with it and allow DMs from that server's members. So the bot must be on a server the players join (Developer Portal → OAuth2 → URL Generator, scope `bot`, no permissions needed) – set its invitation as `DISCORD_INVITE_URL`, the game shows it when DMs don't work.
+* Switching on sends a test message first; if it can't be delivered the switch stays off and the player sees why. If DMs stop working later (left the server, DMs off, bot blocked), the channel switches itself off for that player. Unlinking Discord switches it off too.
+* Code: `utils/discord.js` (Discord API, DM channel cache, one retry on a rate limit), the `discord` channel in `utils/notify.js`. Test: `node tests/discord/discord-dm.test.js` (offline).
+
 ## Android app
 
 Google refuses its login page inside the app's WebView, so the app signs in natively (Credential Manager) and sends the Google ID token to `POST /api/auth/google/idtoken`. Beforehand it gets the client ID and a one-time nonce from `GET /api/auth/google/app-config`; the nonce makes a token unusable twice or in another session. It uses the same Google configuration as above (client ID, *Aktiviert*) and the same account logic as the web login.

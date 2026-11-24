@@ -8,6 +8,7 @@
 |---|---|
 | `user` | play, manage their own account |
 | `botcreator` | like `user`, plus own up to 4 [bot accounts](../reference/bot-accounts.md) (tab *Meine Bots*); granted by admins |
+| `reviewadmin` | read-only access for outside reviewers (e.g. a store review): sees the admin tabs including *OAuth* (secrets never leave the server), changes nothing. Gets as little personal data as possible: e-mail addresses only masked (`p***@gmail.com`), no second factors of other users. Granted by superadmins only |
 | `admin` | everything in the admin tabs below except *OAuth*; manages users with the role `user` or `botcreator` only; owns bots without a limit |
 | `superadmin` | everything, including granting `admin`/`superadmin`, managing other admins and the *OAuth* tab |
 

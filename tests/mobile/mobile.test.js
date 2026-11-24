@@ -1,8 +1,8 @@
 /**
  * Interaction tests of the mobile layer (client/mobile) on a phone-sized viewport with touch:
  * zoom and pan, taps vs. drags, the field next to its sheet, the action bar, tech tree tabs, the
- * view during KI turns, landscape. Held upright, the game (since v102) turns the page by 90° –
- * positions on the map are converted with HochcivMobile.frame / toScreen. Run after changes to client/mobile and after every game update
+ * view during KI turns, landscape. Held upright, the game runs upright (since the extension's v112;
+ * v102–v110 turned the page by 90°, which HochcivMobile.frame / toScreen convert). Run after changes to client/mobile and after every game update
  * (the layer hooks into the game, see the list at the top of mobile.js).
  *
  *   docker compose -f docker-compose.local.yml up -d
@@ -57,7 +57,7 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   const v0 = await vb();
   const whole = await page.evaluate(() => { const v = HochcivMobile.views.get(document.getElementById('map')); return [v.W, v.H]; });
   ok(v0[2] < whole[0] * 0.9 || v0[3] < whole[1] * 0.9, 'game map starts zoomed in on a phone', `view ${Math.round(v0[2])}x${Math.round(v0[3])} of ${whole.map(Math.round).join('x')}`);
-  ok(await page.evaluate(() => HochcivMobile.turned()), 'held upright, the game turns the page (v102+)');
+  ok(await page.evaluate(() => !HochcivMobile.turned() && !document.documentElement.classList.contains('turn')), 'held upright, the game runs upright (no turned page)');
   const hexPx = await page.evaluate(() => Math.sqrt(3) * 30 * __mapFrame().k);
   ok(hexPx >= 43.5, 'hexes are touch-sized', `${hexPx.toFixed(1)} px`);
 
@@ -105,6 +105,9 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   await page.waitForTimeout(400);
   const sheetBox = await page.evaluate(() => HochcivMobile.frame(document.getElementById('sheet').getBoundingClientRect()));
   await page.evaluate(() => closeSheet());
+  // held upright the capital view can end above the sheet (the map is wider than tall) – zoom in
+  // until the map reaches under it
+  for (let i = 0; i < 3; i++) await page.click('.m-zoom [data-z="in"]');
   await page.waitForTimeout(300);
   const low = await page.evaluate(sb => {
     const { r } = __mapFrame();
@@ -140,15 +143,14 @@ const ok = (cond, name, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${nam
   ok(await page.evaluate(() => document.getElementById('overlay').classList.contains('show') && /Welt|World/.test(document.getElementById('ov-title').textContent)), 'the name in the Kopfzeile opens the world sheet');
   await page.evaluate(() => closeModal());
 
-  // tech tree: the turned phone has the landscape layout – all columns, no tabs (those are for
-  // the narrow layout, which v100/v98 still use in the Android app)
+  // tech tree: the upright phone has the narrow layout – one tab per column
   await page.click('#a-tech');
   await page.waitForTimeout(300);
   const tech = await page.evaluate(() => ({
     tabs: [...document.querySelectorAll('.m-tabs')].filter(t => getComputedStyle(t).display !== 'none').length,
     cols: [...document.querySelectorAll('.techgrid .techcol')].filter(c => c.offsetParent).length,
   }));
-  ok(tech.tabs === 0 && tech.cols >= 16, 'turned phone: tech tree with all columns, no tabs', JSON.stringify(tech));
+  ok(tech.tabs === 1, 'upright phone: tech tree with field tabs', JSON.stringify(tech));
   await page.evaluate(() => closeModal());
 
   // the view must not jump to a KI's capital during its turn

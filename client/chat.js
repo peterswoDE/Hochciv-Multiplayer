@@ -445,8 +445,8 @@ const CHAT = {
             }
             #mp-chat-header { background: #a89f91; color: #fff; padding: 6px 10px; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; user-select: none; }
             #mp-chat-list { max-height: 28vh; min-height: 60px; overflow-y: auto; padding: 6px 8px; }
-            /* phone held upright: the game turns the page (html.turn in portrait, style.css) – its
-               height is the screen's width */
+            /* phone held upright on a kept version that turns the page (html.turn in portrait,
+               v102–v110) – its height is the screen's width */
             @media (orientation: portrait) {
                 html.turn #mp-chat-list { max-height: 18vw; }
                 html.turn #mp-chat.mp-menu-open #mp-chat-list { min-height: min(200px, calc(100vw - 260px)); }

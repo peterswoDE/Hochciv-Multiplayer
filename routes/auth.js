@@ -220,7 +220,7 @@ router.post('/bot', botRateLimit, async (req, res) => {
         const bot = await User.findOne({ where: { botTokenHash: Bots.hashToken(token), accountType: 'bot' } });
         if (!bot) return res.status(401).json({ error: 'Ungültiges Bot-Token.' });
         const owner = bot.ownerId ? await User.findByPk(bot.ownerId) : null;
-        const why = Bots.botUsable(bot, owner);
+        const why = Bots.botBlockedReason(bot, owner);
         if (why) return res.status(403).json({ error: why });
         finishLogin(req, res, bot);
     } catch (err) {

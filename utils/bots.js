@@ -5,7 +5,7 @@
  *
  *   · the token is shown once when the bot is created or its token renewed; only its SHA-256
  *     is stored, so the token is random enough to need no slow hash;
- *   · a bot works only while its owner may create bots and is not banned (botUsable): banning
+ *   · a bot works only while its owner may create bots and is not banned (botBlockedReason): banning
  *     the owner or taking the role away stops all their bots, giving it back starts them again;
  *     deleting the owner deletes the bots (utils/deleteAccount.js);
  *   · bots play in lobbies and Rundenspiele whose host allows player-bots (sessions.js,
@@ -46,7 +46,7 @@ function newToken() {
  * null if the bot may play now, else why not. `owner` is the bot's owner (or null if it has
  * none any more).
  */
-function botUsable(bot, owner) {
+function botBlockedReason(bot, owner) {
     if (bot.isBanned) return 'Dieser Bot ist gesperrt.';
     if (!owner) return 'Dieser Bot hat keinen Besitzer.';
     if (owner.isBanned) return 'Der Besitzer dieses Bots ist gesperrt.';
@@ -54,4 +54,4 @@ function botUsable(bot, owner) {
     return null;
 }
 
-module.exports = { isBot, canCreateBots, botLimitOf, hashToken, newToken, botUsable, BOT_CREATOR_ROLES };
+module.exports = { isBot, canCreateBots, botLimitOf, hashToken, newToken, botBlockedReason, BOT_CREATOR_ROLES };

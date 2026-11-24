@@ -17,7 +17,7 @@ let editMap = null, edTool = 'G';
 /* ------------------------------------------------------------------ Basics */
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('show', s.id === id));
-  if (typeof applyTurn === 'function') applyTurn();     // Drehung hängt am Bildschirm
+  if (typeof syncLayout === 'function') syncLayout();   // misst u. a. die Leisten des neuen Bildschirms
 }
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.remove('unten', 'anim'); t.classList.add('show');
@@ -95,9 +95,9 @@ function lockBar() {
 }
 /* Echte Höhe von Kopf- und Aktionsleiste ins CSS spiegeln, damit das Blatt exakt
    darüber endet – die Leiste wächst mit Schriftgröße und Geräteeinfassung.
-   Gemessen wird die Layouthöhe (offsetHeight, seit v103): Sie kennt weder die Drehung um 90°
-   (html.turn) noch den Maßstab großer Bildschirme (--ui) – beide ändern nur, wie groß die Leiste
-   auf dem Schirm erscheint, nicht ihre Höhe im CSS, und dort wird --bar-h gebraucht. Bis v102
+   Gemessen wird die Layouthöhe (offsetHeight, seit v103): Sie kennt den Maßstab großer Bildschirme
+   (--ui) nicht – er ändert nur, wie groß die Leiste auf dem Schirm erscheint, nicht ihre Höhe im
+   CSS, und dort wird --bar-h gebraucht (bis v112 galt dasselbe für die Drehung um 90°). Bis v102
    stand hier getBoundingClientRect: das misst nach Drehung und Zoom. Gedreht war seine Höhe die
    Breite der Leiste (bis v86 stand --bar-h so auf 1180px, und jedes Blatt lag außerhalb des
    Bildschirms – v87 nahm dann die Breite), gezoomt wäre sie um den Faktor zu groß. */
@@ -108,57 +108,27 @@ function setBarHeight() {
   if (bar) st.setProperty('--bar-h', bar + 'px');
   if (hud) st.setProperty('--hud-h', hud + 'px');
 }
-/* Querformat. Eine echte Sperre gibt es nur, wo screen.orientation.lock existiert
-   (installiertes Android/Chrome); iOS kennt sie nicht – weder über die API noch über
-   das Manifest. Dort bleibt nur, die App im Hochformat selbst zu drehen (html.turn,
-   siehe style.css). Seit v102 immer – der Schalter im Spielmenü ist entfallen.
-
-   Gedreht wird NUR der Spielbildschirm. Menü, Aufbau, Editor und die Regelseite haben
-   keine feste Karte, die Platz in der Breite bräuchte – dort wäre der Zwang lästig.
-   Deshalb hängt html.turn am aktiven Bildschirm und wird aus show() nachgeführt. */
-const TURN_SCREENS = ['screen-game', 'screen-place', 'screen-draft'];
-function onTurnScreen() {
-  return TURN_SCREENS.some(id => { const el = $(id); return el && el.classList.contains('show'); });
-}
-function applyTurn() {
-  const on = onTurnScreen();
-  document.documentElement.classList.toggle('turn', on);
-  try {
-    const so = screen && screen.orientation;
-    if (so && typeof so.lock === 'function') {
-      // Nur im Spiel sperren; beim Verlassen wieder freigeben.
-      if (on) so.lock('landscape').catch(() => { });
-      else if (typeof so.unlock === 'function') so.unlock();
-    }
-  } catch { /* Browser ohne screen.orientation – dann bleibt es bei html.turn */ }
-  syncLayout();
-}
-function turning() {
-  return document.documentElement.classList.contains('turn') &&
-    window.innerHeight > window.innerWidth;
-}
+/* Hochkant und quer (Mehrspieler-Erweiterung, v112): Das Spiel folgt dem Gerät. Bis v101 gab es den
+   Schalter „Hochkant drehen", v102 bis v112 drehte sich der Spielbildschirm im Hochformat immer um
+   90° (html.turn) und war, wo es ging, quer gesperrt (screen.orientation.lock). Jetzt läuft das
+   Spiel hochkant gehalten auch hochkant: syncLayout stapelt Karte und Panel untereinander (ohne
+   w-side), die Karte passt sich in die Breite ein. Gesperrt und gedreht wird nichts mehr. */
 /* Große Bildschirme (v103, Anweisung des Autors: Symbole auf 1080p und größer zu klein): die
    ganze Oberfläche wächst mit dem Fenster – ein Faktor, als CSS-zoom auf <html> (--ui), keine
    zweite Gestaltung. Bis 1366 × 720 bleibt es bei 1: jedes iPad quer (das größte hat 1366 × 1024),
    jedes Telefon. Darüber zählt die knappere Seite – ein maximiertes Fenster auf 1080p etwa ×1,33,
    Vollbild ×1,41, 1440p etwa ×1,8. Die Karte füllt ihre Fläche ohnehin; sie gibt nur ab, was Kopf-
-   und Aktionsleiste an Höhe gewinnen. Gedreht (html.turn) bleibt es bei 1: die Drehung rechnet mit
-   100vh/100vw, und die wüchsen mit. Auf zwei Stellen gerundet, damit kleine Größenänderungen nicht
+   und Aktionsleiste an Höhe gewinnen. Auf zwei Stellen gerundet, damit kleine Größenänderungen nicht
    jedes Mal neu umbrechen. */
 const UI_BASE_W = 1366, UI_BASE_H = 720;
-function uiScale(w, h, gedreht) {
-  if (gedreht) return 1;
+function uiScale(w, h) {
   return Math.max(1, Math.round(100 * Math.min(w / UI_BASE_W, h / UI_BASE_H)) / 100);
 }
-/* Effektive Layoutgröße: im gedrehten Zustand sind Breite und Höhe vertauscht.
-   Media Queries können das nicht wissen – sie messen den ungedrehten Viewport und
-   lägen um 90° daneben. Deshalb setzt diese Funktion die Layoutklassen selbst – seit v103 nach
-   der Größe in CSS-Pixeln der vergrößerten Seite (Fenster ÷ --ui). */
+/* Die Layoutklassen setzt diese Funktion selbst statt Media Queries – seit v103 nach der Größe in
+   CSS-Pixeln der vergrößerten Seite (Fenster ÷ --ui), die eine Media Query nicht kennt. */
 function syncLayout() {
-  const t = turning();
-  const vw = t ? window.innerHeight : window.innerWidth;
-  const vh = t ? window.innerWidth : window.innerHeight;
-  const k = uiScale(vw, vh, t), w = vw / k, h = vh / k;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const k = uiScale(vw, vh), w = vw / k, h = vh / k;
   document.documentElement.style.setProperty('--ui', String(k));
   const cl = document.documentElement.classList;
   cl.toggle('w-wide', w >= 820);
@@ -169,7 +139,7 @@ function syncLayout() {
   setBarHeight();
 }
 function initOrientation() {
-  applyTurn();
+  syncLayout();
   window.addEventListener('resize', syncLayout);
   window.addEventListener('orientationchange', syncLayout);
 }

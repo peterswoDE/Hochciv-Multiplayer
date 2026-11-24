@@ -9,6 +9,7 @@
 | Message | Cause and fix |
 |---|---|
 | `SESSION_SECRET is a publicly known default` | set your own value in `.env` |
+| `SESSION_SECRET is shorter than 25 characters` | set a long random value in `.env` (see [Configuration](configuration.md)); changing it logs everyone out |
 | `Invalid BASE_URL "..."` | the value contains a path or stray characters (e.g. a trailing comma) – only scheme and host |
 | `HochCiv/index.html fehlt` | the image was built without the game folder (check `.dockerignore`) |
 

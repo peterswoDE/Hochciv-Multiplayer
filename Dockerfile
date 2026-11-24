@@ -4,6 +4,9 @@ WORKDIR /build
 COPY package*.json ./
 RUN npm ci
 COPY activity ./activity
+# the inline handlers of mp.js and client/ – their shapes are the bridge's allow-list (R-04)
+COPY mp.js ./
+COPY client ./client
 RUN node activity/build.js
 
 FROM node:24-slim

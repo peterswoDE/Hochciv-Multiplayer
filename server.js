@@ -25,8 +25,8 @@ Metrics.instrumentSequelize(sequelize);
 const { Op } = require('sequelize');
 const { refreshOAuthStrategies } = require('./utils/oauth');
 const { str } = require('./utils/auth');
-const { botUsable } = require('./utils/bots');
-const { checkOrigin, allowSocket } = require('./utils/origin');
+const { botBlockedReason } = require('./utils/bots');
+const { allowedOrigin, checkOrigin, allowSocket } = require('./utils/origin');
 const Assets = require('./utils/assets');
 
 // ── Passport Configuration ──────────────────────────────────────────────────
@@ -70,7 +70,7 @@ passport.deserializeUser(async (id, done) => {
         if (!user || user.isBanned) return done(null, false);
         if (user.accountType === 'bot') {
             const owner = user.ownerId ? await User.findByPk(user.ownerId) : null;
-            if (botUsable(user, owner)) return done(null, false);
+            if (botBlockedReason(user, owner)) return done(null, false);
         }
         done(null, user);
     } catch (err) {
@@ -93,7 +93,12 @@ if (process.env.NODE_ENV === 'production') {
     if (KNOWN_DEFAULTS.includes(sessionSecret)) {
         throw new Error('CRITICAL: SESSION_SECRET is a publicly known default. Set a long random value.');
     }
-    if (sessionSecret.length < 32) console.warn('[Security] SESSION_SECRET is shorter than 32 characters.');
+    // A short secret can be guessed offline and session cookies forged: below 25 characters the
+    // server refuses to start, below 32 it warns (the generated 64 hex characters are far above)
+    if (sessionSecret.length < 25) {
+        throw new Error('CRITICAL: SESSION_SECRET is shorter than 25 characters. Set a long random value (docs/operations/configuration.md).');
+    }
+    if (sessionSecret.length < 32) console.warn('[Security] SESSION_SECRET is shorter than 32 characters – use a longer random value.');
     if (!config.WEBAUTHN) {
         console.warn('[Config] BASE_URL is not set – Google/Discord login will redirect to http://localhost:3000 and fail. ' +
             'Set BASE_URL=https://<your domain> in the .env next to docker-compose.yml.');
@@ -106,7 +111,9 @@ const pgPool = new pg.Pool({ connectionString: dbUrl });
 // Socket.IO handles its own traffic before Express
 app.use(Metrics.httpMiddleware);
 app.use(compression());
-app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
+// CORS answers only the pages that utils/origin.js allows (never `*` – with credentials a
+// reflected or wildcard origin would let any site read the visitor's account data)
+app.use(cors((req, cb) => cb(null, { origin: allowedOrigin(req.get('origin'), req.get('host')), credentials: true })));
 // Changing requests only from this site's pages (utils/origin.js): staging is the same site
 app.use(checkOrigin);
 // JSON bodies up to 20 KB – a finished single-player game (routes/solo.js, F28) up to 2 MB
@@ -244,7 +251,8 @@ pgPool.on('error', err => console.error('[DB] Idle session-store connection fail
 process.on('unhandledRejection', err => console.error('[Process] Unhandled rejection:', err));
 
 // Health check
-app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
+// public, so no uptime: it would reveal restart and deploy times (admins see it in the dashboard)
+app.get('/health', (_req, res) => res.json({ ok: true }));
 
 // Local tests only (tests/run-all.js, docs/development/testing.md): forgets every rate-limit counter,
 // so each test starts with a full budget, and the caches of what was read from matches, so matches a
@@ -300,7 +308,8 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: config.CORS_ORIGINS,
+        // same rule as Express; same-origin requests need no CORS headers (utils/origin.js)
+        origin: (origin, cb) => cb(null, allowedOrigin(origin)),
         methods: ['GET', 'POST'],
         credentials: true
     },
@@ -319,6 +328,8 @@ app.locals.io = io;
 io.engine.use(sessionMiddleware);
 io.engine.use(passport.initialize());
 io.engine.use(passport.session());
+// A rate limit for every event of every socket (utils/socket-limit.js, R-15)
+io.on('connection', socket => require('./utils/socket-limit').attach(socket));
 
 registerGame(io);
 registerAsync(io);

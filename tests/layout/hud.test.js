@@ -5,7 +5,7 @@
  *   npm i --no-save playwright-core
  *   node tests/layout/hud.test.js [http://localhost:3000]
  *
- * At a desktop window, a phone held sideways and a phone held upright (the game turns the page):
+ * At a desktop window, a phone held sideways and a phone held upright:
  * code, password and turn timer stay on one line in the header, the collapsed chat is a pill
  * labelled "Chat", there is no second game log beside the game's own "Protokoll", and the open
  * chat and player list never cover each other or the map's zoom buttons – opening one collapses
@@ -86,7 +86,8 @@ async function run(browser, [w, h]) {
         const lh = parseFloat(getComputedStyle(document.getElementById('mp-cred-box')).lineHeight) || 20;
         return { credH: c.getBoundingClientRect(), clock: t.getBoundingClientRect(), lh, text: c.textContent.trim() };
     });
-    const turned = w < h;   // the game turns the page: heights become widths
+    // a kept version (v102–v110) turns the page on an upright phone: heights become widths
+    const turned = await a.evaluate(() => document.documentElement.classList.contains('turn') && innerHeight > innerWidth);
     const credThick = turned ? head.credH.width : head.credH.height;
     ok(credThick < 2 * head.lh + 8, `${size}: code and password on one line`, head.text.replace(/\s+/g, ' '));
     ok(Math.abs((turned ? head.credH.left : head.credH.top) - (turned ? head.clock.left : head.clock.top)) < 12, `${size}: turn timer beside the code, not below`);

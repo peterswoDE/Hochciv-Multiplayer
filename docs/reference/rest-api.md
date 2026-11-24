@@ -43,7 +43,7 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 | POST | `/:id/description` | owner or admin | Set public plain text `{ description }` → `{ description }`. The string is trimmed and limited to 280 Unicode code points. An empty string clears it and returns null |
 | POST | `/:id/token` | recent | New token → `{ token }`; the old one and its sessions end |
 | POST | `/:id/transfer` | recent | Hand the bot over `{ username }` to another bot creator |
-| DELETE | `/:id` | login | Delete the bot |
+| DELETE | `/:id` | recent | Delete the bot (irreversible – a stolen session cookie alone is not enough) |
 
 ## Account – `/api/account` (login)
 
@@ -82,6 +82,8 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 | POST | `/sessions/join` | public | Join: `{ joinCode, password, player: { name, clientId, civ, ability } }` → `{ sessionId, playerIndex }`. A logged-in bot account joins as a player-bot, if the lobby allows them ([Bot accounts](bot-accounts.md)). |
 | POST | `/sessions/watch` | public | Watch as a spectator: `{ joinCode, password, viewer: { name, clientId } }` |
 | POST | `/sessions/preview` | public | Invite link: `{ joinCode, password }` → the lobby as the list of open games shows it (`hostName`, `status`, `playersCount`, `maxPlayers`, settings) plus `players` (names); never the password or session id |
+
+Join, watch and preview: after 10 wrong passwords within 10 minutes the lobby refuses newcomers for 5 minutes (`Zu viele falsche Passwörter für diese Lobby. …`); its players and spectators still get back in ([Security](security.md#limits)).
 | GET | `/public-sessions` | public | Public lobbies and running public games, with the lobby's settings (`empires`, `kiCount`, `difficulty`, `randomCivs`, `events`, `eventMode`, `wonders`, `ranked`, `turnTime`, `customMapName`) for the filters of the open games |
 | GET | `/sessions/:id` | public | Lobby info |
 | DELETE | `/sessions/:id` | host (`{ clientId }`) | Cancel the lobby |
@@ -133,7 +135,7 @@ Admins take a map out of the browser with `POST /api/admin/maps/:id/unpublish` (
 | GET | `/api/profile/:userId[?offset=n]` | Name, MMR, games played, wins and the player's games. Bot profiles include a public `description` string or null |
 | GET | `/api/stats[?seats=humans\|bots\|players\|ki\|all&n=all\|2\|3\|4\|5+&mode=all\|normal\|duel\|marathon&ver=all\|vNN&origin=all\|online\|solo]` | Overall statistics over all finished matches: win rates per nation, ability and turn position, victory types, winners vs. the others, technologies, wonders, with German and English names (anonymous, cached for a minute) |
 | GET | `/api/stats/player/:userId[?n=…&mode=…&ver=…]` | The same over one account's own seats (personal statistics, public like the profile): "how games are won" counts its wins, `query.seats` is `user`; a seat the KI took over still counts for its player |
-| POST | `/api/solo/games` | A finished single-player game (login, no bots; up to 2 MB): `{ cid, ver, state, t, rounds }` from client/solo.js → `{ ok, id, duplicate? }`. Checked for plausibility (known version, sane numbers, a finish the engine can score) and stored once per `cid` as a match marked `solo`; hotseat games without an account on any seat (utils/solo.js) |
+| POST | `/api/solo/games` | A finished single-player game (login, no bots; up to 2 MB sent, 200 KB stored – a long chart is thinned; 30 an hour, 150 a day; 100 stored a day, then `429`): `{ cid, ver, state, t, rounds }` from client/solo.js → `{ ok, id, duplicate? }`. Checked for plausibility (known version, sane numbers, a finish the engine can score) and stored once per `cid` as a match marked `solo`; hotseat games without an account on any seat (utils/solo.js) |
 
 Only public data goes out: names, nations, points, MMR – no e-mail, role or account flags.
 
@@ -183,14 +185,14 @@ Rate limit: 60 requests a minute per account.
 
 ## Admin – `/api/admin`
 
-All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage accounts with the role `user` or `botcreator`. *Recent* (a re-confirmation within 10 minutes, the admin page asks for it) is needed for `DELETE /users/:id/mfa/…`, `DELETE /users/:id`, `POST /oauth/:provider` and the user actions other than `ban`, `unban`, `set_mmr` and `set_bot_limit`.
+All routes need *admin*; `/oauth*` needs *superadmin*. The review admin (`reviewadmin`) may use every GET route (and `POST /words/check`), with the exceptions noted below; every change is refused with 403. Admins can only manage accounts with the role `user` or `botcreator`. *Recent* (a re-confirmation within 10 minutes, the admin page asks for it) is needed for `DELETE /users/:id/mfa/…`, `DELETE /users/:id`, `POST /oauth/:provider` and the user actions other than `ban`, `unban`, `set_mmr` and `set_bot_limit`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/metrics` | Uptime, memory, CPU, maintenance/registration state, lobbies and players online |
 | POST | `/config` | `{ maintenanceMode?, registrationEnabled? }` |
-| GET | `/users` | All accounts; bots with `owner` and `botDisabled`, bot creators with `bots { count, limit }` |
-| GET | `/users/:id/mfa` | A user's second factors |
+| GET | `/users` | All accounts; bots with `owner` and `botDisabled`, bot creators with `bots { count, limit }`. For the review admin the e-mail is masked (`p***@gmail.com`) |
+| GET | `/users/:id/mfa` | A user's second factors (not for the review admin: 403) |
 | DELETE | `/users/:id/mfa/:type/:tokenId?` | Remove a second factor |
 | POST | `/users/:id/action` | `{ action }`: `ban`, `unban`, `set_mmr` (`mmr`), `force_password` (`newPassword`), `make_admin`, `set_role` (`role`), `reset_mfa`, `set_bot_limit` (`botLimit`, null = default). Bots: only ban/unban and `set_mmr`. |
 | DELETE | `/users/:id` | Delete the account |
@@ -213,4 +215,4 @@ All routes need *admin*; `/oauth*` needs *superadmin*. Admins can only manage ac
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | `{ ok: true, uptime }` |
+| GET | `/health` | `{ ok: true }` (no uptime – the admin dashboard shows it) |

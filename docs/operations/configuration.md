@@ -10,7 +10,7 @@ Settings that change at runtime (maintenance mode, registration switch, OAuth pr
 
 | Variable | Required | Description |
 |---|---|---|
-| `SESSION_SECRET` | **yes** | Long random string that signs login cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. The server refuses to start with a missing or publicly known value. Changing it logs everyone out. |
+| `SESSION_SECRET` | **yes** | Long random string that signs login cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. The server refuses to start in production with a missing or publicly known value or one shorter than 25 characters, and warns below 32. Changing it logs everyone out. |
 | `BASE_URL` | **yes** for OAuth/passkeys | Public URL, scheme and host only, e.g. `https://hochciv.example` – no path, no trailing characters. Used for OAuth callbacks, links in e-mails and as the passkey origin. A malformed value stops the server at startup. Without it, OAuth redirects to `http://localhost:3000` and fails. |
 | `POSTGRES_PASSWORD` | **yes** | Password of the database superuser – the production and staging compose files refuse to start without it (there is no default). For an existing database it must be the password the volume was created with. Only the database and the db-setup container get it, not the server. |
 | `POSTGRES_OWNER_PASSWORD` / `POSTGRES_APP_PASSWORD` | **yes** | Passwords of the server's roles `hochciv_owner` (migrations) and `hochciv_app` (the server). Two different values, letters and digits only (they go into a URL). The db-setup container creates the roles and sets these passwords at every `docker compose up` – changing them in `.env` and running `docker compose up -d` changes them. See [Roles and migrations](../reference/database.md#roles-and-migrations). |
@@ -19,6 +19,7 @@ Settings that change at runtime (maintenance mode, registration switch, OAuth pr
 | `SMTP_REQUIRE_TLS` | no | `off` allows a mail server without STARTTLS (not recommended). |
 | `MAIL_LOG_CODES` | no | `on` writes the codes of logged mails in full in production mode, e.g. to test registration on a staging server without SMTP. Off by default: whoever reads the logs could use anybody's reset or 2FA code. |
 | `HOCHCIV_MEM_LIMIT` | no | Memory limit of the server container (default `2g`). |
+| `DISCORD_INVITE_URL` | optional | Invitation to the Discord server the Hochciv bot is on. Shown when a player switches on Discord messages but the bot can't reach them. See [Discord direct messages](login-providers.md#discord-direct-messages). |
 | `FCM_SERVICE_ACCOUNT` | for push | Firebase service account key, base64-encoded on one line. Without it, push is off. See [Push notifications](push-notifications.md). |
 | `ALLOWED_ORIGINS` | no | Further web origins (comma-separated, e.g. `https://second.example`) whose pages may use a visitor's login. By default only this site (the request's host or `BASE_URL`) and the Discord Activity may connect a socket or send changing API requests – see [Security](../reference/security.md). |
 | `PROXY_NETWORK` | no | Docker network of the reverse proxy (default `proxy`); production and staging must use the same one. |
@@ -45,6 +46,7 @@ These have sensible defaults and are normally left alone. The tests in `tests/` 
 | Variable | Default | Description |
 |---|---|---|
 | `TURN_TIMER_SCALE` | `1` | Factor on the live-game turn timer (tests: `0.05`). *local* |
+| `LOBBY_GRACE_MS` | `45000` | How long a lobby seat waits for its player after a lost connection before it is freed (a host's lobby goes to the next player). |
 | `TURN_TIMER_AFK_AFTER` | `3` | Missed turns in a row after which the KI keeps a live seat. *local* |
 | `MATCH_GROUP_WAIT_MS` | `20000` | Matchmaking: how long the longest-waiting player waits before a game of two or three starts. *local* |
 | `MATCH_CONFIRM_MS` | `20000` | Matchmaking: time to accept a found match. |
@@ -53,6 +55,7 @@ These have sensible defaults and are normally left alone. The tests in `tests/` 
 | `ASYNC_REMINDER_MS` | 5 days | Rundenspiele: when the waiting player gets a reminder (for 7 days per turn; shorter times per turn scale it). |
 | `ASYNC_TIMEOUT_MS` | 7 days | Rundenspiele: when the KI takes over a seat, for 7 days per turn; 1 and 3 days per turn scale it (see [Rundenspiele](../reference/rundenspiele.md)). |
 | `ASYNC_SWEEP_MS` | 10 minutes | Rundenspiele: how often the server checks for reminders and timeouts. |
+| `ACTIVITY_DEBUG` | off | `on` writes the Discord Activity bridge's progress and errors to the server log (`POST /api/activity/log`). The endpoint needs no login, so switch it on only while debugging the Activity. |
 | `REPLAY_KEEP_DAYS` | `180` | Replays older than this are deleted. |
 | `BOT_REPLAY_KEEP_DAYS` | `30` | Matches only bots played (bot accounts and KI, no person): their replays and per-round statistics are deleted after this many days. Result, facts and MMR stay. |
 | `REPORT_KEEP_YEARS` | `3` | Chat reports about guests or deleted accounts are deleted after this time. |
@@ -68,4 +71,6 @@ Changed in code, not by environment:
 | Spectators per live game | 20 |
 | Player name length | 30 |
 | Join code / password | 6 characters / 6 digits |
-| Live game removed after inactivity | 2 hours (lobbies and finished games: 10 minutes) |
+| Live game removed after inactivity | 2 hours (paused: 8 hours; lobbies and finished games: 10 minutes) |
+| Live game removed when nobody is connected | after 30 minutes (paused: 8 hours); lobbies and finished games at the next check (every 5 minutes) |
+| Placing the start tiles without a turn timer | 3 minutes, then the KI places (scaled by `TURN_TIMER_SCALE`) |

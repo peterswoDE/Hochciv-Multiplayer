@@ -8,11 +8,11 @@
  */
 const { Op } = require('sequelize');
 const crypto = require('crypto');
-const { AsyncGame, User, Game, sequelize } = require('../models');
+const { AsyncGame, User, sequelize } = require('../models');
 const L = require('./logic');
 const engine = require('../engine-adapter');
 const { notify } = require('../utils/notify');
-const { calculateMMR } = require('../utils/mmr');
+const Rating = require('../utils/rating');
 const { finalPoints } = require('../utils/score');
 const chatLib = require('../utils/chat');
 const reports = require('../utils/reports');
@@ -24,9 +24,11 @@ const Facts = require('../utils/facts');
 const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
+const Discord = require('../utils/discord');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
+const ENDED_LIST_DAYS = 14;        // ended Rundenspiele stay in the game list until opened, at most this long
 const REMINDER_MS = Number(process.env.ASYNC_REMINDER_MS) || 5 * DAY;
 const SWEEP_MS = Number(process.env.ASYNC_SWEEP_MS) || 10 * 60 * 1000;
 /* The host's time per turn (F19, config.turnDays: 1, 3 or 7) scales both: 7 days are the base,
@@ -60,6 +62,7 @@ function fromRow(row) {
         config: d.config, seats: d.seats || [], invites: d.invites || [], pre: d.pre || null,
         hold: !!d.hold, result: d.result || null, meta: d.meta || {}, chat: d.chat || [], chatMutes: d.chatMutes || {}, stats: d.stats || null,
         replay: d.replay || null, marks: d.marks || null, scenes: d.scenes || null,
+        endSeen: d.endSeen || [],          // players who opened the game after it ended (the game list keeps it until then)
         state: row.state || null,
         waitSince: row.waitSince ? new Date(row.waitSince).getTime() : Date.now(),
         reminded: !!row.reminded,
@@ -83,7 +86,7 @@ function rowFields(g) {
         waitSince: new Date(g.waitSince),
         reminded: !!g.reminded,
         round: S ? S.round : 0,
-        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], chatMutes: g.chatMutes || {}, stats: g.stats || null, replay: g.replay || null, marks: g.marks || null, scenes: g.status === 'playing' ? g.scenes || null : null },
+        data: { engine: g.engine || null, config: g.config, seats: g.seats, invites: g.invites, pre: g.pre, hold: g.hold, result: g.result, meta: g.meta, chat: g.chat || [], chatMutes: g.chatMutes || {}, stats: g.stats || null, replay: g.replay || null, marks: g.marks || null, scenes: g.status === 'playing' ? g.scenes || null : null, endSeen: g.endSeen || [] },
         state: S,
     };
 }
@@ -193,7 +196,14 @@ async function settle(g, before) {
         const key = waitKey(g);
         if (key !== before.key) { g.waitSince = Date.now(); g.reminded = false; }
     }
-    if (g.status === 'finished' && !g.result) await processResult(g);
+    if (g.status === 'finished' && !g.result) {
+        await processResult(g);
+        // who has the game open sees the end right now – the game list does not keep it for them
+        g.endSeen = g.endSeen || [];
+        for (const u of await viewers(g.id)) {
+            if (g.seats.some(s => s.userId === u) && !g.endSeen.includes(u)) g.endSeen.push(u);
+        }
+    }
     await save(g);
     await broadcast(g);
     if (!before) return;
@@ -269,28 +279,28 @@ async function processResult(g) {
                 async: true,
             };
         });
-        for (const p of players) {
-            const u = p.dbUserId ? await User.findByPk(p.dbUserId) : null;
-            p.mmr = u ? u.mmr : 1000;
-        }
-        if (ranked) {
-            for (const r of calculateMMR(players)) {
-                const p = players.find(x => x.dbUserId && x.dbUserId === r.dbUserId);
-                if (!p) continue;
-                Object.assign(p, { mmrShift: r.mmrChange, oldMmr: r.oldMmr, newMmr: r.newMmr });
-                await User.update({ mmr: r.newMmr, gamesPlayed: sequelize.literal('"gamesPlayed" + 1') }, { where: { id: p.dbUserId } });
-            }
-        } else {
-            for (const p of players.filter(x => x.dbUserId))
-                await User.update({ gamesPlayed: sequelize.literal('"gamesPlayed" + 1') }, { where: { id: p.dbUserId } });
-        }
-        const game = await Game.create({
-            version: E.APP_VERSION || 'Unknown',
-            durationRounds: S.round,
-            winnerUsername: players.find(p => p.isWinner && p.dbUsername)?.dbUsername || null,
-            participants: players,
-            stats: Stats.publicStats(g.stats),
+        // MMR, games played, the match record and the result marker of the game row in one
+        // transaction (utils/rating.js, R-18): a restart before save(g) finds the result and
+        // doesn't count the game twice
+        let result;
+        const game = await Rating.book({
+            players,
+            ranked,
+            record: ps => ({
+                version: E.APP_VERSION || 'Unknown',
+                durationRounds: S.round,
+                winnerUsername: ps.find(p => p.isWinner && p.dbUsername)?.dbUsername || null,
+                participants: ps,
+                stats: Stats.publicStats(g.stats),
+            }),
+            after: async (created, transaction) => {
+                result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })),
+                    gameId: created.id, replay: false };
+                await sequelize.query(`UPDATE async_games SET data = jsonb_set(data, '{result}', CAST(:result AS jsonb)) WHERE id = :id`,
+                    { replacements: { result: JSON.stringify(result), id: g.id }, transaction });
+            },
         });
+        g.result = result;
         let replay = false;
         try {
             replay = await Replay.saveAsync(g, game.id, E.APP_VERSION || null, stateNames(g));
@@ -302,11 +312,31 @@ async function processResult(g) {
             try { await require('../utils/challenge').recordResult(g, players, game.id); }
             catch (err) { console.error(`[Challenge] Result of ${g.id} failed:`, err); }
         }
-        g.result = { winners: players.filter(p => p.isWinner).map(p => p.name), ranked, players: players.map(p => ({ name: p.name, points: p.points, mmrShift: p.mmrShift || 0, replaced: p.replaced })),
-            gameId: game.id, replay };
+        g.result = { ...result, replay };
     } catch (err) {
         console.error(`[Async] Result processing failed for ${g.id}:`, err);
-        g.result = { error: true };
+        // nothing was booked: the sweep tries again (retryResults)
+        if (!g.result || g.result.error) g.result = { error: true, tries: ((g.result && g.result.tries) || 0) + 1 };
+    }
+}
+
+/** Finished games whose result failed (processResult): evaluated again, up to RESULT_TRIES times. */
+const RESULT_TRIES = 5;
+async function retryResults() {
+    const rows = await AsyncGame.findAll({
+        where: {
+            status: 'finished',
+            [Op.and]: sequelize.literal(`(data->'result'->>'error') = 'true' AND COALESCE((data->'result'->>'tries')::int, 1) < ${RESULT_TRIES}`),
+        },
+        attributes: ['id'],
+    });
+    for (const row of rows) {
+        await withGame(row.id, async g => {
+            if (g.status !== 'finished' || !g.result || !g.result.error) return;
+            if (!g.result.tries) g.result.tries = 1;
+            await processResult(g);
+            console.log(`[Async] Game ${g.id}: result evaluated again – ${g.result.error ? 'failed (' + g.result.tries + ')' : 'booked'}.`);
+        });
     }
 }
 
@@ -425,13 +455,18 @@ async function fromLive(hostUser, session, opts) {
         g.replay = { key: rec.key, seq: rec.frames.length };
     }
     cache.set(g.id, { g, queue: Promise.resolve(), touched: now, busy: 0 });
+    // Seats resigned in the live game: the live result (processGameOverMmr) never comes, so their
+    // ranked penalty is booked now, as a resign in a Rundenspiel does (R-07 of the findings report)
+    const resigned = seats.filter(s => s.resigned && s.userId && s.penalty).map(s => s.userId);
+    if (resigned.length) await applyPenalties(resigned);
     // saved, the KI moves on if it is its turn, the players whose turn it is are notified
     await withGame(g.id, () => ({ ok: true }));
     const others = seats.filter(s => s.kind === 'human' && s.userId && s.userId !== hostUser.id).map(s => s.userId);
     if (others.length) notify(others, {
         type: 'invite', gameId: g.id,
         subject: 'Euer Spiel geht als Rundenspiel weiter',
-        text: `${hostUser.username} hat euer Live-Spiel als Rundenspiel fortgesetzt. Ziehe, wann es dir passt – ${config.turnDays === 1 ? '1 Tag' : config.turnDays + ' Tage'} pro Zug.`,
+        text: `${hostUser.username} hat euer Live-Spiel als Rundenspiel fortgesetzt. Ziehe, wann es dir passt – ${config.turnDays === 1 ? '1 Tag' : config.turnDays + ' Tage'} pro Zug.`
+            + (ranked ? ' Wer in dieser Zeit nicht zieht, dessen Reich übernimmt die KI – ohne MMR-Abzug, weil ihr diese Regeln nicht gewählt habt.' : ''),
     });
     return { id: g.id, guests };
 }
@@ -452,24 +487,9 @@ async function info(user, id, code) {
     return L.summary(e.g, user.id);
 }
 
-/**
- * Ranked games are only rated between different people: a bot account counts as its owner. True if
- * `user` (or its owner, or one of its bots) already holds a seat of `g`.
- */
-async function samePersonSeated(g, user) {
-    const ids = g.seats.map(s => s.userId).filter(Boolean);
-    if (!ids.length) return false;
-    const rows = await User.findAll({ where: { id: ids }, attributes: ['id', 'ownerId'] });
-    const persons = new Set(rows.map(r => r.ownerId || r.id));
-    return persons.has(user.ownerId || user.id);
-}
-
 function join(user, id, body) {
     return withGame(id, async g => {
         if (!canSee(g, user.id, body && body.code)) return { error: 'Kein Zugriff auf dieses Spiel.' };
-        if (g.config.ranked && await samePersonSeated(g, user)) {
-            return { error: 'In gewerteten Spielen spielt niemand gegen den eigenen Bot.' };
-        }
         const err = L.join(g, userOf(user), body || {});
         return err ? { error: err } : { ok: true };
     });
@@ -545,6 +565,8 @@ async function list(user) {
             yourTurn: (row.waitingIds || []).includes(user.id),
             round: row.round, winners: g.meta.winners || [], result: g.result,
             updatedAt: row.updatedAt,
+            // an ended game the player has not opened since: did they win?
+            won: g.status === 'finished' ? (g.meta.winners || []).includes((g.seats.find(x => x.userId === user.id) || {}).name) : undefined,
             deadline: ACTIVE.includes(g.status) ? g.waitSince + timeoutOf(g) : null,
         });
         return s;
@@ -554,6 +576,12 @@ async function list(user) {
         where: { participantIds: { [Op.contains]: [user.id] }, status: { [Op.notIn]: ['cancelled', 'finished'] } },
         attributes: attrs, order: [['updatedAt', 'DESC']], limit: 100,
     });
+    // … except the ones that ended in the last ENDED_LIST_DAYS and that the player has not opened
+    // since (open() marks them): one last click to see who won
+    const ended = (await AsyncGame.findAll({
+        where: { participantIds: { [Op.contains]: [user.id] }, status: 'finished', updatedAt: { [Op.gt]: new Date(Date.now() - ENDED_LIST_DAYS * DAY) } },
+        attributes: attrs, order: [['updatedAt', 'DESC']], limit: 20,
+    })).filter(row => !((row.data || {}).endSeen || []).includes(user.id));
     const invites = await AsyncGame.findAll({
         where: { invitedIds: { [Op.contains]: [user.id] }, status: { [Op.in]: ['setup', 'playing'] } },
         attributes: attrs, order: [['updatedAt', 'DESC']], limit: 50,
@@ -571,8 +599,12 @@ async function list(user) {
     return {
         notifyEmail: u ? u.notifyEmail : true,
         notifyPush: u ? u.notifyPush : true,
+        // the Discord switch is shown only with a linked Discord account and a bot token
+        notifyDiscord: u ? u.notifyDiscord : false,
+        discord: !!(u && u.discordId) && await Discord.enabled(),
         timeoutDays: TIMEOUT_MS / DAY,
         mine: mine.map(summarize),
+        ended: ended.map(summarize),
         invites: invites.map(summarize).filter(s => s.freeSeats.length && s.mySlot == null),
         open: open.map(summarize).filter(s => s.freeSeats.length),
         watch: watch.map(summarize).filter(s => !s.freeSeats.length),
@@ -588,6 +620,12 @@ async function open(user, id) {
     if (!e.g) return { error: 'Spiel nicht gefunden.' };
     const watchable = e.g.config.isPublic && ['playing', 'finished'].includes(e.g.status);
     if (!e.g.seats.some(s => s.userId === user.id) && !watchable) return { error: 'Du spielst in diesem Spiel nicht mit.' };
+    // the last click on an ended game: from now on it is only in the game history
+    e.g.endSeen = e.g.endSeen || [];
+    if (e.g.status === 'finished' && e.g.seats.some(s => s.userId === user.id) && !e.g.endSeen.includes(user.id)) {
+        e.g.endSeen.push(user.id);
+        await save(e.g).catch(err => console.error(`[Async] Saving endSeen failed for ${e.g.id}:`, err));
+    }
     return { view: JSON.parse(JSON.stringify(L.view(e.g, user.id))), chat: e.g.chat || [], chatMute: (e.g.chatMutes || {})[user.id] || null };
 }
 
@@ -722,7 +760,7 @@ async function sweep() {
                         subject: 'Erinnerung: dein Rundenspiel wartet',
                         text: w.userIds.length
                             ? `Dein Rundenspiel wartet seit ${duration(age)} auf dich. Spielst du nicht innerhalb von ${left}, übernimmt die KI deinen Platz` +
-                            (g.config.ranked ? ` und du verlierst ${L.MMR_PENALTY} MMR.` : '.')
+                            (g.config.ranked && !g.config.fromLive ? ` und du verlierst ${L.MMR_PENALTY} MMR.` : '.')
                             : g.config.noKi
                                 ? `Dein Rundenspiel wartet auf ${w.label}. In ${left} beginnt es mit den Spielern, die da sind – oder wird abgebrochen, wenn es zu wenige sind.`
                                 : `Dein Rundenspiel wartet auf ${w.label}. In ${left} wird der Platz mit der KI besetzt.`,
@@ -741,6 +779,7 @@ async function sweep() {
                 });
             }
         }
+        await retryResults();
         // Evict idle games from memory
         for (const [id, e] of cache) if (!e.busy && Date.now() - e.touched > 30 * 60 * 1000) cache.delete(id);
     } catch (err) {
@@ -771,6 +810,33 @@ function init(ioServer) {
 async function setNotifyEmail(user, on) {
     await User.update({ notifyEmail: !!on }, { where: { id: user.id } });
     return { ok: true, notifyEmail: !!on };
+}
+
+/**
+ * Discord direct messages. Switching on sends a test message first: if the bot can't write to the
+ * player (no shared server, DMs from server members off), the switch stays off and the answer says why.
+ */
+async function setNotifyDiscord(user, on) {
+    const u = await User.findByPk(user.id);
+    if (!u) return { error: 'Konto nicht gefunden.' };
+    if (on) {
+        if (!u.discordId) return { error: 'Verknüpfe zuerst dein Discord-Konto (Mein Konto).' };
+        if (!(await Discord.enabled())) return { error: 'Discord-Nachrichten sind auf diesem Server nicht eingerichtet.' };
+        const result = await Discord.sendDm(u.discordId, Discord.messageFor({
+            subject: 'Discord-Nachrichten an',
+            text: 'Ab jetzt bekommst du hier eine Nachricht, wenn du in einem Rundenspiel am Zug bist, eingeladen wirst oder ein Spiel endet.',
+        }));
+        if (result !== 'sent') {
+            return {
+                error: result === 'closed'
+                    ? 'Der Hochciv-Bot kann dir keine Direktnachricht schicken. Tritt dem Hochciv-Discord bei und erlaube dort Direktnachrichten von Servermitgliedern.'
+                    : 'Discord ist gerade nicht erreichbar. Bitte versuche es später erneut.',
+                invite: Discord.INVITE_URL || undefined,
+            };
+        }
+    }
+    await User.update({ notifyDiscord: !!on }, { where: { id: u.id } });
+    return { ok: true, notifyDiscord: !!on };
 }
 
 /**
@@ -808,6 +874,6 @@ function evict(id) {
 
 module.exports = {
     init, evict, create, fromLive, info, join, leave, cancel, invite, decline, list, open, action, place, draftPick, civDraftPick, chat, report, resign,
-    setNotifyEmail, sweep, room, removeUser, purgeEndedChats,
+    setNotifyEmail, setNotifyDiscord, sweep, room, removeUser, purgeEndedChats,
     processResult,      // for tests/score
 };

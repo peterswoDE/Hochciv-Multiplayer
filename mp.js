@@ -315,14 +315,16 @@ const MP = {
                 ${favOpts ? `<optgroup label="${esc(TX('Favoriten'))}">${favOpts}</optgroup>` : ''}
               </select></label>
             <p class="hint" style="margin:4px 0 8px">${TX('Eigene Karte: %s', info)} ·
-              ${this.browseLink('MP.browseMaps()')}
+              ${this.browseLink('MP')}
               <a href="#" onclick="MP.customMapByCode(); return false">${TX('Code eingeben')}</a> ·
               <a href="#" onclick="MP.importCustomMap(); return false">${TX('aus Datei laden')}</a>
               – ${TX('Karten baust du im Karteneditor (Hauptmenü).')}</p>`;
     },
     /** "Karten entdecken" link (map browser, client/maps) – nothing without it. */
-    browseLink: function (onclick) {
-        return typeof MAPBROWSER !== 'undefined' ? `<a href="#" onclick="${onclick}; return false"><b>${TX('Karten entdecken')}</b></a> · ` : '';
+    browseLink: function (owner) {
+        // the handler is written out (not passed in): the Activity compiles only known handlers (R-04)
+        const handler = owner === 'ASYNC' ? 'onclick="ASYNC.browseMaps(); return false"' : 'onclick="MP.browseMaps(); return false"';
+        return typeof MAPBROWSER !== 'undefined' ? `<a href="#" ${handler}><b>${TX('Karten entdecken')}</b></a> · ` : '';
     },
     /** A map from the map browser becomes the lobby's map. */
     browseMaps: function () {
@@ -458,7 +460,8 @@ const MP = {
     rematch: function () {
         this.socket.emit('session:rematch', {}, res => { if (res && res.error) toast(TXS(res.error)); });
     },
-    /** The host started a rematch: leave the finished game for the lobby. */
+    /** The host started a rematch: leave the finished game for the lobby. Also the way back
+     *  when the start failed during the placement or the Marathon draft (data.error, R-09). */
     enterRematch: async function (data) {
         this.lobbyIndex = this.spectator ? null : data.playerIndex;
         this.hostIndex = data.hostIndex;
@@ -481,7 +484,7 @@ const MP = {
         show('screen-menu');
         await this.showLobby();
         this.setMode(this.spectator ? 'watching' : 'waiting');
-        toast(TX('Revanche! Ihr seid zurück in der Lobby.'));
+        toast(data.error ? TXS(data.error) : TX('Revanche! Ihr seid zurück in der Lobby.'));
     },
 
     /** Lobby code and password in the game's header (spectators: the code only). */
@@ -1103,23 +1106,24 @@ const MP = {
                 const name = (this.user && this.user.username) || localStorage.getItem('mp-name') || TX('Spieler');
                 const tabBtn = (k, label) => `<button type="button" class="mph-tab" data-tab="${k}" onclick="MP.hubShow('${k}')">${label} <span class="mph-count" id="mph-count-${k}"></span></button>`;
                 // a new game: title as the button's own text (tests click 'text=…'), one line below
-                const newGame = (cls, onclick, title, desc, attrs) =>
-                    `<button class="btn mph-mode ${cls}" onclick="${onclick}" ${attrs || ''}>${title}<small>${desc}</small></button>`;
+                // (handler: the whole onclick="…" attribute – the Activity compiles only known handlers, R-04)
+                const newGame = (cls, handler, title, desc, attrs) =>
+                    `<button class="btn mph-mode ${cls}" ${handler} ${attrs || ''}>${title}<small>${desc}</small></button>`;
                 h = `<div class="mph">
           <label class="mph-name"><span>${TX('Dein Name')}</span><input type="text" id="mp-n" value="${escHtml(name)}" maxlength="24" autocomplete="nickname"></label>
           <div class="mph-new">
-            ${newGame('primary', 'MP.host()', TX('Live-Spiel hosten'), TX('Alle spielen gleichzeitig.'))}
-            ${newGame('mph-async', 'ASYNC.newGame()', TX('Neues Rundenspiel'), this.user ? TX('Nacheinander ziehen, wann es dir passt.') : TX('Nur mit Anmeldung.'))}
+            ${newGame('primary', 'onclick="MP.host()"', TX('Live-Spiel hosten'), TX('Alle spielen gleichzeitig.'))}
+            ${newGame('mph-async', 'onclick="ASYNC.newGame()"', TX('Neues Rundenspiel'), this.user ? TX('Nacheinander ziehen, wann es dir passt.') : TX('Nur mit Anmeldung.'))}
             ${typeof MATCH !== 'undefined' ? `<div class="mph-ranked">
-              ${newGame('', 'MATCH.start()', '🔥 ' + TX('Gewertetes Spiel suchen'), this.user ? TX('Gegner mit ähnlicher MMR, gewertet.') : TX('Nur mit Anmeldung.'),
+              ${newGame('', 'onclick="MATCH.start()"', '🔥 ' + TX('Gewertetes Spiel suchen'), this.user ? TX('Gegner mit ähnlicher MMR, gewertet.') : TX('Nur mit Anmeldung.'),
                     this.user ? '' : `disabled title="${escHtml(TX('Für gewertete Spiele musst du angemeldet sein.'))}"`)}
               ${this.user ? `<label class="mph-bots"><input type="checkbox" id="mpm-allow-bots" onchange="MATCH.allowBots()" ${MATCH.allowBots() ? 'checked' : ''}> 🤖 ${TX('Spieler-Bots in der Suche zulassen')}</label>` : ''}
               ${typeof RANKING !== 'undefined' ? `<a href="#" class="mph-rank-link" onclick="RANKING.open(null); return false">🏆 ${TX('Rangliste und Saison')}</a>` : ''}
             </div>` : ''}
           </div>
           <div class="mph-more">
-            ${typeof MAPBROWSER !== 'undefined' ? newGame('mph-maps', 'MAPBROWSER.open()', '🗺 ' + TX('Karten entdecken'), TX('Karten anderer Spieler ansehen, favorisieren und spielen.')) : ''}
-            ${typeof CHALLENGE !== 'undefined' ? newGame('mph-challenge', 'CHALLENGE.open()', '📅 ' + TX('Wochen-Challenge'), CHALLENGE.hubText()) : ''}
+            ${typeof MAPBROWSER !== 'undefined' ? newGame('mph-maps', 'onclick="MAPBROWSER.open()"', '🗺 ' + TX('Karten entdecken'), TX('Karten anderer Spieler ansehen, favorisieren und spielen.')) : ''}
+            ${typeof CHALLENGE !== 'undefined' ? newGame('mph-challenge', 'onclick="CHALLENGE.open()"', '📅 ' + TX('Wochen-Challenge'), CHALLENGE.hubText()) : ''}
           </div>
           ${typeof ALERTS !== 'undefined' ? ALERTS.checkboxHtml(TX('Töne bei deinem Zug, neuen Mitspielern, Spielstart und Nachrichten')) : ''}
           <div class="mph-tabs" id="mph-tabs">${tabBtn('running', TX('Laufende Spiele'))}${tabBtn('open', TX('Offene Spiele'))}${typeof FRIENDS !== 'undefined' ? tabBtn('friends', '👥 ' + TX('Freunde')) : ''}</div>
@@ -1222,7 +1226,7 @@ const MP = {
                 </select>
               </label>
               ${this.gameConfig.mapKey === 'eigene' ? this.customMapRow(isHost)
-                    : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP.browseMaps()').replace(/ · $/, '')}</p>` : ''}
+                    : isHost && typeof MAPBROWSER !== 'undefined' ? `<p class="hint" style="margin:4px 0 8px">${TX('Oder eine Karte anderer Spieler:')} ${this.browseLink('MP').replace(/ · $/, '')}</p>` : ''}
               ${isMarathon ? `<p class="hint" style="margin:4px 0 8px">${TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')}</p>` : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span>
                 <input type="checkbox" id="mp-set-events" onchange="MP.updateLobbyConfig()" ${this.gameConfig.events ? 'checked' : ''}>
@@ -1350,10 +1354,12 @@ const MP = {
             turn = active.filter(g => g.yourTurn);
             const waiting = active.filter(g => !g.yourTurn);
             const takenOver = rs.mine.filter(g => !active.includes(g));
-            mine = active.length;
+            const ended = rs.ended || [];             // ended, not opened since: one last click (async/service.js)
+            mine = active.length + ended.length;
+            if (ended.length) run += section(TX('Beendet – wer hat gewonnen?'), ended.map(g => ASYNC.row(g)), '', 'mph-async mph-ended');
             run += `<p class="sub mph-async">${TX('Gespielt wird nacheinander, ohne dass die anderen online sein müssen. Wer %s Tage nicht zieht, wird von der KI ersetzt (gewertet: −15 MMR).', rs.timeoutDays)}</p>`
                 // nothing running: one empty box instead of two
-                + (mine ? section(TX('Du bist am Zug'), turn.map(g => ASYNC.row(g)), TX('Gerade nirgends.'), 'mph-async')
+                + (active.length ? section(TX('Du bist am Zug'), turn.map(g => ASYNC.row(g)), TX('Gerade nirgends.'), 'mph-async')
                     + section(TX('Warten auf andere'), waiting.map(g => ASYNC.row(g)), TX('Keine.'), 'mph-async')
                     : section(TX('Rundenspiele'), [], TX('Keine laufenden Rundenspiele.'), 'mph-async'))
                 + (takenOver.length ? section(TX('Von der KI übernommen'), takenOver.slice(0, 15).map(g => ASYNC.row(g)), '', 'mph-async') : '');
@@ -1365,7 +1371,10 @@ const MP = {
             <label class="row mpa-notify"><span>${TX('E-Mail, wenn ich am Zug bin')}</span>
               <input type="checkbox" ${rs.notifyEmail ? 'checked' : ''} onchange="ASYNC.setNotify(this.checked)"></label>
             ${/HochcivApp\//.test(navigator.userAgent) ? `<label class="row"><span>${TX('Push-Nachricht, wenn ich am Zug bin')}</span>
-              <input type="checkbox" ${rs.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}</div>`;
+              <input type="checkbox" ${rs.notifyPush ? 'checked' : ''} onchange="ASYNC.setPush(this.checked)"></label>` : ''}
+            ${rs.discord ? `<label class="row"><span>${TX('Discord-Nachricht, wenn ich am Zug bin')}</span>
+              <input type="checkbox" id="mpa-notify-discord" ${rs.notifyDiscord ? 'checked' : ''} onchange="ASYNC.setDiscord(this.checked)"></label>
+              <p class="sub" id="mpa-discord-hint" hidden></p>` : ''}</div>`;
 
         // Offen: invitations, lobbies and Rundenspiele with a free seat – the last two through the
         // filters (invitations always show)
@@ -1391,11 +1400,12 @@ const MP = {
         put('mph-running', run);
         put('mph-open', open);
         const count = (k, n, hot) => { const el = $('mph-count-' + k); if (el) { el.textContent = n || ''; el.classList.toggle('hot', !!hot); } };
-        count('running', turn.length || mine, turn.length);
+        const endedN = rs && rs.ended ? rs.ended.length : 0;
+        count('running', turn.length + endedN || mine, turn.length + endedN);
         count('open', shown + invites.length, invites.length);
         // until the player picks a tab: open on "Laufend" when one of their Rundenspiele runs
         if (!this.hubPicked && mine) this.hubShow('running', true);
-        ASYNC.badgeCount = turn.length;
+        ASYNC.badgeCount = turn.length + endedN;
         ASYNC.drawBadge();
     },
 
@@ -2139,7 +2149,7 @@ window.addEventListener('DOMContentLoaded', () => {
             position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1001;
             background: #fffbe8; color: #333; border: 2px solid #9d3b2f; border-radius: 6px;
             padding: 8px 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; gap: 10px; align-items: center;
-            /* % of the body: the game turns the body on phones held upright (html.turn) */
+            /* % of the body: the kept versions v102–v110 turn the body on phones held upright (html.turn) */
             width: max-content; max-width: calc(100% - 32px); box-sizing: border-box; font-size: 14px;
         }
         #mp-afk-banner[hidden] { display: none; }
@@ -2307,6 +2317,8 @@ if (originalGameOver) {
             MP.updatePlayerList();
             MP.setTurnClock(null);
         }
+        // full screen: "<name> gewinnt das Spiel", then the end screen above (client/victory.js)
+        if (typeof VICTORY !== 'undefined') VICTORY.play();
         return r;
     };
 }
@@ -2432,6 +2444,7 @@ const ACTIONS = {
     buildRoad: (state, pi, r, c, target) => ({ type: 'buildRoad', params: { r, c, target } }),
     buyTile: (state, pi, r, c) => ({ type: 'buyTile', params: { r, c } }),          // Kolonialismus up to v100
     claimTile: (state, pi, r, c) => ({ type: 'claimTile', params: { r, c } }),      // Kolonialismus since v103
+    collectIncomeNow: (state, pi) => ({ type: 'collectIncomeNow', params: {} }),     // China since v111
     coverPop: (state, pi, kind, amount) => ({ type: 'coverPop', params: { kind, amount } }),
     uncoverPop: (state, pi, kind, amount) => ({ type: 'uncoverPop', params: { kind, amount } }),
     buildWonder: (state, pi, city, wonder) => ({ type: 'buildWonder', params: { cityId: city.id, wonder } }),
@@ -2662,7 +2675,7 @@ const ASYNC = {
         if (!btn) return;
         let n = 0;
         if (MP.user) {
-            try { n = (await this.api('')).mine.filter(g => g.yourTurn).length; } catch (_) { }
+            try { const d = await this.api(''); n = d.mine.filter(g => g.yourTurn).length + (d.ended || []).length; } catch (_) { }
         }
         this.badgeCount = n;
         this.drawBadge();
@@ -2693,6 +2706,8 @@ const ASYNC = {
         const left = leftMs == null ? '' : leftMs >= 864e5 ? TX('noch %s Tag(e)', Math.ceil(leftMs / 864e5)) : TX('noch %s Std.', Math.max(1, Math.ceil(leftMs / 36e5)));
         let info = '';
         if (g.yourTurn) info = `<span class="mpa-badge">${TX('Du bist am Zug')}</span>` + (left ? ' ' + left : '');
+        else if (g.status === 'finished' && g.won === true) info = `<span class="mpa-badge won">🏆 ${TX('Du hast gewonnen!')}</span>`;
+        else if (g.status === 'finished' && g.won === false) info = `<span class="mpa-badge lost">${TX('Verloren')}</span> ` + TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
         else if (g.status === 'finished') info = TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
         else if (g.resigned) info = TX('Aufgegeben');
         else if (g.replaced) info = TX('Von der KI übernommen');
@@ -2701,12 +2716,13 @@ const ASYNC = {
         // a game to join shows all its settings (as the live lobbies, MP.traitsHtml)
         const joinable = !member && g.freeSeats && g.freeSeats.length;
         const btns = [];
-        if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">${TX('Öffnen')}</button>`);
+        if (member) btns.push(`<button class="btn small primary" onclick="ASYNC.open('${g.id}')">${g.status === 'finished' ? '🏁 ' + TX('Ergebnis ansehen') : TX('Öffnen')}</button>`);
         else if (g.status === 'playing' && !g.freeSeats.length) btns.push(`<button class="btn small" onclick="ASYNC.open('${g.id}')">${TX('Zuschauen')}</button>`);
         else btns.push(`<button class="btn small primary" onclick="ASYNC.showJoin('${g.id}')">${TX('Beitreten')}</button>`);
         if (g.invited && !member) btns.push(`<button class="btn small ghost" onclick="ASYNC.decline('${g.id}')">${TX('Ablehnen')}</button>`);
         if (member && g.freeSeats.length) btns.push(`<button class="btn small ghost" onclick="ASYNC.showInvite('${g.id}', '${g.joinCode}')">${TX('Einladen')}</button>`);
-        return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}">
+        const end = g.status === 'finished' && g.won != null ? (g.won ? ' ended won' : ' ended lost') : '';
+        return `<div class="mpa-row${g.yourTurn ? ' turn' : ''}${end}">
             <div class="mpa-title"><span class="mph-kind">${c.challenge ? '📅 ' + TX('Wochen-Challenge') : TX('Rundenspiel')}</span> <b>${this.mapName(c.mapKey, c)}</b>${joinable ? '' : ` · ${MP.civModeLabel(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}`}${c.isPublic ? ' · ' + TX('öffentlich') : ''} · ${statusText}
               <small class="mpa-c">${g.engine ? this.esc(g.engine) : ''}${member ? `${g.engine ? ' · ' : ''}${TX('Code')} ${g.joinCode}` : ''}</small></div>
             ${joinable ? MP.traitsHtml(MP.lobbyTraits(g, false)) : ''}
@@ -2725,6 +2741,38 @@ const ASYNC = {
             headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }),
         }).then(r => r.ok ? toast(on ? TX('Push-Nachrichten an.') : TX('Push-Nachrichten aus.')) : Promise.reject(new Error(TX('Speichern fehlgeschlagen'))))
             .catch(e => toast(e.message));
+    },
+
+    /**
+     * Direct messages from the Hochciv Discord bot (shown with a linked Discord account). Switching
+     * on sends a test message; if the bot can't reach the player, the switch goes back off and the
+     * hint below it says why (with the server invitation, if there is one).
+     */
+    setDiscord: function (on) {
+        const box = document.getElementById('mpa-notify-discord');
+        const hint = document.getElementById('mpa-discord-hint');
+        if (hint) hint.hidden = true;
+        fetch(`${MP.serverUrl}/api/async/notify/discord`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }),
+        }).then(async r => {
+            const data = await r.json().catch(() => ({}));
+            if (r.ok) return toast(on ? TX('Discord-Nachrichten an.') : TX('Discord-Nachrichten aus.'));
+            if (box) box.checked = !on;
+            const msg = data.error ? TXS(data.error) : TX('Speichern fehlgeschlagen');
+            if (!hint) return toast(msg);
+            hint.textContent = msg + ' ';
+            if (data.invite && /^https:\/\//.test(data.invite)) {
+                const a = document.createElement('a');
+                a.href = data.invite; a.target = '_blank'; a.rel = 'noopener';
+                a.textContent = TX('Zum Hochciv-Discord');
+                hint.appendChild(a);
+            }
+            hint.hidden = false;
+        }).catch(() => {
+            if (box) box.checked = !on;
+            toast(TX('Speichern fehlgeschlagen'));
+        });
     },
 
     // ── Create ───────────────────────────────────────────────────────────────
@@ -2793,9 +2841,9 @@ const ASYNC = {
                 ${myMaps.map(m => `<option value="${this.esc(m.name)}" ${m.name === f.customName ? 'selected' : ''}>${this.esc(m.name)} (${m.marathon ? TX('bis %s Reiche, Marathon', m.maxPlayers || 4) : TX('bis %s Reiche', m.maxPlayers || 4)})</option>`).join('') || `<option value="">${TX('– keine gespeichert –')}</option>`}
                 ${typeof MAPBROWSER !== 'undefined' && MAPBROWSER.favs.length ? `<optgroup label="${this.esc(TX('Favoriten'))}">${MAPBROWSER.favs.map(m =>
                     `<option value="fav:${this.esc(m.id)}">★ ${this.esc(m.name)}${m.author ? ' – ' + this.esc(m.author) : ''}</option>`).join('')}</optgroup>` : ''}</select></label>
-                ${note(`${MP.browseLink('ASYNC.browseMaps()')}<a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
+                ${note(`${MP.browseLink('ASYNC')}<a href="#" onclick="ASYNC.customMapByCode(); return false">${TX('Karte mit Code laden')}</a> ·
                 <a href="#" onclick="ASYNC.importCustomMap(); return false">${TX('aus Datei laden')}</a> – ${TX('eigene Karten baust du im Karteneditor (Hauptmenü).')}`)}`
-                : typeof MAPBROWSER !== 'undefined' ? note(`${TX('Oder eine Karte anderer Spieler:')} ${MP.browseLink('ASYNC.browseMaps()').replace(/ · $/, '')}`) : ''}
+                : typeof MAPBROWSER !== 'undefined' ? note(`${TX('Oder eine Karte anderer Spieler:')} ${MP.browseLink('ASYNC').replace(/ · $/, '')}`) : ''}
               ${marathon ? note(TX('Marathon: vier Reiche auf einer neuen Zufallskarte, Technologien kosten je Zeitalter das Zwei- bis Fünffache. Vor dem ersten Zug sehen alle Karte und Starttechnologien und draften je zwei Fähigkeiten (Schlangenreihenfolge, auch fremde). Bots draften nicht.')) : ''}
               <label class="row"><span>${TX('Mit Ereignissen')}</span><input type="checkbox" id="mpa-events" ${f.events ? 'checked' : ''}></label>
               ${f.events ? `<label class="row"><span>${TX('Ereignisstärke')}</span><select id="mpa-evmode">
@@ -3000,7 +3048,7 @@ const ASYNC = {
     },
 
     showInvite: function (id, code) {
-        const back = MP.asyncId === id ? 'ASYNC.reopenModal()' : 'ASYNC.showList()';
+        const back = MP.asyncId === id ? 'onclick="ASYNC.reopenModal()"' : 'onclick="ASYNC.showList()"';
         modal(TX('Mitspieler einladen'), `
             <p>${TX('Code zum Weitergeben:')} <b style="font-family:monospace;font-size:16px">${code}</b></p>
             <p class="sub">${TX('Oder Link:')} <span id="mpa-inv-link" style="user-select:all">${this.esc(MP.inviteUrl(code))}</span></p>
@@ -3008,7 +3056,7 @@ const ASYNC = {
             <label class="row"><span>${TX('Benutzername')}</span><input type="text" id="mpa-inv-name"></label>
             ${typeof FRIENDS !== 'undefined' ? FRIENDS.chipsHtml('mpa-inv-name') : ''}
             <button class="btn wide primary" onclick="ASYNC.invite('${id}')">${TX('Einladen')}</button>
-            <button class="btn wide ghost" onclick="${back}">${TX('Zurück')}</button>`);
+            <button class="btn wide ghost" ${back}>${TX('Zurück')}</button>`);
     },
 
     reopenModal: function () {
@@ -3487,8 +3535,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .mph .mpa-notify { border-top-color:var(--rule); }
         .mph .row { font-size:14px; }
         .mph a { color:var(--red); }
-        /* phones: the new games one below the other, title and line side by side. Not on a page the
-           game turned (html.turn, phone held upright in a game): the query measures the screen,
+        /* phones: the new games one below the other, title and line side by side. Not on a page a kept
+           version turned (html.turn, v102–v110, phone held upright in a game): the query measures the screen,
            the turned page is as wide as the screen is tall. */
         @media (max-width:640px) {
             html:not(.turn) .mph-new { grid-auto-flow:row; align-items:stretch; gap:8px; }
@@ -3507,6 +3555,10 @@ window.addEventListener('DOMContentLoaded', () => {
         .mpa-h { margin:14px 0 6px; }
         .mpa-row { border:1px solid rgba(0,0,0,.15); border-radius:6px; padding:8px 10px; margin-bottom:8px; background:rgba(255,255,255,.4); }
         .mpa-row.turn { border-color:#c0392b; box-shadow:0 0 0 1px #c0392b inset; }
+        .mpa-row.ended.won { border-color:#c8952c; box-shadow:0 0 0 1px #c8952c inset, 0 0 14px rgba(200,149,44,.35); }
+        .mpa-row.ended.lost { border-color:#7a6a58; }
+        .mpa-badge.won { background:linear-gradient(135deg,#f5d76e,#c8952c); color:#3a2300; }
+        .mpa-badge.lost { background:#6b5d50; }
         .mpa-title { font-size:14px; }
         .mpa-c { float:right; font-family:monospace; opacity:.6; }
         .mpa-traits { font-size:12px; color:var(--ink-soft); margin:3px 0 2px; line-height:1.4; }

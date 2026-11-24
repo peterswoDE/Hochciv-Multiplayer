@@ -48,6 +48,6 @@ Whether an old version has to be kept when a new one comes in is decided per upd
 | Join | code + password, public list, matchmaking, Discord Activity | invitation, join code, public list |
 | Accounts | optional (guests) | required |
 | Missing players | turn timer, KI takes over | reminder after 5 days, KI takes over after 7 |
-| Cleanup | after 2 hours without action (lobbies: 10 minutes) | when finished or cancelled |
+| Cleanup | after 2 hours without action (paused: 8 hours; lobbies: 10 minutes), or 30 minutes after everyone lost the connection (empty lobbies at the next check) | when finished or cancelled |
 
 Details: [Socket.IO events](../reference/socket-events.md), [Rundenspiele](../reference/rundenspiele.md).

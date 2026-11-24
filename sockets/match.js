@@ -128,7 +128,7 @@ module.exports = function registerMatchHandlers(io) {
             match.users.forEach(u => { queue.set(u.userId, u); emitTo(u.socketId, 'match:cancelled', { reason: r, requeued: true }); });
             return;
         }
-        for (const u of rest) sessions.joinSession(r.joinCode, r.password, info(u));
+        for (const u of rest) sessions.joinSession(r.joinCode, r.password, info(u), { trusted: true });
         const session = sessions.getSession(r.sessionId);
         session.match = {
             id: match.id,

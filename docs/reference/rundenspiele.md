@@ -17,7 +17,8 @@ setup ──▶ placement (tile map) ──┐
 * **Starting early** – when the seats are already final (nations dealt at random, or all four nations of a fixed map), the game starts right away: the host plays turn 1 while the others join. A turn of a seat nobody has claimed yet waits (`hold`) until someone takes it. Otherwise – and always without KI – the game starts once everybody is there.
 * **placement / draft** – pre-phases of the tile map (everyone places a start tile) and of Marathon (ability draft).
 * **playing** – one action at a time per game; the state is saved after every action and every KI turn, and everyone who has the game open gets the new view.
-* **finished** – result, points and MMR are stored as a match (`games`), the turn states become a replay.
+* **finished** – result, points and MMR are stored as a match (`games`), the turn states become a replay. MMR, match and the game's `result` are written in one transaction ([Security](security.md#results-and-mmr)); if that fails, the scheduler tries again every 10 minutes, up to 5 times.
+  The game list (`GET /api/async`, `ended`) keeps a finished game for each player until they open it once (`data.endSeen`, set by `async:open` and for everyone who has the game open when it ends), at most 14 days.
 * **cancelled** – by the host, when not enough players joined (games without KI), or when the host's account is deleted during setup.
 
 Leaving is free until your seat has had its first turn (or the pre-phase began).
@@ -49,7 +50,7 @@ At the 7-day timeout:
 | playing, unclaimed seat | The KI plays that nation; one human fewer |
 | playing, a player's turn | The KI takes over the seat for the rest of the game (`replaced`) |
 
-A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. In ranked games the player who was replaced loses **15 MMR** on top of the result ([Points and MMR](ranking.md)). Replaced players still see the game in their history (`replacedUserId`).
+A seat taken over by the KI plays at level *mittel*, in ranked games *schwer*. In ranked games the player who was replaced loses **15 MMR** on top of the result ([Points and MMR](ranking.md)) – except in a ranked live game the host continued as a Rundenspiel (`config.fromLive`): there the takeover costs no MMR, since only the host picked the time per turn. Players who had resigned in the live game get their 15 MMR penalty when the game is converted. Replaced players still see the game in their history (`replacedUserId`).
 
 ## Weekly challenge
 

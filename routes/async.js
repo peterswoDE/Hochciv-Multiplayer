@@ -45,6 +45,7 @@ router.get('/code/:code', (req, res) => send(res, service.info(req.user, null, r
 
 // Notification preference
 router.post('/notify', (req, res) => send(res, service.setNotifyEmail(req.user, !!(req.body || {}).email)));
+router.post('/notify/discord', (req, res) => send(res, service.setNotifyDiscord(req.user, !!(req.body || {}).on)));
 
 router.get('/:id', (req, res) => send(res, service.info(req.user, req.params.id, req.query.code)));
 router.post('/:id/join', (req, res) => send(res, service.join(req.user, req.params.id, req.body || {})));

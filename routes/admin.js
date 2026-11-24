@@ -31,11 +31,18 @@ const ROLES = ['user', 'botcreator', 'reviewadmin', 'admin', 'superadmin'];
 const isPrivileged = role => role === 'admin' || role === 'superadmin' || role === 'reviewadmin';
 
 /*
- * The review admin ('reviewadmin') sees everything a superadmin sees, but may never change
- * anything: only reading requests (plus the word check, which changes nothing) – see readOnly.
+ * The review admin ('reviewadmin') sees what a superadmin sees, but may never change anything:
+ * only reading requests (plus the word check, which changes nothing) – see readOnly. The account
+ * is meant for outside reviewers, so it gets as little personal data as possible: e-mail
+ * addresses only masked (p***@gmail.com), no second factors of other users.
  */
 const READ_ONLY_POSTS = new Set(['/words/check']);
 const isReviewAdmin = user => !!user && user.role === 'reviewadmin';
+function maskEmail(email) {
+    if (!email) return email;
+    const at = String(email).lastIndexOf('@');
+    return at < 1 ? '***' : email[0] + '***' + email.slice(at);
+}
 
 /**
  * Admins manage normal users. Anything that touches an admin/superadmin/review admin account,
@@ -113,12 +120,14 @@ router.get('/users', async (req, res) => {
         const byId = new Map(users.map(u => [u.id, u]));
         const owned = {};
         users.forEach(u => { if (u.accountType === 'bot' && u.ownerId) owned[u.ownerId] = (owned[u.ownerId] || 0) + 1; });
+        const masked = isReviewAdmin(req.user);
         res.json(users.map(u => {
             const j = u.toJSON();
+            if (masked) j.email = maskEmail(j.email);
             if (u.accountType === 'bot') {
                 const owner = byId.get(u.ownerId) || null;
                 j.owner = owner ? { id: owner.id, username: owner.username } : null;
-                j.botDisabled = Bots.botUsable(u, owner);
+                j.botDisabled = Bots.botBlockedReason(u, owner);
             } else if (Bots.canCreateBots(u)) {
                 const limit = Bots.botLimitOf(u);
                 j.bots = { count: owned[u.id] || 0, limit: limit === Infinity ? null : limit };
@@ -131,6 +140,7 @@ router.get('/users', async (req, res) => {
 });
 
 router.get('/users/:id/mfa', async (req, res) => {
+    if (isReviewAdmin(req.user)) return res.status(403).json({ error: 'Nur Lesezugriff: Als Review-Admin siehst du keine zweiten Faktoren anderer Nutzer.' });
     try {
         const targetUser = await User.findByPk(req.params.id);
         if (!targetUser) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
@@ -537,11 +547,12 @@ router.post('/oauth/:provider', isSuperAdmin, requireRecentAuth, async (req, res
         if (clientId !== undefined) oauthProvider.clientId = clientId;
         // The page never has the stored secrets: an empty field keeps them, a new value replaces them
         if (typeof clientSecret === 'string' && clientSecret.trim()) oauthProvider.clientSecret = clientSecret.trim();
-        // Bot token: Discord Activity only
+        // Bot token: Discord only (Activity instance check, direct messages of utils/discord.js)
         if (provider === 'discord' && clearBotToken === true) oauthProvider.botToken = '';
         else if (provider === 'discord' && typeof botToken === 'string' && botToken.trim()) oauthProvider.botToken = botToken.trim();
         if (enabled !== undefined) oauthProvider.enabled = enabled;
         await oauthProvider.save();
+        if (provider === 'discord') require('../utils/discord').resetCache();
 
         // Refresh Passport strategies
         await refreshOAuthStrategies();

@@ -15,7 +15,8 @@
 * **Selected field:** stays visible next to its sheet.
 * **Short screens:** dialogs use the full height, and the editor starts with its settings folded.
 * **Tutorial** (v101 and older): highlighted fields are brought into view.
-* **Turned page:** since v102 the game always turns itself sideways on a phone held upright (`html.turn`, the body rotated by 90°), in the browser and in the Android app. The layer converts pointer positions and rects into the page's own frame (`frame`, `pt` in `mobile.js`), so dragging, pinching and the field next to its sheet follow the finger. In a game held upright the page is wide, so the narrow-screen items above apply to the menu, not the game. Media queries measure the unturned screen – rules for phones that must not apply to a turned page are scoped with `html:not(.turn)` (see the lobby styles in `mp.js`).
+* **Upright:** since the extension's v112 the game runs upright on a device held upright (stacked layout: map on top, sheets below; `w-narrow` on phones, so the narrow-screen items above apply in the game too). The manifest no longer asks for landscape.
+* **Turned page (kept versions v102–v110):** these turn themselves sideways on a phone held upright in the browser (`html.turn`, the body rotated by 90°; the Android app's `bridge.js` switches that off). The layer converts pointer positions and rects into the page's own frame (`frame`, `pt` in `mobile.js`), so dragging, pinching and the field next to its sheet follow the finger. Media queries measure the unturned screen – rules for phones that must not apply to a turned page are scoped with `html:not(.turn)` (see the lobby styles in `mp.js`).
 
 ## Dependencies on the game
 

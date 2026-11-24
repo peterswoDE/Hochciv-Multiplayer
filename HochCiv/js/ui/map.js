@@ -469,8 +469,7 @@ function drawMap(svg, map, opts) {
    wenigsten von den Angreifern verdeckt; bei Gleichstand oben, und nie über den Kartenrand.
    Auf kleinen Bildschirmen (Telefon) wachsen die Werte mit, damit die Zahl lesbar bleibt
    (etwa 14 px). Der Maßstab ist der, mit dem die Karte eingepasst ist (das kleinere
-   Verhältnis von Breite und Höhe); ist die App hochkant gedreht, misst das Rechteck des
-   Browsers die Karte gedreht – dann sind seine Seiten vertauscht. */
+   Verhältnis von Breite und Höhe). */
 function fightMarks(world, S2, f, breite, hoehe) {
   const att = civOf(S2.players[f.pi]), def = civOf(S2.players[f.gegner]);
   const ohne = { 'pointer-events': 'none' };
@@ -490,8 +489,7 @@ function fightMarks(world, S2, f, breite, hoehe) {
   const svg = world.ownerSVGElement, box = svg && svg.getBoundingClientRect ? svg.getBoundingClientRect() : null;
   let massstab = 1;
   if (box && box.width && box.height) {
-    const [bw, bh] = turning() ? [box.height, box.width] : [box.width, box.height];
-    massstab = Math.min(bw / breite, bh / hoehe);
+    massstab = Math.min(box.width / breite, box.height / hoehe);
   }
   const k = Math.min(2.2, Math.max(1, 14 / (18 * massstab)));
   const textA = '⚔️ ' + f.a, textD = '🛡️ ' + f.d;

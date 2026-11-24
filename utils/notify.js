@@ -1,8 +1,8 @@
 /**
  * Notifications for asynchronous games.
  *
- * Every message goes through notify(), which hands it to all registered channels: e-mail and
- * push (Android app). Webhooks or a Discord integration are added later with
+ * Every message goes through notify(), which hands it to all registered channels: e-mail, push
+ * (Android app) and Discord direct messages. More (e.g. webhooks) are added with
  * registerChannel() – the game code does not change.
  *
  * A channel is `async (users, event) => {}` where `users` are User rows and `event` is
@@ -14,6 +14,7 @@ const { User, DeviceToken } = require('../models');
 const { Op } = require('sequelize');
 const { sendMail } = require('./mailer');
 const push = require('./push');
+const discord = require('./discord');
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const channels = [];
@@ -68,6 +69,22 @@ registerChannel('push', async (users, event) => {
                 link: String(event.link || ''),
             });
             if (result === 'invalid') await d.destroy();
+        }
+    }
+});
+
+// ── Discord channel (direct message from the bot, opt-in) ────────────────────
+// Only for accounts with a linked Discord account. If the bot can't write to the player any more
+// (left the shared server, DMs off, bot blocked), the channel switches itself off.
+registerChannel('discord', async (users, event) => {
+    const targets = users.filter(u => u.notifyDiscord && u.discordId && !u.isBanned);
+    if (!targets.length || !(await discord.enabled())) return;
+    const message = discord.messageFor(event);
+    for (const u of targets) {
+        const result = await discord.sendDm(u.discordId, message);
+        if (result === 'closed') {
+            console.warn(`[Notify] Discord DMs to ${u.username} are not possible – switched off.`);
+            await User.update({ notifyDiscord: false }, { where: { id: u.id } });
         }
     }
 });

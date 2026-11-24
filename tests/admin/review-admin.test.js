@@ -6,7 +6,8 @@
  *   npm i --no-save playwright-core
  *   node tests/admin/review-admin.test.js [http://localhost:3000]
  *
- * A review admin reads every admin endpoint (the OAuth tab too), but every change is refused
+ * A review admin reads the admin endpoints (the OAuth tab too) – e-mails only masked, no second
+ * factors of other users (R-03 of the findings report) – but every change is refused
  * – checked against the database afterwards. Only a superadmin hands out the role, and an
  * admin can't touch a review admin's account. On the page: the note, no buttons that change
  * something, locked switches. OAuth secrets never leave the server: the GET only says whether
@@ -14,7 +15,8 @@
  * back afterwards; test accounts are removed.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
- * it is not found.
+ * it is not found. A screenshot of the admin page goes to the temp folder (SHOT sets another
+ * path) – never into the repository: it shows account names and the OAuth layout.
  */
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
@@ -68,11 +70,17 @@ function makeUser(role) {
         const r = await login(review);
         const get = async (ctx, p) => (await ctx.request.get(BASE + p)).status();
 
-        // ── reading: everything a superadmin can read ────────────────────────────────────
-        for (const p of ['/api/admin/metrics', '/api/admin/users', `/api/admin/users/${target.id}/mfa`, '/api/admin/reports?status=open&offset=0',
+        // ── reading: what a superadmin can read, but little personal data (R-03) ─────────
+        for (const p of ['/api/admin/metrics', '/api/admin/users', '/api/admin/reports?status=open&offset=0',
             '/api/admin/words', '/api/admin/lobbies', '/api/admin/games?offset=0', '/api/admin/stats', '/api/admin/running', '/api/admin/oauth']) {
             ok(await get(r, p) === 200, `review admin reads ${p}`);
         }
+        const listed = await (await r.request.get(BASE + '/api/admin/users')).json();
+        const row = listed.find(u => u.id === target.id);
+        ok(row && row.email === target.name[0] + '***@example.com', 'review admin sees e-mails only masked', row && row.email);
+        ok(!listed.some(u => u.email && /^[^@]{2,}@/.test(u.email) && !u.email.includes('***')), 'review admin sees no full e-mail address');
+        const mfa = await r.request.get(BASE + `/api/admin/users/${target.id}/mfa`);
+        ok(mfa.status() === 403, 'review admin can not list second factors of a user', String(mfa.status()));
         const check = await r.request.post(BASE + '/api/admin/words/check', { data: { text: 'hallo' } });
         ok(check.status() === 200, 'review admin may use the word check (changes nothing)');
 
@@ -144,6 +152,8 @@ function makeUser(role) {
             const visibleWrites = await page.$$eval('#tab-admin-users .w', els => els.filter(e => e.offsetParent !== null).length);
             ok(visibleWrites === 0, `${width}px: no buttons that change a user`, String(visibleWrites));
             ok(await page.$$eval('#tab-admin-users select', els => els.length) === 0, `${width}px: roles shown as text, no select`);
+            ok(await page.$$eval('#tab-admin-users [onclick^="toggleAdminUserMfa"]', els => els.length) === 0, `${width}px: no MFA button`);
+            ok(!(await page.textContent('#table-admin-users')).includes(target.name + '@'), `${width}px: the target's e-mail is masked`);
             await page.goto(BASE + '/client/admin.html#dashboard');
             await page.waitForFunction(() => document.getElementById('admin-uptime').textContent !== '-');
             ok(await page.isDisabled('#btn-toggle-maintenance') && await page.isDisabled('#admin-registration'), `${width}px: switches locked`);
@@ -151,7 +161,7 @@ function makeUser(role) {
             await page.waitForTimeout(600);
             ok(await page.$eval('#oauth-discord-secret', e => e.value === '' && e.disabled), `${width}px: OAuth secret empty and locked`);
             ok(!(await page.isVisible('[onclick="saveOAuthConfig(\'discord\')"]')), `${width}px: no save button`);
-            if (width === 1280) await page.screenshot({ path: process.env.SHOT || 'review-admin.png', fullPage: true });
+            if (width === 1280) await page.screenshot({ path: process.env.SHOT || require('path').join(require('os').tmpdir(), 'review-admin.png'), fullPage: true });
             ok(errors.length === 0, `${width}px: no page errors`, errors.join(' | '));
             await page.close();
         }

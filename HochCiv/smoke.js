@@ -1409,42 +1409,35 @@ step('Protokoll: Würfe hängen eingeklappt an der Aktionszeile (Punkt 6)', () =
   G('closeModal')();
   console.log('       3 Blöcke, eingeklappt sichtbar: „' + summaries[0] + '"');
 });
-step('Layoutklassen richten sich nach der effektiven Größe, auch gedreht', () => {
+step('Layoutklassen richten sich nach der Fenstergröße – quer nebeneinander, hochkant untereinander', () => {
   const html = window.document.documentElement;
   const w = window.innerWidth, h = window.innerHeight;
-  html.classList.remove('turn');
-  G('syncLayout')();
-  const quer = html.classList.contains('w-side');
-  // Gedreht sind Breite und Höhe vertauscht – die Klassen müssen umschlagen
-  html.classList.add('turn');
-  Object.defineProperty(window, 'innerWidth', { value: 500, configurable: true });
-  Object.defineProperty(window, 'innerHeight', { value: 1000, configurable: true });
-  G('syncLayout')();
-  if (!html.classList.contains('w-side'))
-    throw new Error('gedreht wird die Querlage nicht erkannt (1000 × 500)');
-  if (!html.classList.contains('w-wide'))
-    throw new Error('gedreht wird die Breite nicht erkannt');
-  html.classList.remove('turn');
-  G('syncLayout')();
-  if (html.classList.contains('w-side'))
-    throw new Error('ohne Drehung gilt 500 × 1000 als quer');
-  Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
-  Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
-  G('applyTurn')();
-  console.log('       500 × 1000 gedreht = quer und breit, ungedreht = hochkant'
-    + (quer ? '' : ''));
+  const klassen = (iw, ih) => {
+    Object.defineProperty(window, 'innerWidth', { value: iw, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: ih, configurable: true });
+    G('syncLayout')();
+    return ['w-side', 'w-wide', 'w-narrow'].filter(k => html.classList.contains(k)).join(' ');
+  };
+  try {
+    const quer = klassen(1000, 500), hoch = klassen(500, 1000), ipad = klassen(820, 1180);
+    if (quer !== 'w-side w-wide') throw new Error('1000 × 500: ' + quer + ' statt w-side w-wide');
+    if (hoch !== 'w-narrow') throw new Error('500 × 1000: ' + hoch + ' statt w-narrow');
+    if (ipad !== 'w-wide') throw new Error('iPad hochkant 820 × 1180: ' + ipad + ' statt w-wide');
+    console.log('       1000 × 500 ' + quer + ' · 500 × 1000 ' + hoch + ' · 820 × 1180 ' + ipad);
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+    G('syncLayout')();
+  }
 });
-step('Querformat wird nur im Spiel erzwungen, nicht im Menü oder Aufbau – seit v102 immer, ohne Schalter', () => {
+step('Hochkant wird nichts gedreht oder gesperrt – das Spiel folgt dem Gerät (seit v112)', () => {
   const html = window.document.documentElement;
-  G('store')('hochciv.noturn', true);   // eine alte Wahl „aus" (bis v101) zählt nicht mehr
-  const dreht = id => { G('show')(id); return html.classList.contains('turn'); };
-  if (dreht('screen-menu')) throw new Error('Hauptmenü wird gedreht');
-  if (dreht('screen-setup')) throw new Error('Aufbaubildschirm wird gedreht');
-  if (dreht('screen-editor')) throw new Error('Editor wird gedreht');
-  if (!dreht('screen-game')) throw new Error('Spielbildschirm wird nicht gedreht');
-  if (G('typeof setTurn') !== 'undefined' || G('typeof turnWanted') !== 'undefined') throw new Error('Schalter gibt es noch');
-  G('store')('hochciv.noturn', null);
-  console.log('       gedreht: nur screen-game, immer');
+  for (const id of ['screen-menu', 'screen-setup', 'screen-editor', 'screen-game']) {
+    G('show')(id);
+    if (html.classList.contains('turn')) throw new Error(id + ' wird gedreht');
+  }
+  if (G('typeof applyTurn') !== 'undefined' || G('typeof turning') !== 'undefined') throw new Error('Drehung gibt es noch');
+  console.log('       kein Bildschirm gedreht');
 });
 step('Blatt endet über der Aktionsleiste (Punkt 3, gemessen)', () => {
   frischesSpiel(); G('setBarHeight')();
@@ -1453,13 +1446,12 @@ step('Blatt endet über der Aktionsleiste (Punkt 3, gemessen)', () => {
   if (!/^\d+px$/.test(v)) throw new Error('--bar-h ist kein Pixelmaß: ' + v);
   console.log('       --bar-h = ' + v);
 });
-/* Gedreht (v87, beim Prüfen gefunden) und vergrößert (v103): --bar-h und --hud-h sind die Höhen der
-   Leisten im CSS. Bis v86 stand dort gedreht ihre Breite (in Chromium 1180px), und jedes Blatt lag
-   außerhalb des Bildschirms, auch das eines KI-Zugs mit seinem „Weiter". Seit v103 misst
-   setBarHeight die Layouthöhe (offsetHeight), die weder Drehung noch Zoom kennt. jsdom kennt kein
-   Layout: die Höhen werden vorgegeben (Leiste 53, Kopf 61), das Rechteck dagegen so, wie der Browser
-   es gedreht oder gezoomt zeigte – würde es wieder gemessen, fiele es auf. */
-step('Gedreht und vergrößert: --bar-h und --hud-h messen die Leisten, nicht ihr Bild (v87, v103)', () => {
+/* Vergrößert (v103): --bar-h und --hud-h sind die Höhen der Leisten im CSS. Bis v86 stand dort im
+   gedrehten Hochformat ihre Breite (in Chromium 1180px), und jedes Blatt lag außerhalb des
+   Bildschirms. Seit v103 misst setBarHeight die Layouthöhe (offsetHeight), die den Zoom nicht kennt.
+   jsdom kennt kein Layout: die Höhen werden vorgegeben (Leiste 53, Kopf 61), das Rechteck dagegen so,
+   wie der Browser es gezoomt zeigte – würde es wieder gemessen, fiele es auf. */
+step('Hochkant und vergrößert: --bar-h und --hud-h messen die Leisten, nicht ihr Bild (v87, v103)', () => {
   const html = window.document.documentElement, st = html.style;
   const bar = window.document.querySelector('#screen-game .actionbar');
   const hud = window.document.querySelector('#screen-game .hud');
@@ -1475,14 +1467,13 @@ step('Gedreht und vergrößert: --bar-h und --hud-h messen die Leisten, nicht ih
   };
   try {
     G('show')('screen-game');
-    if (!html.classList.contains('turn')) throw new Error('Spielbildschirm nicht gedreht');
-    const hochkant = masse(820, 1180, x => ({ width: x, height: 1180 }));          // iPad hochkant, App dreht sich
+    const hochkant = masse(820, 1180, x => ({ width: 820, height: x }));           // iPad hochkant
     const quer = masse(1180, 820, x => ({ width: 1180, height: x }));              // iPad quer
     const gross = masse(1920, 1080, x => ({ width: 1920, height: x * 1.41 }));     // 1080p, vergrößert
-    if (hochkant !== '53px 61px 1') throw new Error('gedreht: ' + hochkant + ' statt 53px 61px 1');
+    if (hochkant !== '53px 61px 1') throw new Error('hochkant: ' + hochkant + ' statt 53px 61px 1');
     if (quer !== '53px 61px 1') throw new Error('quer: ' + quer + ' statt 53px 61px 1');
     if (gross !== '53px 61px 1.41') throw new Error('1920 × 1080: ' + gross + ' statt 53px 61px 1.41');
-    console.log('       hochkant gedreht ' + hochkant + ' · quer ' + quer + ' · 1080p ' + gross);
+    console.log('       hochkant ' + hochkant + ' · quer ' + quer + ' · 1080p ' + gross);
   } finally {
     delete bar.getBoundingClientRect; delete hud.getBoundingClientRect;
     delete bar.offsetHeight; delete hud.offsetHeight;
@@ -1492,11 +1483,11 @@ step('Gedreht und vergrößert: --bar-h und --hud-h messen die Leisten, nicht ih
   }
 });
 /* Große Bildschirme (v103, Anweisung des Autors: Symbole auf 1080p und größer zu klein): die ganze
-   Oberfläche wächst mit dem Fenster, ein Faktor (--ui). Jedes iPad bleibt bei 1, gedreht auch. */
+   Oberfläche wächst mit dem Fenster, ein Faktor (--ui). Jedes iPad bleibt bei 1, hochkant auch. */
 step('v103: Maßstab großer Bildschirme – iPads 1, darüber nach der knapperen Seite', () => {
   const k = G('uiScale');
   const faelle = [[1180, 820], [1194, 834], [1366, 1024], [1024, 768], [1920, 960], [1920, 1080], [2560, 1300], [3840, 2000]];
-  const ist = faelle.map(([w, h]) => k(w, h)).concat([k(1080, 1920, true)]);
+  const ist = faelle.map(([w, h]) => k(w, h)).concat([k(1080, 1920)]);
   const soll = [1, 1, 1, 1, 1.33, 1.41, 1.81, 2.78, 1];
   if (ist.join() !== soll.join()) throw new Error('Maßstab: ' + ist.join(' · ') + ' statt ' + soll.join(' · '));
   // die Layoutklassen nach der vergrößerten Seite: 1920 × 960 ÷ 1,33 ist weiter breit und quer
@@ -1513,7 +1504,7 @@ step('v103: Maßstab großer Bildschirme – iPads 1, darüber nach der knappere
     Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
     G('syncLayout')();
   }
-  console.log('       ' + faelle.map(([w, hh], i) => `${w}×${hh} ${ist[i]}`).join(' · ') + ' · gedreht 1');
+  console.log('       ' + faelle.map(([w, hh], i) => `${w}×${hh} ${ist[i]}`).join(' · ') + ' · hochkant 1');
 });
 
 /* ============================================ Plättchenkarte: Startdreiecke legen */

@@ -368,7 +368,7 @@ Two things this example leaves out on purpose. It ends the turn without moving, 
 | The socket drops in a lobby | The server removes a lobby player whose socket is gone, and closes the lobby if that was the host. Join or host again. |
 | A request gets `401` | The session ended (expired, new token, owner banned). Log in again; if the login fails too, stop and tell the owner. |
 | `session:kicked` | The host or an admin removed your bot, or it was banned. Don't rejoin that lobby. |
-| No action for a long time | Lobbies close after 10 minutes without activity, running live games after 2 hours. |
+| No action for a long time | Lobbies close after 10 minutes without activity, running live games after 2 hours (paused ones after 8). |
 | You get a new token | Every session of the old token ends at once. Restart the bot with the new token. |
 
 ## Errors
@@ -389,6 +389,8 @@ The server answers in German; the game page translates the same texts. The ones 
 | `Unbekannte Aktion: …` / `Ungültiger Parameter: …` | Wrong `type`, or a parameter that isn't a plain value |
 | `Diese Technologie ist nicht erforschbar.` | `research` for a tech your sheet doesn't offer: not available, already known, or the Singularity before a modern tech in every field |
 | `Zu viele Anfragen …` (HTTP 429) | Rate limit: slow down |
+| `Zu viele Anfragen – warte einen Moment.` (socket) | Socket event limit: game moves 30 a second (100 at once), other events 10 a second (40 at once). Wait for each acknowledgement before the next event; a connection that keeps flooding is disconnected |
+| `Zu viele falsche Passwörter für diese Lobby. …` | Too many wrong passwords for this lobby: try again in 5 minutes |
 
 Any other refusal of a move comes from the engine and says what is missing, for example `Zu wenig Münzen.`
 

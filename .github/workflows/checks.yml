@@ -41,8 +41,10 @@ jobs:
       - name: Tests without a server
         run: |
           set -e
-          for t in tests/security/audit.test.js tests/security/research.test.js tests/random/deal.test.js \
-                   tests/draft/civdraft.test.js tests/draft/async-draft.test.js tests/challenge/challenge-map.test.js; do
+          for t in tests/security/audit.test.js tests/security/research.test.js tests/security/params.test.js tests/random/deal.test.js \
+                   tests/draft/civdraft.test.js tests/draft/async-draft.test.js tests/challenge/challenge-map.test.js \
+                   tests/security/activity-handlers.test.js tests/security/continuity.test.js \
+                   tests/security/abuse.test.js; do
             echo "::group::$t"; node "$t"; echo "::endgroup::"
           done
       - name: Database roles and migrations (a model changed without a migration fails here)

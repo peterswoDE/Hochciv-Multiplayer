@@ -18,7 +18,12 @@
  * seat only: in a hotseat game (several people on one device) nobody's seat does, it only counts
  * in the overall statistics. No MMR, no "games played", no seasons; badges of their own
  * (utils/badges.js).
+ *
+ * Limits (R-17 of the findings report): a stored game is at most MAX_STORED_BYTES – a longer
+ * chart keeps every second round until it fits – and an account stores at most MAX_PER_DAY
+ * single-player games in 24 hours (routes/solo.js also limits the uploads per account).
  */
+const { Op } = require('sequelize');
 const { sequelize, Game } = require('../models');
 const engine = require('../engine-adapter');
 const Facts = require('./facts');
@@ -29,6 +34,11 @@ const KEY_RE = /^[a-z0-9_-]{1,40}$/i;
 const KINDS = ['human', 'ki', 'bot', 'barbar'];
 const STAT_KEYS = ['s', 'c', 'pop', 't', 'a', 'w', 'd'];
 const MAX_ROUND = 2000;
+const MAX_STORED_BYTES = 200 * 1024;
+const MAX_PER_DAY = 100;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TOO_LARGE = 'Dieses Einzelspiel ist zu groß zum Speichern.';
+const TOO_MANY = 'Für heute sind genug Einzelspiele gespeichert. Morgen geht es weiter.';
 
 const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const str = (v, max) => (typeof v === 'string' && v.length <= max ? v : null);
@@ -130,6 +140,32 @@ function check(body) {
     return { S, ver: b.ver, t, rounds, cid: b.cid, hotseat: humans > 1 };
 }
 
+/**
+ * The record to store within MAX_STORED_BYTES: the chart over the rounds is thinned (every
+ * second point, the last one stays) and dropped if that is not enough. null if it doesn't fit.
+ */
+function fitSize(record) {
+    const size = () => Buffer.byteLength(JSON.stringify(record));
+    while (size() > MAX_STORED_BYTES && record.stats && record.stats.rounds.length > 2) {
+        const r = record.stats.rounds;
+        record.stats.rounds = r.filter((_, i) => i % 2 === 0 || i === r.length - 1);
+    }
+    if (size() > MAX_STORED_BYTES) record.stats = null;
+    return size() > MAX_STORED_BYTES ? null : record;
+}
+
+/** Single-player games `user` stored on their seat in the last 24 hours. */
+function storedToday(user) {
+    return Game.count({
+        where: {
+            [Op.and]: [
+                sequelize.literal(`"participants"::jsonb @> ${sequelize.escape(JSON.stringify([{ dbUserId: user.id, solo: true }]))}::jsonb`),
+                { createdAt: { [Op.gt]: new Date(Date.now() - DAY_MS) } },
+            ],
+        },
+    });
+}
+
 /** Stores a checked upload for `user`. Returns { ok, id, duplicate? } or { error }. */
 async function store(user, body) {
     const c = check(body);
@@ -139,6 +175,7 @@ async function store(user, body) {
         attributes: ['id'],
     });
     if (dup) return { ok: true, id: dup.id, duplicate: true };
+    if (await storedToday(user) >= MAX_PER_DAY) return { error: TOO_MANY, limit: true };
     const { S, ver, t, rounds, cid, hotseat } = c;
     const E = engine.forVersion(ver).getEngine();
     const civName = k => { const x = (E.ALL_CIVS || E.CIVS || []).find(v => v.k === k); return x ? x.n : k; };
@@ -164,15 +201,17 @@ async function store(user, body) {
     S.players.forEach((p, i) => { if (p.kind !== 'barbar') facts.p[k++].t = t[i]; });
     facts.src = 'solo';
     const me = participants.find(p => p.dbUserId);
-    const game = await Game.create({
+    const record = fitSize({
         version: ver, durationRounds: S.round,
         winnerUsername: me && me.isWinner ? user.username : null,
         participants,
         stats: rounds.length ? { players: statsPlayers, rounds, events: [] } : null,
         facts,
     });
+    if (!record) return { error: TOO_LARGE };
+    const game = await Game.create(record);
     Facts.changed(game.id);
     return { ok: true, id: game.id };
 }
 
-module.exports = { check, store, versions };
+module.exports = { check, store, versions, fitSize, MAX_STORED_BYTES, MAX_PER_DAY, TOO_MANY, TOO_LARGE };

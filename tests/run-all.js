@@ -9,9 +9,8 @@
  * Without a filter it runs every test that works with the default server settings. A filter
  * (part of the path, e.g. `security` or `maps/maps`) runs the matching tests, including those that
  * need another server setting – start the server for them as their header says.
- * The tests' own screenshot (review-admin.png) is restored afterwards.
  */
-const { spawn, execFileSync } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -65,7 +64,6 @@ function run(test) {
             console.log((lines.length ? lines : output.split('\n').slice(-15)).map(l => '      ' + l).join('\n'));
         }
     }
-    try { execFileSync('git', ['checkout', '--', 'review-admin.png'], { cwd: ROOT, stdio: 'ignore' }); } catch (_) { /* not a checkout */ }
     const failed = results.filter(r => !r.ok);
     console.log(`\n${results.length - failed.length}/${results.length} passed in ${Math.round((Date.now() - start) / 60000)} min`);
     if (!filters.length) console.log(`Not run (need other server settings): ${SPECIAL.join(', ')}`);

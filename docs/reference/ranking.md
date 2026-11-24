@@ -10,7 +10,7 @@
 
 * The host ticks *ranked* in the lobby (only possible when logged in) or in the Rundenspiel settings, or the game comes from [matchmaking](../overview/features.md#ranking) (always ranked).
 * KI seats play at the hardest level.
-* A ranked live game starts only when every human seat is held by a logged-in account and no person sits twice: no guest seats (a second tab of the host would just resign), no account on two seats, no bot account against its owner or two bots of one owner. Matchmaking never groups a bot with its owner; a Rundenspiel refuses such a join.
+* A ranked live game starts only when every human seat is held by a logged-in account and no account sits twice: no guest seats (a second tab of the host would just resign), no account on two seats. A bot account is a player of its own: a ranked game against your own bot, or between two bots of one owner, is rated normally. Matchmaking still never groups a bot with its owner.
 * A live game in which one account held several seats is not rated.
 * A Rundenspiel that ends up with fewer than two humans (setup timeout) is no longer ranked.
 
@@ -29,8 +29,10 @@ Every pair of seats (A, B) is compared. KI seats and guests take part at a basel
 
 ## Penalties
 
-* **Rundenspiel takeover:** a player whose ranked Rundenspiel seat is taken over by the KI after 7 days of inactivity loses an extra **15 MMR** ([Rundenspiele](rundenspiele.md)).
-* **Resign:** a player who resigns (live game or Rundenspiel) is out of the MMR calculation; the KI plays the seat. In ranked games it costs the same **15 MMR**, and it always counts as a played game.
+* **Rundenspiel takeover:** a player whose ranked Rundenspiel seat is taken over by the KI after 7 days of inactivity loses an extra **15 MMR** ([Rundenspiele](rundenspiele.md)). Not in a ranked live game the host continued as a Rundenspiel: the other players did not choose its time per turn, so the takeover there costs no MMR (it still counts as a played game).
+* **Resign:** a player who resigns (live game or Rundenspiel) is out of the MMR calculation; the KI plays the seat. In ranked games it costs the same **15 MMR**, and it always counts as a played game. A live game's penalty is booked when the game ends – or, if the host continues it as a Rundenspiel, at that moment.
+
+Booking a result is one transaction (`utils/rating.js`): the MMR is read with the accounts' rows locked, then MMR, played games, penalties and the match record are written together ([Security](security.md#results-and-mmr)).
 
 ## Seasons and tiers
 

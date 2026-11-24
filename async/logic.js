@@ -772,7 +772,10 @@ function timeout(g) {
     const takeOver = seat => {
         replaced.push(seat.userId);
         const u = replaceSeat(g, seat);
-        if (u) penalized.push(u);
+        // A ranked live game the host continued as a Rundenspiel: the others did not choose its
+        // deadline, so missing it costs no MMR (R-06 of the findings report). Resigning still does.
+        if (g.config.fromLive) seat.penalty = 0;
+        else if (u) penalized.push(u);
     };
     if (g.status === 'setup' && positional(g)) {
         // F34: play with those who are there – without KI only if the map allows it

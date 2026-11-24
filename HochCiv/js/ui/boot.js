@@ -73,7 +73,7 @@ function boot() {
   loadPrefs();
   store('hochciv.yields', null);     // Wahl des Umschalters „Erträge" (v75–v86) – entfallen
   store('hochciv.opts', null);       // Module (bis v101) – stehen seit v102 direkt im Aufbau
-  store('hochciv.noturn', null);     // „Hochkant drehen: aus" (bis v101) – seit v102 immer an
+  store('hochciv.noturn', null);     // „Hochkant drehen: aus" (bis v101) – seit v112 folgt das Spiel dem Gerät
   menuButtons();
   bootTexts();
 
@@ -134,7 +134,7 @@ function boot() {
     // Karte. So zeigt (und exportiert) das Menü nie den halben Zugwechsel.
     if (ui.combat) endCombat();
     // Das Menü (v102): Regeln, Protokoll, die eine Vorliebe (Animationen), Export, Ende.
-    // „Hochkant drehen" ist immer an, die Einstellungen sind entfallen.
+    // Die Einstellungen sind entfallen; hochkant läuft das Spiel seit v112 hochkant.
     const stufe = (k, n) => `<button data-anim="${k}"${prefs.anim === k ? ' class="on"' : ''}>${n}</button>`;
     modal(T('Menü'), `<button class="btn wide" id="mm-rules">${T('Regeln & Technologien')}</button>
       <button class="btn wide" id="mm-log">${T('Protokoll')}</button>
