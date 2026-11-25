@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const config = require('./config');
 const CivDraft = require('./utils/civdraft');
+const BotFilter = require('./utils/botfilter');
 
 // ─── In-memory session store ─────────────────────────────────────────────────
 
@@ -62,12 +63,14 @@ function cleanKey(key, fallback) {
 const HOST_CONFIG_KEYS = new Set([
     'mapKey', 'customMap', 'hexTiles', 'expCivs', 'events', 'eventMode', 'wonders', 'difficulty', 'ranked',
     'playerCount', 'kiCount', 'noKi', 'civMode', 'randomCivs', 'turnOrder', 'turnTime',
-    'playerBots', 'playerBotLimit', 'isPublic',
+    'playerBots', 'playerBotLimit', 'playerBotFilter', 'isPublic',
 ]);
 function cleanHostConfig(raw) {
     const out = {};
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
     for (const k of Object.keys(raw)) if (HOST_CONFIG_KEYS.has(k)) out[k] = raw[k];
+    // which bots may join (utils/botfilter.js): only a clean copy, null = every bot
+    if ('playerBotFilter' in out) out.playerBotFilter = BotFilter.clean(out.playerBotFilter);
     return out;
 }
 
@@ -176,6 +179,8 @@ function joinSession(joinCode, password, playerInfo, opts) {
         const policy = playerBotPolicy(session);
         if (!policy.allowed) return 'In dieser Lobby sind keine Spieler-Bots erlaubt.';
         if (policy.free <= 0) return 'In dieser Lobby ist kein Platz mehr für Spieler-Bots.';
+        const refused = BotFilter.reason(session, { id: playerInfo.botUserId, ownerId: playerInfo.botOwnerId, friend: !!playerInfo.botFriend });
+        if (refused) return refused;
     }
 
     const playerIndex = session.players.length;
@@ -246,10 +251,13 @@ function spectatorCount(session) {
  * never on the KI seats. The host allows them (gameConfig.playerBots) and may limit them
  * (gameConfig.playerBotLimit, null = every free human seat). A bot hosting the lobby always
  * allows them and doesn't count itself. A seat of a bot account is bound to that account
- * (botUserId, checked by sockets/game.js session:connect).
+ * (botUserId, checked by sockets/game.js session:connect). The host may also say which bots
+ * (gameConfig.playerBotFilter, utils/botfilter.js): the seat keeps the bot's owner and whether
+ * it is the host's friend for that.
  */
 function botSeat(info) {
-    return info && typeof info.botUserId === 'string' ? { playerBot: true, botUserId: info.botUserId } : {};
+    if (!info || typeof info.botUserId !== 'string') return {};
+    return { playerBot: true, botUserId: info.botUserId, botOwnerId: info.botOwnerId || null, botFriend: !!info.botFriend };
 }
 
 function playerBotPolicy(session) {
@@ -471,12 +479,23 @@ function resetForRematch(sessionId) {
 }
 
 /** Public lobbies to join, and public games that are running (to watch: status ≠ 'lobby'). */
-function getPublicSessions() {
+/**
+ * The public lobbies and running games. For a bot account asking (`forBot` = { id, ownerId,
+ * friendIds }: the accounts it is friends with) each lobby also says whether the host's bot filter
+ * lets this bot in (playerBotsForYou; utils/botfilter.js).
+ */
+function getPublicSessions(forBot) {
     const list = [];
     for (const [, s] of sessions) {
         // nobody connected: abandoned, removed by the next cleanup – nothing to join or watch
         if (!s.isPublic || s.status === 'finished' || !s.players.some(p => p.connected)) continue;
-        list.push(sessionSummary(s));
+        const row = sessionSummary(s);
+        if (forBot) {
+            const host = s.players[s.hostIndex];
+            const friend = !!(host && !host.playerBot && host.dbUserId && forBot.friendIds.has(host.dbUserId));
+            row.playerBotsForYou = row.playerBots && !BotFilter.reason(s, { id: forBot.id, ownerId: forBot.ownerId, friend });
+        }
+        list.push(row);
     }
     return list;
 }
@@ -519,6 +538,8 @@ function sessionSummary(s) {
         // player-bots: allowed at all, and how many more may join (null = no limit)
         playerBots: bots.allowed,
         playerBotsFree: bots.free === Infinity ? null : Math.max(0, bots.free),
+        // the host chose which bots (utils/botfilter.js) – the lists themselves stay private
+        playerBotFilter: !!cfg.playerBotFilter,
         // the lobby's settings, for the filters of the list (mp.js lobbyTraits)
         customMapName: cfg.mapKey === 'eigene' && cfg.customMap ? cfg.customMap.name : null,
         empires,

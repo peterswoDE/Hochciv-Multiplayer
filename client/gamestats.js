@@ -54,9 +54,15 @@
         .hcg h3 { font-family: var(--serif, Georgia, serif); font-size: 16px; margin: 18px 0 4px; }
         .hcg-note { font-size: 12px; color: var(--ink-soft, #6f6551); margin: 0 0 6px; }
         .hcg-scroll { overflow-x: auto; }
-        .hcg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .hcg-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        /* one grid for every table: the name takes what is left, numbers and bars have fixed
+           widths, so "Spiele", "Siege" and the bars stand in the same place in every table */
+        .hcg-table th.num { width: 84px; }
+        .hcg-table th.hcg-c-bar { width: 38%; }
+        .hcg-table th.hcg-c-bar2 { width: 25%; }
+        .hcg-table td:first-child { white-space: normal; overflow-wrap: anywhere; }
         .hcg-table th, .hcg-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(0,0,0,.06); white-space: nowrap; }
-        .hcg-table th { font-weight: 600; color: var(--ink-soft, #6f6551); }
+        .hcg-table th { font-weight: 600; color: var(--ink-soft, #6f6551); white-space: normal; vertical-align: bottom; }
         .hcg-sort { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
             display: inline-flex; align-items: center; gap: 3px; text-align: inherit; }
         .hcg-sort:hover { color: var(--ink, #2a2721); }
@@ -79,6 +85,10 @@
             .hcg-tile b { font-size: 18px; }
             .hcg-table th, .hcg-table td { padding: 4px 3px; }
             .hcg-bar { min-width: 64px; gap: 4px; }
+            /* too narrow for a fixed grid: the columns size to their content, the table scrolls */
+            .hcg-table { table-layout: auto; }
+            .hcg-table th.num, .hcg-table th.hcg-c-bar, .hcg-table th.hcg-c-bar2 { width: auto; }
+            .hcg-table td:first-child { white-space: nowrap; }
             .hcg-bar b { min-width: 30px; }
         }
     `;
@@ -109,7 +119,7 @@
     // one row of "games / wins / win rate"
     const winRow = (label, games, wins) => `<tr class="${games < SMALL ? 'small' : ''}" title="${esc(tx('%s Siege in %s Spielen', wins, games))}">
         <td>${label}</td><td class="num">${games}</td><td class="num">${wins}</td><td>${bar(pct(wins, games))}</td></tr>`;
-    const WIN_HEAD = () => [[tx('Spiele'), 'num'], [tx('Siege'), 'num'], [tx('Siegquote')]];
+    const WIN_HEAD = () => [[tx('Spiele'), 'num'], [tx('Siege'), 'num'], [tx('Siegquote'), 'hcg-c-bar']];
 
     // ── sections ───────────────────────────────────────────────────────────────────────────
     function sections(d) {
@@ -127,7 +137,7 @@
         // victory types
         const vt = Object.entries(d.victory).sort((a, b) => b[1] - a[1]);
         const vtSum = vt.reduce((n, x) => n + x[1], 0);
-        out.push(`<h3>${tx('Siege nach Siegart')}</h3>` + table([[tx('Siegart')], [tx('Partien'), 'num'], [tx('Anteil')]],
+        out.push(`<h3>${tx('Siege nach Siegart')}</h3>` + table([[tx('Siegart')], [tx('Partien'), 'num'], [tx('Anteil'), 'hcg-c-bar']],
             vt.map(([k, n]) => `<tr><td>${tx(VICTORY[k] || k)}</td><td class="num">${n}</td><td>${bar(pct(n, vtSum))}</td></tr>`)));
 
         // nations
@@ -160,7 +170,7 @@
         const hist = Object.entries(d.winners.cities).map(([c, n]) => [+c, n]).sort((a, b) => a[0] - b[0]);
         const histMax = Math.max(1, ...hist.map(h => h[1]));
         out.push(`<p class="hcg-note" style="margin-top:10px"><b>${tx(me ? 'Mit wie vielen Städten gewonnen' : 'Mit wie vielen Städten gewonnen wird')}</b></p>` +
-            table([[tx('Städte')], [tx('Siege')]], hist.map(([c, n]) => `<tr><td>${c}</td><td>${bar(n, histMax)}</td></tr>`)));
+            table([[tx('Städte')], [tx('Siege'), 'hcg-c-bar']], hist.map(([c, n]) => `<tr><td>${c}</td><td>${bar(n, histMax)}</td></tr>`)));
 
         // technologies
         const T = d.techs;
@@ -183,7 +193,7 @@
         out.techs = { techs, ages, me };
 
         // wonders
-        out.push(`<h3>${tx('Weltwunder')}</h3>` + table([[tx('Wunder')], [tx('Gebaut'), 'num'], [tx('Siege'), 'num'], [tx('Siegquote')]],
+        out.push(`<h3>${tx('Weltwunder')}</h3>` + table([[tx('Wunder')], [tx('Gebaut'), 'num'], [tx('Siege'), 'num'], [tx('Siegquote'), 'hcg-c-bar']],
             d.wonders.slice().sort((a, b) => b.built - a.built).map(w => {
                 const row = wonderRow(N, w.k);
                 return winRow(esc(row ? (en() ? row[2] : row[1]) : w.k), w.built, w.wins);
@@ -199,7 +209,7 @@
             round: (a, b) => (a.round == null ? 99 : a.round) - (b.round == null ? 99 : b.round),
             tree: (a, b) => a.order - b.order,
         }[sort] || (() => 0);
-        return table([[tx('Technologie')], [tx(state.me ? 'Bei Siegen' : 'Bei Siegern')], [tx(state.me ? 'Bei Niederlagen' : 'Bei anderen')], [tx('Siegquote mit'), 'num'], [tx('Ø Runde'), 'num']],
+        return table([[tx('Technologie')], [tx(state.me ? 'Bei Siegen' : 'Bei Siegern'), 'hcg-c-bar2'], [tx(state.me ? 'Bei Niederlagen' : 'Bei anderen'), 'hcg-c-bar2'], [tx('Siegquote mit'), 'num'], [tx('Ø Runde'), 'num']],
             state.techs.slice().sort(by).map(t => `<tr class="${t.had < SMALL ? 'small' : ''}" title="${esc(tx('%s Plätze hatten sie', t.had))}">
                 <td>${esc(t.name)}<small>${esc(state.ages[t.age] || '')}</small></td><td>${bar(t.won)}</td><td>${bar(t.lost)}</td>
                 <td class="num">${t.rate == null ? '–' : t.rate + '%'}</td><td class="num">${t.round == null ? '–' : t.round}</td></tr>`));

@@ -38,6 +38,7 @@ const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
 const CivDraft = require('../utils/civdraft');
+const BotFilter = require('../utils/botfilter');
 const Stats = require('../utils/stats');
 const E = () => engine.getEngine();
 /* Each game plays with the engine version it was started on (g.engine): games from before
@@ -219,6 +220,9 @@ function create(host, opts) {
     const botLimit = parseInt(raw.playerBotLimit, 10);
     config.playerBots = !!host.isBot || raw.playerBots === true;
     config.playerBotLimit = Number.isInteger(botLimit) && botLimit >= 1 ? Math.min(botLimit, total) : null;
+    // which bots (utils/botfilter.js), fixed from now on; with a bot as host "own" = its owner's
+    config.playerBotFilter = config.playerBots ? BotFilter.clean(raw.playerBotFilter) : null;
+    if (host.isBot) config.hostBotOwnerId = host.ownerId || null;
 
     const g = {
         engine: engine.version(),           // played with this engine version to the end
@@ -317,12 +321,20 @@ function markStarted(g) {
 // ── Joining and leaving ───────────────────────────────────────────────────────
 
 /** Which seats can a joiner take right now? (for the join dialog) */
-/** null if one more player-bot may join, else why not (the host's own bot seat doesn't count). */
-function playerBotRoom(g) {
+/**
+ * null if one more player-bot may join, else why not (the host's own bot seat doesn't count).
+ * With `bot` ({ id, ownerId, friendIds: Set }) also the host's bot filter (utils/botfilter.js).
+ */
+function playerBotRoom(g, bot) {
     if (!g.config.playerBots) return 'In diesem Rundenspiel sind keine Spieler-Bots erlaubt.';
     const count = g.seats.filter(s => s.botAccount && s.userId && !s.replaced && s.userId !== g.hostUserId).length;
     if (g.config.playerBotLimit != null && count >= g.config.playerBotLimit) return 'In diesem Rundenspiel ist kein Platz mehr für Spieler-Bots.';
-    return null;
+    if (!bot || !g.config.playerBotFilter) return null;
+    // a bot as host has no friends, its "own" bots are those of its owner
+    const botHost = !!g.config.hostBotOwnerId;
+    return BotFilter.check(g.config.playerBotFilter, botHost ? g.config.hostBotOwnerId : g.hostUserId, {
+        id: bot.id, ownerId: bot.ownerId, friend: !botHost && !!(bot.friendIds && bot.friendIds.has(g.hostUserId)),
+    });
 }
 
 function freeSeats(g) {
@@ -361,7 +373,7 @@ function join(g, user, opts) {
     if (!['setup', 'playing'].includes(g.status)) return 'Diesem Spiel kann man nicht mehr beitreten.';
     if (claimedCount(g) >= g.config.humanCount) return 'Das Spiel ist schon voll.';
     if (user.isBot) {
-        const why = playerBotRoom(g);
+        const why = playerBotRoom(g, user);
         if (why) return why;
     }
 
@@ -978,8 +990,10 @@ function summary(g, userId) {
 }
 
 function publicConfig(g) {
-    const { map, setup, seed, order, customMap, ...rest } = g.config;
-    void map; void setup; void seed; void order;
+    const { map, setup, seed, order, customMap, hostBotOwnerId, ...rest } = g.config;
+    void map; void setup; void seed; void order; void hostBotOwnerId;
+    // the bot filter's lists stay with the server: only whether there is one
+    rest.playerBotFilter = !!rest.playerBotFilter;
     // lists only need the name of a custom map; the rows are in the game state
     if (customMap) rest.customMapName = customMap.name;
     return rest;

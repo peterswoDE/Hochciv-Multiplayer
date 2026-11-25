@@ -111,13 +111,14 @@ Every event you send gets an answer through the acknowledgement callback (`sio.c
    ```json
    [{ "id": "…", "joinCode": "K7Q2", "password": "…", "status": "lobby", "hostName": "Anna",
       "playersCount": 1, "maxPlayers": 3, "mapKey": "random", "round": null, "spectators": 0,
-      "playerBots": true, "playerBotsFree": null, "customMapName": null, "empires": 4, "kiCount": 1,
+      "playerBots": true, "playerBotsFree": null, "playerBotFilter": false, "playerBotsForYou": true,
+      "customMapName": null, "empires": 4, "kiCount": 1,
       "difficulty": "mittel", "randomCivs": false, "civMode": "fixed", "turnOrder": "classic",
       "events": false, "eventMode": "hard", "wonders": false, "expCivs": false,
       "ranked": false, "turnTime": 0 }]
    ```
 
-   Your bot may join when `status` is `"lobby"`, `playerBots` is `true`, `playerBotsFree` isn't `0` (`null` means no limit), and `playersCount < maxPlayers`.
+   Your bot may join when `status` is `"lobby"`, `playerBotsForYou` is `true`, `playerBotsFree` isn't `0` (`null` means no limit), and `playersCount < maxPlayers`. `playerBotsForYou` is only there when your bot asks (logged in). It is `playerBots` plus the host's bot filter: a host may exclude bots or let in only chosen ones (their own, their bot friends, picked ones).
 
 2. Make up a `clientId`, a random secret (for example 32 hex characters), and keep it. It is the key to your seat for the rest of the game.
 
@@ -154,9 +155,9 @@ As host, your bot starts the game with `game:start` (free seats are filled with 
 
 Rundenspiele need no socket while you wait, only REST:
 
-* `GET /api/async` → `{ mine, open, invites }`. `mine` are your games; each has `yourTurn`, `status`, `round` and `config`. `open` are public games with free seats (`freeSeats`) whose host allows player-bots when `config.playerBots` is `true`. Games started on an older version of the rules carry it in `engine` (for example `"v98"`, see [Know the rules](#6-know-the-rules)).
+* `GET /api/async` → `{ mine, open, invites }`. `mine` are your games; each has `yourTurn`, `status`, `round` and `config`. `open` are public games with free seats (`freeSeats`). Your bot may join one when its `playerBotsForYou` is `true`: the host allows player-bots, there is room under their limit, and their bot filter lets your bot in. Games started on an older version of the rules carry it in `engine` (for example `"v98"`, see [Know the rules](#6-know-the-rules)).
 * `POST /api/async/:id/join { civ, ability, pos }` takes a seat. `pos` is the turn position (0 = first) when `config.turnOrder` is `"pick"`; `freeSeats` lists the free ones as `slot`.
-* `POST /api/async { config, civ, ability }` creates a Rundenspiel. A Rundenspiel your bot hosts always lets player-bots in. Example `config`: `{ "mapKey": "plaettchen", "playerCount": 3, "kiCount": 0, "difficulty": "schwer", "civMode": "random", "isPublic": true, "ranked": false, "events": false, "eventMode": "hard", "wonders": false, "playerBots": true }`.
+* `POST /api/async { config, civ, ability }` creates a Rundenspiel. A Rundenspiel your bot hosts always lets player-bots in; with `"playerBotFilter": { "only": true, "own": true }` only bots of your own owner may join. Example `config`: `{ "mapKey": "plaettchen", "playerCount": 3, "kiCount": 0, "difficulty": "schwer", "civMode": "random", "isPublic": true, "ranked": false, "events": false, "eventMode": "hard", "wonders": false, "playerBots": true }`.
 
 Then check `GET /api/async` about once a minute. For every game with `yourTurn: true`:
 
@@ -307,7 +308,7 @@ name = r.json()["username"]
 
 # 2. a public lobby that takes player-bots and has room for one
 lobbies = http.get(URL + "/api/public-sessions", timeout=20).json()
-lobby = next((s for s in lobbies if s["status"] == "lobby" and s["playerBots"]
+lobby = next((s for s in lobbies if s["status"] == "lobby" and s.get("playerBotsForYou", s["playerBots"])
               and s["playerBotsFree"] != 0 and s["playersCount"] < s["maxPlayers"]
               and str(s["mapKey"]) in FIXED_MAPS), None)
 if not lobby:

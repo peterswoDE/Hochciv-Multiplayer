@@ -9,14 +9,16 @@
  *
  * Bot accounts (utils/bots.js) can be friends: a person asks, the bot's program accepts or
  * declines over the same API (bots never send requests). Inviting a bot friend into a live lobby
- * needs a lobby that takes one more player-bot (sessions.playerBotPolicy); the bot finds the
- * invitation in GET /api/friends or as 'friends:invited' and joins with POST /api/sessions/join.
+ * needs a lobby that takes one more player-bot (sessions.playerBotPolicy) and whose bot filter
+ * lets this bot in (utils/botfilter.js); the bot finds the invitation in GET /api/friends or as
+ * 'friends:invited' and joins with POST /api/sessions/join.
  */
 const { Op } = require('sequelize');
 const { sequelize, User, Game, Friendship } = require('../models');
 const presence = require('./presence');
 const GamePlayers = require('./gameplayers');
 const sessions = require('../sessions');
+const BotFilter = require('./botfilter');
 
 const MAX_FRIENDS = 200;                 // friends and open requests together
 const INVITE_TTL_MS = 15 * 60 * 1000;
@@ -157,12 +159,15 @@ async function invite(user, otherId, joinCode) {
     if (!row) return { error: 'Ihr seid nicht befreundet.' };
     if (!presence.isOnline(otherId)) return { error: 'Dein Freund ist gerade nicht online.' };
     if (s.players.some(p => p.dbUserId === otherId)) return { error: 'Dein Freund ist schon in der Lobby.' };
-    const other = await User.findByPk(otherId, { attributes: ['id', 'accountType'] });
+    const other = await User.findByPk(otherId, { attributes: ['id', 'accountType', 'ownerId'] });
     if (other && other.accountType === 'bot') {
         // the same rule as joining (sessions.joinSession): the host decides about player-bots
         const policy = sessions.playerBotPolicy(s);
         if (!policy.allowed) return { error: 'In dieser Lobby sind keine Spieler-Bots erlaubt.' };
         if (policy.free <= 0) return { error: 'In dieser Lobby ist kein Platz mehr für Spieler-Bots.' };
+        // and which bots (utils/botfilter.js) – friends of the host, not of the one who invites
+        const refused = BotFilter.reason(s, { id: other.id, ownerId: other.ownerId, friend: await BotFilter.isHostFriend(s, other.id) });
+        if (refused) return { error: refused };
     }
     const now = Date.now();
     const recent = (inviteCount.get(user.id) || []).filter(t => now - t < 60000);

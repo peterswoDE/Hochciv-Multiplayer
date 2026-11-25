@@ -5,6 +5,8 @@ const sessions = require('../sessions');
 const serverState = require('../utils/serverState');
 const Settings = require('../utils/settings');
 const rateLimitLib = require('../utils/rateLimit');
+const BotFilter = require('../utils/botfilter');
+const { User } = require('../models');
 
 // Lobbies live in memory – limit how fast one client can create/join them
 const lobbyLimit = rateLimitLib({
@@ -18,8 +20,16 @@ const lobbyLimit = rateLimitLib({
 /** The id of the logged-in bot account, undefined for humans and guests. */
 const botId = req => (req.user && req.user.accountType === 'bot' ? req.user.id : undefined);
 
+/** A bot account's seat: the account, its owner and – for the host's bot filter – whether it is
+ *  friends with the host of `session` (utils/botfilter.js). Nothing for humans and guests. */
+async function botInfo(req, session) {
+    const id = botId(req);
+    if (!id) return {};
+    return { botUserId: id, botOwnerId: req.user.ownerId || null, botFriend: session ? await BotFilter.isHostFriend(session, id) : false };
+}
+
 // ── POST /api/sessions — create a new session ───────────────────────────────
-router.post('/sessions', lobbyLimit, (req, res) => {
+router.post('/sessions', lobbyLimit, async (req, res) => {
     if (serverState.state.maintenanceMode) {
         return res.status(503).json({ error: 'Der Server befindet sich im Wartungsmodus. Es können keine neuen Lobbys erstellt werden.' });
     }
@@ -34,20 +44,25 @@ router.post('/sessions', lobbyLimit, (req, res) => {
     // Only the host's settings; the seed is the server's (a chosen seed means a known map and dice)
     const gameConfig = { ...sessions.cleanHostConfig(config), seed: crypto.randomInt(2 ** 31) };
     // a bot account plays its seat itself (sessions.js playerBotPolicy)
-    const result = sessions.createSession(gameConfig, { ...host, botUserId: botId(req) });
+    const result = sessions.createSession(gameConfig, { ...host, ...(await botInfo(req, null)) });
     if (typeof result === 'string') return res.status(503).json({ error: result });
     res.status(201).json(result);
 });
 
 // ── POST /api/sessions/join — join with code + password ─────────────────────
-router.post('/sessions/join', lobbyLimit, (req, res) => {
+router.post('/sessions/join', lobbyLimit, async (req, res) => {
     const { joinCode, password, player } = req.body || {};
     if (typeof joinCode !== 'string' || typeof password !== 'string' || !joinCode || !password || !player
         || typeof player.name !== 'string' || typeof player.clientId !== 'string' || !player.name || !player.clientId) {
         return res.status(400).json({ error: 'joinCode, password, player.name und player.clientId sind erforderlich.' });
     }
     // the account, for the host's ban list (R-23)
-    const result = sessions.joinSession(joinCode, password, { ...player, botUserId: botId(req), userId: req.user ? req.user.id : undefined });
+    let bot;
+    try { bot = await botInfo(req, sessions.lobbyByCode(joinCode)); } catch (err) {
+        console.error('Bot join', err);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+    const result = sessions.joinSession(joinCode, password, { ...player, ...bot, userId: req.user ? req.user.id : undefined });
     if (typeof result === 'string') {
         return res.status(400).json({ error: result });
     }
@@ -78,8 +93,47 @@ router.post('/sessions/preview', lobbyLimit, (req, res) => {
 });
 
 // ── GET /api/public-sessions — public lobbies and running public games ──────
-router.get('/public-sessions', (req, res) => {
-    res.json(sessions.getPublicSessions());
+// A bot account also learns per lobby whether the host's bot filter lets it in (playerBotsForYou)
+router.get('/public-sessions', async (req, res) => {
+    const id = botId(req);
+    if (!id) return res.json(sessions.getPublicSessions());
+    try {
+        const { Op } = require('sequelize');
+        const { Friendship } = require('../models');
+        const rows = await Friendship.findAll({ where: { status: 'accepted', [Op.or]: [{ userId: id }, { friendId: id }] }, attributes: ['userId', 'friendId'] });
+        const friendIds = new Set(rows.map(r => (r.userId === id ? r.friendId : r.userId)));
+        res.json(sessions.getPublicSessions({ id, ownerId: req.user.ownerId || null, friendIds }));
+    } catch (err) {
+        console.error('Public sessions', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ── GET /api/playerbots — the bot accounts a lobby host can choose from (bot filter) ──
+// Every bot that may play (not banned), with its owner; for a logged-in person also whether it is
+// their own bot and whether they are friends (utils/botfilter.js).
+router.get('/playerbots', async (req, res) => {
+    try {
+        const bots = await User.findAll({
+            where: { accountType: 'bot', isBanned: false },
+            attributes: ['id', 'username', 'ownerId'],
+            order: [['username', 'ASC']],
+            limit: 500,
+        });
+        const ownerIds = [...new Set(bots.map(b => b.ownerId).filter(Boolean))];
+        const owners = new Map((await User.findAll({ where: { id: ownerIds }, attributes: ['id', 'username'] })).map(o => [o.id, o.username]));
+        const me = req.user && req.user.accountType !== 'bot' ? req.user.id : null;
+        const friends = me ? await BotFilter.friendsAmong(me, bots.map(b => b.id)) : new Set();
+        res.json({
+            bots: bots.map(b => ({
+                id: b.id, username: b.username, owner: owners.get(b.ownerId) || null,
+                own: !!me && b.ownerId === me, friend: friends.has(b.id),
+            })),
+        });
+    } catch (err) {
+        console.error('Player bots', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 // ── GET /api/settings — what the admin set for every page: the Discord invite link ──
@@ -129,7 +183,6 @@ router.delete('/sessions/:id', (req, res) => {
 
 // ── GET /api/leaderboard[?type=bot] — global ranking ────────────────────────
 // Humans and bot accounts share the MMR, but each has its own list (utils/bots.js)
-const { User } = require('../models');
 
 router.get('/leaderboard', async (req, res) => {
     try {

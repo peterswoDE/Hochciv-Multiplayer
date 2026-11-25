@@ -13,6 +13,7 @@ const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Resign = require('../utils/resign');
 const CivDraft = require('../utils/civdraft');
+const BotFilter = require('../utils/botfilter');
 
 /* Turn timer (host setting gameConfig.turnTime, in seconds; 0 = no limit). When the time is up
    the turn ends as the player left it (player feedback: the KI must not change what they did in
@@ -319,12 +320,15 @@ module.exports = function registerHandlers(io) {
         });
 
         // ── Start the game (host only) ───────────────────────────────────────
-        on(socket, 'game:start', (_data, ack) => {
+        on(socket, 'game:start', async (_data, ack) => {
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
             if (!isHost())
                 return ack({ error: 'Nur der Host kann das Spiel starten.' });
             if (session.status !== 'lobby')
                 return ack({ error: 'Spiel läuft bereits.' });
+            // the bot filter's "friends of the host" for the host now (utils/botfilter.js)
+            try { await BotFilter.refreshSeats(session); } catch (e) { console.error('[Start] bot friends', e); }
+            if (session.status !== 'lobby') return ack({ error: 'Spiel läuft bereits.' });
             const err = startGame(io, session);
             ack(err ? { error: err } : { ok: true });
         });
@@ -781,6 +785,8 @@ function beginGame(io, session) {
     const bots = sessions.playerBotPolicy(session);
     if (bots.count > 0 && !bots.allowed) return 'In der Lobby sitzen Spieler-Bots, obwohl sie nicht erlaubt sind.';
     if (bots.free < 0) return `In der Lobby sitzen ${bots.count} Spieler-Bots – erlaubt sind ${bots.limit}.`;
+    const refused = BotFilter.refusedSeats(session);
+    if (refused.length) return `Nach deinem Bot-Filter dürfen nicht mitspielen: ${refused.map(p => p.name).join(', ')}. Entferne sie zuerst.`;
     sessions.recordActivity(session.id);
 
     const gc = session.gameConfig;

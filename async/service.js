@@ -25,6 +25,7 @@ const Replay = require('../utils/replay');
 const Summary = require('../utils/summary');
 const Scenes = require('../utils/scenes');
 const Discord = require('../utils/discord');
+const BotFilter = require('../utils/botfilter');
 
 const DAY = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = Number(process.env.ASYNC_TIMEOUT_MS) || 7 * DAY;
@@ -352,7 +353,11 @@ async function applyPenalties(userIds) {
 
 // ── Public API (routes / sockets) ─────────────────────────────────────────────
 
-const userOf = u => ({ id: u.id, username: u.username, isBot: u.accountType === 'bot' });
+const userOf = u => ({ id: u.id, username: u.username, isBot: u.accountType === 'bot', ownerId: u.ownerId || null });
+/** A bot account for the host's bot filter (async/logic.js playerBotRoom), null for people. */
+async function botOf(u) {
+    return u && u.accountType === 'bot' ? { id: u.id, ownerId: u.ownerId || null, friendIds: await BotFilter.friendIdsOf(u.id) } : null;
+}
 
 function generateJoinCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -432,6 +437,8 @@ async function fromLive(hostUser, session, opts) {
         turnDays: L.TURN_DAYS.includes(opts && opts.turnDays) ? opts.turnDays : 3,
         seed: gc.seed || 0, playerCount: seats.length, humanCount: humans, noKi: false, duel: seats.length === 2,
         playerBots: gc.playerBots === true, playerBotLimit: gc.playerBotLimit || null,
+        playerBotFilter: gc.playerBots === true ? gc.playerBotFilter || null : null,
+        ...(hostUser.accountType === 'bot' ? { hostBotOwnerId: hostUser.ownerId || null } : {}),
         startPlayer: 0, fromLive: session.joinCode || true,
     };
     if (gc.customMap) config.customMap = gc.customMap;
@@ -487,10 +494,11 @@ async function info(user, id, code) {
     return L.summary(e.g, user.id);
 }
 
-function join(user, id, body) {
+async function join(user, id, body) {
+    const u = Object.assign(userOf(user), await botOf(user));
     return withGame(id, async g => {
         if (!canSee(g, user.id, body && body.code)) return { error: 'Kein Zugriff auf dieses Spiel.' };
-        const err = L.join(g, userOf(user), body || {});
+        const err = L.join(g, u, body || {});
         return err ? { error: err } : { ok: true };
     });
 }
@@ -512,12 +520,13 @@ function cancel(user, id) {
 async function invite(user, id, username) {
     const target = await User.findOne({ where: sequelize.where(sequelize.fn('lower', sequelize.col('username')), String(username || '').toLowerCase()) });
     if (!target) return { error: `Spieler „${username}" nicht gefunden.` };
+    const bot = await botOf(target);
     const res = await withGame(id, g => {
         if (!g.seats.some(s => s.userId === user.id)) return { error: 'Nur Mitspieler können einladen.' };
         if (!L.freeSeats(g).length) return { error: 'Es ist kein Platz mehr frei.' };
         if (g.seats.some(s => s.userId === target.id)) return { error: `${target.username} spielt schon mit.` };
         if (target.accountType === 'bot') {
-            const why = L.playerBotRoom(g);
+            const why = L.playerBotRoom(g, bot);
             if (why) return { error: why };
         }
         // Every invitation sends an e-mail – keep the number per game small
@@ -557,9 +566,12 @@ function decline(user, id) {
 /** The game list: own games, invitations, open public games. */
 async function list(user) {
     const attrs = { exclude: ['state'] };
+    const bot = await botOf(user);
     const summarize = row => {
         const g = fromRow(row);
         const s = L.summary(g, user.id);
+        // asked by a bot: may it take a seat now (allowed, room under the limit, the host's filter)?
+        if (bot) s.playerBotsForYou = !L.playerBotRoom(g, bot);
         Object.assign(s, {
             waitingFor: g.meta.waitingFor || s.waitingFor,
             yourTurn: (row.waitingIds || []).includes(user.id),
