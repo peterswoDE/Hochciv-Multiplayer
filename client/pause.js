@@ -8,6 +8,8 @@
  *   Rundenspiel: 'game:toAsync' { turnDays } (host, logged in). The server moves the game to a
  *           Rundenspiel (async/service.js fromLive) and sends 'game:toAsync' { asyncId }: players
  *           with an account open it, guests (their empires go to the KI) and spectators are told.
+ *           The server also does this itself when it shuts down (`restart: true`, sockets/game.js
+ *           convertAllOnShutdown): then the page waits until the server is back before it opens it.
  */
 (function () {
     'use strict';
@@ -98,9 +100,23 @@
             const mine = !MP.spectator && MP.user && me && me.userId && !me.resigned;
             MP.paused = null;
             this.draw();
+            const go = () => { location.href = location.pathname + '?async=' + encodeURIComponent(d.asyncId); };
+            if (mine && d.restart) {
+                toast(tx('Der Server startet neu – das Spiel geht als Rundenspiel weiter.'));
+                this.afterRestart(go);
+                return;
+            }
             if (mine) {
                 toast(tx('Das Spiel geht als Rundenspiel weiter.'));
-                setTimeout(() => { location.href = location.pathname + '?async=' + encodeURIComponent(d.asyncId); }, 600);
+                setTimeout(go, 600);
+                return;
+            }
+            if (d.restart) {
+                const t = MP.spectator ? tx('Der Server startet neu. Das Spiel geht als Rundenspiel weiter – hier gibt es nichts mehr zu sehen.')
+                    : me && me.resigned ? tx('Der Server startet neu. Das Spiel geht als Rundenspiel weiter; du hattest aufgegeben – die KI spielt dein Reich weiter.')
+                        : tx('Der Server startet neu. Das Spiel geht als Rundenspiel weiter. Rundenspiele gibt es nur mit Anmeldung – dein Reich spielt jetzt die KI.');
+                modal(tx('Als Rundenspiel fortgesetzt'), `<p id="mp-moved-text">${esc(t)}</p>
+                    <button class="btn wide primary" onclick="location.href = location.pathname">${esc(tx('Zum Hauptmenü'))}</button>`);
                 return;
             }
             const text = MP.spectator ? tx('%s hat das Spiel als Rundenspiel fortgesetzt. Hier gibt es nichts mehr zu sehen.', d.by || tx('Der Host'))
@@ -108,6 +124,20 @@
                     : tx('%s hat das Spiel als Rundenspiel fortgesetzt. Rundenspiele gibt es nur mit Anmeldung – dein Reich spielt jetzt die KI.', d.by || tx('Der Host'));
             modal(tx('Als Rundenspiel fortgesetzt'), `<p id="mp-moved-text">${esc(text)}</p>
                 <button class="btn wide primary" onclick="location.href = location.pathname">${esc(tx('Zum Hauptmenü'))}</button>`);
+        },
+
+        /** After a shutdown: first the old server goes away (the socket drops), then wait until
+            the new one answers /health – opening the Rundenspiel earlier would hit the old one or
+            nothing. Gives up waiting for the drop after 30 s (a server that stays up). */
+        afterRestart: function (go) {
+            let gone = false;
+            const poll = async () => {
+                try { const r = await fetch('/health', { cache: 'no-store' }); if (r.ok) return go(); } catch (e) { /* still down */ }
+                setTimeout(poll, 2000);
+            };
+            const down = () => { if (gone) return; gone = true; setTimeout(poll, 2000); };
+            if (MP.socket && MP.socket.connected) MP.socket.once('disconnect', down); else down();
+            setTimeout(down, 30000);
         },
     };
 

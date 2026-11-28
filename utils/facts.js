@@ -9,7 +9,8 @@
  *     map, ev, wo,                                   // map name, events / wonders on
  *     win: 'military' | 'science' | 'economy' | 'culture' | 'other' | null, shared,
  *     p: [{ civ, ab, kind, lvl, pos, won, dead, s, c, pop, a,
- *           w: [wonder], t: { tech: round } }]       // t and pos are null for 'record'
+ *           w: [wonder], t: { tech: round },        // t and pos are null for 'record'
+ *           av: [tech], nav: [tech] }]                // researchable or not (see availability)
  *   }
  *
  * Computed from the replay (the state after every turn, utils/replay.js) right after a match is
@@ -39,10 +40,40 @@ function victoryOf(over) {
     return 'other';
 }
 
-/** The engine a match was played with ('v110' → HochCiv-v110, 'v108' → HochCiv-v108, 'v107' → HochCiv-v107, anything else → the current one). */
+/** The engine a match was played with ('v112' → HochCiv-v112, 'v110' → HochCiv-v110, 'v108' → HochCiv-v108, 'v107' → HochCiv-v107, anything else → the current one). */
 const engineFor = version => engine.forVersion(version).getEngine();
 
 const isBarbarian = p => p && p.kind === 'barbar';
+
+/**
+ * Which technologies an empire could research (`av`) and which not (`nav`), from p.avail at the
+ * end. Availability is rolled per field and age (ages 0–3, rollAvailability in the engine); a
+ * group counts only once it was rolled – then at least one of its techs is available – so an age
+ * the empire never reached says nothing. A tech it got anyway counts as researchable. Ages
+ * above 3 are always available and not listed. Null for states without p.avail.
+ */
+function availability(E, S, p) {
+    if (!p || !p.avail || typeof p.avail !== 'object') return null;
+    // the engine's own groups (techsIn: in the simplified game two trees instead of four fields)
+    const groups = [];
+    if (typeof E.techsIn === 'function') {
+        for (let f = 0; f < 8; f++) for (let a = 0; a <= 3; a++) {
+            const keys = E.techsIn(f, a, S).map(t => t.k);
+            if (keys.length) groups.push(keys);
+        }
+    } else {
+        const by = {};
+        for (const t of E.techPool ? E.techPool(S) : []) if (t && t.age != null && t.age <= 3) (by[t.f + ':' + t.age] = by[t.f + ':' + t.age] || []).push(t.k);
+        groups.push(...Object.values(by));
+    }
+    const has = k => !!(p.avail[k] || (p.techs && p.techs[k]));
+    const av = [], nav = [];
+    for (const keys of groups) {
+        if (!keys.some(has)) continue;
+        for (const k of keys) (has(k) ? av : nav).push(k);
+    }
+    return { av, nav };
+}
 
 /**
  * Facts from the states of a match (first = start, last = end). The round of a technology is
@@ -74,6 +105,8 @@ function fromStates(states, version) {
         let s = null;
         try { const v = E.victoryScore ? E.victoryScore(S, i) : null; s = v ? v.total : null; } catch (_) { /* older engine */ }
         const cities = S.cities.filter(c => c.owner === i);
+        let avail = null;
+        try { avail = availability(E, S, p); } catch (_) { /* older engine */ }
         players.push({
             civ: p.civ,
             ab: Array.isArray(p.drafted) && p.drafted.length ? p.drafted.slice() : (p.ability || 'basis'),
@@ -88,6 +121,7 @@ function fromStates(states, version) {
             a: S.armies.filter(a => a.owner === i).length,
             w: (S.wonders || []).filter(w => w.owner === i).map(w => w.k),
             t: t[i],
+            av: avail ? avail.av : null, nav: avail ? avail.nav : null,
         });
     });
     return {
@@ -232,4 +266,4 @@ function startBackfill() {
     setTimeout(() => backfill().catch(err => console.error('[Facts] Backfill failed:', err)), 30 * 1000).unref();
 }
 
-module.exports = { fromStates, fromRecord, markPlayerBots, markAccounts, victoryOf, store, storeLater, backfill, startBackfill, onChange, setOnChange: onChange, changed };
+module.exports = { fromStates, availability, fromRecord, markPlayerBots, markAccounts, victoryOf, store, storeLater, backfill, startBackfill, onChange, setOnChange: onChange, changed };

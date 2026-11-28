@@ -34,6 +34,12 @@ module.exports = (sequelize) => {
             allowNull: false,
             defaultValue: false,
         },
+        // a game of the bot ladder (async/ladder.js; data.config.arenaLadder), set at creation
+        arenaLadder: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+        },
         participantIds: {
             type: DataTypes.ARRAY(DataTypes.UUID),
             allowNull: false,
@@ -73,6 +79,20 @@ module.exports = (sequelize) => {
         },
         // the engine state S (null before the game itself starts)
         state: {
+            type: DataTypes.JSONB,
+            allowNull: true,
+        },
+        // statistics over the rounds (utils/stats.js), "since your last turn" (utils/summary.js) and
+        // the scenes of the running game (utils/scenes.js): written once per turn (async/service.js flush)
+        stats: {
+            type: DataTypes.JSONB,
+            allowNull: true,
+        },
+        marks: {
+            type: DataTypes.JSONB,
+            allowNull: true,
+        },
+        scenes: {
             type: DataTypes.JSONB,
             allowNull: true,
         },

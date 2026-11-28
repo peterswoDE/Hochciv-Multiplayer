@@ -52,11 +52,12 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 
 | Path | Purpose |
 |---|---|
-| `HochCiv/`, `HochCiv-v110/`, `HochCiv-v108/`, `HochCiv-v107/` | The game (current version, and the old versions for Rundenspiele started on them) |
+| `HochCiv/`, `HochCiv-v112/`, `HochCiv-v110/`, `HochCiv-v108/`, `HochCiv-v107/` | The game (current version, and the old versions for Rundenspiele started on them) |
 | `mp.js` | Multiplayer client injected into the game: hooks the game's actions, lobby, login, Rundenspiele, HUD, spectators, end screen |
 | `client/i18n.js` | English texts of everything the server adds ([Languages](../development/languages.md)) |
 | `client/chat.js` | In-game chat panel |
 | `client/stats.js`, `client/replay.js` | Post-game statistics, replay viewer (`?replay=<id>`) |
+| `client/endscreen.js` | End screen tabs in Civ IV style: score history, demographics, wonders & cities, chronicle, time-lapse (the map, points and log round by round from the stored replay) |
 | `utils/logtext.js`, `client/logtext.js` | The game log in every language: the server records what each log line is made of (`e.t`: `T()` keys with arguments, literal text), the client puts it together in the player's language |
 | `client/report.js` | Player report: tap a row of the in-game player list – score, victory progress, empire, abilities, tech tree, trend and key moments |
 | `client/scenes.js` | Plays what the others did on the map (also the diff code `utils/scenes.js` uses) |
@@ -69,6 +70,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | `client/friends.js` | Friends list: the menu tab, lobby invitations, friend names for Rundenspiel invitations, the profile button |
 | `client/maps/` | Map browser ("Karten entdecken"): published maps, favorites, reports, picking a map for a lobby or a Rundenspiel |
 | `client/mobile/` | [Mobile layer](../development/mobile-layer.md) |
+| `client/fx.js` | [Map effects](../development/map-effects.md) |
 | `client/account.html`, `account.js` | Account page and admin panel |
 | `client/passkey.js` | Passkey helpers and the wrong-address message |
 | `client/index.html`, `app.js`, `style.css` | Portal page |
@@ -82,7 +84,7 @@ Node.js (Express, Socket.IO, Passport), PostgreSQL through Sequelize. The big pi
 | Path | Served from |
 |---|---|
 | `/` | `public/` (current game with the injected scripts) |
-| `/v110/`, `/v108/`, `/v107/` | `public/<version>/` |
+| `/v112/`, `/v110/`, `/v108/`, `/v107/` | `public/<version>/` |
 | `/client/…` | `client/` |
 | `/api/…` | `routes/` |
 | `/socket.io/…` | Socket.IO (also serves its client script) |

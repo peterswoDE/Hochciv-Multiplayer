@@ -8,7 +8,8 @@
  *
  * A has three Rundenspiele against B, all on A's turn. In the first one the button is hidden
  * while A plays; after A's turn it shows "Nächstes Spiel (2)" and opens another game on A's
- * turn, then "(1)", and after the last game nothing is left. Leaving the game hides it.
+ * turn, then "(1)", and after the last game nothing is left. Leaving the game hides it, and so
+ * does joining a live lobby from the game (an invitation, matchmaking): it is no Rundenspiel.
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -107,6 +108,21 @@ const ok = (cond, name, info) => {
             .then(() => ok(true, 'English: "Next game (2)"'), () => ok(false, 'English: "Next game (2)"'));
         await pb.evaluate(() => ASYNC.close());
         ok(await pb.evaluate(() => document.getElementById('mp-next-game').hidden), 'leaving the game hides the button');
+
+        // back in the game (not B's turn there), then into a live lobby from it: no button there
+        await pb.evaluate(id => ASYNC.open(id), ids[0]);
+        await pb.waitForFunction(() => /Next game \(2\)/.test((document.getElementById('mp-next-game') || {}).textContent || '') && !document.getElementById('mp-next-game').hidden, null, { timeout: 15000 })
+            .then(() => ok(true, 'back in the game: the button again'), () => ok(false, 'back in the game: the button again'));
+        const lobby = await page.evaluate(() => fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: { playerCount: 2, kiCount: 0 }, host: { name: 'Host', clientId: 'nxt-host-cid' } }) }).then(r => r.json()));
+        await page.evaluate(l => new Promise(r => MP.socket.emit('session:connect', { sessionId: l.sessionId, password: l.password, clientId: 'nxt-host-cid' }, r)), lobby);
+        await pb.evaluate(async ([code, pw, name]) => { if (!MP.setMode) await MP.showLobby('open'); await MP.joinWith(code, pw, name); },
+            [lobby.joinCode, lobby.password, ub.name]);
+        await pb.waitForFunction(() => MP.active && MP.lobbyIndex === 1, null, { timeout: 15000 })
+            .then(() => ok(true, 'B joins the live lobby'), () => ok(false, 'B joins the live lobby'));
+        await pb.waitForTimeout(1500);
+        const live = await pb.evaluate(() => ({ asyncId: MP.asyncId, hidden: document.getElementById('mp-next-game').hidden }));
+        ok(live.hidden && !live.asyncId, 'a live lobby: no "next game" button, the Rundenspiel is left', JSON.stringify(live));
         await ca.close();
     } catch (err) {
         ok(false, 'test run', err.stack);

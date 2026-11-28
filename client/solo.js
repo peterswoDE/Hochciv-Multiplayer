@@ -141,6 +141,8 @@
 
     const SOLO = {
         track, flush, compact,
+        /** The game being recorded (its points per round – the end screen's chart, client/endscreen.js). */
+        current: () => get(KEY_CUR),
         /** Finished games waiting on this device (the app's offline copy hands them over). */
         pending: () => queue(),
         /** Games from elsewhere (the app's offline copy) – queued here and sent. */

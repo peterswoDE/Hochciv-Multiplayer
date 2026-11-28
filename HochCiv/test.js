@@ -3571,7 +3571,7 @@ const cityPlace = (S, pi, cap) => within(cap.r, cap.c, 9).find(([r, c]) =>
   const ki = K.players.findIndex(p => p.civ === 'russland');
   eq(growPrice(K, ki, capitalOf(K, ki)), { food: 0, coins: 2 }, 'Kolonisten und Fruchtbarkeit zusammen: keine Nahrung, doppelte Münzen');
   // keine Prüfung der Grundfähigkeit ohne Zivilisation mehr im Quelltext
-  const quelle = ['engine', 'expansion', 'bots', 'ki', 'marathon']
+  const quelle = ['engine', 'expansion', 'bots', 'ki', 'marathon', 'einfach']
     .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8')).join('\n') + uiQuelle();
   eq((quelle.match(/isAbil\([^)]*'basis'\)/g) || []).length, 0, "kein isAbil(…, 'basis') mehr im Quelltext");
 }
@@ -7344,7 +7344,7 @@ for (const n of [2, 3, 4, 5, 6, 7, 8]) {
      die Flaggen direkt aus LANGS, ohne T(). Die Zahl darf sinken, nicht steigen. */
   {
     const norm = x => x.replace(/\s+/g, ' ');
-    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'anim', 'firstgame']
+    const quellen = ['data', 'civs', 'hex', 'tiles', 'engine', 'expansion', 'bots', 'ki', 'marathon', 'einfach', 'anim', 'firstgame']
       .map(n => fs.readFileSync(`${__dirname}/js/${n}.js`, 'utf8'))
       .concat(uiQuelle(), fs.readFileSync(__dirname + '/index.html', 'utf8')).join('\n');
     const heu = norm(quellen);
@@ -8664,6 +8664,180 @@ function kiAbwehrLage(popKI, gross) {
     eq(!!B.over, true, `Aztekenreich gegen Ägypten auf 8 Dreiecken mit Weltwundern endet (${B.over ? B.over.how : 'offen'}, Runde ${B.round})`);
     const C = partie([['deutschland', 'basis'], ['maya', 'basis'], ['usa', 'basis'], ['rom', 'viaappia']], 4, 3333, false);
     eq(!!C.over, true, `Deutschland, Maya, USA, Rom (Via Appia) auf 14 Dreiecken endet (${C.over ? C.over.how : 'offen'}, Runde ${C.round})`);
+  }
+}
+
+/* ============================================ Vereinfachtes Spiel (v113)
+   Anweisung des Autors: 1 gegen 1 gegen die KI auf einer gespiegelten Zufallskarte aus Grasland,
+   Meer und Gebirge; Forschung und Produktion ein Baum, Militär und Spezial der andere (18 + 19
+   Technologien, fünf Kosten anders); keine Zivilisationsfähigkeiten, keine Straßen, kein
+   Wirtschaftssieg. Dazu jeweils die Gegenprobe: dieselben Funktionen ohne S.einfach rechnen wie
+   bisher (die anderen Spielarten bleiben, wie sie waren). */
+{
+  const E = newGame(einfachCfg(4711, 'leicht'));
+  eq([E.einfach, E.duel, E.ev, E.wo, E.players.length], [true, true, null, false, 2], 'vereinfacht: ein Duell ohne Ereignisse und Weltwunder');
+  eq(E.players.map(p => p.kind + ':' + (p.kiLevel || '-')), ['human:-', 'ki:leicht'], 'du gegen die KI, ab Werk leicht');
+  eq(new Set(E.players.map(p => p.civ)).size === 2 && E.players.every(p => CIV_KEYS.includes(p.civ)), true, 'zwei verschiedene Grundreiche');
+  eq([E.players.map(p => abilitiesOf(p).length), E.recipe.mode, E.recipe.players.map(p => p.kind + ':' + (p.kiLevel || '-'))],
+    [[0, 0], 'einfach', ['human:-', 'ki:leicht']],
+    'keine Fähigkeiten; das Rezept trägt Modus und Stufe');
+  eq([E.map.rows.length, E.map.rows[0].length], [10, 16], 'Karte 10 × 16');
+  eq(JSON.stringify(einfachCfg(4711, 'leicht')) === JSON.stringify(einfachCfg(4711, 'leicht')), true, 'derselbe Startwert, derselbe Aufbau');
+
+  // --- die zwei Bäume: je Zeitalter die Leiter, jede Kostenstufe höchstens einmal
+  eq(felderVon(E), ['Forschung & Produktion', 'Militär & Spezial'], 'zwei Bäume');
+  const leiter = f => AGES.map((_, a) => techsIn(f, a, E).map(t => techBase(E, t) + ' ' + t.k).join(', '));
+  eq(leiter(0), ['1 bewaesserung, 2 fischerei, 3 astronomie, 4 schrift, 5 landwirtschaft',
+    '6 papier, 7 segeln, 8 alchemie, 10 universitaet',
+    '11 chemie, 12 biologie, 13 dampfmaschine, 14 wiss_methode, 15 fliessband',
+    '16 verbundwerkstoffe, 17 gruene_revolution, 18 containerlogistik, 19 robotik'], 'Forschung & Produktion: 18 Technologien');
+  eq(leiter(1), ['1 eisenverarbeitung, 2 stadtmauern, 3 demokratie, 4 belagerung, 5 sklaverei',
+    '7 stahl, 8 burgenbau, 9 kartografie, 10 buerokratie',
+    '11 gewehre, 12 panzerschiff, 13 nationalismus, 14 dynamit, 15 maschinengewehr',
+    '16 panzer, 17 luftwaffe, 18 oekologie, 19 raketentechnik, 20 atomwaffen'], 'Militär & Spezial: 19 Technologien');
+  eq([techPool(E).length, EINFACH_TECHS.size, [...EINFACH_TECHS].every(k => TECH_BY_KEY[k])], [37, 37, true], '37 Technologien, alle aus TECHS');
+  eq([0, 1].every(f => AGES.every((_, a) => { const c = techsIn(f, a, E).map(t => techBase(E, t)); return new Set(c).size === c.length; })), true,
+    'je Baum und Zeitalter jede Kostenstufe höchstens einmal');
+  eq(Object.entries(EINFACH_KOSTEN).filter(([k, c]) => ageOfCost(c) !== TECH_BY_KEY[k].age), [], 'die geänderten Kosten bleiben in ihrem Zeitalter');
+  eq(['rad', 'eisenbahn', 'theologie', 'un', 'mathematik', 'buchdruck', 'muehlentechnik', 'kunstduenger', 'navigation', 'taktik']
+    .filter(k => techActive(E, TECH_BY_KEY[k])), [], 'weg: Straßen, Eisenbahn, Wirtschaftssieg, Wald/Fluss, Navigation, Taktik …');
+  eq([techActive(E, SINGULARITY), techCost(E, 0, SINGULARITY)], [true, 120], 'die Singularität gibt es, für 120');
+  eq([techCost(E, 0, TECH_BY_KEY.stadtmauern), techCost(E, 0, TECH_BY_KEY.panzerschiff)], [2, 12], 'Kosten des Modus am Bogen');
+  // Gegenprobe: eine gewöhnliche Partie rechnet wie bisher
+  const N = mk('griechenland');
+  eq([techPool(N).length, felderVon(N) === FIELDS, TECHS.every(t => techFeld(N, t) === t.f && techFeld(null, t) === t.f)], [62, true, true],
+    'ohne S.einfach: 62 Technologien, vier Felder, jedes Feld wie in TECHS');
+  eq(Object.keys(EINFACH_KOSTEN).map(k => techBase(N, TECH_BY_KEY[k])), [2, 15, 2, 5, 13], 'ohne S.einfach: die alten Kosten');
+
+  // --- Würfeln je Baum: verfügbar nur, was es gibt; die erste Technologie eines Zeitalters öffnet das nächste ihres Baums
+  eq(E.players.every(p => Object.keys(p.avail).every(k => EINFACH_TECHS.has(k)) &&
+    [0, 1].every(f => techsIn(f, 0, E).some(t => p.avail[t.k]))), true, 'je Baum mindestens eine Technologie der Antike verfügbar, sonst nichts');
+  {
+    const U = newGame(einfachCfg(4713, 'leicht')), p = U.players[0];
+    const erste = techsIn(0, 0, U).find(t => p.avail[t.k]);
+    p.res.sci = 99;
+    eq(doResearch(U, 0, erste.k), null, `${erste.n} erforscht`);
+    eq([techsIn(0, 1, U).some(t => p.avail[t.k]), techsIn(1, 1, U).some(t => p.avail[t.k])], [true, false],
+      'erste Technologie der Antike in Forschung & Produktion: dessen Mittelalter ist ausgewürfelt, das des anderen Baums nicht');
+    eq(U.log.some(e => /verfügbar in Forschung & Produktion \(Mittelalter\)/.test(e.m)), true, 'das Protokoll nennt den Baum');
+    // Singularität: je Baum eine Technologie der Moderne
+    p.techs.verbundwerkstoffe = true;
+    eq(singularityReady(p, U), false, 'eine Technologie der Moderne in einem Baum reicht nicht');
+    p.techs.panzer = true;
+    eq([singularityReady(p, U), singularityReady(p)], [true, false], 'je Baum eine: erforschbar (mit vier Feldern fehlten noch zwei)');
+    eq(researchable(U, 0).some(t => t.k === 'singularitaet'), true, 'die Singularität steht zur Wahl');
+    p.res.sci = 200;
+    eq([doResearch(U, 0, 'singularitaet'), U.claims.map(c => c.how)], [null, ['Forschungssieg (Singularität)']],
+      'und lässt sich erforschen – der Forschungssieg ist angemeldet');
+  }
+
+  // --- keine Fähigkeiten: Wikinger ohne Gratisarmee und Navigation, Griechenland ohne Rabatt, Russland ohne Taiga
+  {
+    const cfg = einfachCfg(4712, 'mittel');
+    cfg.players[0].civ = 'wikinger'; cfg.players[1].civ = 'griechenland';
+    const W = newGame(cfg);
+    const wi = W.players.findIndex(p => p.civ === 'wikinger'), gi = W.players.findIndex(p => p.civ === 'griechenland');
+    eq([armiesOf(W, wi).length, !!W.players[wi].avail.navigation, techCost(W, gi, TECH_BY_KEY.papier)], [0, false, 6],
+      'Wikinger ohne Gratisarmee und ohne Navigation, Griechenland ohne Rabatt');
+    const L = migrateState(JSON.parse(JSON.stringify(W)));
+    eq([L.einfach, !!L.players[wi].avail.navigation, L.players.map(p => abilitiesOf(p).length)], [true, false, [0, 0]],
+      'gespeichert und geladen: weiter vereinfacht, ohne Fähigkeiten');
+    const cfgR = einfachCfg(4715, 'mittel');
+    cfgR.players[0].civ = 'russland';
+    const R = newGame(cfgR);
+    eq(tileYield(R, 0, 'B')[1], 0, 'Russland ohne Taiga: Gebirge bringt keine Nahrung');
+  }
+
+  // --- kein Wirtschaftssieg, auch mit fast der ganzen Weltbevölkerung (Gegenprobe: das gewöhnliche Duell)
+  {
+    const V = newGame(einfachCfg(4714, 'leicht'));
+    capitalOf(V, 0).pop = 40;
+    checkEconomyRoundEnd(V);
+    eq([V.over, V.claims.length], [null, 0], 'vereinfacht: 40 von 41 Bevölkerung gewinnen nicht');
+    const D = newGame({ seed: 4714, duel: true, players: [{ civ: 'griechenland', kind: 'human' }, { civ: 'england', kind: 'ki' }] });
+    capitalOf(D, 0).pop = 40;
+    checkEconomyRoundEnd(D);
+    eq(D.claims.some(c => /^Wirtschaftssieg/.test(c.how)), true, 'im gewöhnlichen Duell schon');
+  }
+
+  // --- Karte: gespiegelt, drei Geländearten, ein Stück Land, Binnenmeere, faire Hauptstädte
+  {
+    const fehler = [];
+    let meer = 0, berg = 0, binnen = 0, felder = 0, versuche = 0, abstand = [99, 0];
+    for (let seed = 1; seed <= 200; seed++) {
+      const m = einfachKarte(seed * 101);
+      versuche = Math.max(versuche, m.tries);
+      const R = m.rows.length, C = m.rows[0].length, T_ = (r, c) => m.rows[r][c], drin = (r, c) => r >= 0 && c >= 0 && r < R && c < C;
+      const alle = [];
+      for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) alle.push([r, c]);
+      if (alle.some(([r, c]) => !'GMB'.includes(T_(r, c)))) fehler.push(seed + ' Gelände');
+      if (alle.some(([r, c]) => T_(r, c) !== T_(...einfachSpiegel(r, c)))) fehler.push(seed + ' nicht gespiegelt');
+      const gebiete = art => {
+        const seen = new Set(), out = [];
+        for (const [r, c] of alle) {
+          if ((T_(r, c) === 'M') !== (art === 'M') || seen.has(key(r, c))) continue;
+          const g = [], q = [[r, c]]; seen.add(key(r, c));
+          while (q.length) {
+            const [a, b] = q.pop(); g.push([a, b]);
+            for (const [x, y] of neighbors(a, b))
+              if (drin(x, y) && (T_(x, y) === 'M') === (art === 'M') && !seen.has(key(x, y))) { seen.add(key(x, y)); q.push([x, y]); }
+          }
+          out.push(g);
+        }
+        return out;
+      };
+      if (gebiete('L').length !== 1) fehler.push(seed + ' Land in ' + gebiete('L').length + ' Stücken');
+      const inn = gebiete('M').filter(g => !g.some(([r, c]) => r === 0 || c === 0 || r === R - 1 || c === C - 1));
+      if (!inn.length || inn.some(g => g.length > 4)) fehler.push(seed + ' Binnenmeere ' + inn.map(g => g.length));
+      binnen += inn.reduce((n, g) => n + g.length, 0);
+      meer += alle.filter(([r, c]) => T_(r, c) === 'M').length; berg += alle.filter(([r, c]) => T_(r, c) === 'B').length; felder += alle.length;
+      const [a, b] = m.capitals, d = hexDistance(a.r, a.c, b.r, b.c), y = marathonStartYield(m.rows, a.r, a.c, 1);
+      abstand = [Math.min(abstand[0], d), Math.max(abstand[1], d)];
+      if (T_(a.r, a.c) !== 'G' || einfachSpiegel(a.r, a.c).join() !== [b.r, b.c].join()) fehler.push(seed + ' Hauptstädte');
+      if (y.food + y.coins / 2 < EINFACH_START) fehler.push(seed + ' Startertrag');
+      const weg = pathSteps(a.r, a.c, b.r, b.c, (r, c) => drin(r, c) && T_(r, c) !== 'M');
+      if (weg == null || weg > d + 3) fehler.push(seed + ' Umweg ' + weg);
+    }
+    eq(fehler, [], '200 Karten: gespiegelt, nur Grasland/Meer/Gebirge, Land in einem Stück, Binnenmeere bis 4 Felder, Hauptstädte gespiegelt mit Startertrag, kein Umweg über 3');
+    eq([abstand[0] >= EINFACH_ABSTAND[0], abstand[1] <= EINFACH_ABSTAND[1], versuche <= 5], [true, true, true],
+      `Hauptstädte ${abstand.join('–')} auseinander, höchstens ${versuche} Versuche`);
+    const anteil = n => n / felder;
+    eq([anteil(meer) > 0.25 && anteil(meer) < 0.33, anteil(berg) > 0.11 && anteil(berg) < 0.17, binnen / 200 >= 4 && binnen / 200 <= 8], [true, true, true],
+      `Meer ${(100 * anteil(meer)).toFixed(1)} %, Gebirge ${(100 * anteil(berg)).toFixed(1)} %, Binnenmeer ${(binnen / 200).toFixed(1)} Felder je Karte`);
+    eq(JSON.stringify(einfachKarte(777)) === JSON.stringify(einfachKarte(777)), true, 'eine Karte je Startwert');
+  }
+
+  // --- Spieltipps: nur, was hier passt – geprüft am Wortlaut, in beiden Sprachen dieselben Stellen
+  {
+    const auswahl = einfachTipps(), text = i => TIPS[i];
+    const steht = s => auswahl.some(i => text(i).includes(s));
+    eq([auswahl.length >= 8, steht('Belagerungsmaschinen forschen kann'), steht('Bürokratie ist gut'), steht('Straßennetz'),
+      steht('Keramik'), steht('Griechenland'), steht('Wirtschaftssieg'), steht('Taktik')],
+    [true, true, true, false, false, false, false, false], `${auswahl.length} Tipps passen – keiner zu Straßen, Keramik, Zivilisationen, Wirtschaftssieg, Taktik`);
+    setLang('en', { quiet: true });
+    const en = einfachTipps();
+    setLang('de', { quiet: true });
+    eq(en, auswahl, 'auf Englisch dieselben Stellen');
+  }
+
+  // --- KI gegen KI: jede Partie endet mit Militär- oder Forschungssieg, nichts aus dem Grundspiel taucht auf
+  {
+    const enden = [], fremd = [];
+    for (let g = 0; g < 4; g++) {
+      const cfg = einfachCfg(4800 + g, 'mittel');
+      cfg.players[0] = Object.assign({}, cfg.players[0], { kind: 'ki', kiLevel: g % 2 ? 'schwer' : 'leicht' });
+      const S = newGame(cfg);
+      let n = 0;
+      while (!S.over && n++ < 200) {
+        kiTurn(S, S.cur);
+        S.players.forEach(p => Object.keys(p.techs).forEach(k => { if (k !== 'singularitaet' && !EINFACH_TECHS.has(k)) fremd.push(k); }));
+        if (Object.keys(S.roads).length) fremd.push('Straße');
+        if (S.over) break;
+        endTurn(S);
+      }
+      enden.push(S.over ? S.over.how.split(' (')[0] + ' R' + S.round : 'offen');
+    }
+    eq([enden.every(e => /^(Militärsieg|Forschungssieg) R\d+$/.test(e)), fremd], [true, []], `KI gegen KI: ${enden.join(', ')}`);
   }
 }
 

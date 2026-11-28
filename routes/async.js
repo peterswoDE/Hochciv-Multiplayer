@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const service = require('../async/service');
 const serverState = require('../utils/serverState');
+const ladder = require('../async/ladder');
 
 function isAuthenticated(req, res, next) {
     if (req.isAuthenticated && req.isAuthenticated()) return next();
@@ -21,6 +22,8 @@ router.use(require('../utils/rateLimit')({
     standardHeaders: true,
     legacyHeaders: false,
 }));
+// limits per account (utils/account-limits.js): the game list, a bot's other calls
+router.use(require('../utils/account-limits').asyncRoutes);
 
 const send = (res, p) => p.then(r => {
     if (r && r.error) return res.status(400).json(r);
@@ -42,6 +45,9 @@ router.post('/', (req, res) => {
 
 // Look up a game by join code (for "Mit Code beitreten")
 router.get('/code/:code', (req, res) => send(res, service.info(req.user, null, req.params.code)));
+
+// The bot ladder (async/ladder.js): standings and the latest games of a game version
+router.get('/ladder', (req, res) => send(res, ladder.report(req.query.version)));
 
 // Notification preference
 router.post('/notify', (req, res) => send(res, service.setNotifyEmail(req.user, !!(req.body || {}).email)));

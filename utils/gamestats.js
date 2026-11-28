@@ -20,7 +20,9 @@
  *
  * A "seat" is one empire in one match. `seats` picks which seats count (SEATS below): with
  * 'humans' only real people – KI and bots still play in those matches, they are just not counted. A shared win counts as a win for
- * every winner. `detail` (admin) adds the matches per version, the KI levels and the sources.
+ * every winner. `detail` (admin) adds the matches per version, the KI levels, the sources and
+ * per technology the win rate of seats that could research it against those that could not
+ * (`techAvail`, from the facts' av/nav – matches stored before have none until recomputed).
  */
 const { Op } = require('sequelize');
 const { Game } = require('../models');
@@ -153,6 +155,8 @@ function aggregate(all, q, detail) {
     const games = all.filter(x => keepGame(x) && x.f.p.some(keepSeat));
 
     const civs = {}, abil = {}, pos = {}, win = {}, wonders = {}, techs = {};
+    const avail = {};            // admin: win rate with a tech researchable or not (facts av/nav)
+    let seatsWithAvail = 0;
     const sums = { won: { n: 0 }, lost: { n: 0 } };
     const cityHist = {};
     let seats = 0, seatsWithTech = 0, wonWithTech = 0, roundsSum = 0;
@@ -202,6 +206,16 @@ function aggregate(all, q, detail) {
                     if (won) { x.hadWon++; x.roundWon += p.t[k]; }
                 }
             }
+            if (Array.isArray(p.av) && Array.isArray(p.nav)) {
+                seatsWithAvail++;
+                const count = (list, key) => {
+                    for (const k of list) {
+                        const x = (avail[k] = avail[k] || { av: 0, avWon: 0, nav: 0, navWon: 0 });
+                        x[key]++; x[key + 'Won'] += won;
+                    }
+                };
+                count(p.av, 'av'); count(p.nav, 'nav');
+            }
         }
     }
 
@@ -244,6 +258,8 @@ function aggregate(all, q, detail) {
             byVersion: Object.entries(byVer).map(([ver, n]) => ({ ver, games: n })),
             sources: src,
             levels: Object.entries(lvl).map(([k, v]) => ({ kind: k.split(':')[0], lvl: k.split(':')[1], ...v })),
+            // per tech: seats where it was researchable (av) or rolled but not (nav), and their wins
+            techAvail: { seats: seatsWithAvail, list: Object.entries(avail).map(([k, v]) => ({ k, ...v })) },
         };
     }
     return out;

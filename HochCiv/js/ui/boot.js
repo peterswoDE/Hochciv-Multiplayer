@@ -220,6 +220,7 @@ function startGameScreen() {
    Jede Aussage dort ist an der Regelmaschine geprüft (moveCost, buildRoad, tradeRoutes,
    zocStop, arriveAt) – wer eine dieser Regeln ändert, ändert den Text mit. */
 function rulesModal() {
+  if (S && S.einfach) return modal(T('Kurzregeln'), einfachRegelnHtml());   // v113
   modal(T('Kurzregeln'), `
     <p class="sub">${T('Zugablauf')}</p>
     <ol style="font-size:14px;line-height:1.5;padding-left:20px">
@@ -278,6 +279,50 @@ function rulesModal() {
     <p class="rule-field">${T('Sieg')}</p>
     <div class="rule-tech"><span class="c">${techBase(S, SINGULARITY)}</span><b>${SINGULARITY.n}</b>
       <i>${SINGULARITY.e}</i></div>`);
+}
+/* Die Kurzregeln im vereinfachten Spiel (v113): nur, was es dort gibt – Zugablauf, die zwei Siege,
+   Startausgleich zu zweit, Nahrungsgrenze, Bewegung, Machtringe, drei Geländearten, die zwei Bäume
+   mit den Kosten dieses Modus. Keine Straßen, Kontrollzonen, Zivilisationen, Weltwunder, Ereignisse
+   und Spielarten. Die Sätze, die es schon gab, stehen hier wörtlich wie im vollen Regelbogen. */
+function einfachRegelnHtml() {
+  const klein = t => `<p style="font-size:13px;margin:4px 0">${t}</p>`;
+  return `
+    <p class="sub">${T('Zugablauf')}</p>
+    <ol style="font-size:14px;line-height:1.5;padding-left:20px">
+      <li>${T('Einkommen aus allen Feldern rund um deine Städte plus Bevölkerung.')}</li>
+      <li>${T('Macht halbiert sich (aufgerundet).')}</li>
+      <li>${T('Aktionen in beliebiger Reihenfolge, beliebig oft.')}</li>
+      <li>${T('Kampf: Angriff = Macht je Armee, Verteidigung = Bevölkerung (in der Hauptstadt doppelt) + benachbarte Armeen. Zwei Züge in Folge stärker → Stadt erobert.')}</li>
+      <li>${T('Sieg: Singularität · gegnerische Hauptstadt. Die eroberte Hauptstadt beendet das Spiel sofort, die Singularität am Rundenende – erforschen beide sie in derselben Runde, entscheiden Punkte (Bevölkerung + Technologien).')}</li>
+    </ol>
+    <p class="sub">${T('Ressourcen gelten nur für den laufenden Zug – nur Macht bleibt liegen. 2 Münzen zählen als 1 Nahrung oder 1 Wissenschaft.')}</p>
+    <p class="sub">${T('Startausgleich: Wer als Zweiter zieht, bekommt im ersten Zug %s Münzen dazu.', START_BONUS_DUEL)}</p>
+    <p class="sub">${T('Die Nahrungsproduktion darf nicht negativ werden: Wachstum wird blockiert, sobald das Einkommen dadurch unter 0 fiele.')}</p>
+    <p class="sub">${T('Bewegung')}</p>
+    ${klein(T('Jede Armee hat je Zug 3 Bewegungspunkte (mit Panzerschiff 6, mit Luftwaffe 9); ein Schritt aufs Nachbarfeld kostet 1. Armeen ziehen nicht auf Städte und nicht auf andere Armeen. Eine Armee, die in einer Stadt entsteht, muss sie im selben Zug verlassen.'))}
+    <p class="sub">${T('Machtringe auf der Karte')}</p>
+    ${klein(T('Ringe auf der Karte, ein Teilstück je Punkt: in der Farbe des Besitzers seine Verteidigung bzw. sein Machtwert, in fremder Farbe der Angriff bzw. die Flankierer. Überwiegt ein fremder Anteil, läuft die Belagerung bzw. fällt die Armee – bei Gleichstand hält der Verteidiger. Über %s Punkte nur noch als Anteil.', RING_MAX_PUNKTE))}
+    <p class="sub">${T('Geländeerträge je Feld')}</p>
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <tr style="color:var(--ink-soft);font-size:11px"><th align="left">${T('Feld')}</th><th>🔬</th><th>🌾</th><th>🪙</th></tr>
+      ${['G', 'B', 'M'].map(k => TERRAIN[k]).map(t => `<tr style="border-top:1px solid var(--rule)">
+        <td>${t.name}</td>${t.yield.map(n => `<td align="center">${n || '·'}</td>`).join('')}</tr>`).join('')}
+      <tr style="border-top:1px solid var(--rule)"><td>${T('Stadt (je Bevölkerung)')}</td>
+        <td align="center">1</td><td align="center">−1</td><td align="center">1</td></tr>
+    </table>
+    ${klein(T('Ertragstechnologien nennen, was ein Feld bzw. jede Bevölkerung damit insgesamt bringt. Für dasselbe Gelände und denselben Ertrag zählt nur die beste: Mit Papier bringt Grasland 1 Wissenschaft, mit Biologie 2 – auch mit beiden.'))}
+    <p class="sub">${T('Alle Technologien')}</p>
+    <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">${T('Kosten links, Wirkung rechts. Verfügbar wird eine Technologie erst, wenn sie ausgewürfelt ist.')}</p>
+    ${felderVon(S).map((fn, f) => `<p class="rule-field">${fn}</p>` +
+      AGES.map((an, a) => {
+        const list = techsIn(f, a, S);
+        if (!list.length) return '';
+        return `<p class="rule-age">${an}</p>` + list.map(t =>
+          `<div class="rule-tech"><span class="c">${techBase(S, t)}</span><b>${t.n}</b><i>${techEffect(t, S)}</i></div>`).join('');
+      }).join('')).join('')}
+    <p class="rule-field">${T('Sieg')}</p>
+    <div class="rule-tech"><span class="c">${techBase(S, SINGULARITY)}</span><b>${SINGULARITY.n}</b>
+      <i>${SINGULARITY.e}</i></div>`;
 }
 // Eine Zivilisation im Regelbogen: Name, je Fähigkeit ihr Text – experimentelle (v111) mit dem
 // Hinweis, wenn es sie nur mit Weltwundern gibt

@@ -75,6 +75,7 @@ function isSuperAdmin(req, res, next) {
     res.status(403).json({ error: 'Nur für Super-Administratoren' });
 }
 
+router.use('/ladder', require('./ladder-admin'));
 router.use(isAdmin);
 router.use(readOnly);
 

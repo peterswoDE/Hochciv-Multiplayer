@@ -42,6 +42,7 @@ hochladen, vorher `node tools_version.js`.
 | Bevölkerungswachstum | zwei Knöpfe, wenn Verbundwerkstoffe ein Gratis-Wachstum erlaubt: „Kostenlos wachsen" und der bezahlte „Bevölkerungswachstum" (bis v102 „Bevölkerung wachsen"). Für alle Städte auf einmal: **Fähigkeiten**. Je Stadt und Runde einmal bezahlt, mit **Keramik**, seit v89 mit der **Dampfmaschine** und seit v97 mit Russlands **Fruchtbarkeit** je einmal mehr (alle drei: viermal), dazu einmal kostenlos mit Verbundwerkstoffen |
 | Blätter antippen (v89) | Ein Knopf in einem Blatt reagiert erst **0,4 s nach dem Öffnen oder Neuzeichnen** des Blatts. Sonst traf ein Doppeltipp, was nach einer Aktion an die Stelle gerückt war – nach der Freien Forschung etwa „Alle Städte wachsen". Denselben Knopf gleich wieder zu tippen (zweimal „+1 Macht", noch einmal wachsen) geht sofort, „Weiter" im Blatt eines Bot- oder KI-Zugs auch |
 | **Erstes Spiel** (v92, v93) | Der rote Knopf ganz oben im Menü: erst eine Seite (eine Stadt in der Steinzeit, mehrere Wege zum Sieg) mit der Wahl des Wegs, dann eine ganze Partie bis zum Sieg, 1 gegen 1 gegen England, mit **Zielen** statt Erklärtexten und **💡 Tipp anzeigen**, wenn man festhängt. Alles bleibt antippbar; was den Verlauf verlassen würde, wird mit einem Satz abgelehnt. Siehe unten |
+| **Vereinfachtes Spiel** (v113) | Auf derselben Seite, unter der Führung abgesetzt, ohne Unterzeile: eine freie Partie 1 gegen 1 gegen die KI auf einer Zufallskarte nur aus Grasland, Meer und Gebirge – zwei Technologiebäume, keine Fähigkeiten, keine Straßen, kein Wirtschaftssieg. Siehe unten |
 | Kopfzeile (v102) | Links das Zeichen und der Name des Reichs am Zug, darunter Runde und Ereignis der Runde; ein Tipp auf den Namen (▾) öffnet die **Welt**. Rechts fünf Kästchen ohne Beschriftung: **Bevölkerung** (eigene / Welt, darunter ein Balken in der Reichsfarbe; der Strich markiert die Siegschwelle – mit Theologie oder Vereinten Nationen rückt er nach links; ein Tipp öffnet ebenfalls die Welt), Wissenschaft, Nahrung, Münzen, Macht. Sitzen mehrere Menschen am Gerät, pulsiert beim Wechsel einmal das Zeichen – einen Hinweis „… ist am Zug" gibt es nicht mehr |
 | Spielmenü ☰ (v102) | Regeln & Technologien · Protokoll · **Animationen** (Langsam – ab Werk –, Schnell, Keine; die einzige Vorliebe) · Spielstand exportieren · Spiel beenden. Den Bildschirm „Einstellungen" gibt es seit v102 nicht mehr: Ereignisse und Weltwunder wählt man im Aufbau, Kosten zeigen immer, was tatsächlich abgeht, und im Hochformat dreht sich das Spiel immer quer |
 | Große Bildschirme (v103) | Ab 1366 × 720 wächst die ganze Oberfläche mit dem Fenster – Symbole, Schrift, Blätter, ein Faktor nach der knapperen Seite: ein maximiertes Fenster auf 1080p etwa ×1,33, Vollbild ×1,41, 1440p etwa ×1,8. Jedes iPad (auch 1366 × 1024) und jedes Telefon bleibt bei 1, das gedrehte Hochformat ebenso. Die Karte füllt ihre Fläche wie bisher |
@@ -392,6 +393,52 @@ Ist das Ziel erreicht, geht es von selbst weiter, und oben steht ein Satz, warum
 Die Schritte stehen in `js/firstgame.js` (`FG_STEPS`), jeder mit Ziel, Tipp, Schienen und einer
 Musterlösung, mit der `test.js` alle drei Wege bis zum Sieg spielt.
 
+## Vereinfachtes Spiel (v113)
+
+Auf der Seite **Erstes Spiel**, unter den drei Wegen und ihrem Hinweis abgesetzt: **Vereinfachtes
+Spiel** – ohne Unterzeile, nach dem ersten Sieg mit Haken wie die Wege. Keine Führung, sondern eine
+freie Partie, **1 gegen 1 gegen die KI** (von der Seite aus immer Leicht; **Nochmal spielen** am
+Spielende nach einem Sieg eine Stufe schwerer, jedes Mal auf einer neuen Karte). Zwei verschiedene der
+vier Grundreiche werden ausgelost – nur Name, Zeichen und Farbe –, der Startspieler auch; wer als
+Zweiter zieht, bekommt im ersten Zug 4 Münzen dazu. Ohne Ereignisse und Weltwunder. Gespeichert und
+fortgesetzt wie jede Partie.
+
+* **Karte:** 10 × 16, neu erzeugt, **am Mittelpunkt gespiegelt** – beide Seiten haben dasselbe Land.
+  Nur **Grasland, Meer und Gebirge**: Meer am Rand, aber nicht rundum, dazu ein paar kleine
+  **Binnenmeere** (oft auch einzelne Felder), zusammen etwa 29 % Meer; Gebirge als Kämme, etwa 14 %;
+  der Rest Grasland. Alles Land hängt zusammen. Die Hauptstädte stehen fest (keine Legephase),
+  9–12 Felder auseinander, mit genug Ertrag im ersten Zug (bevorzugt gemischt, etwa 3/3/3 oder
+  2/4/2), ohne weiten Umweg über Land.
+* **Keine Zivilisationsfähigkeiten** – auch nicht die Navigation der Wikinger.
+* **Zwei Technologiebäume:** Forschung und Produktion sind **Forschung & Produktion**, Militär und
+  Spezial **Militär & Spezial**. Je Baum und Zeitalter jede Kostenstufe höchstens einmal; gewürfelt,
+  geöffnet und für die Singularität gezählt wird je Baum (die Singularität braucht also je Baum eine
+  Technologie der Moderne). 37 Technologien, mit * die Kosten, die nur hier gelten:
+
+  | | Forschung & Produktion | Militär & Spezial |
+  |---|---|---|
+  | Antike | Bewässerung 1, Fischerei 2, Astronomie 3*, Schrift 4, Landwirtschaft 5 | Eisenverarbeitung 1*, Stadtmauern 2*, Demokratie 3, Belagerungsmaschinen 4, Sklaverei 5 |
+  | Mittelalter | Papier 6, Segeln 7, Alchemie 8, Universitätswesen 10 | Stahl 7, Burgenbau 8, Kartografie 9, Bürokratie 10 |
+  | Industrialisierung | Chemie 11, Biologie 12, Dampfmaschine 13, Wissenschaftliche Methode 14*, Fließband 15 | Gewehre 11, Panzerschiff 12*, Nationalismus 13, Dynamit 14, Maschinengewehr 15 |
+  | Moderne | Verbundwerkstoffe 16, Grüne Revolution 17, Containerlogistik 18, Robotik 19 | Panzer 16, Luftwaffe 17, Ökologie 18, Raketentechnik 19, Atomwaffen 20 |
+
+  Nicht dabei: alles zu Wald, Fluss und Insel, **Rad und Eisenbahn** (also keine Straßen und
+  Handelsrouten), Theologie und Vereinte Nationen, die Weltwunder-Technologien, dazu nach Wahl des
+  Autors Philosophie, Keramik, Gilden, Computertechnik, Gentechnik, Navigation, Taktik,
+  Kundschafterei, Spionage, Internet, Schießpulver, Rittertum, Militärgericht, Kolonialismus und
+  Massenmedien – damit gibt es auch kein Kopieren, keine Kontrollzonen, keine beanspruchten Felder
+  und kein Füttern; übers Meer geht es erst mit dem Panzerschiff.
+* **Sieg:** nur **Militärsieg** (die gegnerische Hauptstadt, sofort) und **Forschungssieg** (die
+  Singularität, 120, am Rundenende). Kein Wirtschaftssieg – die Kopfzeile zeigt die Bevölkerung
+  ohne Strich einer Schwelle.
+* **Oberfläche:** der Technologiebogen in zwei Spalten, die Kurzregeln nur mit dem, was es hier gibt,
+  die Welt und das Blatt **Fähigkeiten** ohne Fähigkeiten (dort bleiben „Alle Städte wachsen" und
+  die Sklaverei), am Spielende nur Spieltipps, die hier passen.
+
+Karte, Aufbau und die passenden Tipps stehen in `js/einfach.js`, die Regeln in `js/data.js`
+(`EINFACH_TECHS`, `EINFACH_KOSTEN`, `EINFACH_BAUM`, `techFeld`, `felderVon`) und an wenigen Stellen in
+`js/engine.js` und `js/ki.js` – jeweils über `S.einfach`, das nur dieser Modus setzt.
+
 ## Tutorial
 
 Das klassische Tutorial (Russland gegen drei Bots, bis v101) ist seit v102 entfallen
@@ -403,6 +450,7 @@ Das klassische Tutorial (Russland gegen drei Bots, bis v101) ist seit v102 entfa
 node test.js     # Regeln gegen die Beispiele aus dem Regelheft
 node smoke.js    # Oberfläche in jsdom durchspielen (braucht: npm install jsdom)
 python3 build_single.py && node check_single.js   # Einzeldatei bauen und in jsdom prüfen
+node tools_gegenprobe.js ../alte-fassung   # v113: ändert sich, was sich nicht ändern soll? (Partien und Bildschirme alt gegen neu)
 node tools_ki.js duell 40 diff=david   # Messreihen mit der KI (siehe Kopf der Datei)
 node tools_ki.js methode 200           # v96: Methode zuerst gegen die Reihenfolge bis v95, gepaart
 node tools_ki.js selbst 400 reiche=4 dreiecke14   # v107: KI gegen KI auf 14 Dreiecken, Siege nach Platz in der Zugfolge
@@ -432,6 +480,7 @@ js/expansion.js       Erweiterungen: Ereignisse, Weltwunder, Barbaren
 js/bots.js            Bot-Züge nach den Bot-Regeln
 js/ki.js              KI-Züge nach den Regeln für Menschen
 js/marathon.js        Marathon: Kartengenerator, Hauptstädte, Draft, Draftwahl der KI; Fähigkeitswahl der Plättchenkarte (v107)
+js/einfach.js         Vereinfachtes Spiel (v113): gespiegelte Zufallskarte, Aufbau der Partie, passende Spieltipps
 js/anim.js            Züge von KI und Bots aufnehmen und in Szenen teilen
 js/firstgame.js       Erstes Spiel: Seite vor der Partie, Karte, Würfel, Englands Drehbuch, Ziele, Tipps, Schienen, Panel
 js/ui/base.js         Oberfläche (seit v102 je Bildschirm eine Datei): Fenster, Blätter, Leiste, Drehung, Speichern

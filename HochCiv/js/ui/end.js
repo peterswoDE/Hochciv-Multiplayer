@@ -64,6 +64,11 @@ function recipeNow(rec) {
 // Plättchenkarten und eigene Karten: dort darf ein Reich doppelt sitzen
 const recipeFrei = rec => isTilePick(rec.mapPick) || (typeof rec.mapPick === 'string' && rec.mapPick.startsWith(MY_MAP_PICK));
 function rematch(harder) {
+  // Vereinfachtes Spiel (v113): eine neue Partie desselben Modus, nach einem Sieg eine Stufe schwerer
+  if (S.einfach) {
+    const alt = recipeKiLevel(S.recipe);
+    return startEinfach(harder ? nextKiLevel(alt) : alt);
+  }
   const rec = recipeOhneBots(recipeNow(JSON.parse(JSON.stringify(S.recipe))));
   const frei = recipeFrei(rec);
   rec.players.forEach((p, i) => {
@@ -130,6 +135,20 @@ function startFromRecipe(rec) {
     ? 'marathon' : (mapForPick(rec.mapPick) || isTilePick(rec.mapPick) ? rec.mapPick : '0');
   beginFromPick(cfg, pick);
 }
+/* Vereinfachtes Spiel (v113, Anweisung des Autors): von der Seite „Erstes Spiel" (fgSeite, dort
+   immer gegen die leichte KI) und mit „Nochmal spielen" (rematch). Jedes Mal eine neue Zufallskarte
+   (einfachCfg, js/einfach.js). Nach dem ersten Sieg trägt der Knopf auf der Seite einen Haken wie
+   die drei Wege – das Gerät merkt es sich (EINFACH_KEY). */
+const EINFACH_KEY = 'hochciv.einfach';
+const einfachGewonnen = () => !!((typeof load === 'function' && load(EINFACH_KEY)) || {}).gewonnen;
+function startEinfach(stufe) {
+  endTutorialPanel();
+  $('sheet').classList.remove('locked');
+  closeModal(); closeSheet();
+  const schnipsel = $('confetti'); if (schnipsel) schnipsel.remove();
+  S = newGame(einfachCfg(Math.floor(Math.random() * 2 ** 31) || 1, stufe || 'leicht'));
+  startGameScreen();
+}
 
 function gameOver() {
   if (S.fg && typeof fgSpielende === 'function') return fgSpielende();   // Erstes Spiel (v92)
@@ -154,12 +173,18 @@ function gameOver() {
      im Spielstand gemerkt: gameOver() wird aus mehreren Wegen aufgerufen (Zugende,
      Bot-Fenster, Forschen, ein neu geladener beendeter Spielstand), und ein bei jedem
      Aufruf anderer Tipp sähe wie ein Fehler aus. */
-  if (S.tip == null) { S.tip = Math.floor(Math.random() * TIPS.length); saveGame(); }
+  if (S.tip == null) {
+    // im vereinfachten Spiel (v113) nur Tipps, die dort passen (einfachTipps)
+    const auswahl = S.einfach ? einfachTipps() : null;
+    S.tip = auswahl && auswahl.length ? auswahl[Math.floor(Math.random() * auswahl.length)] : Math.floor(Math.random() * TIPS.length);
+    saveGame();
+  }
   const tipp = `<p class="tip"><b>${T('Tipp')}</b>${esc(TIPS[S.tip % TIPS.length])}</p>`;
   /* Allein gegen Bots: „Nochmal spielen" vor und über dem Weg ins Menü – der häufigere
      Wunsch nach einer Partie ist die nächste Partie. */
   const mensch = soloHuman(S);
   const gewonnen = mensch >= 0 && (o.winners || [w]).includes(mensch);
+  if (S.einfach && gewonnen) store(EINFACH_KEY, { gewonnen: true });   // der Haken auf der Seite (v113)
   let nochmal = '';
   if (mensch >= 0) {
     // Mit KI am Tisch zählt ihre Stufe, sonst der Schwierigkeitsgrad der Bots

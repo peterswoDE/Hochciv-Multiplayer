@@ -10,11 +10,13 @@
    wäre schlimmer als gar keine. */
 function techBoardHTML(S, pi, opts) {
   const plain = !!(opts || {}).plain, readonly = !!(opts || {}).readonly, p = S.players[pi];
-  let grid = '<div class="techgrid">';
+  // Vereinfachtes Spiel (v113): zwei Bäume statt vier Felder (felderVon)
+  const felder = felderVon(S);
+  let grid = `<div class="techgrid${felder.length === 2 ? ' zwei' : ''}">`;
   for (let a = 0; a < 4; a++) {
     grid += `<div class="age-label">${AGES[a]}</div>`;
-    for (let f = 0; f < 4; f++) {
-      grid += `<div class="techcol">${a === 0 ? `<h4>${FIELDS[f]}</h4>` : ''}`;
+    for (let f = 0; f < felder.length; f++) {
+      grid += `<div class="techcol">${a === 0 ? `<h4>${felder[f]}</h4>` : ''}`;
       for (const t of techsIn(f, a, S)) {
         const owned = has(p, t.k), avail = p.avail[t.k] && !owned;
         const cost = techCost(S, pi, t);
@@ -38,7 +40,7 @@ function techBoardHTML(S, pi, opts) {
     }
   }
   grid += '</div>';
-  const sing = singularityReady(p), sc = techCost(S, pi, SINGULARITY);
+  const sing = singularityReady(p, S), sc = techCost(S, pi, SINGULARITY);
   const singAfford = !plain && sing && available(S, pi, 'sci') >= sc && !p.techs.singularitaet;
   const singCan = singAfford && !readonly;
   const singState = p.techs.singularitaet ? 'owned'
@@ -231,7 +233,8 @@ function abilSheet(oben) {
         tu(() => collectIncomeNow(S, pi)), !offen, true);
     }
   });
-  if (!abils.length) notiz(T('Bots haben keine Fähigkeit'));
+  // im vereinfachten Spiel (v113) hat niemand eine – dort steht dazu nichts
+  if (!abils.length && !S.einfach) notiz(T('Bots haben keine Fähigkeit'));
 
   // 2 kostenlose Technologien aus Wundern
   const pick = freePick(p), fp = freePickOptions(S, pi);

@@ -213,6 +213,8 @@ function create(host, opts) {
     if (challenge) config.fixedDice = config.seed;
     // the weekly challenge keeps the classic rules; a draft never has the classic order
     if (challenge) Object.assign(config, { civMode: 'fixed', turnOrder: 'classic' });
+    // a game of the bot ladder (async/ladder.js): only the server sets it, never a request
+    if (opts && opts.arena === true) config.arena = true;
     Object.assign(config, CivDraft.modesOf(config));
     Object.assign(config, { playerCount: total, humanCount: total - ki, noKi: ki === 0 });
     // Player-bots (bot accounts, utils/bots.js) take human seats like players, never the KI's;
@@ -457,6 +459,7 @@ function leave(g, userId) {
     const seat = seatOf(g, userId);
     if (!seat) return 'Du bist nicht in diesem Spiel.';
     if (g.config.challenge) return 'Die Wochen-Challenge kann man nur aufgeben.';
+    if (g.config.arena) return 'Partien der Arena kann man nur aufgeben.';
     if (userId === g.hostUserId) return 'Der Host kann das Spiel nur abbrechen, nicht verlassen.';
     const free = g.status === 'setup' || (g.status === 'playing' && !seat.started);
     if (!free) return 'Nach deinem ersten Zug kannst du das Spiel nicht mehr verlassen.';
@@ -480,6 +483,7 @@ function leave(g, userId) {
 function cancel(g, userId) {
     if (userId !== g.hostUserId) return 'Nur der Host kann das Spiel abbrechen.';
     if (g.config.challenge) return 'Die Wochen-Challenge kann man nur aufgeben.';
+    if (g.config.arena) return 'Partien der Arena kann man nur aufgeben.';
     const others = g.seats.filter(s => s.userId && s.userId !== userId);
     const ok = g.status === 'setup' || (g.status === 'playing' && others.every(s => !s.started));
     if (!ok) return 'Das Spiel läuft schon – abbrechen geht nicht mehr.';
@@ -637,6 +641,25 @@ function finishPlacement(g) {
     startGame(g);
 }
 
+/**
+ * A game of the bot ladder (async/ladder.js): two bot accounts on the tile map, nations and turn
+ * order random. Only the server creates it; both bots start by placing their start tiles.
+ */
+function createLadderGame(a, b, { ranked = false, turnDays = 1 } = {}) {
+    if (!a.isBot || !b.isBot || a.id === b.id) return { error: 'Die Arena braucht zwei verschiedene Spieler-Bots.' };
+    const { g, error } = create(a, {
+        arena: true,
+        config: { mapKey: 'plaettchen', playerCount: 2, kiCount: 0, civMode: 'random',
+            turnOrder: 'random', ranked, isPublic: true, turnDays },
+    });
+    if (error) return { error };
+    g.config.arenaLadder = true;
+    const joinError = join(g, b, {});
+    if (joinError) return { error: joinError };
+    if (g.status !== 'placement') return { error: 'Die Arena braucht eine Plättchenkarte.' };
+    return { g };
+}
+
 /** A human picks a Marathon ability. */
 function draftPick(g, userId, id) {
     if (g.status !== 'draft') return 'Gerade wird nicht gedraftet.';
@@ -702,6 +725,8 @@ function action(g, userId, type, params) {
  * turns, eliminated players. Yields between automatic turns (KI turns can take seconds).
  * `onStep` is called after every automatic step (live broadcast).
  */
+const kiTurnSeconds = require('../utils/metrics').async.kiTurn;     // P1.1: what a KI turn costs
+
 async function drive(g, onStep) {
     const S = g.state;
     if (!S || g.status !== 'playing') return;
@@ -723,11 +748,13 @@ async function drive(g, onStep) {
         if (p.dead) { finishAndAdvance(g); continue; }
         if (!ENG(g).isAutoPlayer(p)) break;         // a human's turn
         await new Promise(resolve => setImmediate(resolve));
+        const t0 = process.hrtime.bigint();
         try {
             ENG(g).autoTurn(S);
         } catch (err) {
             console.error(`[Async] ${p.kind} turn failed in game ${g.id}:`, err);
         }
+        kiTurnSeconds.observe({ kind: String(p.kind || 'ki'), level: String(p.kiLevel || '') }, Number(process.hrtime.bigint() - t0) / 1e9);
         finishAndAdvance(g);
         if (onStep) await onStep();
     }
@@ -914,7 +941,7 @@ function removeUser(g, userId) {
     const seat = seatOf(g, userId);
     if (seat && g.status === 'setup' && userId === g.hostUserId) {
         g.status = 'cancelled';
-    } else if (seat && userId !== g.hostUserId && (g.status === 'setup' || (g.status === 'playing' && !seat.started))) {
+    } else if (seat && !g.config.arena && userId !== g.hostUserId && (g.status === 'setup' || (g.status === 'playing' && !seat.started))) {
         leave(g, userId);
     } else if (seat && g.status === 'playing') {
         replaceSeat(g, seat);
@@ -969,7 +996,7 @@ function summary(g, userId) {
     const S = g.state;
     return {
         id: g.id,
-        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v110/, /v108/, /v107/)
+        engine: engineVersionOf(g),        // the client opens games of an older version in it (/v112/, /v110/, /v108/, /v107/)
         joinCode: g.joinCode,
         status: g.status,
         isHost: g.hostUserId === userId,
@@ -1058,7 +1085,7 @@ function view(g, userId) {
 }
 
 module.exports = {
-    create, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, resign, DELETED_NAME, IN_PREPHASE,
+    create, createLadderGame, join, leave, cancel, place, draftPick, action, drive, timeout, removeUser, resign, DELETED_NAME, IN_PREPHASE,
     civDraftPick, waitingOn, summary, view, freeSeats, playerBotRoom, seatOf, stateIndex, isFree, engineVersionOf, ENG, summaryText,
     MMR_PENALTY, TURN_DAYS,
 };

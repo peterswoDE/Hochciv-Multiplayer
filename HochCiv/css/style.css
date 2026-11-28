@@ -304,6 +304,8 @@ body.blocked .actionbar{pointer-events:none;opacity:.4}
 
 /* Technologiebogen */
 .techgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+/* v113: das vereinfachte Spiel hat zwei Bäume */
+.techgrid.zwei{grid-template-columns:repeat(2,1fr)}
 .techcol h4{margin:0 0 6px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--ink-soft);position:sticky;top:0;background:var(--paper);padding:4px 0}
 .tech{border:1px solid var(--rule);border-radius:7px;padding:6px 7px;margin-bottom:6px;
@@ -674,6 +676,9 @@ body.fg .tut-nav .btn.small{flex:1}
 .fg-auftakt{font-family:var(--serif);font-size:19px;line-height:1.4}
 .fg-seite .fg-wahl{margin:4px 0 12px}
 .fg-seite .hint{margin:0;font-size:13px;color:var(--ink-soft)}
+/* v113: das vereinfachte Spiel, unter der Führung abgesetzt */
+.fg-einfach{border-top:1px solid var(--rule);margin:14px 0 0;padding-top:12px}
+.fg-einfach .btn{margin:0}
 
 /* Technologieliste in den Kurzregeln */
 .rule-field{font-family:var(--serif);font-size:15px;font-weight:600;margin:16px 0 2px}

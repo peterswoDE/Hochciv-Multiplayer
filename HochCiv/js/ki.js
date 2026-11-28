@@ -242,20 +242,22 @@ function kiReachKeys(S, pi, r, c, mp) {
 function kiSingularityTurns(S, pi) {
   const p = S.players[pi];
   if (p.dead) return 99;
+  // je Feld – im vereinfachten Spiel (v113) je Baum
+  const nF = felderVon(S).length;
   if (p.kind === 'bot') {
     // Bots forschen zweimal je Runde auf gut Glück; grob: Zahl der fehlenden Zeitalter
     let miss = 0;
-    for (let f = 0; f < 4; f++) {
+    for (let f = 0; f < nF; f++) {
       let a = -1;
-      for (const t of techPool(S)) if (t.f === f && p.techs[t.k] && t.age > a) a = t.age;
+      for (const t of techPool(S)) if (techFeld(S, t) === f && p.techs[t.k] && t.age > a) a = t.age;
       miss += 3 - a;
     }
     return 2 + miss * 1.2;
   }
   let need = 0;
-  for (let f = 0; f < 4; f++) {
+  for (let f = 0; f < nF; f++) {
     let a = -1;
-    for (const t of techPool(S)) if (t.f === f && p.techs[t.k] && t.age > a) a = t.age;
+    for (const t of techPool(S)) if (techFeld(S, t) === f && p.techs[t.k] && t.age > a) a = t.age;
     for (let age = a + 1; age <= 3; age++) {
       const list = techsIn(f, age, S);
       if (!list.length) continue;
@@ -670,15 +672,16 @@ const KI_AGE_VALUE = [0, 1, 2.3, 3.8, 5.6];
 function kiProgress(S, pi, K) {
   const p = S.players[pi];
   let v = 0, ready = 0;
-  for (let f = 0; f < 4; f++) {
+  const nF = felderVon(S).length;        // im vereinfachten Spiel (v113) zwei Bäume
+  for (let f = 0; f < nF; f++) {
     let a = -1;
-    for (const t of techPool(S)) if (t.f === f && p.techs[t.k] && t.age > a) a = t.age;
+    for (const t of techPool(S)) if (techFeld(S, t) === f && p.techs[t.k] && t.age > a) a = t.age;
     v += KI_AGE_VALUE[a + 1];
     if (a === 3) ready++;
   }
   // späte Partie: Zeitalter zählen mehr, die Singularität rückt näher
   const late = Math.min(1.8, 0.6 + S.round / 10);
-  return K.w.age * v * late + (ready === 4 ? 25 : 0);
+  return K.w.age * v * late + (ready === nF ? 25 : 0);
 }
 /* Wie viel bringt eine Stadt? Ihr Anteil am Einkommen (Umland, das keine andere eigene Stadt
    berührt, und die Bevölkerung) über den Horizont, dazu die Bevölkerung selbst. */
@@ -840,9 +843,10 @@ function kiVictory(S, pi, K) {
   // Marathon (v84): jede eroberte Hauptstadt ist ein Schritt zum Militärsieg
   if (capitalsToWin(S) > 1) v += K.vGame * capitalsTaken(p) / capitalsToWin(S);
   // Wirtschaftssieg: Anteil an der Schwelle, steil zum Ende hin. Geprüft wird am Ende der
-  // Runde (v85); der aktuelle Anteil ist dafür die beste Schätzung.
+  // Runde (v85); der aktuelle Anteil ist dafür die beste Schätzung. Das vereinfachte Spiel
+  // (v113) kennt keinen Wirtschaftssieg.
   const w = worldPop(S);
-  if (w > 0) {
+  if (w > 0 && !S.einfach) {
     const o = victoryOption(S, p);
     const share = popOf(S, pi) / w;
     const q = Math.min(1.2, share / o.frac);

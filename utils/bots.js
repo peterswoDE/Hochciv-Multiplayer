@@ -46,8 +46,11 @@ function newToken() {
  * null if the bot may play now, else why not. `owner` is the bot's owner (or null if it has
  * none any more).
  */
+const SUSPENDED = 'Dieser Bot ist wegen zu vieler Anfragen für eine Stunde gesperrt.';
 function botBlockedReason(bot, owner) {
     if (bot.isBanned) return 'Dieser Bot ist gesperrt.';
+    // too many requests (utils/account-limits.js): an hour
+    if (bot.suspendedUntil && new Date(bot.suspendedUntil).getTime() > Date.now()) return SUSPENDED;
     if (!owner) return 'Dieser Bot hat keinen Besitzer.';
     if (owner.isBanned) return 'Der Besitzer dieses Bots ist gesperrt.';
     if (!canCreateBots(owner)) return 'Der Besitzer dieses Bots darf keine Bots mehr betreiben.';

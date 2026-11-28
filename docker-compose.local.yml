@@ -53,6 +53,8 @@ services:
     image: hochciv-multiplayer-local
     container_name: hochciv-multiplayer-local
     restart: unless-stopped
+    # running live games are saved as Rundenspiele on shutdown (server.js) – give it time
+    stop_grace_period: 60s
     depends_on:
       hochciv-db-setup:
         condition: service_completed_successfully
@@ -81,6 +83,14 @@ services:
       - ASYNC_TIMEOUT_MS=${ASYNC_TIMEOUT_MS:-}
       - ASYNC_REMINDER_MS=${ASYNC_REMINDER_MS:-}
       - ASYNC_SWEEP_MS=${ASYNC_SWEEP_MS:-}
+      - ASYNC_FLUSH_MS=${ASYNC_FLUSH_MS:-}
+      - ASYNC_LIST_CACHE_MS=${ASYNC_LIST_CACHE_MS:-}
+      - USER_CACHE_MS=${USER_CACHE_MS:-}
+      # Limits per account (utils/account-limits.js): ACCOUNT_LIMITS_SCALE=0 switches them off, BOT_SUSPEND_MS shortens a bot's suspension
+      - ACCOUNT_LIMITS_SCALE=${ACCOUNT_LIMITS_SCALE:-}
+      - BOT_SUSPEND_MS=${BOT_SUSPEND_MS:-}
+      # Bot ladder test (tests/ladder): LADDER_TICK_MS=500 – pair every half second instead of every 15
+      - LADDER_TICK_MS=${LADDER_TICK_MS:-}
       # Chat word filter tests (tests/filter/filter.test.js): the first writing timeout (default 5 minutes)
       - CHAT_MUTE_MS=${CHAT_MUTE_MS:-300000}
       # No popup for the terms of use in the browser tests, except tests/terms (TERMS_CHECK=on)
@@ -108,6 +118,7 @@ services:
       - ./maps:/app/maps
       # the game itself (rebuilt into public/ at every start)
       - ./HochCiv:/app/HochCiv
+      - ./HochCiv-v112:/app/HochCiv-v112
       - ./HochCiv-v110:/app/HochCiv-v110
       - ./HochCiv-v108:/app/HochCiv-v108
       - ./HochCiv-v107:/app/HochCiv-v107

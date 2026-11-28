@@ -193,7 +193,7 @@ On a socket: `match:join {}`. Your bot is only matched with players who ticked *
 
 ### The state
 
-`game:start { state, yourIndex, turn }` gives you the whole game, and `state:update { state, … }` gives the new one after every move by anyone, including the KI's turns. Each one is the **complete state**, not a change, so you can always just keep the newest one. The parts a bot needs most:
+`game:start { state, yourIndex, turn }` gives you the whole game, and `state:update { state, … }` gives the new one after every move by anyone, including the KI's turns. Each one is the **complete state**, not a change, so you can always just keep the newest one. Each carries a `rev` (a new one with every update); every 15 s the server sends `state:rev { rev }` – if it differs from the `rev` of your last state, you missed an update: emit `state:request` and the state comes again as `state:update`. The parts a bot needs most:
 
 | Field | What it is |
 |---|---|
@@ -371,6 +371,25 @@ Two things this example leaves out on purpose. It ends the turn without moving, 
 | `session:kicked` | The host or an admin removed your bot, or it was banned. Don't rejoin that lobby. |
 | No action for a long time | Lobbies close after 10 minutes without activity, running live games after 2 hours (paused ones after 8). |
 | You get a new token | Every session of the old token ends at once. Restart the bot with the new token. |
+| A request gets `429`, or an acknowledgement `code: 'rate_limited'` / `'engine_budget'` | Wait `retryAfter` seconds (also in the `Retry-After` header), then go on. Keep running into refusals and the bot is suspended for an hour. |
+| The login gets `403` with `code: 'suspended'` | The bot ran into the limits too often. Wait `retryAfter` seconds; the admins have been told. |
+
+### Limits per account
+
+Besides the limits per socket, each account has its own budget ([details](../reference/security.md#limits)):
+
+| What | Bot | Person |
+|---|---|---|
+| Moves in Rundenspielen (`async:action`, `async:place`, `async:draft`, `async:civdraft`) | 5 a second, 30 at once | the same |
+| Moves in one Rundenspiel, all its players together | 10 a second, 30 at once | the same |
+| Engine time of the bot's moves (the KI turns they set off included) | 10 seconds a minute, 30 at once | – |
+| Game list `GET /api/async` (a `304` doesn't count) | 6 a minute | 30 a minute |
+| Every other Rundenspiel call (REST `/api/async/…` and `async:*` events) | 30 a minute | – |
+| Chat (`async:chat`, `chat:send`) | once in 10 seconds | – |
+| Sockets open at once | 3 | 5 |
+| Rundenspiele of all bots of one owner | 60 running, 5 open lobbies, 20 new an hour | – |
+
+A call over the limit is first held back for up to 2 seconds, then refused. Ask for `GET /api/async` once a minute and when an event says something changed, not in a tight loop; send it with `If-None-Match` (the last `ETag`) – an unchanged answer is a `304` and isn't counted. A bot that keeps sending into refusals is suspended for an hour.
 
 ## Errors
 
@@ -389,8 +408,12 @@ The server answers in German; the game page translates the same texts. The ones 
 | `Spiel läuft nicht.` | The game hasn't started yet or is over |
 | `Unbekannte Aktion: …` / `Ungültiger Parameter: …` | Wrong `type`, or a parameter that isn't a plain value |
 | `Diese Technologie ist nicht erforschbar.` | `research` for a tech your sheet doesn't offer: not available, already known, or the Singularity before a modern tech in every field |
-| `Zu viele Anfragen …` (HTTP 429) | Rate limit: slow down |
-| `Zu viele Anfragen – warte einen Moment.` (socket) | Socket event limit: game moves 30 a second (100 at once), other events 10 a second (40 at once). Wait for each acknowledgement before the next event; a connection that keeps flooding is disconnected |
+| `Zu viele Anfragen …` (HTTP 429) | Rate limit: slow down; with `code: 'rate_limited'` wait `retryAfter` seconds |
+| `Dein Bot hat seine Rechenzeit verbraucht – warte einen Moment.` | `engine_budget`: the bot's moves cost more than 10 seconds of engine time a minute |
+| `Zu viele Verbindungen für dieses Konto.` | `too_many_sockets`: more than 3 sockets at once |
+| `Die Bots dieses Besitzers …` | `too_many_games`: the owner's bots together have 60 running, 5 open or 20 new games in the last hour |
+| `Dieser Bot ist wegen zu vieler Anfragen für eine Stunde gesperrt.` | `suspended`: see above |
+| `Zu viele Anfragen – warte einen Moment.` (socket) | Socket event limit: game moves 30 a second (100 at once), other events 10 a second (40 at once), and the limits per account above. Wait for each acknowledgement before the next event; a connection that keeps flooding is disconnected |
 | `Zu viele falsche Passwörter für diese Lobby. …` | Too many wrong passwords for this lobby: try again in 5 minutes |
 
 Any other refusal of a move comes from the engine and says what is missing, for example `Zu wenig Münzen.`

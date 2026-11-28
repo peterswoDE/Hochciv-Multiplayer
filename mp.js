@@ -4,7 +4,7 @@ const escHtml = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/
 
 /* Older game versions served at /<version>/ for Rundenspiele started on them (GAME_DIRS in
    engine-adapter.js), and the version of this page. */
-const OLD_VERSIONS = ['v110', 'v108', 'v107'];
+const OLD_VERSIONS = ['v112', 'v110', 'v108', 'v107'];
 const APP_VERSION_HERE = typeof APP_VERSION !== 'undefined' ? APP_VERSION : null;
 
 /* Texts in the player's language (client/i18n.js, loaded before this file): TX() for our own
@@ -111,7 +111,7 @@ const MP = {
             this.socket.emit('action', payload, res => {
                 if (res && res.error && payload.type !== 'endTurn') {
                     toast(TXS(res.error));
-                    if (res.state) MP.applyState(res.state);
+                    if (res.state) { MP.applyState(res.state); if (res.rev != null) MP.stateRev = res.rev; }
                 }
                 if (cb) cb(res);
             });
@@ -693,6 +693,7 @@ const MP = {
                 MP.alert('start', '▶ ' + TX('Das Spiel beginnt'));
                 MP.clearScenes();
                 S = data.state;
+                MP.stateRev = data.rev != null ? data.rev : null;
                 MP.playerIndex = data.yourIndex;
                 MP.lastStats = null;
                 MP.lastRecord = null;
@@ -717,6 +718,7 @@ const MP = {
 
             this.socket.on('state:update', data => {
                 if (MP.asyncId) return;
+                if (data.rev != null) MP.stateRev = data.rev;
                 MP.setTurnClock(data.turn);
                 if (typeof PAUSE !== 'undefined') PAUSE.set(data.paused);
                 MP.takeSummary(data.summary);
@@ -725,6 +727,15 @@ const MP = {
                 const hurry = !!(data.turn && data.turn.left != null && data.state && data.state.cur === MP.playerIndex && !MP.isAfk());
                 if (hurry) MP.skipScenes();
                 MP.queueScenes(hurry ? null : data.scenes, data.scenes && data.scenes.from, () => MP.applyState(data.state));
+            });
+
+            // The heartbeat (every 15 s): another rev than our last state – an update was missed,
+            // the server sends the state again (at most every 5 s from here)
+            this.socket.on('state:rev', data => {
+                if (MP.asyncId || !data || data.rev == null || data.rev === MP.stateRev || typeof S === 'undefined' || !S) return;
+                if (Date.now() - (MP._stateAsked || 0) < 5000) return;
+                MP._stateAsked = Date.now();
+                this.socket.emit('state:request', {}, () => { });
             });
 
             // Turn timer: our time was up – the server (KI) has finished the turn
@@ -755,6 +766,7 @@ const MP = {
                 if (MP.asyncId || !data) return;
                 MP.lastRecord = data;
                 if (typeof REPLAY !== 'undefined') REPLAY.addToEndScreen(data);
+                if (typeof ENDSCREEN !== 'undefined') ENDSCREEN.setRecord(data);     // its Zeitraffer tab
             });
 
             this.socket.on('game:resigned', d => {
@@ -1808,6 +1820,7 @@ const MP = {
             this.joinCode = joinCode.toUpperCase();
             this.password = password;
 
+            this.leaveAsync();          // a live lobby: no Rundenspiel open any more
             await this.connect();
 
             this.socket.emit('session:connect', {
@@ -1933,6 +1946,7 @@ const MP = {
             this.sessionId = data.sessionId;
             this.joinCode = joinCode.toUpperCase();
             this.password = password;
+            this.leaveAsync();          // a live lobby: no Rundenspiel open any more
             await this.connect();
             this.socket.emit('session:connect', { sessionId: this.sessionId, clientId: this.getClientId(), password }, ack => {
                 if (ack.error) return toast(TXS(ack.error));
@@ -1944,7 +1958,17 @@ const MP = {
         }
     },
     /** After session:connect: take over the lobby state (players, settings, host, our seat or spectator). */
+    /**
+     * Into a live lobby from an open Rundenspiel (an invitation, a friend's lobby, matchmaking):
+     * leave its view first – before the socket connects, whose reconnect would open it again –
+     * or the page still counts as the Rundenspiel ("next game" button, its updates, no game:start).
+     */
+    leaveAsync: function () {
+        if (this.asyncId) ASYNC.close(true);
+    },
+
     enterSession: function (ack) {
+        this.leaveAsync();
         this.active = true;
         this.spectator = !!ack.spectator;
         this.lobbyIndex = this.spectator ? null : ack.playerIndex;
@@ -2001,6 +2025,7 @@ const MP = {
             this.lobbyIndex = 0; // Host is always 0
             this.gameConfig = config;
 
+            this.leaveAsync();          // a live lobby: no Rundenspiel open any more
             await this.connect();
 
             this.socket.emit('session:connect', {
@@ -2611,26 +2636,38 @@ const patchTurnButton = setInterval(() => {
                     const stop = blockingIssues(S, S.cur);
                     if (stop.length) return toast(stop[0]);
                 }
+                // Once per turn (round:player of this game): sent – further taps wait for the server
+                // and send nothing (a second endTurn could end the next turn, once the KI turns
+                // in between have come back round). A click on the bar while the dialog is open
+                // is no confirmation, only the dialog's own "Zug beenden" is.
+                const key = (MP.asyncId || MP.joinCode || '') + ':' + S.round + ':' + S.cur;
+                if (MP.endTurnSent === key) return toast(TX('Warte auf Server...'));
+                if ($('end-ok') && $('overlay').classList.contains('show')) return;
                 // Ask once per turn, as the game does (turns.js endHumanTurn). Since v109 a dialog
                 // ("Zug beenden?": what is left and what it could still buy, open free actions);
                 // its "Zug beenden" comes back here. Older versions: a toast, tap again.
                 const warn = pendingWarnings(S, S.cur);
                 const rest = typeof unspent === 'function' && typeof endTurnAsk === 'function' && !ui.fg
                     ? unspent(S, S.cur) : { kaufbar: [], frei: [] };
-                if ((warn.length || rest.kaufbar.length || rest.frei.length) && !ui.confirmedEnd) {
-                    ui.confirmedEnd = true;
-                    if (typeof endTurnAsk !== 'function') return toast(warn[0] + ' ' + TX('Nochmal tippen zum Bestätigen.'));
+                if ((warn.length || rest.kaufbar.length || rest.frei.length) && MP.endConfirmed !== key) {
+                    if (typeof endTurnAsk !== 'function') {
+                        MP.endConfirmed = key;
+                        return toast(warn[0] + ' ' + TX('Nochmal tippen zum Bestätigen.'));
+                    }
                     endTurnAsk(warn, rest);
                     const ok = $('end-ok');
-                    if (ok) ok.onclick = () => aEnd.onclick();
+                    if (ok) ok.onclick = () => { MP.endConfirmed = key; closeModal(); aEnd.onclick(); };
                     return;
                 }
                 if ($('end-ok') && $('overlay').classList.contains('show')) closeModal();
                 ui.confirmedEnd = false; ui.army = null; ui.sel = null; ui.mode = null;
                 closeSheet();
 
-                MP.sendAction({ type: 'endTurn' }, res => {
-                    if (res && res.error && !MP.asyncId) toast(TXS(res.error));
+                MP.endTurnSent = key;
+                MP.sendAction({ type: 'endTurn', params: { round: S.round } }, res => {
+                    if (!res || !res.error) return;
+                    if (MP.endTurnSent === key) MP.endTurnSent = null;     // refused: may try again
+                    if (!MP.asyncId && res.error !== 'Dieser Zug ist schon beendet.') toast(TXS(res.error));
                 });
                 toast(TX('Warte auf Server...'));
             } else {
@@ -2829,7 +2866,7 @@ const ASYNC = {
         else if (g.status === 'finished') info = TX('Gewonnen: %s', (g.winners || []).map(this.esc).join(', ') || '—');
         else if (g.resigned) info = TX('Aufgegeben');
         else if (g.replaced) info = TX('Von der KI übernommen');
-        else if (g.waitingFor) info = TX('Wartet auf %s', this.esc(TXS(g.waitingFor)));
+        else if (g.waitingFor) info = TX('Wartet auf %s', this.esc(HC_I18N.label(g.waitingFor)));
         const member = g.mySlot != null;
         // a game to join shows all its settings (as the live lobbies, MP.traitsHtml)
         const joinable = !member && g.freeSeats && g.freeSeats.length;
@@ -3266,12 +3303,13 @@ const ASYNC = {
         this.apply(view);
     },
 
-    /** Leave the game view (the game itself goes on). */
-    close: function () {
+    /** Leave the game view (the game itself goes on). `stay`: on this page (into a live lobby). */
+    close: function (stay) {
         if (MP.socket && MP.asyncId) MP.socket.emit('async:close', {});
         MP.clearScenes();
         MP.asyncId = null;
         MP.nextIds = [];
+        MP._nextAt = 0;                 // the list is gone: the next game opened asks again at once
         MP.drawNextGame();
         MP.active = false;
         MP.spectator = false;
@@ -3281,7 +3319,7 @@ const ASYNC = {
         const credBox = $('mp-cred-box');
         if (credBox) credBox.textContent = '';
         // older versions are only there for Rundenspiele started on them – afterwards back to the current game
-        if (OLD_VERSIONS.includes(APP_VERSION_HERE)) { location.href = '/'; return; }
+        if (!stay && OLD_VERSIONS.includes(APP_VERSION_HERE)) { location.href = '/'; return; }
     },
 
     apply: function (view) {
@@ -3289,10 +3327,16 @@ const ASYNC = {
         this.view = view;
         MP.lastStats = view.stats || null;            // a finished game: its statistics (client/stats.js)
         MP.lastRecord = view.record || null;          // … and its stored match with the replay (client/replay.js)
+        // the end screen is already up (the own last move ended the game on this device before the
+        // server's finished view came): give it the statistics and the match now, not on the next open
+        if (typeof ENDSCREEN !== 'undefined' && $('hce-panel')) {
+            if (view.stats && !ENDSCREEN.stats) ENDSCREEN.add(view.stats);
+            if (view.record) ENDSCREEN.setRecord(view.record);
+        }
         MP.players = view.seats.map(s => ({ index: s.slot, name: s.name, civ: s.civ, userId: s.replaced ? null : s.userId, isBot: s.kind === 'bot' || (s.kind === 'ki' && !s.replaced), resigned: !!s.resigned }));
         if (view.state && view.state.over) MP.translateOver(view.state.over);
         const toastEl = document.querySelector('.mp-waiting-toast');
-        if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', TXS(view.waitingFor)) : TX('Warte auf deinen Zug...');
+        if (toastEl) toastEl.textContent = MP.spectator ? TX('Du schaust zu') : view.waitingFor ? TX('Warte auf %s …', HC_I18N.label(view.waitingFor)) : TX('Warte auf deinen Zug...');
 
         if (view.status === 'cancelled') {
             toast(TX('Das Rundenspiel wurde abgebrochen.'));
@@ -3368,7 +3412,7 @@ const ASYNC = {
             <p><b>${this.mapName(c.mapKey, c)}</b> · ${MP.civModeLabel(c)} · ${ASYNC.countText(c)}${c.ranked ? ' · 🔥 ' + TX('Gewertet') : ''}${view.engine ? ' · ' + this.esc(view.engine) : ''}</p>
             ${this.seatsHtml(view.seats, view.mySlot)}
             <p>${text}</p>
-            ${view.waitingFor ? `<p class="sub">${TX('Wartet auf: %s', this.esc(TXS(view.waitingFor)))}</p>` : ''}
+            ${view.waitingFor ? `<p class="sub">${TX('Wartet auf: %s', this.esc(HC_I18N.label(view.waitingFor)))}</p>` : ''}
             ${view.freeSeats.length ? `<button class="btn wide" onclick="ASYNC.showInvite('${view.id}', '${view.joinCode}')">${TX('Mitspieler einladen (Code %s)', view.joinCode)}</button>` : ''}
             <button class="btn wide primary" onclick="ASYNC.close(); show('screen-menu'); ASYNC.showList()">${TX('Zur Liste')}</button>
             ${view.status === 'setup' && host ? `<button class="btn wide ghost" onclick="ASYNC.cancel('${view.id}')">${TX('Spiel abbrechen')}</button>` : ''}
@@ -3415,20 +3459,31 @@ MP.drawLegalFooter = function () {
         ${link('/nutzungsbedingungen.html', TX('Nutzungsbedingungen'))} |
         ${link('/impressum.html', TX('Impressum'))}${MP.discordInvite ? ' | ' + link(escHtml(MP.discordInvite), 'Discord') : ''}`;
 };
-/* The Discord invite link the admin set (GET /api/settings, utils/settings.js): a button in the
-   main menu next to Statistiken and Rangliste, and a link in the footer. Not in the Discord
-   Activity – the players are in Discord already, and links there need the SDK to open. */
+/* Site settings control the Arena entry point and the Discord invite. The invite is only shown
+   outside the Discord Activity, where the players are already in Discord. */
 MP.IN_ACTIVITY = new URLSearchParams(location.search).has('frame_id') || /\.discordsays\.com$/.test(location.hostname);
-MP.loadDiscordInvite = async function () {
-    if (this.IN_ACTIVITY) return;
+MP.loadSiteSettings = async function () {
+    let site = {};
     try {
-        const r = await fetch(`${this.serverUrl}/api/settings`);
-        this.discordInvite = r.ok ? ((await r.json()).discordInvite || null) : null;
-    } catch (_) {
-        this.discordInvite = null;
-    }
+        const r = await fetch(`${this.serverUrl}/api/settings`, { cache: 'no-cache' });
+        if (r.ok) site = await r.json();
+    } catch (_) { /* keep the default navigation */ }
+    this.ladderPlacement = site.ladderPlacement === 'main-menu' ? 'main-menu' : 'leaderboard';
+    this.drawLadderButton();
+    if (this.IN_ACTIVITY) return;
+    this.discordInvite = site.discordInvite || null;
     this.drawDiscordButton();
     this.drawLegalFooter();
+};
+MP.drawLadderButton = function () {
+    const ranking = $('mp-ranking-btn');
+    if (!ranking || this.ladderPlacement !== 'main-menu') return;
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.id = 'mp-bot-ladder-btn';
+    btn.textContent = TX('Arena');
+    btn.onclick = () => RANKING.openLadder();
+    ranking.after(btn);
 };
 MP.drawDiscordButton = function () {
     let btn = $('mp-discord-btn');
@@ -3479,6 +3534,7 @@ MP.applyLang = function () {
     set('mp-live-btn', TX('Multiplayer'));
     set('mp-overall-btn', TX('Statistiken'));
     set('mp-ranking-btn', '🏆 ' + TX('Rangliste'));
+    set('mp-bot-ladder-btn', TX('Arena'));
     if ($('mp-discord-btn')) this.drawDiscordButton();
     set('mp-maps-btn', TX('Karten entdecken'));
     set('mp-players-title', TX('Spieler'));
@@ -3534,7 +3590,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     MP.arrangeMenu();
     MP.applyLang();
-    MP.loadDiscordInvite();
+    MP.siteSettingsReady = MP.loadSiteSettings();
     // Tap the code box in the HUD to go back to the list (the game goes on)
     const cred = $('mp-cred-wrapper');
     if (cred) cred.addEventListener('click', () => {

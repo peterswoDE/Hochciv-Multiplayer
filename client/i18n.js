@@ -9,6 +9,8 @@
  *   HC_I18N.t(de, ...args)  – our own texts; %s placeholders in order, like the game's T()
  *   HC_I18N.tr(msg)         – a message from the server: exact key, or a key with %s whose
  *                             pattern matches (numbers and names in the message stay)
+ *   HC_I18N.label(msg)      – like tr(), for a server text that may also be just names
+ *                             ("Anna, Bert" or "2 Mitspieler"): names are not reported missing
  *   HC_I18N.apply(root)     – the fixed texts of a page (text nodes, placeholder, title)
  *   HC_I18N.lang(), .locale(), .missing()
  *
@@ -137,9 +139,37 @@
         'Die Challenge startet gerade schon.': 'The challenge is starting already.',
         // seasons, leaderboard, badges (client/ranking.js, client/profile.js)
         'Rangliste': 'Leaderboard',
+        'Arena': 'Arena',
         'Discord-Server': 'Discord server',
         'Tritt unserem Discord-Server bei: Mitspieler finden, Neuigkeiten, Feedback': 'Join our Discord server: find players, news, feedback',
         'Rangliste und Saison': 'Leaderboard and season',
+        // The correspondence arena (async/ladder.js; client/ranking.js, account.js, admin.html)
+        'An der Arena für Rundenspiele teilnehmen': 'Join the turn-based arena',
+        'Spieler-Bots, die ihr Besitzer angemeldet hat, spielen automatisch Rundenspiele gegeneinander, zu zweit auf der Plättchenkarte.': 'Player bots opted in by their owner play turn-based games against each other automatically, one on one on the tile map.',
+        'Nach dem Speichern startet die aktive Arena automatisch Partien zwischen verfügbaren, angemeldeten Bots. Bei einer Pause laufen begonnene Partien weiter.': 'After saving, the active arena automatically starts games between available, opted-in bots. Pausing lets games already underway continue.',
+        'Gespeicherter Status': 'Saved status',
+        'Paarungsintervall (Sekunden)': 'Pairing interval (seconds)',
+        'Letzte Partien (Anzahl)': 'Recent games to show',
+        'Position der Arena': 'Arena location',
+        'Hauptmenü': 'Main menu',
+        'Aktiv': 'Active',
+        'Inaktiv': 'Inactive',
+        'Auf „Speichern“ klicken, um die Änderungen zu übernehmen.': 'Click Save to apply the changes.',
+        'Angemeldet %s · Paarungsbereit %s · Laufende Partien %s · Letzte Prüfung %s': 'Opted in %s · Available %s · Games running %s · Last check %s',
+        'seit Serverstart keine': 'none since server start',
+        'Status der Arena konnte nicht geladen werden.': 'Could not load arena status.',
+        'Einstellungen der Arena konnten nicht geladen werden.': 'Could not load arena settings.',
+        'Tage pro Zug': 'Days per turn',
+        'Direkte Wiederholung vermeiden': 'Avoid immediate rematches',
+        'Partien desselben Besitzers werten': 'Rate games between bots of the same owner',
+        'Spielversion': 'Game version',
+        'S–U–N': 'W–D–L',
+        'Punktequote': 'Score rate',
+        'Partie': 'Game',
+        'Wertung': 'Rating',
+        'Unentschieden': 'Draw',
+        'Für diese Version gibt es noch keine Arena-Partien.': 'No arena games for this version yet.',
+        'Partien der Arena kann man nur aufgeben.': 'Arena games can only be resigned.',
         'Saison %s': 'Season %s',
         'läuft': 'running',
         'Abgeschlossen am %s.': 'Closed on %s.',
@@ -489,6 +519,8 @@
         'Münzen je Runde': 'Coins per round',
         'Als Tabelle': 'As a table',
         'Tabelle ausblenden': 'Hide the table',
+        'Anteile je Runde': 'Share per round',
+        'Keine Werte': 'No values',
         'Am Ende': 'At the end',
         'Städte': 'Cities',
         'Bevölkerung': 'Population',
@@ -496,6 +528,35 @@
         'Armeen': 'Armies',
         'Wichtige Momente': 'Key moments',
         'Keine besonderen Ereignisse.': 'Nothing special happened.',
+        // the end screen's tabs (client/endscreen.js)
+        'Punkteverlauf': 'Score history',
+        'Demografie': 'Demographics',
+        'Wunder & Städte': 'Wonders & cities',
+        'Chronik': 'Chronicle',
+        'Zeitraffer': 'Time-lapse',
+        'Die Wiederholung wird geladen …': 'Loading the replay…',
+        'Das Spiel wird gespeichert …': 'Saving the game…',
+        'Ende (Runde %s)': 'End (round %s)',
+        'Das lässt sich für dieses Spiel nicht anzeigen.': 'This cannot be shown for this game.',
+        'Die Statistik wird geladen …': 'Loading the statistics …',
+        'Größte Stadt': 'Largest city',
+        'Demografie: %s': 'Demographics: %s',
+        'Wert': 'Value',
+        'Rang': 'Rank',
+        'Bester': 'Best',
+        'Schnitt': 'Average',
+        'Schlechtester': 'Worst',
+        'Verglichen mit den %s Reichen, die bis zum Ende im Spiel waren.': 'Compared with the %s empires that were in the game until the end.',
+        'Hauptstadt': 'Capital',
+        'Stadt': 'City',
+        'Erbaut von': 'Built by',
+        'Stadtgröße': 'City size',
+        'In diesem Spiel wurde kein Weltwunder gebaut.': 'No world wonder was built in this game.',
+        'Die größten Städte': 'The largest cities',
+        'Einwohner': 'Population',
+        ' und ': ' and ',
+        '%s gewinnen gemeinsam.': '%s win together.',
+        '%s gewinnt.': '%s wins.',
         '%s baut %s.': '%s builds %s.',
         '%s erobert eine Stadt von %s.': '%s conquers a city of %s.',
         '%s erobert %s Städte von %s.': '%s conquers %s cities of %s.',
@@ -604,6 +665,10 @@
         'Nur der Host kann das Spiel als Rundenspiel fortsetzen.': 'Only the host can continue the game as a turn-based game.',
         'Die KI zieht gerade – versuche es gleich noch einmal.': 'The AI is moving right now – try again in a moment.',
         'Das Spiel konnte nicht umgewandelt werden.': 'The game could not be converted.',
+        'Der Server startet neu – das Spiel geht als Rundenspiel weiter.': 'The server is restarting – the game goes on as a turn-based game.',
+        'Der Server startet neu. Das Spiel geht als Rundenspiel weiter – hier gibt es nichts mehr zu sehen.': 'The server is restarting. The game goes on as a turn-based game – there is nothing more to see here.',
+        'Der Server startet neu. Das Spiel geht als Rundenspiel weiter; du hattest aufgegeben – die KI spielt dein Reich weiter.': 'The server is restarting. The game goes on as a turn-based game; you had resigned – the AI plays your empire on.',
+        'Der Server startet neu. Das Spiel geht als Rundenspiel weiter. Rundenspiele gibt es nur mit Anmeldung – dein Reich spielt jetzt die KI.': 'The server is restarting. The game goes on as a turn-based game. Turn-based games need an account – the AI plays your empire now.',
         'Du spielst in diesem Spiel nicht mit.': 'You are not playing in this game.',
         // lobby presets (F25, client/presets.js)
         'Vorlagen': 'Presets',
@@ -1069,6 +1134,14 @@
         'von %s': 'by %s',
         'Nachricht:': 'Message:',
         'Grund:': 'Reason:',
+        'Züge': 'Moves',
+        'Spielliste': 'Game list',
+        'Anfragen': 'Requests',
+        'Rechenzeit': 'Engine time',
+        'Verbindungen': 'Connections',
+        'Limits': 'Limits',
+        'Besitzer:': 'Owner:',
+        'Bot für eine Stunde gesperrt (bis %s): zu viele Anfragen.': 'Bot suspended for an hour (until %s): too many requests.',
         'Notiz (freiwillig)': 'Note (optional)',
         'Konto sperren': 'Ban account',
         'Gefunden:': 'Found:',
@@ -1299,6 +1372,12 @@
         'Token fehlt.': 'Token missing.',
         'Ungültiges Bot-Token.': 'Invalid bot token.',
         'Dieser Bot ist gesperrt.': 'This bot is banned.',
+        'Dieser Bot ist wegen zu vieler Anfragen für eine Stunde gesperrt.': 'This bot is suspended for an hour for too many requests.',
+        'Dein Bot hat seine Rechenzeit verbraucht – warte einen Moment.': 'Your bot has used up its engine time – wait a moment.',
+        'Zu viele Verbindungen für dieses Konto.': 'Too many connections for this account.',
+        'Die Bots dieses Besitzers spielen schon %s Rundenspiele.': "This owner's bots already play %s turn-based games.",
+        'Die Bots dieses Besitzers haben schon %s offene Rundenspiele.': "This owner's bots already have %s open turn-based games.",
+        'Die Bots dieses Besitzers haben in der letzten Stunde schon %s Rundenspiele eröffnet.': "This owner's bots already opened %s turn-based games in the last hour.",
         'Dieser Bot hat keinen Besitzer.': 'This bot has no owner.',
         'Der Besitzer dieses Bots ist gesperrt.': 'The owner of this bot is banned.',
         'Der Besitzer dieses Bots darf keine Bots mehr betreiben.': 'The owner of this bot may no longer run bots.',
@@ -1375,6 +1454,7 @@
         'Spielstatus fehlt.': 'Game state missing.',
         'Ungültige Aktion.': 'Invalid action.',
         'Du bist nicht am Zug.': 'It is not your turn.',
+        'Dieser Zug ist schon beendet.': 'This turn has already ended.',
         'Falscher Status': 'Wrong status',
         'Kein Startplatz für dich reserviert.': 'No starting seat reserved for you.',
         'Du hast dein Startplättchen bereits platziert.': 'You have already placed your starting tile.',
@@ -1630,6 +1710,12 @@
         'Stufe': 'Level',
         'Rohdaten exportieren (JSON)': 'Export raw data (JSON)',
         'Neu berechnen': 'Recompute',
+        'Technologien: forschbar oder nicht': 'Technologies: researchable or not',
+        'Siegquote der Plätze, denen eine Technologie verfügbar war, gegen die, bei denen sie im Wurf für ihr Feld und Zeitalter nicht verfügbar wurde. Zeitalter, die ein Reich nie erreicht hat, zählen nicht. Aus %s Plätzen; ältere Partien erst nach „Neu berechnen“.': 'Win rate of the seats a technology was available to, against those whose roll for its field and age left it out. Ages an empire never reached do not count. From %s seats; older matches only after "Recompute".',
+        'Siegquote forschbar': 'Win rate researchable',
+        'Siegquote nicht forschbar': 'Win rate not researchable',
+        'Differenz': 'Difference',
+        '%s Plätze': '%s seats',
         'Lädt...': 'Loading...',
         'Gezählt': 'Counted',
         'Nur Menschen': 'Humans only',
@@ -1687,7 +1773,7 @@
     }
 
     /** A message from the server (German) in the player's language; unknown ones stay as they are. */
-    function tr(msg, nested) {
+    function tr(msg, nested, quiet) {
         if (msg == null || lang() === 'de') return msg;
         msg = String(msg);
         const en = lookup(msg);
@@ -1698,7 +1784,7 @@
             // a part may be a message of its own ("Eigene Karte: <engine message>"); names stay
             if (m) return fill(lookup(k), m.slice(1).map(x => (nested ? x : tr(x, true))));
         }
-        if (!nested) missingSet.add(msg);
+        if (!nested && !quiet) missingSet.add(msg);
         return msg;
     }
 
@@ -1724,5 +1810,7 @@
         if (root === document && document.title) { const en = lookup(key(document.title)); if (en != null) document.title = en; }
     }
 
-    window.HC_I18N = { t, tr, apply, lang, locale, missing: () => [...missingSet], EN };
+    const label = msg => tr(msg, false, true);
+
+    window.HC_I18N = { t, tr, label, apply, lang, locale, missing: () => [...missingSet], EN };
 })();

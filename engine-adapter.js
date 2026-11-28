@@ -6,7 +6,7 @@
  * sandbox so they can see each other's globals (TERRAIN, TECHS, neighbors, …).
  *
  * The game ships with this repository (no download): HochCiv/ is the current version,
- * HochCiv-v110/, HochCiv-v108/ and HochCiv-v107/ the versions deployed before it. Every version gets its own sandbox
+ * HochCiv-v112/, HochCiv-v110/, HochCiv-v108/ and HochCiv-v107/ the versions deployed before it. Every version gets its own sandbox
  * (makeAdapter). Live games and new Rundenspiele use the current one; Rundenspiele that were
  * started on an older version keep playing with its rules (forVersion, async/logic.js).
  * This module itself is the adapter of the current version, as before.
@@ -36,6 +36,7 @@ const OPTIONAL_FILES = new Set(['ki.js', 'marathon.js', 'anim.js']);
    (and its folder, scripts/build-public.js, OLD_VERSIONS in mp.js) once none is left. */
 const GAME_DIRS = {
     current: path.resolve(__dirname, 'HochCiv', 'js'),
+    v112: path.resolve(__dirname, 'HochCiv-v112', 'js'),
     v110: path.resolve(__dirname, 'HochCiv-v110', 'js'),
     v108: path.resolve(__dirname, 'HochCiv-v108', 'js'),
     v107: path.resolve(__dirname, 'HochCiv-v107', 'js'),
@@ -338,7 +339,7 @@ function makeAdapter(engineDir, label) {
      */
     const KEY_PARAMS = ['tech', 'mode', 'kind', 'wonder'];
     const COUNT_PARAMS = ['n', 'amount'];
-    const INT_PARAMS = ['r', 'c', 'cityId', 'armyId', 'target'];
+    const INT_PARAMS = ['r', 'c', 'cityId', 'armyId', 'target', 'round'];
     const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     function checkParams(params) {
         for (const [k, v] of Object.entries(params)) {
@@ -471,6 +472,9 @@ function makeAdapter(engineDir, label) {
 
                 // ── Turn ──────────────────────────────────────────────────
                 case 'endTurn': {
+                    // The round the player ended (mp.js): an endTurn sent twice must not end the
+                    // player's next turn, when the KI turns in between have already come back round.
+                    if (params.round != null && params.round !== state.round) return 'Dieser Zug ist schon beendet.';
                     // v80+: an army still standing in a city blocks the end of the turn.
                     if (typeof E.blockingIssues === 'function') {
                         const stop = E.blockingIssues(state, pi);

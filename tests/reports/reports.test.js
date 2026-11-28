@@ -288,7 +288,7 @@ async function rundenspiel(browser, users, sources) {
     const pb = await socketPage(cb), pa = await socketPage(ca), pc = await socketPage(cc);
     const sent = await emit(pb, 'async:chat', { id: created.id, kind: 'text', text: 'Rundenspiel-Beleidigung' });
     ok(sent.ok, 'Rundenspiel: B writes');
-    const msgId = sql(`SELECT data->'chat'->0->>'id' FROM async_games WHERE id = '${created.id}'`);
+    const msgId = sql(`SELECT msg->>'id' FROM async_chat WHERE "gameId" = '${created.id}' ORDER BY id LIMIT 1`);
     const r = await emit(pa, 'async:report', { id: created.id, msgId, reason: 'gemein' });
     ok(r.ok && sql(`SELECT source || '|' || "reportedId" || '|' || reason FROM reports WHERE "sourceId" = '${created.id}'`) === `async|${ub.id}|gemein`,
         'Rundenspiel: a player reports through async:report', JSON.stringify(r));

@@ -16,7 +16,8 @@
 
 ## Sessions and cookies
 
-* Login sessions are stored in PostgreSQL (table `session`) and last 30 days.
+* Login sessions are stored in PostgreSQL (table `session`) and last 30 days from the last visit. The cookie and the stored expiry are renewed at most every 15 minutes, not on every request (`utils/session-cost.js`); Socket.IO reads the session only at the handshake, not on every poll.
+* The logged-in user is kept up to `USER_CACHE_MS` (60 s) between requests. A ban, a role change or any other change of the `users` row – also by hand in `psql` – drops it at once: a trigger announces every change (`hochciv_user_changed`, migration 0008) and the server listens for it. Without that listener nothing is cached.
 * The cookie is `SameSite=Lax`, and `Secure` in production (`NODE_ENV=production`, behind a proxy with `trust proxy`).
 * Changing `SESSION_SECRET` logs everyone out.
 * A socket keeps the login it had when it connected. Whenever the other sessions of an account end – password change, password reset, a password set by an admin, a ban, deleting the account – its open sockets are closed as well (`utils/detachUser.js`), except those of the session that changed the password.
@@ -66,6 +67,20 @@ CORS follows the same rule (`server.js`): only these origins get `Access-Control
 * Lobby passwords (`sessions.js` `checkPassword`): 10 wrong passwords within 10 minutes lock the lobby for 5 minutes for everyone not yet in it – also with the right password, so the lock gives a guesser nothing. Its players and spectators (by their `clientId`) still get back in, and so do the server's own joins (Discord Activity, matchmaking). Passwords are compared in constant time.
 * Single-player games (`utils/solo.js`): at most 200 KB stored per game (a long chart over the rounds keeps every second round until it fits) and 100 games per account and 24 hours; uploads 30 an hour and 150 a day per account. A game over the daily cap gets a `429` and waits on the device.
 * Chat: 5 messages per 10 seconds per sender; word filter with auto-reports.
+* Limits per account (`utils/account-limits.js`): the limits above count per IP, route or socket; these count per account, so several sockets or many bots of one owner don't get round them:
+
+| What | Bot | Person |
+|---|---|---|
+| Moves in Rundenspielen (`async:action`, `async:place`, `async:draft`, `async:civdraft`) | 5 a second, 30 at once | the same |
+| Moves in one Rundenspiel, all its players together | 10 a second, 30 at once | the same |
+| Engine time of the bot's moves (the KI turns they set off included) | 10 seconds a minute, 30 at once | – |
+| Game list `GET /api/async` (a `304` doesn't count) | 6 a minute | 30 a minute |
+| Every other Rundenspiel call (REST `/api/async/…` and `async:*` events) | 30 a minute | – |
+| Chat (`async:chat`, `chat:send`) | once in 10 seconds | – |
+| Sockets open at once | 3 | 5 |
+| Rundenspiele of all bots of one owner | 60 running, 5 open lobbies, 20 new an hour | – |
+
+  An empty bucket first delays the call (when the next token is due within 2 seconds and no other call of the account is waiting), then refuses it: REST with `429`, a `Retry-After` header and `{ error, code: 'rate_limited', retryAfter }`, a socket acknowledgement with the same object. Other codes: `engine_budget`, `too_many_sockets` (the socket gets a `limit` event and is closed), `too_many_games` (`400`), `suspended`. Every refusal is a strike, a strike fades after 20 seconds; a **bot** with 30 strikes is suspended for an hour (`users.suspendedUntil`, migration 0009): its login (`403`, `code: 'suspended'`) and session are refused, its sockets closed, and the admins get a report of kind `limit` with what it ran into. People are delayed and refused, never suspended. The counts live in the server process (one instance); `ACCOUNT_LIMITS_SCALE` scales them, `0` switches them off.
 * At most 500 live lobbies/games and 20 spectators per game.
 
 ## Results and MMR

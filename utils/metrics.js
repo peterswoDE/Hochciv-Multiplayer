@@ -34,6 +34,76 @@ const dbDuration = new client.Histogram({
     registers: [register],
 });
 
+// Rundenspiele (async/service.js): what a move costs – the action, the KI, the save, the broadcast
+const asyncAction = new client.Histogram({
+    name: 'hochciv_async_action_seconds',
+    help: 'Duration of a Rundenspiel action (move, end of turn …) incl. the KI turns it drives',
+    labelNames: ['action'],
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
+    registers: [register],
+});
+const kiTurn = new client.Histogram({
+    name: 'hochciv_ki_turn_seconds',
+    help: 'Duration of one KI/bot turn of the engine',
+    labelNames: ['kind', 'level'],
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+    registers: [register],
+});
+const asyncSave = new client.Histogram({
+    name: 'hochciv_async_save_seconds',
+    help: 'Duration of writing a Rundenspiel row (serialising and UPDATE)',
+    buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+    registers: [register],
+});
+const asyncSaveBytes = new client.Histogram({
+    name: 'hochciv_async_save_bytes',
+    help: 'Size of a written Rundenspiel row (data + state JSON)',
+    buckets: [1e3, 1e4, 5e4, 1e5, 2.5e5, 5e5, 1e6, 2.5e6, 5e6],
+    registers: [register],
+});
+const asyncWrites = new client.Counter({
+    name: 'hochciv_async_writes_total',
+    help: 'Rundenspiel rows written, by reason (delayed, immediate, shutdown, retry)',
+    labelNames: ['reason'],
+    registers: [register],
+});
+const asyncSaveRequests = new client.Counter({
+    name: 'hochciv_async_save_requests_total',
+    help: 'Saves asked for by the service (several are merged into one write)',
+    registers: [register],
+});
+const asyncBroadcasts = new client.Counter({
+    name: 'hochciv_async_broadcasts_total',
+    help: 'Views of a Rundenspiel sent to sockets',
+    registers: [register],
+});
+const asyncBroadcastBytes = new client.Histogram({
+    name: 'hochciv_async_broadcast_bytes',
+    help: 'Size of one view sent to a socket (every 20th is measured)',
+    buckets: [1e3, 1e4, 5e4, 1e5, 2.5e5, 5e5, 1e6, 2.5e6],
+    registers: [register],
+});
+const asyncList = new client.Histogram({
+    name: 'hochciv_async_list_seconds',
+    help: 'Duration of the game list of an account (GET /api/async)',
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+    registers: [register],
+});
+
+/** The figures of the Rundenspiele, used by async/service.js and engine-adapter.js. */
+const async = {
+    action: asyncAction, kiTurn, save: asyncSave, saveBytes: asyncSaveBytes, writes: asyncWrites,
+    saveRequests: asyncSaveRequests, broadcasts: asyncBroadcasts, broadcastBytes: asyncBroadcastBytes, list: asyncList,
+    /** cached and dirty (not yet written) games: `stats()` returns { cached, dirty } */
+    cacheGauge(stats) {
+        new client.Gauge({
+            name: 'hochciv_async_cached_games', help: 'Rundenspiele in memory, by state (cached, dirty)',
+            labelNames: ['state'], registers: [register],
+            collect() { const s = stats(); this.set({ state: 'cached' }, s.cached); this.set({ state: 'dirty' }, s.dirty); },
+        });
+    },
+};
+
 /** The route of an answer: the Express pattern (/api/profile/:id), else a coarse group. */
 function routeOf(req) {
     if (req.route && req.route.path) return (req.baseUrl || '') + req.route.path;
@@ -131,4 +201,4 @@ function serve(port = Number(process.env.METRICS_PORT) || 9464) {
     return server;
 }
 
-module.exports = { register, httpMiddleware, instrumentSequelize, instrumentGame, serve, routeOf };
+module.exports = { register, httpMiddleware, instrumentSequelize, instrumentGame, serve, routeOf, async };

@@ -156,7 +156,7 @@ const emit = (page, ev, data) => page.evaluate(([ev, data]) => new Promise(r => 
         ok(!!asyncId && asyncId === await b.evaluate(() => MP.asyncId), 'A and B land in the same Rundenspiel', asyncId);
         await c.waitForSelector('#mp-moved-text');
         ok(/dein Reich spielt jetzt die KI/.test(await c.$eval('#mp-moved-text', el => el.textContent)), 'the guest is told that the KI plays the empire');
-        const g = JSON.parse(sql(`SELECT json_build_object('status', status, 'round', round, 'cfg', data->'config', 'seats', data->'seats', 'stats', data->'stats' IS NOT NULL, 'chat', data->'chat', 'waiting', "waitingIds", 'frames', (SELECT count(*) FROM replay_frames WHERE "gameKey" = async_games.id)) FROM async_games WHERE id = '${asyncId}'`));
+        const g = JSON.parse(sql(`SELECT json_build_object('status', status, 'round', round, 'cfg', data->'config', 'seats', data->'seats', 'stats', stats IS NOT NULL, 'chat', (SELECT coalesce(json_agg(msg ORDER BY id), '[]') FROM async_chat WHERE "gameId" = async_games.id), 'waiting', "waitingIds", 'frames', (SELECT count(*) FROM replay_frames WHERE "gameKey" = async_games.id)) FROM async_games WHERE id = '${asyncId}'`));
         const kinds = g.seats.map(s => `${s.civ}:${s.kind}${s.userId ? ':acc' : ''}`).join(' ');
         ok(g.status === 'playing' && g.round >= round && g.cfg.turnDays === 1 && g.cfg.fromLive && g.cfg.playerCount === 4 && g.cfg.humanCount === 2,
             'the Rundenspiel: playing, the same game on, 1 day per turn', JSON.stringify({ status: g.status, round: g.round, from: round, days: g.cfg.turnDays }));

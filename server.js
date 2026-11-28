@@ -62,14 +62,17 @@ passport.serializeUser((user, done) => {
     done(null, user.id);
 });
 
+// the user and a bot's owner from a short cache (utils/session-cost.js, P1.7)
+const SessionCost = require('./utils/session-cost');
+const loadUser = SessionCost.makeLoader(User);
 passport.deserializeUser(async (id, done) => {
     try {
-        const user = await User.findByPk(id);
+        const user = await loadUser(id);
         // A banned (or deleted) user is logged out on the next request – a bot also when its
         // owner is banned or may no longer run bots (utils/bots.js)
         if (!user || user.isBanned) return done(null, false);
         if (user.accountType === 'bot') {
-            const owner = user.ownerId ? await User.findByPk(user.ownerId) : null;
+            const owner = user.ownerId ? await loadUser(user.ownerId) : null;
             if (botBlockedReason(user, owner)) return done(null, false);
         }
         done(null, user);
@@ -161,7 +164,7 @@ app.get('/datenschutzerklaerung.html', (req, res) => res.sendFile(path.join(__di
 app.get('/nutzungsbedingungen.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 app.get('/nutzungserklaerung.html', (req, res) => res.sendFile(path.join(__dirname, 'client/nutzungsbedingungen.html')));
 
-// The older versions (/v110/, /v108/, /v107/ – Rundenspiele started on them) get the same no-op service
+// The older versions (/v112/, /v110/, /v108/, /v107/ – Rundenspiele started on them) get the same no-op service
 // worker and Activity bridge
 const OLD_GAME_PATHS = ['', ...require('./engine-adapter').OLD_VERSIONS.map(v => '/' + v)];
 app.get(OLD_GAME_PATHS.map(p => p + '/sw.js'), (req, res) => {
@@ -197,14 +200,16 @@ app.get(OLD_GAME_PATHS.map(p => p + '/js/activity.js'), (req, res) => {
 app.use(Assets.gzipped(path.join(__dirname, 'public')), express.static(path.join(__dirname, 'public'), staticOpts));
 
 const sessionMiddleware = session({
-    store: new pgSession({ pool: pgPool, tableName: 'session' }),
+    // no write of the expiry on every answer: refreshSession renews it at most every 15 minutes
+    store: new pgSession({ pool: pgPool, tableName: 'session', disableTouch: true }),
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
-    // Every answer renews the cookie (and the store's expiry): the 30 days count from the last
-    // visit, not from the login. Without it, players – the app most of all – were logged out
-    // 30 days after logging in, however often they played.
-    rolling: true,
+    // The 30 days count from the last visit, not from the login (without that, players – the app
+    // most of all – were logged out 30 days after logging in, however often they played). Not by
+    // `rolling` (a cookie and a database write on every answer): SessionCost.refreshSession
+    // renews cookie and expiry at most every 15 minutes.
+    rolling: false,
     cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         secure: process.env.NODE_ENV === 'production',
@@ -216,6 +221,7 @@ app.use(sessionMiddleware);
 
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(SessionCost.refreshSession);
 
 // The Grafana dashboards of the admin page (tab "Leistung"), for admins only
 app.use(Grafana.PREFIX, Grafana.proxy);
@@ -248,6 +254,7 @@ require('./utils/migrate').migrate(dbUrl).then(async () => {
 // A database restart or a failed background task must not end the process (and every live game
 // in memory with it): log it and go on
 pgPool.on('error', err => console.error('[DB] Idle session-store connection failed:', err.message));
+SessionCost.listen(pgPool);              // the user cache follows every change of a users row
 process.on('unhandledRejection', err => console.error('[Process] Unhandled rejection:', err));
 
 // Health check
@@ -261,6 +268,8 @@ if (process.env.TEST_HOOKS === 'on' && process.env.NODE_ENV !== 'production') {
     console.warn('[Test] TEST_HOOKS=on – POST /api/test/reset resets all rate limits and match caches');
     app.post('/api/test/reset', async (_req, res) => {
         require('./utils/facts').changed();
+        require('./utils/account-limits').resetAll();
+        require('./async/ladder').changed();
         res.json({ limiters: await require('./utils/rateLimit').resetAll() });
     });
 }
@@ -325,11 +334,17 @@ const io = new Server(server, {
 });
 
 app.locals.io = io;
-io.engine.use(sessionMiddleware);
-io.engine.use(passport.initialize());
-io.engine.use(passport.session());
+// only the handshake: socket.request keeps its session and user, the polls after it skip them
+io.engine.use(SessionCost.onlyForHandshake(sessionMiddleware));
+io.engine.use(SessionCost.onlyForHandshake(passport.initialize()));
+io.engine.use(SessionCost.onlyForHandshake(passport.session()));
+io.engine.use(SessionCost.onlyForHandshake(SessionCost.refreshSession));
 // A rate limit for every event of every socket (utils/socket-limit.js, R-15)
 io.on('connection', socket => require('./utils/socket-limit').attach(socket));
+// Limits per account: sockets at once, moves, a bot's calls and chat (utils/account-limits.js, P1.11)
+const AccountLimits = require('./utils/account-limits');
+AccountLimits.init(io);
+io.on('connection', socket => AccountLimits.attach(socket));
 
 registerGame(io);
 registerAsync(io);
@@ -341,6 +356,31 @@ Metrics.instrumentGame({ io, sessions: require('./sessions'), sequelize });
 Metrics.serve();
 
 // ── Start ────────────────────────────────────────────────────────────────────
+
+// Shutting down (a deploy, Watchtower, a reboot: Docker sends SIGTERM and waits stop_grace_period,
+// docker-compose*.yml): running live games are kept as Rundenspiele (sockets/game.js), then exit.
+let stopping = false;
+async function shutdown(signal) {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[Shutdown] ${signal}: live games go on as Rundenspiele`);
+    setTimeout(() => process.exit(0), 50 * 1000).unref();          // never hang past Docker's grace period
+    try {
+        const done = await registerGame.convertAllOnShutdown(io);
+        console.log(`[Shutdown] ${done.filter(x => x.asyncId).length} of ${done.length} live games converted`);
+    } catch (err) {
+        console.error('[Shutdown] Converting live games failed:', err);
+    }
+    // Rundenspiele with changes not yet written (saving waits ASYNC_FLUSH_MS); from now on at once
+    try {
+        await require('./async/service').flushAll();
+    } catch (err) {
+        console.error('[Shutdown] Saving Rundenspiele failed:', err);
+    }
+    setTimeout(() => process.exit(0), 1000);                         // the 'game:toAsync' messages still go out
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 server.listen(config.PORT, () => {
     console.log(`Hochciv Multiplayer-Server läuft auf Port ${config.PORT}`);

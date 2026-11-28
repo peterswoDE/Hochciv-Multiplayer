@@ -1,4 +1,4 @@
-# Hochzeivilization — Projekt-Übergabe (Stand 23.11., `sw.js` v112)
+# Hochzeivilization — Projekt-Übergabe (Stand 26.11., `sw.js` v113)
 
 Dieses Dokument ist so geschrieben, dass es in einen neuen Chat kopiert werden kann.
 
@@ -10,7 +10,7 @@ Home-Bildschirm hinzugefügt** (PWA, funktioniert offline). Vollständige Regel-
 automatischen Bots, Solo-gegen-Bots und Hotseat für 2–4 Menschen. Oberfläche **deutsch
 und englisch** (zwei Flaggen im Hauptmenü, Deutsch ist Vorgabe und Quelle).
 
-## Letzte Sitzungen auf einen Blick (v61 → v112)
+## Letzte Sitzungen auf einen Blick (v61 → v113)
 
 Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser Reihenfolge:
 
@@ -67,6 +67,11 @@ Für den Einstieg in einen neuen Chat – was sich zuletzt getan hat, in dieser 
 | v110 | Anweisung des Autors, ohne Rückfrage: **Sklaverei 4 Münzen** je geopferter Bevölkerung (`SLAVERY_COINS`; v84–v109 7, bis v83 10). Regel, „In allen Städten opfern", Knopf und Protokoll lesen die Konstante; fest steht die Zahl nur im Techtext, deutsch und englisch – `test.js` prüft jetzt beide | Regel |
 | v111 | Anweisungen des Autors (22.11.), drei Rückfragen (Rom, Hauptstadt von Atlantis, Stapeln): **Berserker** statt Seefahrer (Grundfähigkeit der Wikinger); **Sklaverei 5 Münzen**; **zu viert immer die 14 Dreiecke** (der Eintrag „experimentell" und die Form aus 10 fallen weg); **zu zweit 8 Dreiecke** – das Sechseck offen, die Startdreiecke außen an gegenüberliegenden Kanten; Häkchen **Experimentelle Zivilisationen** mit neun Reichen und zehn Fähigkeiten (Rom: Legion/Via Appia, Venedig, Aztekenreich, Ägypten, Deutschland, Atlantis, Maya, China, USA), Aztekenreich und Ägypten nur mit Weltwundern | Regel, Oberfläche |
 | v112 | Anweisung des Autors, ohne Rückfrage: **Atlantis ganz entfernt** (aus v111 – gewann dort 12 von 12 KI-Partien): Zivilisation, Regeln (Gründen auf dem Meer, Städte doppelt), KI, Texte, Zeichen und Tests. Ein Spielstand von v111 mit Atlantis lädt weiter (das Reich spielt als freie Grundzivilisation ohne Fähigkeit, `migrateState`), „Nochmal spielen" lost den Platz neu aus (`recipeNow`) | Regel |
+| v113 | Anweisung des Autors (26.11.), zwei Runden Rückfragen vorab: **Vereinfachtes Spiel** auf der Seite „Erstes Spiel" (abgesetzt, ohne Unterzeile) – 1 gegen 1 gegen die KI auf einer gespiegelten Zufallskarte 10 × 16 nur aus Grasland, Meer und Gebirge (mit kleinen Binnenmeeren, Land in einem Stück), keine Fähigkeiten, keine Straßen, kein Wirtschaftssieg; **zwei Bäume** (Forschung & Produktion, Militär & Spezial) mit 18 + 19 Technologien, fünf Kosten nur dort anders (`js/einfach.js`, `EINFACH_TECHS`/`EINFACH_KOSTEN`/`techFeld`, `S.einfach`). Andere Spielarten unverändert, geprüft mit dem neuen `tools_gegenprobe.js` (39 Partien, 128 Bildschirme alt gegen neu) | Modus + Oberfläche |
+
+Neu in v113: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
+(Abschnitt „Vereinfachtes Spiel (v113)"), die Zeilen `js/einfach.js` und `tools_gegenprobe.js` in der
+Dateitabelle, Verifikationsmethode 9 (Gegenprobe), drei Fragilitäten, die offenen Punkte 76 und 77.
 
 Neu in v112: der erste Punkt unter „Was das Spiel heute kann", ausführlich in `ANNAHMEN.md`
 (Abschnitt „Atlantis entfernt (v112)"), Punkte 74 und 75 ergänzt.
@@ -226,7 +231,8 @@ dritt unverändert, alte Spielstände) und 61 (was die Messung zu v101 sagt und 
 Punkt 62 (Auslegungen zu v103) und 63 (Kolonialismus kostenlos: Balance und KI-Forschungswert nicht
 gemessen), seit v104 Punkt 64 (Auslegungen zu v104), seit v105 Punkt 65 (Kopieren und Kosten: Auslegungen,
 nicht gemessen), seit v106 Punkt 66 (Auslieferung: Auslegungen), seit v107 Punkt 67 (Auslegungen zu v107) und 68 (Wahl der KI
-geschätzt, 14 Dreiecke nur von der KI gemessen). Punkt 3 (Nachbarschaftsverbot der
+geschätzt, 14 Dreiecke nur von der KI gemessen), seit v113 Punkt 76 (Auslegungen zum vereinfachten
+Spiel) und 77 (dort gemessen: kurz, meist Forschungssieg). Punkt 3 (Nachbarschaftsverbot der
 Territoriumsklausel) hat der Autor in v104 entschieden.
 
 ## Wo alles liegt
@@ -243,7 +249,7 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
   Danach `npm install jsdom --no-fund --no-audit` — für `smoke.js` und `check_single.js` nötig.
   Am besten im **Elternordner** (`cd /home/claude`): Node findet es dort über die
   Verzeichnissuche, und `node_modules` kann gar nicht erst ins Paket rutschen (so in v69).
-- **Deliverables in `/mnt/user-data/outputs/`:** Ordner `hochzeivilization/` (46 Dateien),
+- **Deliverables in `/mnt/user-data/outputs/`:** Ordner `hochzeivilization/` (48 Dateien),
   `hochzeivilization.zip`, und `hochzeivilization-einzeldatei.html` — Letzteres ist, was der
   Autor tatsächlich aufs iPad lädt.
 - **Wichtig beim Paketieren:** `node_modules` und `package*.json` ausschließen
@@ -255,38 +261,40 @@ Territoriumsklausel) hat der Autor in v104 entschieden.
 
 | Datei | Zeilen | Inhalt |
 |---|---|---|
-| `js/i18n.js` | 1435 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
+| `js/i18n.js` | 1449 | Sprachen: `LANG`, `setLang`, `DATA_EN` (Spielobjekte), `UI_EN` + `T()` (Oberflächensätze), `missingStrings()` |
 | `data/civs.json` | 165 | **Quelle** für die Zivilisationen · `node tools_civs.js` → `js/civs.js` |
 | `js/civs.js` | 118 | ERZEUGT: `CIVS` (die vier), seit v111 `EXP_CIVS` (experimentelle, Felder `exp`/`wo`) und `ALL_CIVS`, `CIV_BY_KEY`, `ORDER` (Zugfolge), `BARB_CIV` – nicht von Hand ändern |
-| `js/data.js` | 581 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
+| `js/data.js` | 620 | `APP_VERSION`, TERRAIN (inkl. Vulkan und `X` „Kein Feld"), TECHS (66, davon 62 Grundspiel) samt `OLD_TECH_COSTS`/`techBase` (alter Techtree, Spielstände von vor v82), `CIV_TECH` (v107: Wikinger → Navigation), feste Karten, `mapRng`, EVENT_ROWS (18), WONDERS (18), Regelkonstanten |
 | `js/hex.js` | 161 | Hexraster (pointy-top, odd-r), `hexDistance`, `hexOpposite`, `reachable` (Heap, seit v77), `pathSteps` |
 | `js/tiles.js` | 353 | Dreiecksplättchen: Würfelgeometrie, `TILE_POOL` (20), `TILE_SHAPES` (2/3/4: `tri8`, `tri9`, `tri14` – seit v111 je Spielerzahl eine, alle mit den Startdreiecken außen), `SHAPE_BY_KEY`, Plan, Legeregeln (`seatFreeCells`), Ertragsvorschau und dominierte Startfelder (`placeYieldTable`, `dominatedCells`), Kartenbau |
-| `js/engine.js` | 2504 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
+| `js/engine.js` | 2514 | Kernregeln: Einkommen, Kurse, Kampf, Bewegung, Wachstum inkl. Nahrungsgrenze, Handelsrouten, Zivilisationsfähigkeiten, Sieg, Zugablauf, Protokoll · `powerView` (Machtansicht), `canFlank`, `foundSiteError`/`withFoundTable` · `isAuto`/`kindTag` (Bot oder KI) · Sammelaktionen `growAll`/`growAllPlan`/`sacrificeAll` und `freeActions` (v87) |
 | `js/expansion.js` | 531 | Ereignisse, Barbaren (neutrale Fraktion), Weltwunder, Kultursieg, Bot-Wunderbau |
 | `js/bots.js` | 487 | Bot-Züge, Siedlerbewegung, **neunstufige Armeeprioritäten** (`botPlanArmies` für 1–6, `botMoveArmy` für 7–9), Bot-Forschung |
-| `js/ki.js` | 1953 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
+| `js/ki.js` | 1957 | **KI nach den Regeln für Menschen** (v77): Lage (`kiContext`), Bewertung (`kiValue`, `kiRisk` mit Ernstfall und Plätzen an der Stadt `kiAttackSlots`, `kiOffense`), Kandidaten und Planer auf Kopien (`kiCandidates`, `kiPlan`), Militärpakete (Angriff, Verteidigung, Flanke), Aufstellen, Startplättchen (`kiPlaceSeat`), Stufen (`KI_PARAMS`) |
 | `js/anim.js` | 165 | **Züge von KI und Bots nachspielen** (v94, ohne Oberfläche): Aufnahme über `LOG_HOOK` (`animAufnahme`, `animSnap`), seit v95 je Aktion eine Szene (`animSzenen`; Art aus `log(…, art)` oder `animUnterschied`, Inhalt `animDetails`), Sätze (`animText`); abgespielt in `ui.js` (`playAnim`, `animFaktor`, `animDraw`, `animMarks`, `animCaption`) |
 | `js/marathon.js` | 369 | **Marathon** (v83): Kartengenerator (`marathonTerrain`, Rauschen, Kämme, Flüsse), Hauptstädte (`marathonCapitals`, `marathonStartYield`), Draft (`draftView`, `draftNew`, `draftOptions`, `draftPick`, `ALL_ABILITIES`), Wahl der KI (`KI_DRAFT_BASE`, `kiDraftValue`, `kiDraftPick`); **Fähigkeitswahl der Plättchenkarte** (v107: `pickWanted`, `pickNew`, `kiPickAbility`, `pickApply`) |
+| `js/einfach.js` | 230 | **Vereinfachtes Spiel** (v113): gespiegelte Zufallskarte 10 × 16 aus Grasland, Meer und Gebirge (`einfachKarte`: `einfachGelaende`, `einfachHauptstaedte`, `einfachBinnenmeere`, `einfachSpiegel`), Aufbau einer Partie (`einfachCfg`), passende Spieltipps (`einfachTipps`). Die Regeln dazu in `js/data.js` (`EINFACH_TECHS`, `EINFACH_KOSTEN`, `EINFACH_BAUM`, `techFeld`, `felderVon`) und über `S.einfach` in `engine.js`/`ki.js`; Start und „Nochmal spielen“ in `js/ui/end.js` (`startEinfach`), der Knopf in `fgSeite`, die Kurzregeln in `js/ui/boot.js` (`einfachRegelnHtml`) |
 | `js/ui/base.js` | 187 | Oberfläche, seit v102 je Bildschirm eine Datei (Reihenfolge: die `<script>`-Tags in `index.html`, die einzige Liste). Hier: `show`, `toast`, `modal`, Blätter (`sheet`, Ruhezeit), Leiste, Drehung (im Spiel immer), `store`/`load`/`saveGame` |
 | `js/ui/map.js` | 567 | SVG-Karte (`drawMap`), Geländezeichen, Erträge im Gründungsmodus, Machtringe, Flüsse, Kampfbilder, `attachTaps` |
-| `js/ui/game.js` | 430 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
-| `js/ui/sheets.js` | 327 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
+| `js/ui/game.js` | 432 | Spielbildschirm: `redraw`, Kopfzeile (`hudStand`: Runde, Bevölkerung mit Siegstrich, Vorrat), `pulseCiv`, Gründungsmodus, `tapHex`, Kosten am Knopf (`costText`/`paidText`), Feld- und Stadtblatt, Straßen, Ertragsübersicht |
+| `js/ui/sheets.js` | 330 | Technologiebogen, Macht, Fähigkeiten (Punkte der Freien Forschung), Würfelzeilen, Protokoll |
 | `js/ui/turns.js` | 407 | Zugende, KI- und Bot-Züge, Kampf- und Zug-Nachspiel (Szenen, Satz, laufender Vorrat), Bot-Blatt |
-| `js/ui/end.js` | 183 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
-| `js/ui/world.js` | 227 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
+| `js/ui/end.js` | 208 | Nochmal spielen (Rezept, Stufen), Spielende (Ergebnis als Titel, Tipp, Stufe im Knopf), Konfetti |
+| `js/ui/world.js` | 229 | Ereignis der Runde, Welt, Wunder, Nahrung, freie Wahl, `humanTurnStart` |
 | `js/ui/setup.js` | 358 | die eine Vorliebe (`prefs.anim`, `setAnim`); Aufbau: Spielart, Plätze (eine Zeile, Fähigkeitswahl mit Wirkung), Karte, Startspieler, Rezept, Doppelte |
 | `js/ui/place.js` | 241 | Legephase der Plättchenkarte: würfeln, wählen lassen (`startPick`) oder legen (`placeBegin`), Forschung mit allen Reichen, Welt |
 | `js/ui/draft.js` | 154 | Fähigkeiten wählen: Draft des Marathons, seit v107 die Fähigkeitswahl der Plättchenkarte (`startPick`, `pickAdvance`, `drawPick`) auf demselben Bildschirm |
 | `js/ui/editor.js` | 34 | Karteneditor |
-| `js/ui/boot.js` | 318 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
-| `js/firstgame.js` | 1460 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
-| `test.js` | 8445 | **2117 Assertions**, `node test.js` |
-| `smoke.js` | 4952 | **179 Schritte** durch die echte UI via jsdom, `node smoke.js` |
+| `js/ui/boot.js` | 363 | Sprache, `boot`, Menü (`menuButtons`), Verdrahtung, Spielmenü ☰, Regeln (`rulesModal`, `spielartenHtml`), Laden/Speichern |
+| `js/firstgame.js` | 1465 | **Erstes Spiel** (v92, v93): Seite vor der Partie mit der Wahl des Wegs (`fgSeite`), Karte, Verfügbarkeit und Würfel (`FG_SPAETER`, `fgVerfuegbar`, `fgWurf`, `fgNextDie`), Englands Drehbuch (`fgGegnerZug`), Schritte `FG_STEPS` (Ziel, Stand, Tipp, Rückmeldung, Schienen, Musterlösung; vom Weg geführt über `fgJe`, `fgRestSchritt`), blasse Kacheln (`fgBlass`), Schienen (`fgVeto`), Panel (`fgRenderPanel`), Spielende |
+| `test.js` | 8619 | **2154 Assertions**, `node test.js` |
+| `smoke.js` | 5081 | **184 Schritte** durch die echte UI via jsdom, `node smoke.js` |
 | `build_single.py` / `check_single.js` | 26 / 85 | Einzeldatei bauen und in jsdom prüfen (inkl. Plättchenkarte) |
 | `tools_version.js` | 72 | Version erhöhen + `BUILD_HASH` schreiben – **vor jedem Ausrollen** |
 | `tools_docs.js` | 75 | Zahlen in dieser Übergabe nachziehen (Zeilen, Assertions, Schritte) |
 | `tools_civs.js` | 97 | `data/civs.json` → `js/civs.js` |
 | `tools_ki.js` | 493 | Messreihen mit der KI: Duell gegen Bots, eine KI gegen drei Bots, Stufen gepaart, KI gegen KI, nachgestellte Vorstöße samt Ausgaben vor/nach dem ersten Treffer (`node tools_ki.js duell 40 diff=david`, `… vorstoss 40 art=droh` …); seit v90 die Schalter `reihenfolge` (Kampfphase zusätzlich in der Reihenfolge bis v89, Unterschiede) und `kampflaenge` (Kämpfe je Phase); seit v101 die Modi `freie` (Freie Forschung: Regel von v100 und vier Arten zu wählen, gepaart) und `wirtschaft` (Siegschwellen zu viert v100 gegen v101, gepaart); seit v107 der Schalter `dreiecke14` (bis v106 `sechsecke`) und in `selbst` die Siege nach Platz in der Zugfolge |
+| `tools_gegenprobe.js` | 238 | **Gegenprobe** (v113): ändert eine Änderung, was sie nicht ändern soll? `node tools_gegenprobe.js <alter Ordner>` spielt 39 Partien aller Spielarten mit festem Startwert und zeichnet 128 Bildschirme (deutsch und englisch) mit beiden Fassungen; verglichen werden Endstand, **jede** Protokollzeile (auch die der Wegwerfkopien der KI) und das HTML. Braucht jsdom, gut eine Minute je Fassung |
 | `tools_startplaettchen_dump.js` / `tools_startplaettchen_pdf.py` | 34 / 176 | Druckbogen `Startplaettchen.pdf` aus `js/tiles.js` (A4 quer, 3 Seiten, Spieloptik, verzahnt mit 4 mm Luft, ohne Umriss) |
 | `ANNAHMEN.md` | — | **Alle Regelauslegungen und Entscheidungen.** Bei Regelfragen zuerst hier nachsehen. |
 
@@ -309,6 +317,38 @@ Gedächtnis rekonstruieren.
 
 ## Was das Spiel heute kann
 
+- **v113 auf einen Blick.** Anweisung des Autors (26.11.), zwei Runden Rückfragen vorab (welche
+  Technologien gehen, Karte, Namen der Bäume, Stufe der KI, Singularität, der Knopf „Fähigkeiten",
+  Lage des neuen Knopfs): ein **vereinfachtes Spiel** auf der Seite „Erstes Spiel".
+  · **Seite:** unter den drei Wegen und ihrem Hinweis, über einer Linie, „Vereinfachtes Spiel" ohne
+    Unterzeile (`.fg-einfach` in `fgSeite`); nach dem ersten Sieg mit Haken (`EINFACH_KEY`). Startet
+    eine freie Partie (`startEinfach`, js/ui/end.js) gegen die KI, von hier aus immer Leicht; „Nochmal
+    spielen" nach einem Sieg eine Stufe schwerer, jedes Mal auf neuer Karte (`rematch` prüft zuerst
+    `S.einfach`).
+  · **Aufbau** (`einfachCfg`, js/einfach.js): zwei verschiedene Grundreiche ausgelost, je mit
+    `drafted: []` (keine Fähigkeit), Startspieler ausgelost, Duell, keine Ereignisse und Weltwunder,
+    Rezept `{ mode: 'einfach', players }` mit der Stufe der KI.
+  · **Karte** (`einfachKarte`): 10 × 16, am Mittelpunkt gespiegelt ((r, c) → (9 − r, 15 − c) – nur
+    mit gerader Zeilenzahl ein Zug des Hexrasters), Grasland, Meer und Gebirge; Randmeer plus kleine
+    Binnenmeere (ein Paar aus 2–3 Feldern, oft ein Paar einzelner), etwa 29 % Meer, 14 % Gebirge; Land
+    in einem Stück; Hauptstädte gespiegelt, 9–12 auseinander, gemischter Start bevorzugt, kein Umweg
+    über 3. Keine Legephase.
+  · **Regeln** über `S.einfach` (nur `cfg.einfach` setzt es): 37 Technologien (`EINFACH_TECHS`), fünf
+    Kosten anders (`EINFACH_KOSTEN`: Astronomie 3, Wiss. Methode 14, Eisenverarbeitung 1, Stadtmauern
+    2, Panzerschiff 12), zwei Bäume (`EINFACH_BAUM`, `techFeld`, `felderVon`) für Würfeln, Öffnen des
+    nächsten Zeitalters und Singularität; keine Navigation der Wikinger (`civTechAfterRoll` mit `S`);
+    kein Wirtschaftssieg (`checkVictory`, KI: `kiVictory`); die KI zählt ihren Fortschritt je Baum.
+  · **Oberfläche:** Bogen in zwei Spalten, Kopfzeile ohne Schwellenstrich, Welt/Fähigkeiten/Nahrung
+    ohne Texte zu Dingen, die es nicht gibt, eigene Kurzregeln (`einfachRegelnHtml`), Spieltipps
+    gefiltert (`einfachTipps`). Englisch vollständig.
+  · **Andere Spielarten unverändert**, geprüft mit dem neuen `tools_gegenprobe.js` (39 Partien und
+    128 Bildschirme gegen v112: gleich bis auf den neuen Abschnitt der Seite).
+  · **Gemessen:** KI gegen KI je 200 Partien – meist Forschungssieg in Runde 6–7 (Punkt 77). Dabei
+    gefunden und behoben: die Singularität fehlte zuerst im Pool des Modus.
+  · **Tests:** `test.js` (Bäume, Kosten, Würfeln, Singularität, keine Fähigkeiten, kein
+    Wirtschaftssieg, 200 Karten, Tipps, vier KI-Partien, Gegenproben), `smoke.js` (Seite, Partie,
+    Bogen, Blätter, Regeln, Zugwechsel, Fortsetzen, Spielende samt „Nochmal spielen" und Haken,
+    Englisch).
 - **v112 auf einen Blick.** Eine Anweisung des Autors, ohne Rückfrage umgesetzt: **Atlantis ist ganz
   entfernt** – aus `data/civs.json` (und damit `EXP_CIVS`, `ORDER`), die Regeln (`cityFactor`, das
   Gründen auf dem Meer in `foundSiteError`, `ATLANTIS_CITY_FACTOR`), die KI (`kiSiteOk`,
@@ -1388,10 +1428,10 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
 
 ## Verifikationsmethoden (etabliert, unbedingt beibehalten)
 
-1. **`node test.js`** muss grün sein — 2117 Assertions, darunter die Rechnungen aus dem
+1. **`node test.js`** muss grün sein — 2154 Assertions, darunter die Rechnungen aus dem
    Regelheft-Beispiel, ein Test je geänderter Regel, 40 Bot-Partien, 40 mit Erweiterungen,
    20 Mensch-Partien, 20 Duelle, der komplette Tutorial-Durchlauf (zweimal, auf Gleichheit).
-2. **`node smoke.js`** fährt die echte UI durch jsdom (179 Schritte), inklusive
+2. **`node smoke.js`** fährt die echte UI durch jsdom (184 Schritte), inklusive
    Tutorial-Audit: in jedem der 29 Schritte wird geprüft, dass **nur** das Vorgesehene
    anklickbar ist — und dass überhaupt etwas anklickbar ist (beide Richtungen!).
 3. **`python3 build_single.py && node check_single.js`** — Einzeldatei bauen und prüfen.
@@ -1419,6 +1459,12 @@ Grundermittlung für die Meldung läuft nur, wenn schon feststeht, dass es keine
    „offline" heißt Server aus. So in v108: frischer Einbau, gescheiterter erster Einbau mit Rückkehr in
    die App, Update über einen halben Upload. iOS selbst (Home-Bildschirm, eigener Speicher je App)
    bleibt ungeprüft.
+9. **Gegenprobe** (seit v113): Soll eine Änderung nur einen Teil betreffen, `node tools_gegenprobe.js
+   <Ordner der vorigen Fassung>` – 39 Partien aller Spielarten und 128 Bildschirme mit beiden
+   Fassungen, verglichen bis auf jede Protokollzeile der KI-Planung und das HTML. Erwartete
+   Unterschiede nennt das Werkzeug mit Stelle; alles andere muss gleich sein. Die vorige Fassung
+   vorher aus dem Zip in einen eigenen Ordner entpacken. In v113 gegen v112: nur der neue Abschnitt
+   der Seite „Erstes Spiel" anders; dieselbe Fassung gegen sich selbst: 0 anders.
 
 ## Oberfläche und Regeln (Stand 22.8.)
 
@@ -1458,6 +1504,20 @@ Begründung und Messung festgehalten, chronologisch nach Versionen.
 
 ## Bekannte Fragilitäten
 
+- **Das vereinfachte Spiel hängt an `S.einfach`** (v113). Nur `einfachCfg` setzt es; was ohne es
+  gerechnet wird, muss genau das Bisherige liefern (`techFeld`, `felderVon`, `techActive`, `techBase`,
+  `singularityReady` ohne `S`, `civTechAfterRoll` ohne `S`). Wer dort etwas ändert, prüft beide Wege –
+  und mit `tools_gegenprobe.js`, dass die anderen Spielarten gleich bleiben.
+- **Feld oder Baum** (v113): Wo Code fragt, zu welchem Feld eine Technologie gehört, um zu würfeln,
+  ein Zeitalter zu öffnen oder die Singularität zu prüfen, gehört `techFeld(S, t)` hin, nicht `t.f`, und
+  `felderVon(S).length` statt einer 4. `t.f` bleibt richtig, wo es um das Feld des Grundspiels geht:
+  die Ertragsketten (`YIELD_CHAINS` – sonst brächte im Baum Forschung & Produktion die Grüne Revolution
+  die Wissenschaft von Papier und Biologie mit), Rückschau, Bots, Wunder. Die Singularität ist keine
+  der TECHS: wer `techActive` ändert, lässt sie gelten (in v113 zuerst vergessen – kein
+  Forschungssieg).
+- **`einfachTipps` prüft am Wortlaut** (v113): ein Tipp, der einen Namen nur umschreibt („die
+  russischen …"), käme durch, wenn die Fähigkeit nicht auch beim Namen genannt ist. Neue Tipps also
+  beim Namen nennen lassen – oder ein Stichwort ergänzen.
 - **`sw.js`: `VERSION` und `BUILD_HASH` nur über `node tools_version.js`.** Ohne neue `VERSION`
   kommt eine Änderung nicht an; seit v106 auch nicht ohne passenden `BUILD_HASH` – der Einbau prüft
   den Inhalt und übernimmt nur eine vollständige Fassung. Ein Host, der Dateien beim Ausliefern
@@ -2779,6 +2839,27 @@ Aus der Sitzung vom 21.–22.8. (Versionen v30–v49), grob nach Themen:
    Forschungswerte (`kiTechBonus`) kennen weder Venedigs Kolonialismus noch das Rad der Via Appia.
    **Seit v112:** Atlantis ist nach dieser Messung entfernt (Anweisung des Autors); für die übrigen
    acht gilt das Übrige weiter.
+76. **Getroffene Auslegungen (v113)** – zum Ändern angeboten. Vom Autor entschieden: welche
+   Technologien bleiben und welche Kosten wandern, die Karte (gespiegelt, 10 × 16, wenige kleine
+   Binnenmeere statt Randmeer), die Namen der Bäume, Leicht zu Beginn und eine Stufe schwerer nach
+   einem Sieg, Singularität 120, der Knopf „Fähigkeiten" bleibt, der neue Knopf abgesetzt unter der
+   Führung. Ohne Rückfrage: (a) Panzerschiff **12** („billiger" – der Platz der Spionage). (b) Keine
+   Navigation der Wikinger: ein Zug der Zivilisation, keine wählbare Fähigkeit, aber „no civ
+   abilities". (c) Zwei verschiedene der vier Grundreiche, ausgelost, keine experimentellen. (d)
+   Startausgleich zu zweit (4 Münzen) gilt. (e) Keine Führung – eine freie Partie. (f) Haken nach dem
+   ersten Sieg. (g) Hauptstädte mit gemischtem Start bevorzugt, kein Umweg über 3, Binnenmeere
+   mindestens 3 Felder von den Hauptstädten. (h) Eigene Kurzregeln; Bürokratie dort mit dem Text der
+   Kachel. (i) Tipps nach Wortlaut gefiltert. (j) Die Karte heißt „Zufallskarte (10 × 16)".
+77. **Vereinfachtes Spiel gemessen – kurz, meist Forschungssieg (v113).** KI gegen KI, je 200 Partien:
+   Leicht gegen Leicht 60 % Forschungs-, 40 % Militärsiege, Endrunde im Median 7 (90 %: bis 9); Mittel
+   gegen Mittel 76 % / 24 %, Median 6; Schwer gegen Schwer 82 % / 18 %, Median 6 (90 %: bis 7). Die
+   Stufen bleiben getrennt (Mittel schlägt Leicht in 70 %, Schwer Mittel in 74 %). Der Startspieler
+   gewinnt 55–63 %. Die Singularität (120) kommt also früh: zwei Bäume bis in die Moderne sind
+   kürzer als vier Felder. Zum Vergleich das gewöhnliche Duell (Mittel gegen Mittel, 200 Partien):
+   Median Runde 7, 52 % Forschungs-, 29 % Wirtschafts-, 20 % Militärsiege – das vereinfachte Spiel ist
+   gut eine Runde kürzer. Der Autor wollte 120 vorerst behalten; die Zahlen sind die Grundlage, falls
+   er nachstellt (eine Zeile: `SINGULARITY_BASE` gilt überall – für den Modus allein bräuchte es einen
+   eigenen Wert in `techBase`). Gegen Menschen nicht gemessen.
 
 ## Arbeitsweise, die der Autor schätzt
 
@@ -2791,7 +2872,8 @@ nicht die erstbeste Vermutung umsetzen. Jede Regeländerung mit Test absichern.
 
 ## Typischer Abschluss-Ablauf nach Änderungen
 
-1. `node test.js` und `node smoke.js` grün – je eine Zeile (`--verbose` zeigt alles).
+1. `node test.js` und `node smoke.js` grün – je eine Zeile (`--verbose` zeigt alles). Soll die
+   Änderung andere Spielarten nicht berühren: `node tools_gegenprobe.js <vorige Fassung>` (v113).
 2. Version hochzählen mit `node tools_version.js` (setzt `APP_VERSION` in `js/data.js`, `VERSION`
    und `BUILD_HASH` in `sw.js`). Ein Test schlägt an, wenn sie auseinanderlaufen.
 3. `python3 build_single.py && node check_single.js` (`build   ok`, `single  ok`). Neue Skripte

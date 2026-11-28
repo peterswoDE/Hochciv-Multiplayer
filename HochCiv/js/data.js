@@ -1,6 +1,6 @@
 /* Version der App. Sie steht im Hauptmenü und muss zur VERSION in sw.js passen –
    ein Test bindet beide aneinander, damit sie nicht auseinanderlaufen. */
-const APP_VERSION = 'v112';
+const APP_VERSION = 'v113';
 
 /* Hochzeivilization – Spieldaten
    Alle Werte aus den Originalregeln (Regelheft + Technologiebogen).
@@ -258,9 +258,46 @@ const YIELD_CHAINS = {};
     (YIELD_CHAINS[on] || (YIELD_CHAINS[on] = [])).push(chain);
   }
 }
+/* ---------------------------------------------------------------- Vereinfachtes Spiel (v113)
+   Anweisung des Autors: ein 1 gegen 1 gegen die KI auf einer Zufallskarte aus Grasland, Meer und
+   Gebirge, ohne Zivilisationsfähigkeiten, ohne Straßen und Eisenbahn, ohne Wirtschaftssieg (es
+   bleiben Militär- und Forschungssieg). Forschung und Produktion sind ein Baum, Militär und Spezial
+   der andere (EINFACH_BAUM: Feld des Grundspiels → Baum). Je Baum und Zeitalter jede Kostenstufe
+   höchstens einmal – wo zwei zusammenfielen, hat der Autor gewählt, was bleibt, und ein paar Kosten
+   verschoben (EINFACH_KOSTEN). Weg sind außerdem alles zu Wald, Fluss und Insel, Rad und Eisenbahn,
+   Theologie und Vereinte Nationen (ohne Wirtschaftssieg wirkungslos) und die Weltwunder-Technologien
+   (Weltwunder und Ereignisse gibt es dort nicht). Ein Spielstand trägt den Modus als S.einfach.
+   Karte und Aufbau: js/einfach.js. Ändert sich hier etwas, ändern sich Regelbogen und Tests mit. */
+const EINFACH_TECHS = new Set([
+  // Forschung & Produktion (18)
+  'bewaesserung', 'fischerei', 'astronomie', 'schrift', 'landwirtschaft',
+  'papier', 'segeln', 'alchemie', 'universitaet',
+  'chemie', 'biologie', 'dampfmaschine', 'wiss_methode', 'fliessband',
+  'verbundwerkstoffe', 'gruene_revolution', 'containerlogistik', 'robotik',
+  // Militär & Spezial (19)
+  'eisenverarbeitung', 'stadtmauern', 'demokratie', 'belagerung', 'sklaverei',
+  'stahl', 'burgenbau', 'kartografie', 'buerokratie',
+  'gewehre', 'panzerschiff', 'nationalismus', 'dynamit', 'maschinengewehr',
+  'panzer', 'luftwaffe', 'oekologie', 'raketentechnik', 'atomwaffen',
+]);
+// Kosten, die nur im vereinfachten Spiel anders sind – jede bleibt in ihrem Zeitalter (ein Test prüft es)
+const EINFACH_KOSTEN = { astronomie: 3, wiss_methode: 14, eisenverarbeitung: 1, stadtmauern: 2, panzerschiff: 12 };
+const EINFACH_BAUM = [0, 0, 1, 1];
+// Die Namen der zwei Bäume – über T(), Englisch in UI_EN
+const einfachFelder = () => [T('Forschung & Produktion'), T('Militär & Spezial')];
+/* Der Baum einer Technologie in dieser Partie und die Namen der Felder bzw. Bäume. Ohne
+   vereinfachtes Spiel (auch ohne Spielstand) genau das Feld und FIELDS wie bisher. */
+const techFeld = (S, t) => S && S.einfach ? EINFACH_BAUM[t.f] : t.f;
+const felderVon = S => S && S.einfach ? einfachFelder() : FIELDS;
+
 /* Technologien mit `wo: true` gehören zur Weltwunder-Erweiterung und existieren nur in
-   einer Partie mit Weltwundern. Ohne Spielstand (z. B. in Tabellen) zählt die Grundliste. */
-function techActive(S, t) { return !t.wo || !!(S && S.wo); }
+   einer Partie mit Weltwundern. Ohne Spielstand (z. B. in Tabellen) zählt die Grundliste.
+   Im vereinfachten Spiel (v113) gilt allein EINFACH_TECHS samt der Singularität – Weltwunder gibt
+   es dort nicht. */
+function techActive(S, t) {
+  if (S && S.einfach) return EINFACH_TECHS.has(t.k) || t.k === 'singularitaet';
+  return !t.wo || !!(S && S.wo);
+}
 function techPool(S) { return TECHS.filter(t => techActive(S, t)); }
 const SINGULARITY = {
   k: 'singularitaet', n: 'Singularität', c: SINGULARITY_BASE,
@@ -333,14 +370,16 @@ const MARATHON_MIN_DIST = 14;      // Mindestabstand der Hauptstädte (Originalk
    Standardkosten. Wer irgendwo Kosten braucht, nimmt diese Funktion, nicht t.c. Gilt auch
    für die Singularität (SINGULARITY, ohne Zeitalter). */
 function techBase(S, t) {
+  if (S && S.einfach && EINFACH_KOSTEN[t.k] != null) return EINFACH_KOSTEN[t.k];   // v113
   const c = S && S.oldTree && OLD_TECH_COSTS[t.k] != null ? OLD_TECH_COSTS[t.k] : t.c;
   if (!(S && S.marathon)) return c;
   return t.k === 'singularitaet' ? MARATHON_SINGULARITY : c * MARATHON_TECH_FACTOR[t.age];
 }
 // Techs je Feld und Zeitalter, nach den Kosten der Partie sortiert (billigere zuerst).
 // Das ist die Leiter im Technologiebogen; Würfe auf „die n-te Technologie" zählen ebenso.
+// Im vereinfachten Spiel (v113) ist `field` einer der zwei Bäume (techFeld).
 function techsIn(field, age, S) {
-  return techPool(S).filter(t => t.f === field && t.age === age)
+  return techPool(S).filter(t => techFeld(S, t) === field && t.age === age)
     .sort((a, b) => techBase(S, a) - techBase(S, b));
 }
 

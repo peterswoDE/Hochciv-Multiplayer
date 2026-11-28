@@ -47,7 +47,7 @@ function attach(socket) {
         strikes.n = Math.max(0, strikes.n - (now - strikes.at) / 1000 * STRIKE_DECAY) + 1;
         strikes.at = now;
         const ack = packet[packet.length - 1];
-        if (typeof ack === 'function') ack({ error: MESSAGE });
+        if (typeof ack === 'function') ack({ error: MESSAGE, code: 'rate_limited', retryAfter: 1 });
         if (strikes.n >= MAX_STRIKES) {
             console.warn(`[SocketLimit] ${socket.id} disconnected: too many events (last: ${String(event).slice(0, 40)})`);
             socket.disconnect(true);

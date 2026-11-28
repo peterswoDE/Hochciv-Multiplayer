@@ -398,6 +398,9 @@ function newGame(cfg) {
       copies: 0, nuked: false, dead: false,
     })),
   };
+  /* Vereinfachtes Spiel (v113): zwei Bäume, eigene Technologien und Kosten, kein Wirtschaftssieg
+     (data.js, js/einfach.js). Nur dann im Spielstand – andere Partien bleiben, wie sie waren. */
+  if (cfg.einfach) S.einfach = true;
   log(S, 'head', 'Neues Spiel — ' + (S.duel ? '1 gegen 1: ' : '') +
     S.players.map(p => civOf(p).n + kindTag(p)).join(', ') +
     ` · ${S.map.name}` +
@@ -416,11 +419,12 @@ function newGame(cfg) {
     const vorab = cfg.avail && cfg.avail[p.slot];
     if (vorab) {
       p.avail = Object.assign({}, vorab);
-      civTechAfterRoll(p, null, 0);
+      civTechAfterRoll(p, null, 0, S);
       log(S, 'info', T('%s: verfügbar (vor dem Legen ausgewürfelt):', civOf(p).n) + ' ' +
         (TECHS.filter(t => p.avail[t.k]).map(t => t.n).join(', ') || '—'));
     } else {
-      for (let f = 0; f < 4; f++) rollAvailability(S, i, f, 0);
+      // je Feld – im vereinfachten Spiel je Baum (v113)
+      for (let f = 0; f < felderVon(S).length; f++) rollAvailability(S, i, f, 0);
     }
   });
   // Aufbau 5: Hauptstädte setzen
@@ -476,15 +480,17 @@ function rollAvailability(S, pi, field, age) {
     do { idx = d6(S, T('keine verfügbar → eine auswürfeln (1–%s)', list.length), { pi, pick: list.map(t => t.k), fixed: `pick:${p.slot}:${field}:${age}:${n++}` }); } while (idx > list.length);
     p.avail[list[idx - 1].k] = true;
   }
-  civTechAfterRoll(p, field, age);
-  log(S, 'info', T('%s: verfügbar in %s (%s):', civOf(p).n, FIELDS[field], AGES[age]) +
+  civTechAfterRoll(p, field, age, S);
+  log(S, 'info', T('%s: verfügbar in %s (%s):', civOf(p).n, felderVon(S)[field], AGES[age]) +
     (list.filter(t => p.avail[t.k]).map(t => t.n).join(', ') || '—'));
 }
 /* CIV_TECH (v107): nach dem Wurf kommt dazu, was der Zivilisation immer verfügbar ist – den
    Wikingern die Navigation –, ABIL_TECH (v111) dasselbe je Fähigkeit: Roms Via Appia das Rad.
    `field` null heißt alle Felder: vorab gewürfelt (newGame) und in laufenden Partien
-   (migrateState). */
-function civTechAfterRoll(p, field, age) {
+   (migrateState). Im vereinfachten Spiel (v113, `S`) gibt es keine Zivilisationsfähigkeiten –
+   auch nicht die Navigation der Wikinger. Ohne `S` (Ansicht der Fähigkeitswahl) wie bisher. */
+function civTechAfterRoll(p, field, age, S) {
+  if (S && S.einfach) return;
   const keys = [CIV_TECH[p.civ]].concat(abilitiesOf(p).map(a => ABIL_TECH[a]));
   for (const k of keys) {
     const t = TECH_BY_KEY[k];
@@ -527,7 +533,7 @@ function migrateState(S) {
     p.drafted = [];
   }
   // Wikinger (v107): Navigation immer verfügbar – auch in Partien, die vorher begonnen haben
-  for (const p of S.players || []) if (p.avail) civTechAfterRoll(p, null, 0);
+  for (const p of S.players || []) if (p.avail) civTechAfterRoll(p, null, 0, S);
   // Kopieren (v105): je Weg die Runde der letzten Kopie – bis v104 nur das Internet
   for (const p of S.players || []) if (p.internetUsed !== undefined) {
     (p.copied = p.copied || {}).internet = p.internetUsed;
@@ -549,13 +555,14 @@ function rollSetup(cfg) {
   probe.players.forEach(p => { avail[p.slot] = Object.assign({}, p.avail); });
   return { avail, wpool: probe.wo ? JSON.parse(JSON.stringify(probe.wpool)) : null };
 }
-function singularityReady(p) {
-  return FIELDS.every((_, f) => TECHS.some(t => t.f === f && t.age === 3 && p.techs[t.k]));
+/* Je Feld eine Technologie der Moderne – im vereinfachten Spiel (v113, mit `S`) je Baum. */
+function singularityReady(p, S) {
+  return felderVon(S).every((_, f) => TECHS.some(t => techFeld(S, t) === f && t.age === 3 && p.techs[t.k]));
 }
 function researchable(S, pi) {
   const p = S.players[pi], out = [];
   for (const t of techPool(S)) if (p.avail[t.k] && !p.techs[t.k]) out.push(t);
-  if (singularityReady(p) && !p.techs.singularitaet) out.push(SINGULARITY);
+  if (singularityReady(p, S) && !p.techs.singularitaet) out.push(SINGULARITY);
   return out;
 }
 function doResearch(S, pi, tk) {
@@ -593,9 +600,10 @@ function applyTech(S, pi, tech, note, opts) {
   // Maximalweite wird der Restbewegung der eigenen Armeen dieser Runde gutgeschrieben.
   const gained = moveAllowance(S, pi) - rangeBefore;
   if (gained > 0) for (const a of armiesOf(S, pi)) a.mp += gained;
-  // Erste Technologie in Zeitalter+Feld → nächstes Zeitalter auswürfeln
-  const sameAgeField = techPool(S).filter(t => t.f === tech.f && t.age === tech.age && p.techs[t.k]);
-  if (sameAgeField.length === 1) rollAvailability(S, pi, tech.f, tech.age + 1);
+  // Erste Technologie in Zeitalter+Feld → nächstes Zeitalter auswürfeln (vereinfacht: je Baum, v113)
+  const f = techFeld(S, tech);
+  const sameAgeField = techPool(S).filter(t => techFeld(S, t) === f && t.age === tech.age && p.techs[t.k]);
+  if (sameAgeField.length === 1) rollAvailability(S, pi, f, tech.age + 1);
 }
 /* Kostenlose Forschung: Griechenland-Fähigkeiten und die Wunder Bibliothek/Oxford.
    quelle beschreibt, woher der Anspruch kommt (nur für das Protokoll). */
@@ -2133,8 +2141,9 @@ function copyTech(S, pi, tk, way) {
   p.techs[tk] = true;
   log(S, 'act', w.coins ? T('%s: %s kopiert (%s, %s Münzen).', civOf(p).n, opt.tech.n, TECH_BY_KEY[w.k].n, w.coins)
     : T('%s: %s kopiert (Internet, gratis).', civOf(p).n, opt.tech.n), 'kopieren');
-  const same = techPool(S).filter(t => t.f === opt.tech.f && t.age === opt.tech.age && p.techs[t.k]);
-  if (same.length === 1) rollAvailability(S, pi, opt.tech.f, opt.tech.age + 1);
+  const f = techFeld(S, opt.tech);
+  const same = techPool(S).filter(t => techFeld(S, t) === f && t.age === opt.tech.age && p.techs[t.k]);
+  if (same.length === 1) rollAvailability(S, pi, f, opt.tech.age + 1);
   return null;
 }
 /* Was diesem Reich gerade GRATIS offensteht (v87, Wunsch des Autors: die Zahl an
@@ -2484,6 +2493,7 @@ function techEffectFull(t, S) { return t.voll || techEffect(t, S); }
    am Rundenende haben alle gleich oft gezogen. */
 function checkVictory(S, pi) {
   if (S.over) return S.over;
+  if (S.einfach) return S.over;       // vereinfachtes Spiel (v113): kein Wirtschaftssieg
   // gerufen am Rundenende (checkEconomyRoundEnd, v85) – mit dem Stand von dort
   const p = S.players[pi], w = worldPop(S), mine = popOf(S, pi);
   const o = victoryOption(S, p);

@@ -290,7 +290,7 @@ async function rundenspiel(browser, errors) {
             await sleep(800);
         }
         ok(aMoved && bResearched, 'Rundenspiel: A ended a turn, B researched and ended one', String(bResearched));
-        const stored = sql(`SELECT jsonb_array_length(data->'scenes'->'frames') FROM async_games WHERE id = '${g.id}'`);
+        const stored = sql(`SELECT jsonb_array_length(scenes->'frames') FROM async_games WHERE id = '${g.id}'`);
         ok(+stored > 0, 'Rundenspiel: the scenes are stored with the game', stored);
 
         const open = async () => {

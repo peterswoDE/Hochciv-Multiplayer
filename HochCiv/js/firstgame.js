@@ -1197,14 +1197,19 @@ function fgLoesungWissenschaft() {
 /* Die Seite vor der Partie (v93, Wunsch des Autors): wer man ist, worum es geht – und gleich
    die Wahl des Wegs. Ein Fenster über dem Menü (oder über dem Spielende: „Anderen Weg
    ausprobieren"). Wer es schließt, steht wieder, wo er war – angefangen ist noch nichts. */
+/* Darunter, abgesetzt (v113, Anweisung des Autors, Variante B): das vereinfachte Spiel – keine
+   Führung, sondern eine freie Partie gegen die KI auf einer Zufallskarte (startEinfach,
+   js/ui/end.js). Ohne Unterzeile; nach dem ersten Sieg mit Haken wie die Wege. */
 function fgSeite() {
   modal(T('Erstes Spiel'), `<div class="fg-seite">
     <p class="fg-auftakt">${T('Du führst eine einzige Stadt in der Steinzeit. Dein Ziel: eine Zivilisation, die die Zeiten überdauert.')}</p>
     <p>${T('Es gibt viele Wege zu einem blühenden Reich – und deshalb mehr als einen Weg zum Sieg. Welchen gehst du?')}</p>
     ${fgWahlHtml(fgGeschafft())}
     <p class="hint">${T('Du spielst Griechenland gegen England, 1 gegen 1 auf einer kleinen Karte. Jeder Schritt nennt ein Ziel – wer festhängt, holt sich einen Tipp.')}</p>
+    <div class="fg-einfach"><button class="btn wide" data-einfach>${T('Vereinfachtes Spiel')}${einfachGewonnen() ? ' <span class="fg-ja">✓</span>' : ''}</button></div>
   </div>`);
   $('ov-body').querySelectorAll('[data-pfad]').forEach(b => b.onclick = () => fgStart(b.dataset.pfad));
+  $('ov-body').querySelector('[data-einfach]').onclick = () => startEinfach();
 }
 // Ohne Weg geht es erst auf die Seite – gespielt wird nur mit gewähltem Weg
 function fgStart(pfad) {

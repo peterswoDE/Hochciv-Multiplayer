@@ -46,6 +46,8 @@ Status: ⬜ planned · 🔨 in progress · ✅ on `development` (staging) · �
 | 36 | F36 | [Second security audit](#f36-second-security-audit) | ✔ | ✔ | ✅ |
 | 37 | F37 | [Database roles and migrations](#f37-database-roles-and-migrations) | ✔ | ✔ | ✅ |
 | 38 | F38 | [Public bot descriptions](#f38-public-bot-descriptions) | ✔ | ✔ | ✅ (#171) |
+| 39 | F39 | [Arena](#f39-arena) | – | ✔ | 🚧 (#121) |
+| 40 | P1 | [Scalability, phase 1](#p1-scalability-phase-1) | – | ✔ | 🔨 |
 
 The numbers are those of the original proposal; F11 and F12 were requested after the staging tests of F1. F15–F22 (and F8, F10 moved up from "later") are the second round, approved on 2026-11-03. Not wanted for now: a vacation mode for Rundenspiele, a tutorial, tournaments (too few players yet). F23–F27 are the third round, approved on 2026-11-10; F28 was asked for the same day. Parked as GitHub issues for later: daily challenge (#120), bot arena (#121), Discord integration (#122), mirror match (#161, was F33). The order puts the small fixes for live games first. F6 and F7 come before F5 because they record per-turn data that F5 can reuse.
 
@@ -457,11 +459,12 @@ Texts with bad language are not sent but reported automatically, and the sender 
 **Decisions**
 - In a Rundenspiel, while it isn't one's turn (or the game is over), *▶ Nächstes Spiel (n)* appears below the waiting note when other games wait for one's turn; it opens the one with the nearest deadline. Hidden during one's own turn.
 - The list is fetched right after one's turn ends and at most every 20 seconds otherwise.
+- Never in a live lobby or live game: joining one from an open Rundenspiel (an invitation, a friend's lobby, matchmaking) leaves the Rundenspiel first.
 
 **Implementation**
-- `mp.js`: `refreshNext()` (from `syncTurnBlocker`), `drawNextGame()` (below the AFK/resign banner if one is shown), `openNextGame()` (closes the game and opens the next; on an older game version page via `/?async=`). `ASYNC.close()` hides it. Texts in `client/i18n.js`.
+- `mp.js`: `refreshNext()` (from `syncTurnBlocker`), `drawNextGame()` (below the AFK/resign banner if one is shown), `openNextGame()` (closes the game and opens the next; on an older game version page via `/?async=`). `ASYNC.close()` hides it and drops the 20-second wait, so a game opened again asks at once. `MP.leaveAsync()` closes an open Rundenspiel (`ASYNC.close(true)`: on this page, also on an older game version) before `joinWith`, `watch` and `host` connect, in `enterSession` and when matchmaking found a lobby. Before, the page kept `MP.asyncId` in the live lobby: the button stayed, and the live game's `game:start` would have been ignored. Texts in `client/i18n.js`.
 
-**Tests:** `tests/nextgame/nextgame.test.js`.
+**Tests:** `tests/nextgame/nextgame.test.js` (also: the button again after reopening a game, none after joining a live lobby from a Rundenspiel); lobbies, friends, invite, spectators, match, rematch, security/activity-handlers.
 
 **Status:** ✅ on `development`
 
@@ -820,3 +823,57 @@ Rest of SA-13 from the second security audit: the server no longer connects as t
 **Tests:** `tests/bots/description.test.js` (local Docker and browser) covers permissions, validation, editing and public rendering; `tests/db/migrations.test.js` checks the model against the schema.
 
 **Status:** ✅
+
+## F39 Arena
+
+**Goal:** Bot accounts play each other without anybody setting the games up, and everybody can see how they do.
+
+**Built:** A bot's owner opts it in (*Meine Bots*); an admin starts or pauses pairing under *Übersicht* → *Arena* → *Rundenspiele*. The server pairs available, opted-in bots for public two-player Rundenspiele on the tile map (`async/ladder.js`). The *Arena* standings are grouped by game version. Column `users.arenaLadderOptIn` comes with migration `0007-bot-ladder-opt-in`. See [Rundenspiele → Arena](docs/reference/rundenspiele.md#arena) and [#121](https://github.com/peterswoDE/Hochciv-Multiplayer/issues/121).
+
+**Tests:** `tests/ladder/ladder.test.js` – pairing and standings without a server (also in CI); against the local server the opt-in, the settings and the pairing of bots that ask for their games. Not covered by a test yet: a ladder game played to its end by two bot programs, and the *Arena* page in a browser.
+
+**Status:** 🚧 built, not yet played through by real bots
+
+## P1 Scalability, phase 1
+
+**Goal:** Many bots and players in Rundenspiele without the database and the event loop giving out: phase 1 of the scalability report (write less, read less, limit per account). Gate to phase 2: bytes written to the database per move down at least 5×, and the game list's p95 under 50 ms.
+
+**Built so far (PR A, write path):**
+
+* **P1.1 figures** – `utils/metrics.js`: action time by kind (`hochciv_async_action_seconds`), KI turn time by level (`hochciv_ki_turn_seconds`, timed in `logic.drive`), save time and size, writes by reason, save requests, views sent and their size, game-list time, games in memory. Grafana: row *Rundenspiele* (also `async_games` updates and dead rows from the exporter).
+* **P1.2 one save after the KI turns** – `withGame` no longer saves after every bot / KI turn: each turn records its statistics and a view goes out at most every 500 ms; the game is saved once when they are through.
+* **P1.3 delayed saving** – a save marks the game; the row is written `ASYNC_FLUSH_MS` (2 s) later in the game's queue, so a burst of moves costs one write. Written at once: the end of a game, a change of what the game list selects by (status, public, players, invitations, whose turn), chat messages. The row is serialised at once and written with one `UPDATE` (bind parameters); the writes of a game go out in order; a failed write is tried again. Shutdown writes everything left (`flushAll`). The game list takes turn, round and winners from the copy in memory.
+* **P1.9 leaner views** – the extra JSON copy per viewer is gone (`L.view` copies already, Socket.IO encodes at once); the viewers found by the broadcast are reused for the notifications.
+* **P1.10 cache limit** – at most `ASYNC_MAX_CACHED` (200) games in memory, least recently used first; a game is never dropped while it runs, has unwritten changes or somebody has it open.
+
+**Built (PR B, sessions and game list):**
+
+* **P1.7 sessions** – `rolling` is off and the store no longer touches the session on every answer; `refreshSession` renews cookie and expiry at most every 15 minutes (30 days still count from the last visit). The user (and a bot's owner) comes from a cache (`USER_CACHE_MS`, 60 s); every change of a `users` row drops it at once – trigger `users_changed` → `pg_notify('hochciv_user_changed')` → `LISTEN` (migration 0008), no cache without the listener. Socket.IO runs session and passport only at the handshake (`onlyForHandshake`), not on every poll.
+* **P1.5 game list** – the rows come without `state`, chat, statistics, replay, marks, scenes and the rolled map (`jsonb_build_object` of the needed `data` fields), the five lists in parallel on the GIN indexes, finished games already seen are filtered in SQL. The answer is kept `ASYNC_LIST_CACHE_MS` (10 s) per account; saving a game drops the lists of its players and invited, a change of a public game (status, seats taken) all of them. Express answers repeats with `304` (weak ETag). Locally every list took under 10 ms.
+
+**Built (PR C, limits per account):**
+
+* **P1.11** – `utils/account-limits.js` counts per account (token buckets in the process): moves 5/s with 30 at once, per game 10/s; a bot's engine time 10 s a minute (`withGame` measures each move, KI turns it sets off included); the game list 6/min for bots, 30/min for people, a `304` gives the token back; a bot's other Rundenspiel calls 30/min, its chat once in 10 s; sockets 3 per bot, 5 per person; per bot owner 60 running Rundenspiele, 5 open lobbies, 20 new an hour (`create`, `join`; not the ladder). Over the limit: first a delay of up to 2 s, then `429` + `Retry-After` + `{ error, code, retryAfter }` (codes `rate_limited`, `engine_budget`, `too_many_sockets`, `too_many_games`, `suspended`); 30 strikes suspend a bot for an hour (`users.suspendedUntil`, migration 0009, `botBlockedReason`), close its sockets and report it to the admins (`kind: 'limit'`, shown in *Meldungen*). `ACCOUNT_LIMITS_SCALE` scales or switches them off. The per-socket limiter's refusal now carries `code: 'rate_limited'` too.
+
+**Built (PR D, arena standings):**
+
+* **P1.6** – `async_games.arenaLadder` (set at creation, partial index on (`createdAt`, `id`)) instead of searching every row's JSON for `config.arenaLadder`; table `arena_standings` (game version, bot, games, wins, draws; migration 0010 fills it from the existing ladder games). A bot's row is made with its first ladder game of a version, a booked game is counted in the booking's transaction (`processResult` → `ladder.book`), so the standings never read the games. `GET /api/async/ladder` reads the standings row by row and only the latest games (`LIMIT`), and is kept 60 s; a new ladder game, a booked one and new settings drop it. The pairing reads only the booked games of the current version, without seats and results.
+
+**Built (PR E, the row split):**
+
+* **P1.4** – the chat moves to its own table `async_chat` (one insert per message, the last 200 kept, deleted with the end of the game; migration 0011 moves the existing chats); `stats`, `marks` and `scenes` get their own columns of `async_games`. `flush` writes only what changed (a SHA-1 of every JSON column as last written): the small columns always, `data` and `state` when they changed, statistics, marks and scenes once per turn (player or round changed, end, shutdown, at the latest `ASYNC_HOLD_MS` 60 s later). A chat message no longer writes the game. Measured (2 players, 16 turns, research + end turn + chat): 13.2 KB written per move instead of 23.7 KB (1.8×) – what is left is the engine state, written with every save; the 5× of the gate needs the state written less often or as a change.
+
+**Built (PR F, rev):**
+
+* **P1.8** – every `state:update` of a live game carries a `rev` (a new one per update; `game:start` and a refused action's ack carry the current one). The 15-second loop sends only `state:rev { rev }` (`LIVE_HEARTBEAT_MS`); a client whose last rev differs asks with `state:request` and gets the full state to its socket alone (`resync: true`, no summary or scenes; once in 2 s per socket on the server, once in 5 s from `mp.js`). The full state goes to the whole room again only every 4th heartbeat (60 s), to games played in the last minute – before, every 15 s to games played in the last 30 s.
+
+**Built (PR G, the engine log):**
+
+* **P1.4, second part** – the engine's log (`state.log`, up to 600 entries, most of the engine state) moves to its own table `async_log` (one row per entry by its `seq`, migration 0012). While a game runs, `state` is written without it and only the entries new since the last write are inserted; the rows the engine dropped (older than its last 600) go in the same statement. A game loaded again reads its log back from the table. When the game ends the log is back in `state` and its rows are deleted; a log the engine did not number throughout stays in `state`. A row written before 0012 is split with its next write.
+* **Gate** – measured in the server container (2 players, research + end turn + two chat messages per turn), bytes written per move compared with writing the whole row as before PR E: 16 turns 4.0 KB instead of 19.2 KB (4.8×), 60 turns 5.4 KB instead of 32.2 KB (6.0×), 200 turns 8.1 KB instead of 62.5 KB (7.7×). What is left per write is `data`, the rest of `state` and, once per turn, `stats` and `scenes`. The game list's p95: 10.8 ms locally without its cache (gate: 50 ms).
+
+**Next:** phase 2 of the scalability report.
+
+**Tests:** the existing Rundenspiel tests (turns, stats, replay, scenes, chat, resign, deadline, restart, ladder) against the local server; for PR B also auth, account, bots, invite, spectators, lobbies, maps, filter, friends, security, nextgame, reports, seasons and terms (`TERMS_CHECK=on`) – the tests that change users with raw SQL check the trigger. For PR C `tests/limits` (without a server: the buckets; against it: list, 304, calls, sockets, moves per account and game, open games per owner, suspension with report) and bots, ladder, security/abuse, turns, chat, spectators, invite, resign, stats, replay, scenes, nextgame, challenge, reports, lobbies, account, auth, friends. For PR D `tests/ladder` (also the standings table: a booked win, draw and KI takeover, another game version kept apart), `db/migrations`, bots, limits, turns, resign, stats, replay, scenes, nextgame, spectators; the migration's fill checked against `standingsOf` on test rows. For PR E chat, filter, pause, reports, scenes (their checks now read `async_chat` and the new columns), stats, replay, summary, turns, resign, restart, spectators, nextgame, invite, score, victory, deadline, bots, rematch, `db/migrations`, and a write benchmark in the server container. For PR F `tests/sync` (without a server: the rev of game:start and updates, the heartbeat, `state:request` and its limits, the safety resync) and the live tests timer, pause, spectators, restart, rematch, chat, security/continuity and security/audit. For PR G `tests/turns/engine-log.test.js` (in the server container: the state without its log, a game loaded again, a row from before 0012, the last 600, the end) and turns, stats, replay, summary, scenes, chat, resign, restart, deadline, spectators, nextgame, invite, score, victory, bots, ladder, pause, reports, filter, rematch, `sync/rev`, `db/migrations`, and the write benchmark.
+
+**Status:** 🔨 PR A–G on `development`; the gate is met

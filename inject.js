@@ -2,7 +2,7 @@
  * Patches the fetched game in public/ (called by entrypoint.sh and the Dockerfile):
  *   • loads the Socket.IO client from this server (Discord Activities may not use CDNs),
  *   • adds the multiplayer texts (client/i18n.js), the game log in the player's language (client/logtext.js), the player profile (client/profile.js), mp.js, the scene player (client/scenes.js), the in-game chat (client/chat.js), the post-game statistics (client/stats.js), the player report (client/report.js), the overall statistics (client/gamestats.js), the replay viewer (client/replay.js), the matchmaking (client/matchmaking.js), the sound and tab alerts (client/alerts.js), the friends list (client/friends.js), the leaderboard (client/ranking.js), the weekly challenge (client/challenge.js), the end of a game in full screen (client/victory.js), the lobby presets (client/presets.js), pause and "continue as a Rundenspiel" (client/pause.js), the single-player recorder (client/solo.js), the Discord Activity bridge, the
- *     map browser (client/maps) and the mobile layer (client/mobile) to index.html,
+ *     map browser (client/maps), the mobile layer (client/mobile) and the map effects (client/fx.js) to index.html,
  *   • points mp.js at this server,
  *   • writes a content hash into every script and stylesheet tag (utils/assets.js), so browsers
  *     keep these files until they change.
@@ -32,6 +32,8 @@ const CHAT = '<script src="/client/chat.js"></script>';
 const CONSENT = '<script src="/client/consent.js"></script>';
 // Post-game statistics (after mp.js)
 const STATS = '<script src="/client/stats.js"></script>';
+// The end screen's tabs, Civ IV style (after client/stats.js and client/solo.js, whose data it shows)
+const ENDSCREEN = '<script src="/client/endscreen.js"></script>';
 // Player report (after mp.js and client/stats.js, whose chart it uses)
 const REPORT = '<script src="/client/report.js"></script>';
 // Overall statistics over all matches (menu button "Statistiken", mp.js)
@@ -66,6 +68,9 @@ const MAPS_JS = '<script src="/client/maps/maps.js"></script>';
 // game functions and styles mp.js's widgets.
 const MOBILE_CSS = '<link rel="stylesheet" href="/client/mobile/mobile.css">';
 const MOBILE_JS = '<script src="/client/mobile/mobile.js"></script>';
+// Map effects (client/fx.js): events, battles, cities. Last – it wraps drawMap outside of
+// client/chat.js and client/mobile/mobile.js.
+const FX = '<script src="/client/fx.js"></script>';
 
 if (fs.existsSync(jsPath)) {
     let js = fs.readFileSync(jsPath, 'utf8');
@@ -88,7 +93,7 @@ if (fs.existsSync(htmlPath)) {
     html = html.replace(/<script\s+src="https:\/\/cdn\.socket\.io\/[^"]*"\s*><\/script>/g, SOCKET_IO);
     if (!html.includes(MAPS_CSS)) html = html.replace('</head>', MAPS_CSS + '\n</head>');
     if (!html.includes(MOBILE_CSS)) html = html.replace('</head>', MOBILE_CSS + '\n</head>');
-    const missing = [SOCKET_IO, I18N, LOGTEXT_JS, PROFILE, MP, ALERTS, FRIENDS, RANKING, CHALLENGE, VICTORY, PRESETS, PAUSE, SOLO, SCENES, CHAT, CONSENT, STATS, REPORT, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS].filter(tag => !html.includes(tag));
+    const missing = [SOCKET_IO, I18N, LOGTEXT_JS, PROFILE, MP, ALERTS, FRIENDS, RANKING, CHALLENGE, VICTORY, PRESETS, PAUSE, SOLO, SCENES, CHAT, CONSENT, STATS, ENDSCREEN, REPORT, GAMESTATS, REPLAY, MATCH, ACTIVITY, MAPS_JS, MOBILE_JS, FX].filter(tag => !html.includes(tag));
     if (missing.length) html = html.replace('</body>', missing.join('\n') + '\n</body>');
     html = Assets.versioned(html, fileOf);
     fs.writeFileSync(htmlPath, html, 'utf8');

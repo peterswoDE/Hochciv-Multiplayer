@@ -246,7 +246,7 @@ async function rundenspiel(browser, users, sources) {
     const bad = await emit(pb, 'async:chat', { id: created.id, kind: 'text', text: 'Hurensohn' });
     ok(/nicht gesendet/.test(bad.error || '') && bad.mute.strikes === 1, 'Rundenspiel: a bad text is refused', JSON.stringify(bad));
     await sleep(300);
-    const stored = sql(`SELECT (data->'chatMutes'->'${ub.id}'->>'strikes') || '|' || jsonb_array_length(data->'chat') FROM async_games WHERE id = '${created.id}'`);
+    const stored = sql(`SELECT (data->'chatMutes'->'${ub.id}'->>'strikes') || '|' || (SELECT count(*) FROM async_chat WHERE "gameId" = async_games.id) FROM async_games WHERE id = '${created.id}'`);
     ok(stored === '1|0', 'Rundenspiel: the timeout is kept with the game, the message is not', stored);
     ok(sql(`SELECT source || '|' || penalty FROM reports WHERE "sourceId" = '${created.id}'`) === 'async|timeout', 'Rundenspiel: auto-reported');
     const opened = await pb.evaluate(id => new Promise(res => {

@@ -87,6 +87,7 @@ const MATCH = {
         MP.sessionId = r.sessionId;
         MP.joinCode = r.joinCode;
         MP.password = r.password;
+        MP.leaveAsync();                // found while a Rundenspiel was open: leave it for the lobby
         await MP.showLobby();
         MP.socket.emit('session:connect', { sessionId: r.sessionId, clientId: r.clientId, password: r.password }, ack => {
             if (!ack || ack.error) return toast(TXS((ack && ack.error) || TX('Fehler')));

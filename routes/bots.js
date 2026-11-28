@@ -40,6 +40,7 @@ function botJson(bot, owner) {
         id: bot.id,
         username: bot.username,
         description: bot.botDescription,
+        arenaLadderOptIn: bot.arenaLadderOptIn,
         mmr: bot.mmr,
         gamesPlayed: bot.gamesPlayed,
         createdAt: bot.createdAt,
@@ -134,6 +135,20 @@ router.post('/:id/description', rateLimit, async (req, res) => {
         res.json({ description });
     } catch (err) {
         console.error('[Bots] Description', err);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+// The bot ladder of the Rundenspiele (async/ladder.js): the owner opts the bot in or out
+router.post('/:id/ladder-opt-in', rateLimit, async (req, res) => {
+    const optedIn = req.body?.arenaLadderOptIn;
+    if (typeof optedIn !== 'boolean') return res.status(400).json({ error: 'Ungültige Aktion.' });
+    try {
+        const [updated] = await User.update({ arenaLadderOptIn: optedIn }, { where: managedBotWhere(req) });
+        if (!updated) return res.status(404).json({ error: 'Bot nicht gefunden.' });
+        res.json({ arenaLadderOptIn: optedIn });
+    } catch (err) {
+        console.error('[Bots] Ladder opt-in', err);
         res.status(500).json({ error: 'Serverfehler' });
     }
 });

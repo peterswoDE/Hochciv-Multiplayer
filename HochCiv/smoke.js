@@ -5285,6 +5285,135 @@ step('v111: Venedig – Gründen erklärt sich, „Feld beanspruchen“ ohne Kol
   if (!/Immer die Plättchenkarte aus acht Dreiecken/.test(regeln)) throw new Error('Duell: nicht acht Dreiecke');
 });
 
+/* ------------------------------------------------------------------ Vereinfachtes Spiel (v113)
+   Auf der Seite „Erstes Spiel" unter der Führung abgesetzt; eine freie Partie gegen die KI auf einer
+   gespiegelten Zufallskarte, zwei Bäume, ohne Fähigkeiten und Wirtschaftssieg. */
+// Bis der Mensch dran ist: Züge der KI über das Blatt mit „Weiter" (Animationen „Keine")
+const bisMenschDran = () => {
+  for (let n = 0; n < 10 && G('isAuto')(G('P')(G('S'))) && !G('S').over; n++) {
+    if (!G('ui').botLock) G('runBots')();
+    if (G('ui').botLock) $('bot-next').onclick();
+  }
+};
+step('v113: Erstes Spiel – darunter abgesetzt „Vereinfachtes Spiel“, ohne Unterzeile; startet eine freie Partie', () => {
+  G('show')('screen-menu');
+  window.localStorage.removeItem('hochciv.einfach');
+  $('m-first').onclick();
+  const seite = $('ov-body').querySelector('.fg-seite');
+  if (!seite) throw new Error('keine Seite vor der Partie');
+  const wege = [...seite.querySelectorAll('[data-pfad]')].map(b => b.dataset.pfad);
+  if (wege.join() !== 'militaer,wirtschaft,wissenschaft') throw new Error('Wege: ' + wege.join());
+  const knopf = seite.querySelector('.fg-einfach [data-einfach]');
+  if (!knopf) throw new Error('kein Knopf');
+  if (knopf.textContent.trim() !== 'Vereinfachtes Spiel' || knopf.querySelector('small, .fg-ja')) throw new Error('Knopf: ' + knopf.innerHTML);
+  const teile = [...seite.children];
+  if (knopf.closest('.fg-wahl') || teile.indexOf(knopf.parentElement) !== teile.length - 1 || teile.indexOf(seite.querySelector('.hint')) !== teile.length - 2)
+    throw new Error('nicht abgesetzt unter dem Hinweis');
+  knopf.onclick();
+  const S = G('S');
+  if (!S.einfach || S.fg || !$('screen-game').classList.contains('show') || !$('tut-panel').hidden || $('overlay').classList.contains('show'))
+    throw new Error('keine freie vereinfachte Partie');
+  if (S.players.map(p => p.kind).join() !== 'human,ki' || S.players[1].kiLevel !== 'leicht') throw new Error('Aufstellung: ' + S.players.map(p => p.kind + ':' + p.kiLevel));
+  if (S.map.rows.length !== 10 || S.map.rows.some(z => z.length !== 16 || /[^GMB]/.test(z))) throw new Error('Karte');
+  bisMenschDran();
+  if (G('isAuto')(G('P')(S))) throw new Error('der Mensch kommt nicht dran');
+  if ($('hud-popk').style.display !== 'none') throw new Error('der Strich der Siegschwelle steht da');
+  console.log('       ' + S.players.map(p => p.civ + ' (' + p.kind + ')').join(' gegen ') + ' · ' + S.map.name);
+});
+step('v113: vereinfacht – Bogen mit zwei Bäumen, Fähigkeiten, Welt, Nahrung und Regeln ohne Fehlendes', () => {
+  G('techModal')();
+  const grid = $('ov-body').querySelector('.techgrid');
+  const koepfe = [...grid.querySelectorAll('.techcol h4')].map(h => h.textContent);
+  if (!grid.classList.contains('zwei') || koepfe.join('|') !== 'Forschung & Produktion|Militär & Spezial') throw new Error('Bäume: ' + koepfe.join('|'));
+  const kacheln = [...$('ov-body').querySelectorAll('.tech b')].map(b => b.textContent);
+  if (kacheln.length !== 38 || kacheln.some(n => /^(Taktik|Navigation|Rad|Theologie|Keramik|Mathematik)$/.test(n))) throw new Error(kacheln.length + ' Kacheln: ' + kacheln.join(', '));
+  G('closeModal')();
+  $('a-abil').onclick();
+  const blatt = $('sheet-body');
+  if (/Bots haben keine Fähigkeit/.test(blatt.textContent) || blatt.querySelector('.abil-card') || !/Alle Städte wachsen/.test(blatt.textContent))
+    throw new Error('Fähigkeiten: ' + blatt.textContent.replace(/\s+/g, ' ').slice(0, 120));
+  G('closeSheet')();
+  $('hud-civ').onclick();
+  if ($('ov-body').querySelectorAll('.civ-row').length !== 2 || /Bots haben keine Fähigkeit|ohne Ereignisse/.test($('ov-body').textContent))
+    throw new Error('Welt: ' + $('ov-body').textContent.replace(/\s+/g, ' ').slice(0, 160));
+  G('closeModal')();
+  $('hud-feed').onclick();
+  if (/Gentechnik|Massenmedien/.test($('sheet-body').textContent)) throw new Error('Nahrung nennt Gentechnik/Massenmedien');
+  G('closeSheet')();
+  G('rulesModal')();
+  const regeln = $('ov-body').textContent;
+  if (!/Forschung & Produktion/.test(regeln) || !/Militär & Spezial/.test(regeln) || !/Startausgleich: Wer als Zweiter zieht, bekommt im ersten Zug 4 Münzen/.test(regeln))
+    throw new Error('Regeln ohne die Bäume oder den Startausgleich');
+  const fremd = ['Zivilisationen', 'Straße', 'Kontrollzone', 'Weltwunder', 'Wirtschaftssieg', 'Ereignis', 'Wald', 'Fluss', 'Insel', 'Theologie', 'Spielarten']
+    .filter(w => regeln.includes(w));
+  if (fremd.length) throw new Error('Regeln nennen: ' + fremd.join(', '));
+  if ($('ov-body').querySelectorAll('table tr').length !== 5) throw new Error('Geländetabelle nicht drei Felder und Stadt');
+  G('closeModal')();
+});
+step('v113: vereinfacht – Zug beenden, die KI zieht, du bist wieder dran', () => {
+  const S = G('S'), runde = S.round;
+  zugEnde();
+  bisMenschDran();
+  if (G('S') !== S || (!S.over && (S.round !== runde + 1 || G('isAuto')(G('P')(S))))) throw new Error('Runde ' + S.round + ', am Zug ' + G('P')(S).kind);
+  if (G('UI_ERRORS').length) throw new Error(G('UI_ERRORS').join(' | '));
+  // gespeichert wie jede Partie: „Spiel fortsetzen" macht vereinfacht weiter
+  G('show')('screen-menu'); G('menuButtons')();
+  $('m-continue').onclick();
+  const L = G('S');
+  if (L === S || !L.einfach || L.round !== S.round || !$('screen-game').classList.contains('show')) throw new Error('fortgesetzt: ' + JSON.stringify([L.einfach, L.round]));
+  G('techModal')();
+  if (!$('ov-body').querySelector('.techgrid.zwei')) throw new Error('fortgesetzt ohne die zwei Bäume');
+  G('closeModal')();
+});
+step('v113: vereinfacht – Spielende: Tipp passt, „Nochmal spielen“ eine Stufe schwerer auf neuer Karte, Haken auf der Seite', () => {
+  const S = G('S'), mensch = S.players.findIndex(p => p.kind === 'human');
+  S.over = { winner: mensch, winners: [mensch], how: 'Militärsieg (Test)' };
+  S.tip = null;
+  G('gameOver')();
+  const tipp = $('ov-body').querySelector('.tip').textContent;
+  if (/Straßen|Griechenland|England|Russland|Wikinger|Wirtschaftssieg|Keramik|Taktik|Theologie/.test(tipp)) throw new Error('Tipp: ' + tipp);
+  const nochmal = $('go-again');
+  if (!nochmal || nochmal.textContent.trim() !== 'Nochmal spielen · Mittel') throw new Error('Knopf: ' + (nochmal && nochmal.textContent));
+  if (!G('einfachGewonnen')()) throw new Error('der Sieg ist nicht gemerkt');
+  const c = $('confetti'); if (c) c.remove();
+  nochmal.onclick();
+  const N = G('S');
+  if (N === S || !N.einfach || N.players.find(p => p.kind === 'ki').kiLevel !== 'mittel') throw new Error('keine neue Partie gegen Mittel');
+  if (N.map.rows.join() === S.map.rows.join()) throw new Error('dieselbe Karte');
+  G('show')('screen-menu');
+  $('m-first').onclick();
+  if (!$('ov-body').querySelector('[data-einfach] .fg-ja')) throw new Error('kein Haken am Knopf');
+  G('closeModal')();
+  console.log('       „' + tipp.replace(/^Tipp/, '').slice(0, 70) + '…"');
+});
+step('v113: vereinfacht auf Englisch – Seite, Bogen, Regeln, Welt, Blätter und Spielende übersetzt', () => {
+  G('switchLang')('en');
+  try {
+    G('clearMissing')();
+    G('show')('screen-menu');
+    $('m-first').onclick();
+    const knopf = $('ov-body').querySelector('[data-einfach]');
+    if (!/^Simplified game/.test(knopf.textContent.trim())) throw new Error('Knopf: ' + knopf.textContent);
+    knopf.onclick();
+    bisMenschDran();
+    G('techModal')();
+    const koepfe = [...$('ov-body').querySelectorAll('.techcol h4')].map(h => h.textContent).join('|');
+    if (koepfe !== 'Research & Production|Military & Special') throw new Error('Bäume: ' + koepfe);
+    G('closeModal')();
+    G('rulesModal')(); G('closeModal')();
+    $('hud-civ').onclick(); G('closeModal')();
+    $('a-abil').onclick(); G('closeSheet')();
+    $('hud-feed').onclick(); G('closeSheet')();
+    const S = G('S');
+    if (!/Random map/.test(S.map.name)) throw new Error('Kartenname: ' + S.map.name);
+    S.over = { winner: 1, winners: [1], how: 'Test' };
+    G('gameOver')(); G('closeModal')();
+    const c = $('confetti'); if (c) c.remove();
+    const fehlt = G('missingStrings')();
+    if (fehlt.length) throw new Error('ohne Übersetzung: ' + fehlt.join(' | '));
+  } finally { G('switchLang')('de'); }
+});
+
 step('kein abgefangener Fehler im Zugablauf', () => {
   const f = G('UI_ERRORS');
   if (f.length) throw new Error(f.join(' | '));

@@ -149,7 +149,7 @@ async function viewer(browser, errors, record, doc) {
     await page.click('[data-act="last"]');
     await page.waitForSelector('#ov-body');
     const end = await page.evaluate(() => ({
-        over: !!S.over, stats: !!document.getElementById('mp-stats-btn'), rematch: !!document.getElementById('mp-rematch-box'),
+        over: !!S.over, stats: !!document.getElementById('hce-panel'), rematch: !!document.getElementById('mp-rematch-box'),
         replayBtn: !!document.getElementById('mp-replay-btn'), again: !!document.getElementById('go-again'),
     }));
     ok(end.over && end.stats && !end.rematch && !end.replayBtn && !end.again, 'viewer: the end screen with statistics, without rematch', JSON.stringify(end));

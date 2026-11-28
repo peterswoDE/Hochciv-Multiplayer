@@ -39,6 +39,7 @@ Documentation of the Hochciv multiplayer server. Start with **[How it works](ove
 | [Testing](development/testing.md) | The game's tests and the server's test suite |
 | [Languages](development/languages.md) | German/English texts of everything the server adds |
 | [Mobile layer](development/mobile-layer.md) | `client/mobile/`: zoom, narrow-screen layout |
+| [Map effects](development/map-effects.md) | `client/fx.js`: animations for events, battles, cities |
 
 ## Reference
 

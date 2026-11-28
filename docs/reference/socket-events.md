@@ -2,7 +2,7 @@
 
 # Socket.IO events
 
-One Socket.IO connection per browser tab carries live games, the open Rundenspiel and matchmaking. Connections must pass the [origin check](security.md#origin-check). Every handler takes an object payload and answers through the acknowledgement callback with `{ ok: true, … }` or `{ error: "<German message>" }`; a handler error never takes the server down. Every event passes a rate limit per connection (`utils/socket-limit.js`: game moves 30 a second, 100 at once; other events 10 a second, 40 at once): over it the event is not handled and the acknowledgement is `{ error: 'Zu viele Anfragen – warte einen Moment.' }`; a connection that keeps flooding is disconnected ([Security](security.md#limits)).
+One Socket.IO connection per browser tab carries live games, the open Rundenspiel and matchmaking. Connections must pass the [origin check](security.md#origin-check). Every handler takes an object payload and answers through the acknowledgement callback with `{ ok: true, … }` or `{ error: "<German message>" }`; a handler error never takes the server down. Every event passes a rate limit per connection (`utils/socket-limit.js`: game moves 30 a second, 100 at once; other events 10 a second, 40 at once): over it the event is not handled and the acknowledgement is `{ error: 'Zu viele Anfragen – warte einen Moment.' }`; a connection that keeps flooding is disconnected ([Security](security.md#limits)). On top of that each account has [limits per account](security.md#limits) (`utils/account-limits.js`): moves (`async:action`, `async:place`, `async:draft`, `async:civdraft`) per account and per game, a bot's other `async:*` events and its chat (`async:chat`, `chat:send`). Over them an event is first held back for up to 2 seconds, then refused with the acknowledgement `{ error, code, retryAfter }` – `code` is `rate_limited`, `engine_budget` (a bot's engine time is spent) or `suspended`; wait `retryAfter` seconds. A new socket of an account with too many sockets (3 for a bot, 5 for a person) or of a suspended bot gets the event `limit` (`{ error, code: 'too_many_sockets' | 'suspended', retryAfter }`) and is closed; when a bot is suspended, its open sockets are closed too.
 
 The server is authoritative: the client sends intentions (`action`), the server applies them with the game engine and sends the new state to everyone. Each player gets their own view of the state (`engine.stateForPlayer`).
 
@@ -29,6 +29,7 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `chat:send` | `{ kind: 'text' \| 'emote' \| 'ping', … }` | player | Chat message, emote or map ping (texts need an account) |
 | `chat:report` | `{ id, reason }` (message id) | player or spectator | Report a message ([chat moderation](../overview/features.md#during-and-after-a-game)) |
 | `session:rematch` | – | host | Back to the lobby after the game |
+| `state:request` | – | player or spectator | The full state again, as `state:update` with `resync: true` (no `summary`, no `scenes`) – for a client whose last `rev` differs from the heartbeat `state:rev`. At most once in 2 s per socket |
 | `turn:reclaim` | – | player | *Ich bin zurück*: take the seat back from the KI after missed turns |
 | `game:trend` | – | player, spectator | The statistics so far for the player report (`client/report.js`): `{ trend }`, only points, cities, population, techs, armies, wonders and key moments (`utils/stats.js` `trend`, no income); a finished game answers with its full statistics. Rundenspiele have `trend` in their view while they run |
 | `game:resign` | – | player | Resign: the KI plays the seat to the end; may end the game ([Resign](#resign)) |
@@ -49,8 +50,9 @@ Handled by `sockets/game.js`. A live game is a Socket.IO room named after its `s
 | `draft:update` | Marathon draft state |
 | `civdraft:update` | Nation draft state after every pick: `{ mode, order, at, cur, pool: [{ id, civ, ability, left }], picks: { seat: { civ, ability } }, noAbility, seats, turn: { total, left } }`. The seats sit in turn order already (lobby index = position); the last to move picks first. A pick has the turn time (2 minutes without a timer), then a random one is made. Then `placement:start`, `draft:update` or `game:start` |
 | `game:startFailed` | `{ error }` – the start after the nation draft failed, the lobby is back as before the start (no KI seats, the players' nations and settings) |
-| `game:start` | `{ state, yourIndex, turn }` – the game begins (or the state after a reconnect) |
-| `state:update` | New state after every action or KI turn, with turn/timer info and the scenes since the last update (`scenes`, `client/scenes.js`) |
+| `game:start` | `{ state, yourIndex, rev, turn }` – the game begins (or the state after a reconnect) |
+| `state:update` | New state after every action or KI turn, with turn/timer info and the scenes since the last update (`scenes`, `client/scenes.js`). `rev` numbers the updates of a game; every update has a new one |
+| `state:rev` | `{ rev }` every 15 s while the game runs: the rev of the latest update. A client with another rev missed one and sends `state:request`. The full state itself is sent again only every 60 s, to games played in the last minute |
 | `turn:timeout` | Your turn ran out; `{ afk }` when the KI keeps the seat |
 | `game:resigned` | `{ index, name }`: a player resigned (the player list follows with `resigned: true`) |
 | `game:paused` | `{ paused }`: the host paused (`{ by, at }`) or resumed (null) the game |

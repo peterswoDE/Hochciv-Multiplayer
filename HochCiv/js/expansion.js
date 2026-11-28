@@ -343,7 +343,7 @@ function applyWonderEffect(S, pi, city, w) {
       addFreePick(S, pi, {
         n: 2, why: T('Universität von Oxford'),
         only: techPool(S).filter(t => p.avail[t.k] && !p.techs[t.k]).map(t => t.k)
-          .concat(singularityReady(p) && !p.techs.singularitaet ? ['singularitaet'] : []),
+          .concat(singularityReady(p, S) && !p.techs.singularitaet ? ['singularitaet'] : []),
       });
       break;
     case 'gaerten':

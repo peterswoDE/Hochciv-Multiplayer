@@ -7,6 +7,7 @@ The admin page has a tab **Leistung**. It shows a Grafana dashboard with:
 * event-loop lag, memory, CPU and garbage collection
 * open sockets and live games
 * matches of the last 24 hours (with people, bots only, single-player)
+* Rundenspiele: time per action (incl. the KI turns it starts) and per KI turn, the game list's time, rows written per second and their size, `async_games` updates and dead rows, views sent, games in memory (`hochciv_async_*`, `hochciv_ki_turn_seconds`)
 * the database: query times, the connection pool, database size and table rows, full-table scans, and the most expensive queries (`pg_stat_statements`)
 
 ```

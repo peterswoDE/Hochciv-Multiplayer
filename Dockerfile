@@ -18,7 +18,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=activity /build/node_modules/.cache/hochciv-activity ./node_modules/.cache/hochciv-activity
 
-# Copy application files – including the game itself (HochCiv/, and HochCiv-v110/, HochCiv-v108/ and HochCiv-v107/
+# Copy application files – including the game itself (HochCiv/, and HochCiv-v112/, HochCiv-v110/, HochCiv-v108/ and HochCiv-v107/
 # for Rundenspiele started on those versions). Nothing is downloaded, neither at build time nor at start.
 COPY . .
 

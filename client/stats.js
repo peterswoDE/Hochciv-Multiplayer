@@ -11,7 +11,10 @@
  * map). Those colours are not told apart reliably by everyone, so every line also has its own
  * marker shape, the legend and the end labels name it, a crosshair tooltip lists every empire at
  * a round, and the table view has all values.
+ * "Anteile je Runde" (a switch for every value, kept per device): each empire's share of all
+ * empires at that round, stacked to 100 % like Civ IV's score graph – the relations, not the sizes.
  */
+const NORM_KEY = 'hochciv.stats.norm';   // the "Anteile je Runde" switch, kept per device
 const STATS = {
     SHAPES: ['circle', 'square', 'triangle', 'diamond', 'down', 'hexagon', 'cross', 'star'],
     // what the chart can show: the key in a point of utils/stats.js and its title
@@ -86,9 +89,12 @@ const STATS = {
         const ids = this.series(stats);
         const metrics = this.metrics(stats, ids);
         let k = metrics.length ? metrics[0][0] : 's';
+        let norm = (() => { try { return localStorage.getItem(NORM_KEY) === '1'; } catch (e) { return false; } })();
         const select = metrics.length > 1 ? `<label class="hcs-metric">${TX('Anzeigen')} <select>${metrics.map(([key, n]) =>
             `<option value="${key}">${escHtml(TX(n))}</option>`).join('')}</select></label>` : '';
-        el.innerHTML = `<div class="hcs-head"><h4 class="hcs-title">${TX('Punkte je Runde')}</h4>${select}</div><div class="hcs-legend">${ids.map(i => `<span>${this.swatch(i, this.civ(stats.players[i]).color)}${escHtml(this.label(stats, i))}</span>`).join('')}</div>
+        const toggle = ids.length > 1 ? `<label class="hcs-metric hcs-norm"><input type="checkbox"${norm ? ' checked' : ''}> ${TX('Anteile je Runde')}</label>` : '';
+        if (!toggle) norm = false;
+        el.innerHTML = `<div class="hcs-head"><h4 class="hcs-title">${TX('Punkte je Runde')}</h4><div class="hcs-ctrl">${select}${toggle}</div></div><div class="hcs-legend">${ids.map(i => `<span>${this.swatch(i, this.civ(stats.players[i]).color)}${escHtml(this.label(stats, i))}</span>`).join('')}</div>
             <div class="hcs-plot"><div class="hcs-tip" hidden></div></div>
             <div class="hcs-moments"></div>
             <button type="button" class="btn small hcs-table-btn">${TX('Als Tabelle')}</button>
@@ -97,27 +103,48 @@ const STATS = {
         const btn = el.querySelector('.hcs-table-btn'), tables = el.querySelector('.hcs-tables');
         const draw = () => {
             title.textContent = TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1]);
-            this.chart(plot, stats, ids, k);
-            if (!tables.hidden) tables.innerHTML = this.tables(stats, ids, k);
+            this.chart(plot, stats, ids, k, norm);
+            if (!tables.hidden) tables.innerHTML = this.tables(stats, ids, k, norm);
         };
         draw();
         const sel = el.querySelector('.hcs-metric select');
         if (sel) sel.onchange = () => { k = sel.value; tables.innerHTML = ''; draw(); };
+        const box = el.querySelector('.hcs-norm input');
+        if (box) box.onchange = () => {
+            norm = box.checked;
+            try { localStorage.setItem(NORM_KEY, norm ? '1' : '0'); } catch (e) { /* private window */ }
+            tables.innerHTML = ''; draw();
+        };
         if (opts && opts.noMoments) el.querySelector('.hcs-moments').remove();
         else this.moments(el.querySelector('.hcs-moments'), stats);
         btn.onclick = () => {
             tables.hidden = !tables.hidden;
             btn.textContent = tables.hidden ? TX('Als Tabelle') : TX('Tabelle ausblenden');
-            if (!tables.hidden && !tables.innerHTML) tables.innerHTML = this.tables(stats, ids, k);
+            if (!tables.hidden && !tables.innerHTML) tables.innerHTML = this.tables(stats, ids, k, norm);
         };
     },
 
-    chart: function (box, stats, ids, k) {
+    /** The value of empire i at round rd: as recorded, or (`norm`) its share of all empires in
+        percent – the relations, as in Civ IV (negative values count as 0; a round where every
+        empire has 0 has no shares). */
+    value: function (stats, ids, k, norm) {
+        const raw = (rd, i) => (rd.p[i] && rd.p[i][k] != null ? rd.p[i][k] : null);
+        if (!norm) return raw;
+        const tot = new Map(stats.rounds.map(rd => [rd, ids.reduce((n, i) => n + Math.max(0, raw(rd, i) || 0), 0)]));
+        return (rd, i) => (tot.get(rd) > 0 ? Math.max(0, raw(rd, i) || 0) / tot.get(rd) * 100 : null);
+    },
+
+    chart: function (box, stats, ids, k, norm) {
         k = k || 's';
         const old = box.querySelector(':scope > svg');
         if (old) old.remove();
-        const rounds = stats.rounds;
-        const val = (rd, i) => (rd.p[i] && rd.p[i][k] != null ? rd.p[i][k] : null);
+        const val = this.value(stats, ids, k, norm);
+        const rounds = norm ? stats.rounds.filter(rd => val(rd, ids[0]) != null) : stats.rounds;
+        if (!rounds.length) {
+            box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 300 40" width="100%"><text x="150" y="24" text-anchor="middle" class="hcs-axis">${TX('Keine Werte')}</text></svg>`);
+            return;
+        }
+        const fmt = v => (norm ? Math.round(v) + ' %' : v);
         const title = TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1]);
         const W = Math.max(300, Math.min(720, box.clientWidth || 600)), H = 240;
         const labels = W >= 440;                             // end labels need room on the right
@@ -125,20 +152,33 @@ const STATS = {
         const pw = W - m.l - m.r, ph = H - m.t - m.b;
         const all = rounds.flatMap(rd => ids.map(i => val(rd, i))).filter(v => v != null);
         // food income can be negative: the axis then starts below zero
-        const low = Math.min(0, ...all);
+        const low = norm ? 0 : Math.min(0, ...all);
         const minS = low < 0 ? -this.niceMax(-low) : 0;
-        const maxS = this.niceMax(Math.max(1, ...all));
+        const maxS = norm ? 100 : this.niceMax(Math.max(1, ...all));
         const r0 = rounds[0].r, r1 = rounds[rounds.length - 1].r;
         const x = r => m.l + (r1 === r0 ? pw / 2 : (r - r0) / (r1 - r0) * pw);
         const y = v => m.t + ph - (v - minS) / (maxS - minS) * ph;
         const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round((minS + f * (maxS - minS)) * 10) / 10);
         const every = Math.max(1, Math.ceil(rounds.length / Math.floor(pw / 32)));
         const grid = ticks.map(v => `<line x1="${m.l}" x2="${m.l + pw}" y1="${y(v)}" y2="${y(v)}" class="hcs-grid"/>
-            <text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" class="hcs-axis">${v}</text>`).join('');
+            <text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" class="hcs-axis">${norm ? v + '%' : v}</text>`).join('');
         const xt = rounds.filter((rd, k) => k % every === 0 || k === rounds.length - 1)
             .map(rd => `<text x="${x(rd.r)}" y="${H - 8}" text-anchor="middle" class="hcs-axis">${rd.r}</text>`).join('');
         const markersEvery = rounds.length > 24 ? Math.ceil(rounds.length / 12) : 1;
-        const lines = ids.map(i => {
+        // shares: stacked areas, the first empire at the bottom (Civ IV's score graph)
+        const base = new Map(rounds.map(rd => [rd, 0]));
+        const band = {};
+        const areas = !norm ? '' : ids.map(i => {
+            const color = this.civ(stats.players[i]).color;
+            const lo = rounds.map(rd => base.get(rd));
+            rounds.forEach(rd => base.set(rd, base.get(rd) + val(rd, i)));
+            const hi = rounds.map(rd => base.get(rd));
+            band[i] = [lo[lo.length - 1], hi[hi.length - 1]];
+            const pts = rounds.map((rd, n) => `${x(rd.r).toFixed(1)},${y(hi[n]).toFixed(1)}`)
+                .concat(rounds.map((rd, n) => `${x(rd.r).toFixed(1)},${y(lo[n]).toFixed(1)}`).reverse());
+            return `<polygon class="hcs-area" points="${pts.join(' ')}" fill="${color}" fill-opacity="0.85" stroke="var(--paper, #f5efdf)" stroke-width="1"/>`;
+        }).join('');
+        const lines = norm ? areas : ids.map(i => {
             const color = this.civ(stats.players[i]).color;
             const pts = rounds.filter(rd => val(rd, i) != null).map(rd => [x(rd.r), y(val(rd, i))]);
             if (!pts.length) return '';
@@ -154,13 +194,14 @@ const STATS = {
             const last = rounds[rounds.length - 1];
             const placed = [];
             ids.map(i => ({ i, v: val(last, i) }))
-                .filter(e => e.v != null).sort((a, b) => b.v - a.v)
+                .filter(e => e.v != null && (!norm || e.v > 0)).sort((a, b) => b.v - a.v)
                 .forEach(e => {
-                    const yy = y(e.v);
+                    // a share's label sits in the middle of its band
+                    const yy = norm ? y((band[e.i][0] + band[e.i][1]) / 2) : y(e.v);
                     if (placed.some(p => Math.abs(p - yy) < 13)) return;
                     placed.push(yy);
                     const name = this.short(stats, e.i);
-                    ends += `<text x="${x(last.r) + 9}" y="${yy + 4}" class="hcs-end">${escHtml(name.length > 14 ? name.slice(0, 13) + '…' : name)} ${e.v}</text>`;
+                    ends += `<text x="${x(last.r) + 9}" y="${yy + 4}" class="hcs-end">${escHtml(name.length > 14 ? name.slice(0, 13) + '…' : name)} ${fmt(e.v)}</text>`;
                 });
         }
         box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${escHtml(title)}">
@@ -186,7 +227,7 @@ const STATS = {
             ids.filter(i => val(best, i) != null).sort((a, b) => val(best, b) - val(best, a)).forEach(i => {
                 const row = document.createElement('div');
                 row.innerHTML = this.swatch(i, this.civ(stats.players[i]).color);
-                const v = document.createElement('b'); v.textContent = val(best, i);
+                const v = document.createElement('b'); v.textContent = fmt(val(best, i));
                 const n = document.createElement('span'); n.textContent = this.short(stats, i);
                 row.append(v, n);
                 tip.appendChild(row);
@@ -202,8 +243,9 @@ const STATS = {
         hit.addEventListener('pointerleave', hide);
     },
 
-    /** Key moments: wonders, conquered cities (grouped per round), empires out, new leader, biggest jump. */
-    moments: function (box, stats) {
+    /** Key moments: wonders, conquered cities (grouped per round), empires out, new leader, biggest jump.
+        `opts.all`: every one (the end screen's chronicle, client/endscreen.js), else at most 15. */
+    moments: function (box, stats, opts) {
         const name = i => escHtml(this.short(stats, i));
         const wonder = k => {
             const w = typeof WONDER_BY_KEY !== 'undefined' && WONDER_BY_KEY[k];
@@ -240,25 +282,28 @@ const STATS = {
             lead: () => `👑 ${TX('%s übernimmt die Führung.', name(e.pi))}`,
             jump: () => `📈 ${TX('Größter Sprung: %s, +%s Punkte.', name(e.pi), e.d)}`,
         }[e.k] || (() => ''))();
-        const shown = list.length > 15 ? list.filter(e => e.k !== 'capture').slice(0, 15) : list;
+        const shown = opts && opts.all ? list : list.length > 15 ? list.filter(e => e.k !== 'capture').slice(0, 15) : list;
         box.innerHTML = `<h4>${TX('Wichtige Momente')}</h4>` + (shown.length
             ? `<ul>${shown.map(e => `<li><span class="hcs-r">${TX('Runde %s', e.r)}</span><span>${text(e)}</span></li>`).join('')}</ul>`
             : `<p class="sub">${TX('Keine besonderen Ereignisse.')}</p>`);
     },
 
-    tables: function (stats, ids, k) {
+    tables: function (stats, ids, k, norm) {
         k = k || 's';
         const cell = (rd, i, key) => (rd.p[i] && rd.p[i][key] != null ? rd.p[i][key] : '–');
+        const share = this.value(stats, ids, k, norm);
+        const row = (rd, i) => { if (!norm) return cell(rd, i, k); const v = share(rd, i); return v == null ? '–' : Math.round(v) + ' %'; };
         const head = ids.map(i => `<th>${this.swatch(i, this.civ(stats.players[i]).color)} ${escHtml(this.short(stats, i))}</th>`).join('');
-        const rows = stats.rounds.map(rd => `<tr><td>${rd.r}</td>${ids.map(i => `<td class="hcs-num">${cell(rd, i, k)}</td>`).join('')}</tr>`).join('');
+        const rows = stats.rounds.map(rd => `<tr><td>${rd.r}</td>${ids.map(i => `<td class="hcs-num">${row(rd, i)}</td>`).join('')}</tr>`).join('');
         const last = stats.rounds[stats.rounds.length - 1];
         const counts = this.metrics(stats, ids).filter(([key]) => key !== 's');
         const end = counts.map(([key, n]) => `<tr><td>${TX(n)}</td>${ids.map(i => `<td class="hcs-num">${cell(last, i, key)}</td>`).join('')}</tr>`).join('');
-        return `<h4>${TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1])}</h4><div class="hcs-scroll"><table class="tbl"><tr><th>${TX('Runde')}</th>${head}</tr>${rows}</table></div>
+        return `<h4>${TX((this.METRICS.find(m => m[0] === k) || this.METRICS[0])[1])}${norm ? ' – ' + TX('Anteile je Runde') : ''}</h4><div class="hcs-scroll"><table class="tbl"><tr><th>${TX('Runde')}</th>${head}</tr>${rows}</table></div>
             <h4>${TX('Am Ende')}</h4><div class="hcs-scroll"><table class="tbl"><tr><th></th>${head}</tr>${end}</table></div>`;
     },
 
-    // ── End screen: "Statistik" opens the section below the result ────────────────
+    // ── End screen: "Statistik" opens the section below the result. On the game page
+    //    client/endscreen.js replaces this with its tabs (Civ IV style).
     addToEndScreen: function (stats) {
         const body = $('ov-body');
         if (!body || !stats || $('mp-stats-btn') || !$('go-menu')) return;
@@ -301,6 +346,8 @@ window.addEventListener('DOMContentLoaded', () => {
     style.textContent = `
         .hcs-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 8px 0 2px; }
         .hcs-title { margin: 0; }
+        .hcs-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+        .hcs-norm input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent, #8a5a2b); }
         .hcs-metric { font-size: 13px; color: var(--ink-soft, #6f6551); display: inline-flex; align-items: center; gap: 6px; }
         .hcs-metric select { font: inherit; font-size: 14px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--rule, #c9bb98);
             background: var(--paper-2, #efe6ce); color: var(--ink, #2a2721); }

@@ -93,8 +93,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // --- Overview: metrics, global switches, lobbies ---
+    const ladderAdmin = HC_LADDER_ADMIN.mount(document.getElementById('admin-ladder-panel'), authFetch);
     const LIVE_STATUS = { placement: tx('Startplättchen'), draft: tx('Draft'), playing: tx('Läuft'), finished: tx('Beendet') };
     async function loadDashboard() {
+        ladderAdmin.refreshStatus();
         try {
             const mData = await (await fetch('/api/admin/metrics')).json();
             document.getElementById('admin-lobbies-count').textContent = mData.lobbiesActive;
@@ -150,6 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg.textContent = data.discordInvite ? tx('Gespeichert.') : tx('Entfernt – der Discord-Knopf ist ausgeblendet.');
     };
     loadSettings();
+
     window.toggleMaintenance = async () => {
         await post('/api/admin/config', { maintenanceMode: !window._maintenanceMode });
         loadDashboard();
@@ -201,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${esc(g.version)}</td>
                     <td>${esc(ASYNC_STATUS[g.status] || g.status)}</td>
                     <td>${esc(g.round || '-')}</td>
-                    <td>${esc(g.waitingFor ? txs(g.waitingFor) : '-')}</td>
+                    <td>${esc(g.waitingFor ? HC_I18N.label(g.waitingFor) : '-')}</td>
                     <td style="font-size:13px">${g.players.map(p => nameLink(p.name, p.userId) + (p.isBot ? ` (${tx('Bot')})` : p.replaced ? ` (${tx('KI')})` : '')).join(', ')}</td>
                     <td>${whenAgo(g.waitSince)}</td>
                 </tr>`).join('');
@@ -498,6 +501,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>`;
     }
 
+    // A bot suspended by the limits per account (utils/account-limits.js): what it ran into how often
+    function renderLimitReport(r, i, acc, closed, ban) {
+        const m = r.message || {};
+        const what = {
+            move: tx('Züge'), list: tx('Spielliste'), call: tx('Anfragen'), chat: tx('Chat'),
+            engine_budget: tx('Rechenzeit'), too_many_sockets: tx('Verbindungen'),
+        };
+        const rows = (Array.isArray(r.context) ? r.context : [])
+            .map(c => `<li>${esc(what[c.what] || c.what)}: ${Number(c.n) || 0}×</li>`).join('');
+        const actions = r.status === 'open'
+            ? `<input type="text" id="report-note-${i}" maxlength="1000" placeholder="${tx('Notiz (freiwillig)')}">
+               <button class="btn small btn-primary" onclick="reportAction(${i}, 'resolved')">${tx('Erledigt')}</button>
+               <button class="btn small" onclick="reportAction(${i}, 'dismissed')">${tx('Verwerfen')}</button>${ban}`
+            : `<button class="btn small" onclick="reportAction(${i}, 'open')">${tx('Wieder öffnen')}</button>${ban}`;
+        return `<div class="report-card">
+            <div class="report-head">
+                <strong>${esc(r.reportedName)}</strong>
+                <span class="report-meta">${fmtTime(r.createdAt)} · ${tx('Limits')}</span>
+            </div>
+            <div>${tx('Bot für eine Stunde gesperrt (bis %s): zu viele Anfragen.', m.until ? fmtTime(m.until) : '?')}</div>
+            ${m.owner ? `<div><strong>${tx('Besitzer:')}</strong> ${esc(m.owner)}</div>` : ''}
+            <ul>${rows}</ul>
+            ${closed}
+            <div class="report-actions w">${actions}</div>
+        </div>`;
+    }
+
     function renderReport(r, i) {
         const acc = r.reportedAccount;
         const where = r.source === 'async' ? tx('Rundenspiel') : tx('Live-Spiel');
@@ -508,6 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<button class="btn small error" onclick="reportAction(${i}, 'ban')">${tx('Konto sperren')}</button>`
             : (acc && acc.isBanned ? `<span class="badge banned">${tx('Gesperrt')}</span>` : '');
         if (r.kind === 'map') return renderMapReport(r, i, acc, closed, ban);
+        if (r.kind === 'limit') return renderLimitReport(r, i, acc, closed, ban);
         const chat = (r.context || []).map(m => {
             const cls = m.id === r.message.id ? 'reported' : (m.name === r.reportedName ? 'by-reported' : '');
             return `<div class="${cls}"><time>${fmtTime(m.t)}</time><strong>${esc(m.name)}</strong> ${esc(chatText(m))}</div>`;

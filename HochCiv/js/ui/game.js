@@ -69,6 +69,8 @@ function hudStand() {
   $('hud-popf').style.width = (all > 0 ? Math.min(100, (100 * mine) / all) : 0) + '%';
   $('hud-popf').style.background = civOf(p).color;
   $('hud-popk').style.left = (100 * o.frac) + '%';
+  // Vereinfachtes Spiel (v113): kein Wirtschaftssieg, also auch kein Strich für seine Schwelle
+  $('hud-popk').style.display = S.einfach ? 'none' : '';
   const w = kopf ? kopf.nach
     : { sci: p.res.sci, food: p.res.food, coins: p.res.coins, power: powerOf(S, S.cur), deficit: p.foodDeficit || 0 };
   $('hud-sci').textContent = w.sci;

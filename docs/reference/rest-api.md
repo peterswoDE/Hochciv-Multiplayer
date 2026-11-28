@@ -13,7 +13,7 @@ All endpoints take and return JSON (request body limit 20 KB). Logins are cookie
 | POST | `/register` | public | Create an account (username, password, e-mail); sends an activation code. Refused while registration is off. A taken username is refused; a taken e-mail address gets the same answer as a new one (its owner gets a note instead of a code). |
 | POST | `/activate` | public | Activate with the e-mailed code |
 | POST | `/login` | public | Username + password. With 2FA, answers which second factors are needed. |
-| POST | `/bot` | public | Bot account login: `{ token }` or `Authorization: Bearer <token>` → session ([Bot accounts](bot-accounts.md)) |
+| POST | `/bot` | public | Bot account login: `{ token }` or `Authorization: Bearer <token>` → session ([Bot accounts](bot-accounts.md)). A bot suspended for running into the [limits per account](security.md#limits) gets `403` with `{ error, code: 'suspended', retryAfter }` and a `Retry-After` header |
 | POST | `/login/email-otp/request` | public | Send the e-mail code (second factor) |
 | POST | `/login/email-otp/verify` | public | Check the e-mail code |
 | POST | `/login/totp` | public | Check the authenticator code |
@@ -38,9 +38,10 @@ For bot creators and admins ([Bot accounts](bot-accounts.md)). Admins may act on
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| GET | `/[?all=1]` | login | Own bots (admins with `all=1`: every bot), `{ canCreate, limit, own, bots }`. Each bot has a `description` string or null |
+| GET | `/[?all=1]` | login | Own bots (admins with `all=1`: every bot), `{ canCreate, limit, own, bots }`. Each bot has a `description` string or null and `arenaLadderOptIn` |
 | POST | `/` | recent | Create a bot `{ username }` → `{ bot, token }` – the token is shown only now |
 | POST | `/:id/description` | owner or admin | Set public plain text `{ description }` → `{ description }`. The string is trimmed and limited to 280 Unicode code points. An empty string clears it and returns null |
+| POST | `/:id/ladder-opt-in` | owner or admin | Take part in the [correspondence arena](rundenspiele.md#arena) or not: `{ arenaLadderOptIn: true/false }` → the same |
 | POST | `/:id/token` | recent | New token → `{ token }`; the old one and its sessions end |
 | POST | `/:id/transfer` | recent | Hand the bot over `{ username }` to another bot creator |
 | DELETE | `/:id` | recent | Delete the bot (irreversible – a stolen session cookie alone is not enough) |
@@ -89,6 +90,7 @@ Join, watch and preview: after 10 wrong passwords within 10 minutes the lobby re
 | GET | `/sessions/:id` | public | Lobby info |
 | DELETE | `/sessions/:id` | host (`{ clientId }`) | Cancel the lobby |
 | GET | `/leaderboard[?type=bot]` | public | Top 100 human accounts by MMR; `type=bot`: top 100 bot accounts |
+| GET | `/settings` | public | Site navigation and links: `{ discordInvite, ladderPlacement }` |
 
 The `clientId` is a secret the browser generates and keeps; the game itself then runs over [Socket.IO](socket-events.md#live-games), where the seat is found by that `clientId`, never by an index the client picks.
 
@@ -99,6 +101,7 @@ The `clientId` is a secret the browser generates and keeps; the game itself then
 | GET | `/` | Own games, invitations, open public games. Asked by a bot, each game also has `playerBotsForYou` (it may take a seat now: player-bots allowed, room under the limit, the host's bot filter lets it in) |
 | POST | `/` | Create: `{ config: { mapKey, civMode, humanCount, events, eventMode, wonders, difficulty, ranked, isPublic, playerBots, playerBotLimit, playerBotFilter, … }, civ, ability, invite: [usernames] }`. `playerBotFilter` is `{ only, own, friends, allow, block }` ([Bot accounts](bot-accounts.md#rundenspiele)). Refused in maintenance mode. |
 | GET | `/code/:code` | Look up a game by join code |
+| GET | `/ladder[?version=v112]` | The [correspondence arena](rundenspiele.md#arena) of a game version (default: the current one): `{ version, editions, standings: [{ name, games, wins, draws, score }], games: [{ id, status, round, ranked, turnDays, names, winners, replay }] }` – the latest games up to the configured limit (default 30), `replay` is the match id once the replay is stored. Kept up to 60 seconds |
 | POST | `/notify` | E-mail notifications on/off |
 | GET | `/:id` | Game info and the player's view |
 | POST | `/:id/join` | Take a seat |
@@ -107,6 +110,8 @@ The `clientId` is a secret the browser generates and keeps; the game itself then
 | POST | `/:id/resign` | Resign while the game runs: the KI plays the seat to the end ([Resign](socket-events.md#resign)) |
 | POST | `/:id/invite` | Invite a player by username (a bot account only when the game takes one more player-bot and its bot filter lets this bot in). One e-mail per invitation: again while it is open → `{ ok, already }` without a mail; a declined one can be renewed once a day |
 | POST | `/:id/decline` | Decline an invitation |
+
+These routes count against the [limits per account](security.md#limits): `GET /` 6 times a minute for a bot, 30 for a person (a `304` for `If-None-Match` is not counted); every other call of a bot 30 a minute. Over a limit a call is first held back for up to 2 seconds, then refused with `429`, a `Retry-After` header and `{ error, code: 'rate_limited', retryAfter }` (`403` with `code: 'suspended'` for a suspended bot). Creating (`POST /`) and joining (`POST /:id/join`) answer `400` with `code: 'too_many_games'` when the bots of one owner already have 60 running Rundenspiele, 5 open lobbies or 20 new games in the last hour.
 
 Playing the opened game: [Socket.IO events → Rundenspiele](socket-events.md#rundenspiele). Rules: [Rundenspiele](rundenspiele.md).
 
@@ -192,6 +197,9 @@ All routes need *admin*; `/oauth*` needs *superadmin*. The review admin (`review
 |---|---|---|
 | GET | `/metrics` | Uptime, memory, CPU, maintenance/registration state, lobbies and players online |
 | POST | `/config` | `{ maintenanceMode?, registrationEnabled? }` |
+| GET | `/ladder` | Settings for the [correspondence arena](rundenspiele.md#arena) `{ enabled, turnDays, avoidRematches, sameOwnerRanked, pairingIntervalSeconds, placement, recentGamesLimit, canManage }`. `canManage` reflects this viewer's permission to save. |
+| GET | `/ladder/status` | Ladder activity `{ optedIn, available, activeGames, lastCheckAt }`. `lastCheckAt` is an ISO timestamp or null. |
+| POST | `/ladder` | `turnDays` is 1, 3 or 7. `enabled`, `avoidRematches` and `sameOwnerRanked` are booleans. `pairingIntervalSeconds` is an integer from 5 to 300 (default 15). `placement` is `leaderboard` (default) or `main-menu`. `recentGamesLimit` is a positive integer (default 30). Omitting the interval, placement, or recent game limit keeps its saved value. |
 | GET | `/users` | All accounts; bots with `owner` and `botDisabled`, bot creators with `bots { count, limit }`. For the review admin the e-mail is masked (`p***@gmail.com`) |
 | GET | `/users/:id/mfa` | A user's second factors (not for the review admin: 403) |
 | DELETE | `/users/:id/mfa/:type/:tokenId?` | Remove a second factor |

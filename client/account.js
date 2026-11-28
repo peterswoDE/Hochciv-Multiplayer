@@ -449,6 +449,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${esc(b.gamesPlayed)}</td>
                     <td>
                         <button class="btn small" data-bot-description="${id}">${tx('Beschreibung bearbeiten')}</button>
+                        <label class="acc-check"><input type="checkbox" data-bot-ladder-opt-in="${id}" ${b.arenaLadderOptIn ? 'checked' : ''}> ${tx('An der Arena für Rundenspiele teilnehmen')}</label>
                         <button class="btn small" data-bot-token="${id}">${tx('Neues Token')}</button>
                         <button class="btn small" data-bot-transfer="${id}">${tx('Übergeben')}</button>
                         <button class="btn small error" data-bot-delete="${id}">${tx('Löschen')}</button>
@@ -469,6 +470,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
     });
     document.getElementById('bots-all').addEventListener('change', loadBots);
+    // The bot ladder of the Rundenspiele (async/ladder.js): the owner opts a bot in or out
+    document.getElementById('table-bots').addEventListener('change', async e => {
+        const field = e.target, id = field.dataset.botLadderOptIn;
+        if (!id) return;
+        const optedIn = field.checked;
+        field.disabled = true;
+        const res = await postJson(`/api/bots/${encodeURIComponent(id)}/ladder-opt-in`, { arenaLadderOptIn: optedIn }).catch(() => null);
+        if (!res?.ok) {
+            field.checked = !optedIn;
+            botMsg(tx('Fehler'));
+        }
+        field.disabled = false;
+    });
     document.getElementById('btn-bot-token-copy').addEventListener('click', () => {
         const token = document.getElementById('bot-token-value').textContent;
         (navigator.clipboard ? navigator.clipboard.writeText(token) : Promise.reject()).then(

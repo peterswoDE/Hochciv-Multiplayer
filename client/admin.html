@@ -84,6 +84,47 @@
                     <p id="admin-discord-msg" class="acc-setting-msg" hidden></p>
                 </div>
 
+                <div id="admin-ladder-panel" class="acc-card">
+                    <h2>Arena</h2>
+                    <form id="admin-ladder-form" class="acc-ladder-form">
+                        <fieldset class="acc-ladder-group">
+                            <legend>Rundenspiele</legend>
+                            <div class="acc-ladder-controls">
+                                <label class="acc-check" title="Nach dem Speichern startet die aktive Arena automatisch Partien zwischen verfügbaren, angemeldeten Bots. Bei einer Pause laufen begonnene Partien weiter.">
+                                    <input name="enabled" type="checkbox" class="w-lock">Aktiv
+                                </label>
+                                <small><span>Gespeicherter Status</span> <strong id="admin-ladder-status" class="acc-ladder-status" role="status"></strong></small>
+                            </div>
+                            <div class="acc-ladder-controls">
+                                <label class="acc-check">Tage pro Zug
+                                    <select name="turnDays" class="w-lock" aria-label="Tage pro Zug">
+                                        <option value="1">1</option><option value="3">3</option><option value="7">7</option>
+                                    </select>
+                                </label>
+                                <label class="acc-check">Paarungsintervall (Sekunden)
+                                    <input name="pairingIntervalSeconds" type="number" min="5" max="300" step="1" value="15" required class="w-lock">
+                                </label>
+                                <label class="acc-check">Letzte Partien (Anzahl)
+                                    <input name="recentGamesLimit" type="number" min="1" step="1" required class="w-lock">
+                                </label>
+                                <label class="acc-check"><input name="avoidRematches" type="checkbox" class="w-lock">Direkte Wiederholung vermeiden</label>
+                                <label class="acc-check"><input name="sameOwnerRanked" type="checkbox" class="w-lock">Partien desselben Besitzers werten</label>
+                            </div>
+                            <small id="admin-ladder-summary" class="acc-ladder-summary"></small>
+                        </fieldset>
+                        <label class="acc-check">Position der Arena
+                            <select name="placement" class="w-lock">
+                                <option value="leaderboard">Rangliste</option><option value="main-menu">Hauptmenü</option>
+                            </select>
+                        </label>
+                        <div class="acc-ladder-controls">
+                            <button type="submit" class="btn small w-lock">Speichern</button>
+                            <span id="admin-ladder-pending" class="acc-ladder-pending" role="status" hidden>Auf „Speichern“ klicken, um die Änderungen zu übernehmen.</span>
+                        </div>
+                    </form>
+                    <p id="admin-ladder-msg" class="acc-setting-msg" hidden></p>
+                </div>
+
                 <div class="acc-card">
                     <h2>Lobby Management</h2>
                     <div class="acc-scroll">
@@ -414,6 +455,7 @@
     </script>
     <script src="stats.js"></script>
     <script src="account-common.js"></script>
+    <script src="ladder-admin.js"></script>
     <script src="admin.js"></script>
 </body>
 

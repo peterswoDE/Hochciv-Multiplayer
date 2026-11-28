@@ -13,6 +13,9 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `users` | `User` | Accounts |
 | `games` | `Game` | Finished matches (live games and Rundenspiele) |
 | `async_games` | `AsyncGame` | Rundenspiele, running and finished |
+| `arena_standings` | – | Standings of the [correspondence arena](rundenspiele.md#arena), one row per game version and bot (migration 0010) |
+| `async_chat` | – | Chat messages of running Rundenspiele, one row per message (migration 0011) |
+| `async_log` | – | The engine log of running Rundenspiele, one row per entry (migration 0012) |
 | `replays` | `Replay` | Replays of finished matches |
 | `replay_frames` | `ReplayFrame` | Turn states of Rundenspiele that are still running |
 | `custom_maps` | `CustomMap` | Custom maps in accounts |
@@ -27,7 +30,7 @@ Live lobbies and games are **not** in the database – they live in memory (`ses
 | `oauth_providers` | `OAuthProvider` | Google/Discord configuration |
 | `reports` | `Report` | Chat reports |
 | `banned_words` | `BannedWord` | Admins' word-filter entries |
-| `settings` | `Setting` | Server settings from the admin panel, one row per `key` (utils/settings.js): `discordInvite` |
+| `settings` | `Setting` | Server settings from the admin panel, one row per `key`: `discordInvite` (utils/settings.js), `arena-correspondence-ladder` (the bot ladder's settings as JSON, async/ladder.js) |
 | `session` | – | Login sessions (`connect-pg-simple`) |
 | `schema_migrations` | – | The applied migrations (`name`, `appliedAt`) |
 
@@ -41,7 +44,7 @@ Relations: a `User` has many `Passkey`, `TotpToken` and `DeviceToken` rows (devi
 | `password_hash` | bcrypt; empty for Google/Discord/passkey-only accounts |
 | `mmr` (default 1000), `gamesPlayed` | Ranking |
 | `role` (`user`/`botcreator`/`admin`/`superadmin`), `isActive`, `isBanned` | Rights and state |
-| `accountType` (`human`/`bot`), `ownerId`, `botTokenHash`, `botLimit`, `botDescription` | [Bot accounts](bot-accounts.md): a bot's owner and the SHA-256 of its token; how many bots a bot creator may own (null = default); the bot's public profile text (null = none) |
+| `accountType` (`human`/`bot`), `ownerId`, `botTokenHash`, `botLimit`, `botDescription`, `arenaLadderOptIn`, `suspendedUntil` | [Bot accounts](bot-accounts.md): a bot's owner and the SHA-256 of its token; how many bots a bot creator may own (null = default); the bot's public profile text (null = none); whether the bot takes part in the [correspondence arena](rundenspiele.md#arena); until when a bot is suspended for running into the [limits per account](security.md#limits) (migration 0009) |
 | `googleId`, `discordId`, `avatarUrl` | Linked providers |
 | `activationCode…`, `resetCode…`, `pendingEmail`, `emailChangeCode…` | One-time codes with expiry and attempt counters |
 | `totpSecret`, `totpEnabled`, `totpAttempts`, `totpLockedUntil` | Authenticator (and its lockout) |
@@ -56,7 +59,7 @@ One row per finished match: `id` (UUID, used in `/api/games/:id` and `/?replay=`
 
 ## `async_games`
 
-A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → `placement` | `draft` → `playing` → `finished` | `cancelled`), `isPublic`, `round`, `waitSince`, `reminded`. The array columns `participantIds`, `invitedIds`, `waitingIds` exist for the game list and the "your turn" badge; everything else – seats, settings, chat, statistics, pre-phase – is in `data`, and the engine state in `state`. Saved after every action. Structure of `data`: see the header of `async/logic.js` and [Rundenspiele](rundenspiele.md).
+A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → `placement` | `draft` → `playing` → `finished` | `cancelled`), `isPublic`, `round`, `waitSince`, `reminded`, `arenaLadder` (a game of the [correspondence arena](rundenspiele.md#arena), set at creation; partial index `async_games_arena_ladder` on (`createdAt`, `id`) of those games, migration 0010). The array columns `participantIds`, `invitedIds`, `waitingIds` exist for the game list and the "your turn" badge. `stats` (statistics over the rounds, `utils/stats.js`), `marks` ("since your last turn", `utils/summary.js`) and `scenes` (the scenes of the running game, `utils/scenes.js`) have their own columns (migration 0011); everything else – seats, settings, chat timeouts, pre-phase, result – is in `data`, the engine state in `state` (while the game runs without its log, which is in `async_log`), the chat in `async_chat`. A save writes only the columns that changed: the small columns always, `data` and `state` when they changed, `stats`, `marks` and `scenes` once per turn – when the player or the round changes, the game ends or the server shuts down, at the latest `ASYNC_HOLD_MS` (60 s) after a change (`async/service.js` flush). Structure of `data`: see the header of `async/logic.js` and [Rundenspiele](rundenspiele.md).
 
 ## `replays` and `replay_frames`
 
@@ -66,6 +69,10 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 
 `replay_frames`: while a Rundenspiel runs, its turn states wait here (`gameKey`, `seq`, `data`), because Rundenspiele run for days and survive restarts. At the end they become one `replays` row and are deleted. Live games keep their frames in memory.
 
+## User changes
+
+A trigger on `users` (migrations/0008-user-changed-notify.js) sends `pg_notify('hochciv_user_changed', id)` after every update or delete of a row. The server keeps the logged-in users for a short while (`utils/session-cost.js`, `USER_CACHE_MS`) and drops one as soon as its id is announced; the listener has a connection of its own from the session store's pool and switches the cache off while it is away.
+
 ## Other tables
 
 * **`custom_maps`:** `ownerId` (null: a map that belongs to nobody, `maps/builtin.js`), `name` (unique per owner), `map` (the clean copy `checkCustomMap` returns: `{ name, rows, capitals }`), `code` (6 characters when published, else null – every published map is in the map browser), `publishedAt`, `loads` (loaded by code or picked in the browser, by others), `favorites` (count of `map_favorites` rows, for sorting).
@@ -73,7 +80,10 @@ A Rundenspiel as a whole: `id`, `joinCode`, `hostUserId`, `status` (`setup` → 
 * **`oauth_providers`:** `provider` (`google`/`discord`), `clientId`, `clientSecret`, `botToken` (Discord Activity), `enabled`.
 * **`passkeys`:** `credentialID`, `credentialPublicKey`, `counter`, `transports`.
 * **`device_tokens`:** `token`, `platform`, `lastSeenAt`, `sessionHash` (SHA-256 of the session id that registered the device, migrations/0004-device-session.js – another account takes the device over only after that login ended).
-* **`reports`:** `kind` (`chat` or `map`), `status`, `source`/`sourceId` (live game or Rundenspiel; for a map `map` and the map's id), reporter and reported (id and name), `reason`, `message`, `context` (the game's chat history from the server's copy; for a map report the map as it was), `auto` (word filter), `matches`, `penalty`, `note`, `handledBy`, `handledAt`. Reports about an existing account are kept as long as it exists; the others for `REPORT_KEEP_YEARS` (3).
+* **`async_chat`:** `id` (bigserial, the order), `gameId` (→ `async_games`, deleted with the game), `msg` (the message as the clients get it: `{ id, t, slot, name, uid, kind, text | emote, … }`), `createdAt`; index on (`gameId`, `id`). One insert per message; a game keeps its last 200. The rows are deleted when the game ends (in the statement that writes the end) and at server start for games that ended before.
+* **`async_log`:** `gameId` (→ `async_games`, deleted with the game), `seq` (the entry's number in the engine, one up per entry), `entry` (the entry as in `state.log`: `{ c, m, r, seq, art? }`); primary key (`gameId`, `seq`). While a game runs its `state` is written without `log`: a write that carries the state inserts the entries new since the last one and deletes the rows outside the log's range (the engine keeps the last 600), in the statement that writes the row. Loading the game puts the last 600 back into `state.log`. When the game ends the log is back in `state` and the rows go in that statement (at server start too, for games that ended before). A log whose entries are not numbered one after another stays in `state`.
+* **`arena_standings`:** `version` (game version), `userId`, `name` (the bot's name in its first ladder game of that version), `games` (booked games), `wins`, `draws`; primary key (`version`, `userId`). A bot's row is made with its first ladder game of a version and counted when a game is booked, in the booking's transaction (async/service.js processResult → async/ladder.js `book`), so each game counts once. No foreign key: a deleted bot stays in the standings, as it stays in the games.
+* **`reports`:** `kind` (`chat`, `map` or `limit` – a bot suspended by the [limits per account](security.md#limits)), `status`, `source`/`sourceId` (live game or Rundenspiel; for a map `map` and the map's id), reporter and reported (id and name), `reason`, `message`, `context` (the game's chat history from the server's copy; for a map report the map as it was), `auto` (word filter), `matches`, `penalty`, `note`, `handledBy`, `handledAt`. Reports about an existing account are kept as long as it exists; the others for `REPORT_KEEP_YEARS` (3).
 * **`settings`:** `key` (primary key), `value` (text), `updatedBy` (admin username). Read once and kept in memory by utils/settings.js.
 * **`banned_words`:** `word` (normalized: lower case, ä → ae, ß → ss), `kind` (`ban`/`allow`), `match` (`word` – whole word, or `part` – anywhere), `addedBy`.
 

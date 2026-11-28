@@ -32,7 +32,7 @@ node tests/run-all.js                 # every test that works with the default s
 node tests/run-all.js security maps   # only the tests whose path contains one of the words
 ```
 
-The server limits logins and other requests per minute, so tests run back to back would run into `429`. The runner therefore resets every rate limit before each test (`POST /api/test/reset`, which also drops the server's caches of match statistics, so matches a test writes straight into the database count at once). That endpoint only exists with `TEST_HOOKS=on`, which `docker-compose.local.yml` sets, and never with `NODE_ENV=production`. The limits themselves still apply within a test, so the tests that expect a `429` keep working. At the end it prints which tests failed, with their failing lines, and which tests it skipped because they need other server settings (the last column below). With a filter, those run too – start the server for them first.
+The server limits logins and other requests per minute, so tests run back to back would run into `429`. The runner therefore resets every rate limit before each test (`POST /api/test/reset`, which also resets the [limits per account](../reference/security.md#limits) and drops the server's caches of match statistics, so matches a test writes straight into the database count at once). That endpoint only exists with `TEST_HOOKS=on`, which `docker-compose.local.yml` sets, and never with `NODE_ENV=production`. The limits themselves still apply within a test, so the tests that expect a `429` keep working. At the end it prints which tests failed, with their failing lines, and which tests it skipped because they need other server settings (the last column below). With a filter, those run too – start the server for them first.
 
 | Test | Covers | Server started with |
 |---|---|---|
@@ -42,6 +42,8 @@ The server limits logins and other requests per minute, so tests run back to bac
 | `alerts/alerts.test.js` | sound and tab alerts: tones for join, ready, start, turn and chat, the blinking title of a hidden tab, the sound switch | default |
 | `auth/google-app-login.test.js` | Android Google sign-in (`/api/auth/google/*`) | override file with a token stub (see header) |
 | `invite/invite.test.js` | invite links: copying, the preview, joining a private lobby and a Rundenspiel, watching a running game, guests, English | default |
+| `ladder/ladder.test.js` | bot ladder: pairing and standings (without a server); with the server's address also the owner's opt-in, the admin's settings and the pairing of bots that ask for their games, the standings table (it resets the limits before each poll of the game list) | `LADDER_TICK_MS=500`, a freshly started server (the ladder's last check is kept in memory) |
+| `limits/limits.test.js` | limits per account: the buckets (without a server); with the server's address the game list and its `304`, a bot's other calls, sockets per account, moves per account and per game, open Rundenspiele per owner, the suspension of a bot with its report | default (`ACCOUNT_LIMITS_SCALE` empty or 1) |
 | `lobbies/lobby-filter.test.js` | filters of the open games: every lobby setting in `/api/public-sessions`, each filter and combinations on live lobbies and Rundenspiele, search, reset, kept filters, phone | default |
 | `bots/bots.test.js` | bot accounts: tokens, owners, limits, the *Meine Bots* tab; player-bots in lobbies, Rundenspiele and matchmaking groups; a bot as friend, invited into a lobby and a Rundenspiel | default |
 | `bots/description.test.js` | bot descriptions: owner and admin permissions, length validation, editing and clearing in *Meine Bots*, escaped and wrapped public profile text | default |
@@ -52,6 +54,7 @@ The server limits logins and other requests per minute, so tests run back to bac
 | `terms/terms.test.js` | consent to the terms of use: popup for accounts and guests, declining, the server's refusals, new versions | `TERMS_CHECK=on` |
 | `friends/friends.test.js` | friends list: requests, accepting, crossing requests, refusals and blocks, suggestions, profile button, live invitation into a lobby, Rundenspiel names, removing, offline, account deletion, English | default |
 | `i18n/english.test.js` | every screen in English, no German left | default |
+| `i18n/label.test.js` | „waiting for“ (`HC_I18N.label`): German texts become English, player names stay and are not reported missing (static) | default |
 | `i18n/log.test.js` | the game log (Protokoll, `logSince`) in English from the server's parts (`e.t`), German unchanged, the compressed WebSocket | default |
 | `i18n/victory.test.js` | the end screen in English: every victory text the engine writes, points comparisons with several claims, resign texts, via state and `game:over`; German unchanged | default |
 | `layout/hud.test.js` | multiplayer HUD layout on several screen sizes | default |
@@ -70,6 +73,7 @@ The server limits logins and other requests per minute, so tests run back to bac
 | `replay/replay.test.js` | replays | default |
 | `reports/reports.test.js` | chat reports and their admin section | default |
 | `scenes/scenes.test.js` | what the others did, played on the map: recording, live game, Rundenspiel | default |
+| `turns/engine-log.test.js` | the engine log in `async_log`: a running game's `state` without its log, a game loaded again keeps its entries and adds only new ones, a row with its log still in `state` is split, the last 600 only, the log back in `state` at the end; runs in the server container (`docker exec`) | default |
 | `turns/end-turn.test.js` | ending a turn with something left (v109): the game's "Zug beenden?" dialog, nothing sent until its button, "Zurück" keeps the turn, asked once per turn | default |
 | `techs/tech-tree-refresh.test.js` | the open tech tree redraws from the server's state after researching (the next age's roll), other modals stay | default |
 | `score/win-bonus.test.js` | the winner's points doubled (live, Rundenspiel, end screen) | default |
@@ -81,6 +85,7 @@ The server limits logins and other requests per minute, so tests run back to bac
 | `security/activity-handlers.test.js` | Discord Activity: the bridge's handler allow-list – every handler of `mp.js` and `client/` fits, injected ones (`fetch`, `alert`, appended calls, `javascript:` addresses) do not, the bundle carries the list (R-04); runs without a server | – |
 | `security/ranked.test.js` | ranked integrity: a seat stays with its account after the start (R-02), no timeout penalty in a converted ranked game (R-06), the resign penalty survives the conversion (R-07) | default |
 | `security/quickwins.test.js` | small hardening: clientId and join code checked in `sessions.js` (R-13, R-25), short `SESSION_SECRET` refused in production (R-05), CORS only for allowed origins (R-14), Activity log off (R-21), bot deletion needs a recent login (R-20), `/health` without uptime (R-27) | default |
+| `sync/rev.test.js` | live games: the `rev` of `game:start` and every `state:update`, the heartbeat `state:rev`, `state:request` (to the asking socket only, once in 2 s, not for a socket of no game), the full state every 4th heartbeat; runs without a server (`LIVE_HEARTBEAT_MS=300`) | – |
 | `db/migrations.test.js` | database roles and migrations on an empty database: the setup, every migration, models matching the schema, what the server's role may not do | no server – an empty PostgreSQL (see header); runs on every pull request |
 | `security/regression.test.js` | findings of the security audit of 2026-11-16: passkey login, ranked seats, parallel code guesses, sockets after a password change, invitation e-mails, password-change limit (waits a minute three times for the auth limits) | `TURN_TIMER_SCALE=0.05` |
 | `spectators/spectators.test.js` | spectator mode | default |
@@ -101,7 +106,7 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 
 ## On GitHub
 
-`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `security/params`, `security/activity-handlers`, `security/continuity`, `security/abuse`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`), `db/migrations` against a Postgres service container and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
+`.github/workflows/checks.yml` runs on every pull request into `development` and `main`: the tests that need no server (`security/audit`, `security/research`, `security/params`, `security/activity-handlers`, `security/continuity`, `security/abuse`, `sync/rev`, `random/deal`, `draft/civdraft`, `draft/async-draft`, `challenge/challenge-map`, `ladder/ladder`), `db/migrations` against a Postgres service container and `npm audit --omit=dev --audit-level=high`. Workflow actions are pinned to commit SHAs; Dependabot (`.github/dependabot.yml`) proposes updates of the actions and the npm packages as pull requests into `development`.
 
 ## Which tests to run
 
@@ -109,10 +114,15 @@ Some tests need the same variable on the test side too (`filter`, `timer`) – t
 |---|---|
 | new game version | game tests, `mobile`, `layout`, `i18n`, `match`, `replay`, `placement`, `rematch`, `summary`, `scenes`, `spectators`, `admin/running-games` |
 | `client/mobile/` | `mobile`, `maps` (editor painting) |
+| `client/fx.js` | `fx` (screenshots in `tests/fx/shots`), `mobile`, `scenes` |
 | custom maps, map browser, editor | `maps`, `i18n` |
 | new or changed texts | `i18n` |
 | a feature from [TASKS.md](../../TASKS.md) | that feature's test (named in its section) |
 | auth, origin check, sessions | `security`, `auth`, `loading` |
 | bot accounts, player-bots | `bots`, `match`, `security` |
+| limits per account (`utils/account-limits.js`) | `limits`, `security/abuse`, `bots`, `ladder` |
+| the bot ladder (`async/ladder.js`), `arena_standings` | `ladder` (on a freshly started server), `bots`, `db/migrations` |
+| saving Rundenspiele (`async/service.js` flush, `async_chat`, `async_log`) | `turns` (`engine-log`), `chat`, `stats`, `replay`, `scenes`, `summary`, `resign`, `restart`, `deadline`, `db/migrations` |
+| live-game sync (`broadcastState`, `state:rev`, `state:request`) | `sync`, `timer`, `pause`, `spectators`, `restart`, `rematch` |
 | `server.js` middleware order, `inject.js`, static files | `loading` |
 | `models/`, `migrations/`, database roles | `db/migrations`, then the tests of the feature |

@@ -32,6 +32,10 @@ const PLACEMENT_MS = 3 * 60 * 1000;
  * Register a socket event handler that cannot take the process down: the payload is
  * always an object, `ack` is always a function and any exception is logged and acked.
  */
+const HEARTBEAT_MS = Number(process.env.LIVE_HEARTBEAT_MS) || 15000;   // state:rev to every running live game
+const SAFETY_TICKS = 4;              // every 4th heartbeat (60 s) the full state again …
+const SAFETY_RESYNC_MS = 60000;      // … to games played in the last minute
+
 function on(socket, event, handler) {
     socket.on(event, (data, ack) => {
         const reply = typeof ack === 'function' ? ack : () => { };
@@ -165,7 +169,7 @@ module.exports = function registerHandlers(io) {
                 const sortedStateIndex = engine.stateIndexOf(s.state, playerIndex, me);
                 socket.emit('game:start', {
                     state: engine.stateForPlayer(s.state, sortedStateIndex),
-                    yourIndex: sortedStateIndex,
+                    yourIndex: sortedStateIndex, rev: s.rev || 0,
                     turn: turnInfo(s), paused: s.paused || null,
                     // back in the middle of one's own turn: its summary again
                     summary: s.lastSummary && s.lastSummary.me === sortedStateIndex ? s.lastSummary : undefined,
@@ -189,7 +193,7 @@ module.exports = function registerHandlers(io) {
             if (s.status === 'draft' && s.draft) socket.emit('draft:update', engine.draftPayload(s));
             if (s.status === 'civdraft' && s.civDraft) socket.emit('civdraft:update', civDraftPayload(s));
             if (s.status === 'playing' && s.state) {
-                socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, turn: turnInfo(s), paused: s.paused || null });
+                socket.emit('game:start', { state: engine.stateForPlayer(s.state, -1), yourIndex: -1, rev: s.rev || 0, turn: turnInfo(s), paused: s.paused || null });
             }
         }
 
@@ -384,7 +388,7 @@ module.exports = function registerHandlers(io) {
             });
             // Refused (F30): the client already played the move on its own copy, so it gets the
             // authoritative state back with the reason and puts its board back.
-            if (err) return ack({ error: err, state: engine.stateForPlayer(session.state, finalIndex) });
+            if (err) return ack({ error: err, state: engine.stateForPlayer(session.state, finalIndex), rev: session.rev || 0 });
 
             sessions.recordActivity(sessionId);
             me.missedTurns = 0;             // acting is being there (turn timer)
@@ -495,6 +499,18 @@ module.exports = function registerHandlers(io) {
         });
 
         // ── Pause (F27): the host stops the game – nobody can act, the turn timer stands still ──
+        // The client missed a state update (the heartbeat 'state:rev' has another rev than its last
+        // state): the full state again, to this socket only – at most once in 2 s (scalability P1.8)
+        let lastStateRequest = 0;
+        on(socket, 'state:request', (data, ack) => {
+            if (!session || (!me && !watcher)) return ack({ error: 'Nicht verbunden.' });
+            if (session.status !== 'playing' || !session.state) return ack({ error: 'Spiel läuft nicht.' });
+            if (Date.now() - lastStateRequest < 2000) return ack({ error: 'Zu viele Anfragen.' });
+            lastStateRequest = Date.now();
+            socket.emit('state:update', statePayload(session, { resync: true }));
+            ack({ ok: true, rev: session.rev || 0 });
+        });
+
         on(socket, 'game:pause', (data, ack) => {
             if (!bound()) return ack({ error: 'Nicht verbunden.' });
             if (!isHost()) return ack({ error: 'Nur der Host kann das Spiel anhalten.' });
@@ -643,22 +659,25 @@ module.exports = function registerHandlers(io) {
             }
         });
     });
-    // Start the global 15-second synchronization loop
+    // Every 15 s a heartbeat with the state's rev (a few bytes): a client that missed an update
+    // asks for the state ('state:request'). The full state goes out again only as a safety net,
+    // every 60 s to games played in the last minute (scalability P1.8).
     if (!io.__syncInterval) {
+        let tick = 0;
         io.__syncInterval = setInterval(() => {
             const now = Date.now();
+            const full = ++tick % SAFETY_TICKS === 0;
             for (const session of sessions.getAllSessions().values()) {
                 if (session.status === 'playing' && session.state) {
                     try {
-                        if (now - session.lastActivity < 30000) {
-                            broadcastState(io, session);
-                        }
+                        if (full && now - session.lastActivity < SAFETY_RESYNC_MS) broadcastState(io, session);
+                        else io.to(session.id).emit('state:rev', { rev: session.rev || 0 });
                     } catch (err) {
                         console.error(`[Sync] Error syncing session ${session.id}:`, err);
                     }
                 }
             }
-        }, 15000);
+        }, HEARTBEAT_MS);
         // like the turn timer: the loop alone must not keep the process alive (tests, shutdown)
         io.__syncInterval.unref();
     }
@@ -1131,14 +1150,14 @@ function emitGameStart(io, session) {
             const finalIndex = engine.stateIndexOf(session.state, lobbyIndex, lobbyPlayer);
             io.to(lobbyPlayer.socketId).emit('game:start', {
                 state: engine.stateForPlayer(session.state, finalIndex),
-                yourIndex: finalIndex,
+                yourIndex: finalIndex, rev: session.rev || 0,
                 turn: turnInfo(session), paused: session.paused || null,
             });
         }
     });
     for (const w of session.spectators || []) {
         if (!w.connected || !w.socketId) continue;
-        io.to(w.socketId).emit('game:start', { state: engine.stateForPlayer(session.state, -1), yourIndex: -1, turn: turnInfo(session), paused: session.paused || null });
+        io.to(w.socketId).emit('game:start', { state: engine.stateForPlayer(session.state, -1), yourIndex: -1, rev: session.rev || 0, turn: turnInfo(session), paused: session.paused || null });
     }
     session.startSnapshot = null;           // the game runs: no way back to the lobby (R-09)
 }
@@ -1228,22 +1247,29 @@ function turnSummary(session) {
 function broadcastState(io, session) {
     if (!session || !session.state) return;
     recordStats(session, false);
+    session.rev = (session.rev || 0) + 1;       // every update a new rev (the heartbeat repeats it)
+    // Broadcast universally to everyone in the room. This avoids individual serialization per socket.
+    io.to(session.id).emit('state:update', statePayload(session, { summary: turnSummary(session), scenes: newScenes(session) }));
+}
 
+/**
+ * The state update: `rev` numbers the updates of a game (sockets/game.js broadcastState). A resync
+ * (state:request) carries the same rev, without summary and scenes – they were sent once.
+ */
+function statePayload(session, { summary, scenes, resync } = {}) {
     // Instead of deep cloning per-player in a loop, clone the state exactly once.
     // The engine's stateForPlayer currently treats the state as fully visible for all players.
     // WARNING: everyone in the room gets this one copy. If the game ever gets hidden information
     // (fog of war, secret cards), this must become one stateForPlayer per player.
-    const sharedState = engine.stateForPlayer(session.state, 0);
-
-    // Broadcast universally to everyone in the room. This avoids individual serialization per socket.
-    io.to(session.id).emit('state:update', {
-        state: sharedState,
+    return {
+        state: engine.stateForPlayer(session.state, 0),
+        rev: session.rev || 0,
         currentPlayer: session.state.cur,
         round: session.state.round,
         turn: turnInfo(session), paused: session.paused || null,
-        summary: turnSummary(session),
-        scenes: newScenes(session),
-    });
+        summary, scenes,
+        ...(resync ? { resync: true } : {}),
+    };
 }
 
 /**
@@ -1466,6 +1492,48 @@ async function processGameOverMmr(session, io, sessionId, isRanked = false) {
 }
 
 // for tests/score
+/**
+ * The server shuts down (SIGTERM / SIGINT: a deploy, Watchtower, a reboot – server.js): every
+ * running live game goes on as a Rundenspiel, as if its host had chosen "Als Rundenspiel
+ * fortsetzen" (F27, async/service.js fromLive). Its host is the session's host if they have an
+ * account, else the first other player with one. A game without any player with an account
+ * can't be one (Rundenspiele need an account) and is lost, as before. The players get
+ * 'game:toAsync' with `restart: true` (client/pause.js waits for the server to be back).
+ * Returns [{ session, asyncId } | { session, error }].
+ */
+async function convertAllOnShutdown(io) {
+    const { User } = require('../models');
+    const out = [];
+    for (const [id, session] of sessions.getAllSessions()) {
+        const S = session.state;
+        if (session.status !== 'playing' || !S || S.over || session.converting || session.converted) continue;
+        const account = p => p && p.kind === 'human' && p.dbUserId && !p.resigned;
+        const lp = [session.players[session.hostIndex]].concat(session.players).find(account);
+        if (!lp) { out.push({ session: id, error: 'no account' }); continue; }
+        session.converting = true;
+        let r;
+        try {
+            const user = await User.findByPk(lp.dbUserId);
+            r = user ? await require('../async/service').fromLive(user, session, { restart: true }) : { error: 'account gone' };
+        } catch (err) {
+            r = { error: err.message || String(err) };
+        }
+        if (r.error) {
+            session.converting = false;
+            console.error(`[Shutdown] Session ${id} not converted: ${r.error}`);
+            out.push({ session: id, error: r.error });
+            continue;
+        }
+        session.converted = r.id;
+        session.turnClock = null;
+        console.log(`[Shutdown] Session ${id} → Rundenspiel ${r.id}`);
+        io.to(id).emit('game:toAsync', { asyncId: r.id, by: lp.dbUsername || lp.name, guests: r.guests, restart: true });
+        out.push({ session: id, asyncId: r.id });
+    }
+    return out;
+}
+
+module.exports.convertAllOnShutdown = convertAllOnShutdown;
 module.exports.processGameOverMmr = processGameOverMmr;
 // for the matchmaking (sockets/match.js)
 module.exports.startGame = startGame;

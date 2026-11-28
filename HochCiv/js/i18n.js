@@ -1561,6 +1561,20 @@ const UI_EN = {
   'Einkommen sofort einsammeln': 'Collect income now',
   'einmal je Partie, zusätzlich zum Einkommen zu Zugbeginn': 'once per game, in addition to the income at the start of your turn',
   'In Runde %s eingesammelt.': 'Collected in round %s.',
+  // v113: vereinfachtes Spiel
+  'Vereinfachtes Spiel': 'Simplified game',
+  'Forschung & Produktion': 'Research & Production',
+  'Militär & Spezial': 'Military & Special',
+  'Zufallskarte (%s × %s)': 'Random map (%s × %s)',
+  'Bewegung': 'Movement',
+  'Sieg: Singularität · gegnerische Hauptstadt. Die eroberte Hauptstadt beendet das Spiel sofort, die Singularität am Rundenende – erforschen beide sie in derselben Runde, entscheiden Punkte (Bevölkerung + Technologien).':
+    'Victory: Singularity · an enemy capital. Capturing the capital ends the game at once, the Singularity at the end of the round – if both research it in the same round, points decide (population + technologies).',
+  'Startausgleich: Wer als Zweiter zieht, bekommt im ersten Zug %s Münzen dazu.':
+    'Starting compensation: whoever moves second gets %s extra coins on their first turn.',
+  'Die Nahrungsproduktion darf nicht negativ werden: Wachstum wird blockiert, sobald das Einkommen dadurch unter 0 fiele.':
+    'Food production must not go negative: growth is blocked as soon as income would fall below 0.',
+  'Ertragstechnologien nennen, was ein Feld bzw. jede Bevölkerung damit insgesamt bringt. Für dasselbe Gelände und denselben Ertrag zählt nur die beste: Mit Papier bringt Grasland 1 Wissenschaft, mit Biologie 2 – auch mit beiden.':
+    'Yield technologies state what a tile, or each population, then yields in total. For the same terrain and the same yield only the best one counts: with Paper grassland yields 1 science, with Biology 2 – even with both.',
 };
 const MISSING = new Set();
 /* Übersetzt einen deutschen Satz. Platzhalter `%s` werden der Reihe nach ersetzt. */

@@ -22,7 +22,7 @@ function civRowsHTML(list, V) {
         <span class="civ-chip" style="border-color:${c.color};color:${c.color}">${SYM[c.sym]}</span>
         <span class="civ-nw"><span class="civ-n">${n + 1}. ${esc(c.n)}${extra || ''}</span>${summe}</span>
         <span class="civ-a">${as.length ? as.map(a => `<b>${esc(a.n)}</b><small>${esc(abilEffect(a, V))}</small>`).join('')
-        : `<i>${T('Bots haben keine Fähigkeit')}</i>`}</span></div>`;
+        : V && V.einfach ? '' : `<i>${T('Bots haben keine Fähigkeit')}</i>`}</span></div>`;
   }).join('') + '</div>';
 }
 function worldModal() {
@@ -81,7 +81,8 @@ function worldModal() {
         wondersOf(S, i).map(w => WONDER_BY_KEY[w.k].n).join(', ') + '</p>').join('');
     }
   }
-  if (!S.ev && !S.wo) h += `<p class="sub">${T('Dieses Spiel läuft ohne Ereignisse und ohne Weltwunder.')}</p>`;
+  // im vereinfachten Spiel (v113) gibt es beides nie – dort steht dazu nichts
+  if (!S.ev && !S.wo && !S.einfach) h += `<p class="sub">${T('Dieses Spiel läuft ohne Ereignisse und ohne Weltwunder.')}</p>`;
   modal(T('Welt'), h);
 }
 /* Weltwunder in einer Stadt bauen */
@@ -135,7 +136,8 @@ function foodSheet() {
     </div>`;
 
   if (!src.length) {
-    h += T('<p class="hint">Mit <b>Gentechnik</b> oder <b>Massenmedien</b> ließe sich ein Teil davon aus Wissenschaft oder Münzen bestreiten.</p>');
+    // beide gibt es im vereinfachten Spiel (v113) nicht – dort ohne den Hinweis
+    if (!S.einfach) h += T('<p class="hint">Mit <b>Gentechnik</b> oder <b>Massenmedien</b> ließe sich ein Teil davon aus Wissenschaft oder Münzen bestreiten.</p>');
     sheet(h); return;
   }
   h += T('<p class="sub" style="margin-top:10px">Aus anderen Quellen bestreiten – höchstens %s, also nur die tatsächlichen Kosten.</p>', isst);

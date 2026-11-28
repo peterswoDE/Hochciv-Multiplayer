@@ -7209,3 +7209,207 @@ umgesetzt. Anlass war die Messung aus v111: Atlantis gewann 12 von 12 KI-Partien
   ohne Fähigkeit, Gründen wieder nur an Land, ein zweites `migrateState` ändert nichts); die KI-Partie
   mit vier experimentellen Reichen spielt jetzt mit Deutschland statt Atlantis. `smoke.js` – die
   Auswahl im Aufbau (zehn ohne, zwölf mit Weltwundern, kein Atlantis) und das alte Rezept.
+
+## Vereinfachtes Spiel (v113)
+
+Anweisung des Autors (26.11.), wörtlich: „Offer another alternative in the "first game" screen, a
+simplified game. In that version, make a 1v1 game on a randomized map against AI. There should be no
+civ abilities. There should only be three terrain types: grassland, sea and mountains. The production
+and research tech tree should be collapsed into one, with all the techs affecting non existing
+terrains out. Also, roads/railroads should be removed. The military and special tree should also be
+collapsed into a single tree. In this mode, no economic victory should exist, only military and
+research. Keep in mind to keep the UX clean, as before (no unnecessary subtitles or explanations
+please). Also make absolutely sure to not change anything about other game modes than the new one.
+Also, ask me any questions you have up front, especially which techs to remove to make the collapsed
+two trees work." Vor dem Bauen zwei Runden Rückfragen; was der Autor entschieden hat, steht unten
+mit „(Autor)", der Rest sind Auslegungen (zum Ändern angeboten, UEBERGABE Punkt 76).
+
+### Technologien
+
+* **Weg nach der Anweisung:** alles zu Wald, Fluss und Insel (Mathematik, Elektrizität, Künstliche
+  Intelligenz, Buchdruck, Mühlentechnik, Kunstdünger), Rad und Eisenbahn, dazu – vorgeschlagen und
+  bestätigt – Theologie und Vereinte Nationen (ohne Wirtschaftssieg wirkungslos) und die Technologien
+  der Weltwunder-Erweiterung (Raumfahrt, Baukräne, Militärlogistik, Wallfahrt; Weltwunder und
+  Ereignisse gibt es im Modus nicht – mit Weltwundern käme der Kultursieg dazu).
+* **Grundsatz (vorgeschlagen, vom Autor angenommen):** In jedem Feld des Grundspiels steht je
+  Zeitalter jede Kostenstufe höchstens einmal. Der zusammengelegte Baum soll das auch, also musste,
+  wo zwei Technologien dieselben Kosten hatten, eine gehen oder ziehen – 15 Stellen. Entschieden
+  (Autor): **Forschung & Produktion** – Fischerei und Astronomie bleiben, Astronomie auf 3, dafür
+  Philosophie weg; Schrift statt Keramik; Universitätswesen statt Gilden; Wissenschaftliche Methode und
+  Fließband bleiben, die Methode auf 14; Grüne Revolution statt Computertechnik; Containerlogistik
+  statt Gentechnik. **Militär & Spezial** – zuerst Taktik statt Navigation, in der zweiten Runde auch
+  Taktik weg, Eisenverarbeitung auf 1 und Stadtmauern auf 2 (Stadtmauern und Sklaverei bleiben beide,
+  Sklaverei bei 5); Stahl statt Kundschafterei; Bürokratie statt Schießpulver; Gewehre statt
+  Militärgericht; Panzerschiff und Nationalismus bleiben, das Panzerschiff billiger; Dynamit statt
+  Kolonialismus; Panzer statt Massenmedien; Raketentechnik statt Internet; zusätzlich Rittertum und
+  Spionage weg.
+* **Auslegung:** „Ironclad billiger" heißt **12** – der Platz, den die Spionage frei gemacht hat (11
+  sind die Gewehre). Damit steht in beiden Bäumen je Zeitalter jede Kostenstufe höchstens einmal, und
+  jede verschobene Technologie bleibt in ihrem Zeitalter (`EINFACH_KOSTEN`, ein Test prüft beides).
+* **Ergebnis:** 37 Technologien (`EINFACH_TECHS`), 18 + 19:
+
+  | | Forschung & Produktion | Militär & Spezial |
+  |---|---|---|
+  | Antike | Bewässerung 1, Fischerei 2, Astronomie 3, Schrift 4, Landwirtschaft 5 | Eisenverarbeitung 1, Stadtmauern 2, Demokratie 3, Belagerungsmaschinen 4, Sklaverei 5 |
+  | Mittelalter | Papier 6, Segeln 7, Alchemie 8, Universitätswesen 10 | Stahl 7, Burgenbau 8, Kartografie 9, Bürokratie 10 |
+  | Industrialisierung | Chemie 11, Biologie 12, Dampfmaschine 13, Wiss. Methode 14, Fließband 15 | Gewehre 11, Panzerschiff 12, Nationalismus 13, Dynamit 14, Maschinengewehr 15 |
+  | Moderne | Verbundwerkstoffe 16, Grüne Revolution 17, Containerlogistik 18, Robotik 19 | Panzer 16, Luftwaffe 17, Ökologie 18, Raketentechnik 19, Atomwaffen 20 |
+
+* **Was damit aus dem Modus verschwindet** (Folge, nicht eigens gefragt): Straßen und Handelsrouten,
+  Kopieren (Kundschafterei, Spionage, Internet), beanspruchte Felder (Kolonialismus), Kontrollzonen
+  (Schießpulver), das Füttern (Gentechnik, Massenmedien), der Würfelbonus (Philosophie: verfügbar
+  heißt immer 4–6); übers Meer geht es erst mit dem Panzerschiff (darauf und darüber) bzw. der
+  Luftwaffe, auch für den Siedlerweg; beim Erobern verliert eine Stadt immer 2 Bevölkerung (Rittertum
+  und Militärgericht fehlen). Die Oberfläche dafür bleibt einfach stumm – ihre Knöpfe erscheinen nur
+  mit der Technologie.
+
+### Zwei Bäume
+
+* `EINFACH_BAUM` ordnet jedes Feld des Grundspiels einem Baum zu (Forschung, Produktion → 0; Militär,
+  Spezial → 1); `techFeld(S, t)` gibt den Baum einer Technologie in dieser Partie, `felderVon(S)` die
+  Namen – ohne `S.einfach` genau `t.f` und `FIELDS`, so rechnet jede andere Partie wie bisher.
+* Je Baum wird gewürfelt (`newGame`, `rollAvailability`), die erste Technologie eines Zeitalters öffnet
+  das nächste Zeitalter **ihres Baums** (`applyTech`, `copyTech`), und die Singularität verlangt je
+  Baum eine Technologie der Moderne (`singularityReady(p, S)`; ohne `S` wie bisher je Feld). Die KI
+  zählt ihren Fortschritt und den Weg zur Singularität je Baum (`kiProgress`, `kiSingularityTurns`).
+* **Ertragsketten bleiben je Feld des Grundspiels** (`YIELD_CHAINS` unverändert): Im Baum Forschung &
+  Produktion stehen Papier/Biologie (Wissenschaft auf Grasland) und Landwirtschaft/Grüne Revolution
+  (Nahrung und Münzen auf Grasland). Zu einer Kette verschmolzen, brächte die Grüne Revolution auch
+  die Wissenschaft von Papier und Biologie mit. So bleibt jeder Techtext richtig („Grasland bringt 2
+  Wissenschaft"); fehlt ein Glied (Philosophie ist keins; Fließband, Keramik, Gilden auch nicht), setzt
+  das nächste wie bisher die Summe.
+* **Namen** (Autor): „Forschung & Produktion", „Militär & Spezial" – englisch „Research &
+  Production", „Military & Special". Über `T()` statt über `DATA_EN.fields`, weil es sie nur in
+  diesem Modus gibt.
+* **Bug, beim Messen gefunden und vor der Auslieferung behoben:** `techActive` ließ im Modus zuerst
+  nur `EINFACH_TECHS` gelten – die Singularität steht dort nicht (sie ist keine der TECHS), also
+  lehnte `doResearch` sie ab. In KI-Partien stand sie bei beiden zur Wahl, keiner konnte sie
+  erforschen, eine Partie lief 60 Runden (1240 Bevölkerung). Jetzt gilt die Singularität dazu; ein
+  Test erforscht sie.
+
+### Keine Fähigkeiten, kein Wirtschaftssieg
+
+* Jeder Platz bekommt `drafted: []` – `abilitiesOf` gibt dann nichts zurück (derselbe Weg wie bei
+  einem Spielstand mit einer entfernten Zivilisation, v112). Damit wirken weder Grund- noch
+  Alternativfähigkeiten, auch nicht über die KI. **Auslegung:** Die Navigation der Wikinger
+  (`CIV_TECH`, v107) ist ein Zug der Zivilisation, keine wählbare Fähigkeit – „no civ abilities" schließt
+  sie ein: `civTechAfterRoll(p, field, age, S)` tut im Modus nichts.
+* Zivilisationen: zwei verschiedene der vier Grundreiche, ausgelost (`einfachCfg`) – nur Name,
+  Zeichen und Farbe. Startspieler ausgelost, der Startausgleich zu zweit gilt (4 Münzen).
+* **Kein Wirtschaftssieg:** `checkVictory` meldet im Modus nichts an (auch nicht auf den Kopien der
+  KI, die `checkVictory` am Rundenende selbst ruft); die KI wertet den Anteil an der Weltbevölkerung
+  nicht mehr als Weg zum Sieg (`kiVictory`); die Kopfzeile zeigt Bevölkerung und Balken ohne den
+  Strich der Schwelle. Sieg also nur: gegnerische Hauptstadt (sofort) und Singularität (am
+  Rundenende, Punkte bei zwei Ansprüchen – ohne Wunder zählen Bevölkerung und Technologien).
+
+### Karte
+
+* **Autor:** neu erzeugt, 10 × 16, am Mittelpunkt gespiegelt; „also put some inland seas, just make
+  sure it's one landmass"; in der zweiten Runde „Not that much, remove some of the edge seas
+  instead. Some 1 tile inland seas are also fine."
+* **Gespiegelt:** (r, c) → (9 − r, 15 − c). Bei gerader Zeilenzahl wechselt dabei jede Zeile ihre
+  Versetzung (odd-r) – genau dann ist das im Bild eine Drehung um 180°, Nachbarn bleiben Nachbarn. Mit
+  ungerader Zeilenzahl ginge es nicht; deshalb 10 Zeilen statt 11 wie die Plättchenkarte zu zweit.
+  Kein Feld liegt auf sich selbst, beide Seiten haben genau dasselbe Land.
+* **Bau** (`einfachGelaende`): Höhe aus geglättetem Rauschen wie im Marathon (`marathonNoise`), am
+  Rand abfallend, gemittelt mit dem Spiegelbild. Meer sind die tiefsten Felder, **die mit dem Rand
+  zusammenhängen**, so viele, dass mit den Binnenmeeren etwa 28 % herauskommen (eingeschlossene Senken
+  bleiben Land). Das Land muss in einem Stück am Mittelpunkt hängen (sonst nächster Startwert),
+  abgetrennte Inselchen werden Meer. Gebirge: die obersten 15 % eines Kammrauschens auf dem Land.
+  **Binnenmeere** (`einfachBinnenmeere`): ein gespiegeltes Paar aus 2–3 Feldern, in 60 % der Karten
+  dazu ein Paar einzelner Felder; nie neben anderem Meer oder am Rand, mindestens 3 Felder von den
+  Hauptstädten, und nur, wenn das Land danach noch zusammenhängt.
+* **Hauptstädte** (`einfachHauptstaedte`): ein Grasfeld und sein Spiegelbild, 9–13 auseinander, nicht
+  am Rand, mit Nahrung + ½ Münzen ≥ 4 im ersten Zug (wie im Marathon, hier mit 1 Bevölkerung) und
+  mindestens 20 Land im Umkreis 3. **Auslegung:** bevorzugt ein gemischter Start – mit nur dieser
+  Gewichtung standen zwei Drittel der Hauptstädte mitten im Grasland (1/5/1: kaum Münzen und
+  Wissenschaft); jetzt zählt Wissenschaft und Münzen aus Gebirge oder Meer mit. Dazu kein weiter Umweg:
+  über Land höchstens 3 Schritte mehr als die Luftlinie. Welcher Platz welche Seite bekommt, lost der
+  Startwert. Keine Legephase.
+* **Gemessen** (2000 Karten): Meer 29,0 % (5–95 %: 27,5–30,0), Gebirge 14,2 % (12,5–15,0),
+  Binnenmeer 6,2 Felder je Karte (4–8) in gut drei Becken, Hauptstädte 9–12 auseinander (Mittel 10,8),
+  Umweg über Land höchstens 3; Startertrag 🔬/🌾/🪙 3/3/3 in 47 %, 2/4/2 in 32 %, 1/5/1 in 9 %, 4/2/4 in
+  7 %; nach 1,06 Versuchen im Mittel, höchstens 3.
+
+### Oberfläche
+
+* **Seite „Erstes Spiel"** (Autor, Variante B): unter den drei Wegen und ihrem Hinweis, über einer
+  Linie, der Knopf „Vereinfachtes Spiel" – ohne Unterzeile (Anweisung: keine unnötigen Erklärungen).
+  **Auslegung:** nach dem ersten Sieg ein Haken wie bei den Wegen (`EINFACH_KEY` auf dem Gerät).
+* **Gegner** (Autor): die KI, von der Seite aus immer Leicht; „Nochmal spielen" am Spielende nach
+  einem Sieg eine Stufe schwerer, jedes Mal auf einer neuen Karte (`rematch` → `startEinfach`).
+  **Auslegung:** eine freie Partie ohne Ziele und Tipps (das Panel des Ersten Spiels hängt an seiner
+  festen Karte und Englands Drehbuch).
+* **Technologiebogen** in zwei Spalten (`.techgrid.zwei`). **Kurzregeln** im Modus nur, was es dort
+  gibt (`einfachRegelnHtml`): Zugablauf mit den zwei Siegen, Startausgleich zu zweit, Nahrungsgrenze
+  ohne Gentechnik und Massenmedien, Bewegung, Machtringe, drei Geländearten, die Bäume mit den Kosten
+  des Modus; die Sätze, die es schon gab, wörtlich. Neu ist das Beispiel der Ertragstechnologien
+  (Papier und Biologie statt Mathematik bis Künstliche Intelligenz). Bürokratie mit dem Text der Kachel
+  – der lange nennt Handelsrouten, Gentechnik und beanspruchte Felder.
+* **Fähigkeiten** (Autor: der Knopf bleibt): im Modus ohne Karte einer Fähigkeit und ohne „Bots haben
+  keine Fähigkeit" – es bleiben „Alle Städte wachsen" (mit Verbundwerkstoffen auch kostenlos) und, mit
+  Sklaverei, „In allen Städten opfern". **Welt:** ohne Fähigkeiten und ohne den Satz „Dieses Spiel
+  läuft ohne Ereignisse und ohne Weltwunder" (das gilt hier immer). **Nahrung:** ohne den Hinweis auf
+  Gentechnik und Massenmedien.
+* **Spieltipps** am Spielende (`einfachTipps`): nur, was hier passt – keiner, der eine Zivilisation oder
+  eine ihrer Fähigkeiten nennt, eine Technologie, die es nicht gibt, Straßen, Wunder, Ereignisse oder
+  den Wirtschaftssieg. Geprüft am deutschen Wortlaut (ein Name zählt nur am Wortanfang), dieselben
+  Stellen gelten auf Englisch. Heute bleiben 13 von 43. Ein neuer Tipp wird so von selbst erfasst.
+
+### Andere Spielarten unverändert – wie gesichert
+
+* Alles hängt an `S.einfach`, das nur `einfachCfg` setzt (`cfg.einfach`; ohne steht es gar nicht im
+  Spielstand), oder an Funktionen, die ohne es genau das Bisherige liefern (`techFeld`, `felderVon`,
+  `techActive`, `techBase`, `singularityReady` ohne `S`, `civTechAfterRoll` ohne `S`).
+* **Gegenprobe** (`tools_gegenprobe.js`, neu): 39 Partien aller bisherigen Spielarten mit festem
+  Startwert – Duelle mit allen zwölf Grundfähigkeiten und allen experimentellen Reichen, drei und vier
+  Reiche auf Plättchen- und Originalkarte, Ereignisse, Weltwunder, alter Techtree, Marathon,
+  Fähigkeitswahl, die drei Wege des Ersten Spiels mit ihren Musterlösungen – mit v112 und v113
+  gespielt: Endstände und **jede** Protokollzeile gleich, auch die der Wegwerfkopien der KI. Dazu 128
+  Bildschirme (deutsch und englisch, vier Spielstände je mit Kopfzeile, Karte, Leiste, Bogen, Welt,
+  Fähigkeiten, Nahrung, Macht, Regeln, Stadt- und Feldblatt, Protokoll, Spielende; Menü, Regeln ohne
+  Spiel, die vier Spielarten im Aufbau, Panel und Bogen des Ersten Spiels): gleich bis auf die Seite
+  „Erstes Spiel", die genau um den neuen Abschnitt länger ist.
+
+### Gemessen (v113)
+
+KI gegen KI im vereinfachten Spiel, je 200 Partien, Startwerte fest, die Stufen wechseln die Plätze
+(Wegwerf-Schleife nach dem Muster von `tools_ki.js`):
+
+| Stufen | Forschungssieg | Militärsieg | Endrunde Median (10–90 %, max) | Startspieler gewinnt | Siege je Stufe |
+|---|---|---|---|---|---|
+| Leicht – Leicht | 120 | 80 | 7 (6–9, 11) | 114 | – |
+| Mittel – Mittel | 152 | 48 | 6 (6–7, 9) | 125 | – |
+| Schwer – Schwer | 163 | 37 | 6 (5–7, 8) | 110 | – |
+| Leicht – Mittel | 140 | 60 | 7 (6–8, 12) | 120 | Mittel 140, Leicht 60 |
+| Mittel – Schwer | 162 | 38 | 6 (6–7, 8) | 101 | Schwer 147, Mittel 53 |
+
+Jede Partie endete (keine offen, keine Fehler); am Ende im Mittel 16–17 Technologien, 7 Städte und 28–30
+Bevölkerung je Reich; ein KI-Zug brauchte im Median 10–15 ms, höchstens 0,6 s. **Einordnung:** Die
+Singularität kommt früh – zwei Bäume bis in die Moderne sind kürzer als vier Felder, und ohne
+Wirtschaftssieg wird sie der übliche Sieg. Zum Vergleich das gewöhnliche Duell (Plättchenkarte, Mittel
+gegen Mittel, 200 Partien, `node tools_ki.js selbst 200 reiche=2 stufe=mittel`): Endrunde im Median 7,
+103 Forschungs-, 57 Wirtschafts-, 40 Militärsiege, der Startspieler gewinnt 121 – das vereinfachte
+Spiel ist also gut eine Runde kürzer, und die Forschungssiege nehmen den Platz der Wirtschaftssiege ein. Der Autor wollte 120 vorerst behalten (Rückfrage 5); die
+Tabelle ist die Grundlage, falls er nachstellt (UEBERGABE Punkt 77). Gegen Menschen nicht gemessen.
+
+### Abgesichert (v113)
+
+`test.js`: Aufbau (Duell ohne Ereignisse und Weltwunder, Mensch gegen KI Leicht, zwei verschiedene
+Grundreiche, keine Fähigkeiten, Rezept, derselbe Startwert derselbe Aufbau); die Leitern beider Bäume
+als Schnappschuss, 37 Technologien, je Baum und Zeitalter jede Kostenstufe einmal, die verschobenen
+Kosten im alten Zeitalter, was fehlt (Straßen, Wirtschaftssieg, Wald und Fluss, Navigation, Taktik),
+die Singularität zu 120; Würfeln je Baum (nur Technologien des Modus, je Baum mindestens eine der
+Antike, die erste Technologie öffnet nur das Mittelalter ihres Baums, das Protokoll nennt den Baum);
+die Singularität mit je einer Technologie der Moderne je Baum, erforscht als Forschungssieg; Wikinger
+ohne Gratisarmee und Navigation, Griechenland ohne Rabatt, Russland ohne Taiga, auch nach Speichern
+und Laden; kein Wirtschaftssieg mit 40 von 41 Bevölkerung (im gewöhnlichen Duell schon); 200 Karten
+(gespiegelt, drei Geländearten, Land in einem Stück, Binnenmeere bis 4 Felder, Hauptstädte gespiegelt
+mit Startertrag und ohne Umweg, Anteile, eine Karte je Startwert); die Spieltipps (welche passen, auf
+Englisch dieselben); vier KI-Partien bis zum Militär- oder Forschungssieg ohne fremde Technologie und
+ohne Straße. Dazu je die Gegenprobe ohne `S.einfach` (62 Technologien, vier Felder, die alten Kosten).
+`smoke.js`: der Knopf auf der Seite (Stelle, ohne Unterzeile, ohne Haken), die freie Partie (Karte,
+Aufstellung, Kopfzeile ohne Strich), Bogen mit zwei Spalten und 38 Kacheln, Fähigkeiten, Welt, Nahrung
+und Regeln ohne Fremdes, Zugwechsel mit der KI, „Spiel fortsetzen", das Spielende (passender Tipp,
+„Nochmal spielen · Mittel" auf neuer Karte, Haken auf der Seite) und alles auf Englisch ohne Lücke.
+`tools_gegenprobe.js` (neu, siehe oben): die anderen Spielarten gegen v112.

@@ -221,7 +221,15 @@ router.post('/bot', botRateLimit, async (req, res) => {
         if (!bot) return res.status(401).json({ error: 'Ungültiges Bot-Token.' });
         const owner = bot.ownerId ? await User.findByPk(bot.ownerId) : null;
         const why = Bots.botBlockedReason(bot, owner);
-        if (why) return res.status(403).json({ error: why });
+        if (why) {
+            const until = bot.suspendedUntil && new Date(bot.suspendedUntil).getTime();
+            if (until > Date.now()) {
+                const retryAfter = Math.ceil((until - Date.now()) / 1000);
+                res.set('Retry-After', String(retryAfter));
+                return res.status(403).json({ error: why, code: 'suspended', retryAfter });
+            }
+            return res.status(403).json({ error: why });
+        }
         finishLogin(req, res, bot);
     } catch (err) {
         console.error('Bot login error', err);

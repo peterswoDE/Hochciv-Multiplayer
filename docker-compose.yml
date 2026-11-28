@@ -57,6 +57,8 @@ services:
     image: peterswode/hochciv-multiplayer:${HOCHCIV_IMAGE_TAG:-latest}
     container_name: hochciv-multiplayer
     restart: unless-stopped
+    # running live games are saved as Rundenspiele on shutdown (server.js) – give it time
+    stop_grace_period: 60s
     depends_on:
       hochciv-db-setup:
         condition: service_completed_successfully
@@ -231,6 +233,8 @@ services:
       - WATCHTOWER_SCOPE=hochciv
       - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-300}
       - WATCHTOWER_CLEANUP=true
+      # stop the app with the same grace period (live games → Rundenspiele, server.js)
+      - WATCHTOWER_TIMEOUT=60s
     labels:
       - com.centurylinklabs.watchtower.scope=hochciv
     volumes:

@@ -8,7 +8,9 @@
  * Since v109 the game asks once per turn when resources or free actions would be left
  * ("Zug beenden?", endTurnAsk). mp.js has its own turn button: it shows the same dialog, sends
  * nothing until "Zug beenden" is tapped there, and then ends the turn on the server. "Zurück"
- * keeps playing; after that the button ends without asking again in that turn.
+ * keeps playing; the button asks again then. Tapping the button again and again (while waiting
+ * for the server) neither skips the dialog nor sends a second endTurn, and the server refuses an
+ * endTurn for a round that is over (it would end the next turn).
  *
  * Uses an installed Chrome or Edge (no browser download); set HOCHCIV_BROWSER to its path if
  * it is not found.
@@ -82,10 +84,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         ok(await a.evaluate(() => !document.getElementById('overlay').classList.contains('show') && window.__sent.length === 0 && MP.isMyTurn()),
             '"Zurück" keeps the turn');
 
-        // 3. asked once: the button now ends via the server; and again from the dialog's button
-        await a.evaluate(() => { ui.confirmedEnd = false; });                 // ask again for the dialog's own button
+        // 3. the button asks again; the dialog's "Zug beenden" ends the turn
         await a.click('#a-end');
         await a.waitForSelector('#end-ok');
+        ok(await a.evaluate(() => window.__sent.length === 0), 'after "Zurück" the button asks again');
         await a.click('#end-ok');
         await sleep(300);
         const sent = await a.evaluate(() => window.__sent.slice());
@@ -94,12 +96,31 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         await a.waitForFunction(r => S.round > r || !MP.isMyTurn(), before.round, { timeout: 30000 });
         ok(true, 'the turn moved on');
 
-        // 4. next turn: asks again (once per turn)
+        // 4. next turn: the server refuses an endTurn for the round before (sent twice)
         await myTurn();
+        const r2 = await a.evaluate(() => S.round);
+        const stale = await a.evaluate(() => new Promise(r => MP.socket.emit('action', { type: 'endTurn', params: { round: S.round - 1 } }, r)));
+        ok(stale && stale.error === 'Dieser Zug ist schon beendet.' && await a.evaluate(() => MP.isMyTurn()),
+            'server: an endTurn for a round that is over is refused', JSON.stringify(stale && stale.error));
+
+        // 5. impatient: many taps – the dialog still comes (once per turn), nothing sent
+        await a.evaluate(() => { if (typeof closeModal === 'function') closeModal(); Object.assign(S.players[MP.playerIndex].res, { sci: 50, coins: 50 }); window.__sent = []; });
+        await a.evaluate(() => { for (let n = 0; n < 5; n++) document.getElementById('a-end').click(); });
+        await a.waitForSelector('#end-ok');
+        ok(await a.evaluate(() => window.__sent.length === 0 && document.getElementById('overlay').classList.contains('show')),
+            'next turn: five taps – the dialog is shown, nothing sent');
+        // "Zug beenden", then more taps while waiting for the server: one endTurn only
+        await a.evaluate(() => { document.getElementById('end-ok').click(); for (let n = 0; n < 5; n++) document.getElementById('a-end').click(); });
+        await sleep(500);
+        const sent2 = await a.evaluate(() => window.__sent.slice());
+        ok(sent2.length === 1 && sent2[0] === 'endTurn', 'taps while waiting send no second endTurn', sent2.join());
+        await myTurn();
+        const r3 = await a.evaluate(() => S.round);
+        ok(r3 === r2 + 1, 'the next turn is played, not skipped', `${r2} → ${r3}`);
         await a.evaluate(() => { if (typeof closeModal === 'function') closeModal(); Object.assign(S.players[MP.playerIndex].res, { sci: 50, coins: 50 }); window.__sent = []; });
         await a.click('#a-end');
         await a.waitForSelector('#end-ok');
-        ok(await a.evaluate(() => window.__sent.length === 0), 'next turn asks again');
+        ok(await a.evaluate(() => window.__sent.length === 0), 'and it asks again');
         await a.evaluate(() => closeModal());
 
         ok(errors.length === 0, 'no page errors', errors.join(' | '));

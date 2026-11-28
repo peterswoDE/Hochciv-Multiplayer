@@ -244,7 +244,7 @@ async function rundenspiel(browser, errors) {
         await a.fill('#mp-chat-input', 'Gut gespielt, bis morgen');
         await a.press('#mp-chat-input', 'Enter');
         ok(!!(await until(async () => (await badge(b)) === '1')), 'Rundenspiel: the message arrives live (badge on B)');
-        const stored = await until(async () => sql(`SELECT data->'chat'->0->>'text' FROM async_games WHERE id = '${gameId}'`) || null);
+        const stored = await until(async () => sql(`SELECT msg->>'text' FROM async_chat WHERE "gameId" = '${gameId}' ORDER BY id LIMIT 1`) || null);
         ok(stored === 'Gut gespielt, bis morgen', 'Rundenspiel: stored with the game', stored);
 
         await b.goto(BASE + '/?async=' + gameId);           // opened again (mp.js drops ?async= from the address)
@@ -271,7 +271,7 @@ async function rundenspiel(browser, errors) {
         const done = await a.evaluate(id => new Promise(r => MP.socket.emit('async:resign', { id }, r)), gameId);
         ok(!done.error, 'Rundenspiel: A resigns, the game ends', done.error);
         ok(await until(async () => sql(`SELECT status FROM async_games WHERE id = '${gameId}'`) === 'finished'), 'Rundenspiel: finished');
-        ok(sql(`SELECT coalesce(jsonb_array_length(data->'chat'), 0) FROM async_games WHERE id = '${gameId}'`) === '0', 'Rundenspiel: the chat is deleted at the end');
+        ok(sql(`SELECT count(*) FROM async_chat WHERE "gameId" = '${gameId}'`) === '0', 'Rundenspiel: the chat is deleted at the end');
         const late = await a.evaluate(id => new Promise(r => MP.socket.emit('async:chat', { id, kind: 'emote', emote: '👍' }, r)), gameId);
         ok(late.error === 'Das Spiel ist beendet, der Chat ist geschlossen.', 'Rundenspiel: no more messages after the end', late.error);
         for (const ctx of [ca, cb, cc]) await ctx.close();

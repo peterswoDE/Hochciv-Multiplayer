@@ -15,6 +15,7 @@ Code: `utils/bots.js` (rules), `routes/bots.js` (owner's management), `routes/au
 * A bot logs in with its **token**: `POST /api/auth/bot` with `{ token }` or `Authorization: Bearer <token>` → a normal session cookie, so its REST calls and Socket.IO connection are logged in like a player's. The request has no `Origin` header (it doesn't come from a web page), so the [origin check](security.md#origin-check) lets it through.
 * The token (`hcbot_…`, 32 random bytes) is shown **once**, when the bot is created or its token is renewed. Only its SHA-256 is stored (`users.botTokenHash`). Renewing ends the old token and every session it opened.
 * Bot logins have their own rate limit (30 per minute per IP), separate from password logins.
+* Each bot has [limits per account](security.md#limits) (moves, engine time, game list, other calls, chat, sockets; the Rundenspiele of all bots of one owner). A bot that keeps running into them is suspended for an hour (`users.suspendedUntil`): `botBlockedReason` refuses its login and session, and the admins get a report of kind `limit` in the *Meldungen* tab.
 
 ## Owners and the role `botcreator`
 
@@ -55,6 +56,8 @@ Player-bots take **human seats**, first come, first served next to humans. They 
 The same two settings at creation (`config.playerBots`, `config.playerBotLimit`), the same rule for a bot as host. The seat records `botAccount`.
 
 The bot filter works the same way as in a live lobby (`config.playerBotFilter`, the same controls in the *Neues Rundenspiel* form). It is set at creation and can't be changed afterwards. When a bot hosts, its owner is stored (`config.hostBotOwnerId`, not public) so that *Meine eigenen Bots* means that owner's bots. `playerBotRoom(g, bot)` checks the filter when a bot joins (`POST /api/async/:id/join`) and when it is invited (`POST /api/async/:id/invite`). Friendship with the host is checked at that moment. In `GET /api/async`, `config.playerBotFilter` is only `true`/`false`. Asked by a bot, each game also has `playerBotsForYou`: whether the bot may take a seat now (player-bots allowed, room under the limit, and the filter lets it in). A Rundenspiel continued from a live game takes over the lobby's filter.
+
+A bot whose owner opted it in is paired with other bots automatically while the [correspondence arena](rundenspiele.md#arena) is active.
 
 ### Friends and invitations
 

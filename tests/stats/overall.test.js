@@ -92,6 +92,10 @@ function facts() {
     const sample = f.p.flatMap((p, i) => Object.keys(p.t).map(k => [i, k])).slice(0, 20);
     ok(sample.every(([i, k]) => { const j = firstSeen(i, k); return f.p[i].t[k] === (j ? states[j - 1].round : states[0].round); }), 'facts: the round is the one of the turn that researched it');
     ok(['military', 'science', 'economy', 'culture', 'other'].includes(f.win), 'facts: victory type', f.win);
+    ok(f.p.every((p, i) => Array.isArray(p.av) && Array.isArray(p.nav) && p.av.length && !p.av.some(k => p.nav.includes(k))
+            && p.av.every(k => S.players[i].avail[k] || S.players[i].techs[k]) && p.nav.every(k => !S.players[i].avail[k] && !S.players[i].techs[k])
+            && Object.keys(p.t).every(k => p.av.includes(k) || (E.techPool(S).find(t => t.k === k) || { age: 4 }).age > 3)),
+        'facts: researchable (av) and rolled but not researchable (nav) techs', JSON.stringify(f.p.map(p => [p.av.length, p.nav.length])));
     ok(f.p.every((p, i) => p.c === S.cities.filter(c => c.owner === i).length && p.s === E.victoryScore(S, i).total && p.kind === 'ki' && p.lvl === 'schwer'),
         'facts: cities, score and KI level at the end');
     ok(Facts.victoryOf({ military: true }) === 'military' && Facts.victoryOf({ how: 'Forschungssieg (Singularität)' }) === 'science'
@@ -155,6 +159,16 @@ function aggregate() {
         'aggregate: versions and names (German, English, the Singularity)');
     const d = aggregate(rows, {}, true);
     ok(d.detail && d.detail.levels.length && d.detail.sources.replay === 5 && d.detail.sources.record === 2, 'aggregate: admin detail', JSON.stringify(d.detail && d.detail.sources));
+
+    // researchable or not (facts av/nav): only seats that carry them count
+    const av = (won, a, n) => P('england', 'human', 1, won, { av: a, nav: n });
+    const ar = [g(2, 'duel', 'v113', [av(true, ['schrift', 'rad'], ['mathematik']), av(false, ['mathematik'], ['schrift', 'rad'])]),
+        g(2, 'duel', 'v113', [av(true, ['schrift'], ['rad']), av(false, ['rad', 'schrift'], [])]),
+        g(2, 'duel', 'v112', [P('england', 'human', 1, true), P('russland', 'human', 2, false)])];
+    const ta = aggregate(ar, { seats: 'all' }, true).detail.techAvail, tk = k => ta.list.find(x => x.k === k);
+    ok(ta.seats === 4 && tk('schrift').av === 3 && tk('schrift').avWon === 2 && tk('schrift').nav === 1 && tk('schrift').navWon === 0
+        && tk('rad').av === 2 && tk('rad').avWon === 1 && tk('rad').nav === 2 && tk('rad').navWon === 1 && !aggregate(ar, {}).detail,
+        'aggregate: admin detail – win rate with a tech researchable or not', JSON.stringify(ta));
 
     // player-bots play human seats; the match record marks them (participants[].botAccount)
     const { markPlayerBots } = require('../../utils/facts');

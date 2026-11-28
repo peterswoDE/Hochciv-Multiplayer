@@ -15,7 +15,8 @@
  *  since the extension's v112 the game runs upright when held upright.
  *
  * Hooks into the game – check these when the game is updated:
- *   drawMap(svg, map, opts)   wrapped: re-applies the zoom after every redraw
+ *   drawMap(svg, map, opts)   wrapped: re-applies the zoom after every redraw (not on an svg with
+ *                             data-no-zoom)
  *   openTile(r, c)            wrapped: keeps the selected field (ui.sel) visible next to its sheet
  *   editorScreen()            wrapped: folds the settings on short screens
  *   edOwnsDrag()              asked on the editor map: a finger paints (true) or moves the map
@@ -158,6 +159,8 @@
   const origDrawMap = window.drawMap;
   window.drawMap = function (svg) {
     const out = origDrawMap.apply(this, arguments);
+    // data-no-zoom: a map shown whole, without zoom and pan (client/endscreen.js, Zeitraffer)
+    if (svg && svg.dataset && svg.dataset.noZoom) return out;
     try { afterDraw(svg); showTutorialFields(svg); } catch (e) { /* never break drawing */ }
     return out;
   };

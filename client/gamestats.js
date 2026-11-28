@@ -215,11 +215,32 @@
                 <td class="num">${t.rate == null ? '–' : t.rate + '%'}</td><td class="num">${t.round == null ? '–' : t.round}</td></tr>`));
     }
 
+    /* Per technology: the win rate of seats that could research it, of seats whose roll for its
+       field and age left it out, and the difference in points (utils/gamestats.js, techAvail). */
+    function availTable(d) {
+        const A = (d.detail || {}).techAvail;
+        if (!A) return '';
+        const N = d.names, ages = N.ages[en() ? 1 : 0] || [];
+        const rows = A.list.map(x => {
+            const row = techRow(N, x.k);
+            const a = pct(x.avWon, x.av), n = pct(x.navWon, x.nav);
+            return { name: row ? (en() ? row[2] : row[1]) : x.k, age: row ? row[4] : null, a, n, av: x.av, nav: x.nav, diff: a != null && n != null ? a - n : null };
+        }).sort((p, q) => (q.diff == null ? -999 : q.diff) - (p.diff == null ? -999 : p.diff));
+        const rate = (v, n) => `${bar(v)}<small>${tx('%s Plätze', n)}</small>`;
+        return `<p class="hcg-note" style="margin-top:10px"><b>${tx('Technologien: forschbar oder nicht')}</b></p>
+            <p class="hcg-note">${tx('Siegquote der Plätze, denen eine Technologie verfügbar war, gegen die, bei denen sie im Wurf für ihr Feld und Zeitalter nicht verfügbar wurde. Zeitalter, die ein Reich nie erreicht hat, zählen nicht. Aus %s Plätzen; ältere Partien erst nach „Neu berechnen“.', A.seats)}</p>
+            ${table([[tx('Technologie')], [tx('Siegquote forschbar'), 'hcg-c-bar2'], [tx('Siegquote nicht forschbar'), 'hcg-c-bar2'], [tx('Differenz'), 'num']],
+                rows.map(r => `<tr class="${Math.min(r.av, r.nav) < SMALL ? 'small' : ''}"><td>${esc(r.name)}<small>${esc(ages[r.age] || '')}</small></td>
+                    <td>${rate(r.a, r.av)}</td><td>${rate(r.n, r.nav)}</td>
+                    <td class="num">${r.diff == null ? '–' : (r.diff > 0 ? '+' : '') + r.diff}</td></tr>`))}`;
+    }
+
     function adminSection(d) {
         const D = d.detail || {};
         const src = D.sources || {};
         return `<h3>${tx('Admin')}</h3>
             <p class="hcg-note">${tx('Quelle der Daten: %s aus Wiederholungen (vollständig), %s aus dem Spielbericht (ohne Technologien und Startplatz), %s ohne Daten.', src.replay || 0, src.record || 0, src.none || 0)} ${tx('Einzelspiele: %s.', src.solo || 0)}</p>
+            ${availTable(d)}
             ${table([[tx('Version')], [tx('Partien'), 'num']], (D.byVersion || []).sort((a, b) => parseInt(b.ver.slice(1)) - parseInt(a.ver.slice(1)) || 0)
                 .map(v => `<tr><td>${esc(v.ver)}</td><td class="num">${v.games}</td></tr>`))}
             <p class="hcg-note" style="margin-top:10px"><b>${tx('KI und Bots nach Stufe')}</b> (${tx('in den gefilterten Partien')})</p>
